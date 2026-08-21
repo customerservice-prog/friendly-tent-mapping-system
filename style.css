@@ -1,0 +1,57 @@
+:root {
+    --green: #2f7a3c;
+    --green-dark: #22592c;
+    --tan: #f7f3ea;
+    --text: #2b2b2b;
+    --muted: #6b6b6b;
+    --warn: #b45309;
+    --ok: #1f7a3f;
+    --danger: #b91c1c;
+    --border: #ddd7c9;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: var(--text); background: var(--tan); }
+.site-header { background: var(--green); color: #fff; padding: 24px 32px; }
+.site-header h1 { margin: 0 0 4px 0; font-size: 26px; }
+.site-header p { margin: 0; opacity: 0.9; }
+#app { max-width: 1100px; margin: 24px auto; padding: 0 16px 48px 16px; }
+.step { display: none; background: #fff; border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+.step.active { display: block; }
+.step h2 { margin-top: 0; color: var(--green-dark); }
+.field { margin-bottom: 16px; display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
+.checkbox-field { flex-direction: row; align-items: center; }
+.field label { font-weight: 600; font-size: 14px; }
+.field input, .field select { padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+.btn-primary, .btn-secondary, .btn-danger { cursor: pointer; border: none; border-radius: 6px; padding: 10px 18px; font-size: 14px; font-weight: 600; }
+.btn-primary { background: var(--green); color: #fff; }
+.btn-primary:hover { background: var(--green-dark); }
+.btn-secondary { background: #fff; color: var(--green-dark); border: 1px solid var(--green); }
+.btn-danger { background: #fff; color: var(--danger); border: 1px solid var(--danger); }
+.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-link { background: none; border: none; color: var(--green-dark); cursor: pointer; padding: 8px 0; font-size: 14px; text-decoration: underline; }
+.btn-primary.small, .btn-secondary.small, .btn-danger.small { padding: 6px 10px; font-size: 13px; }
+.button-row { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+.card { background: var(--tan); border: 1px solid var(--border); border-radius: 8px; padding: 16px; }
+.card.small { padding: 10px; font-size: 13px; }
+.card ul { margin: 8px 0 0 18px; padding: 0; }
+.designer-grid { display: grid; grid-template-columns: 220px 1fr 260px; gap: 16px; align-items: start; }
+.panel h3 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin: 18px 0 8px 0; }
+.panel h3:first-child { margin-top: 0; }
+.button-list { display: flex; flex-direction: column; gap: 6px; }
+.button-list button { text-align: left; }
+.canvas-wrap { display: flex; justify-content: center; }
+.canvas { position: relative; width: 640px; height: 480px; background: #eaf4ea; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+.tent-outline { position: absolute; background: #ffffff; border: 3px solid var(--green); border-radius: 4px; }
+.item { position: absolute; display: flex; align-items: center; justify-content: center; background: #fff; border: 2px solid #8a8a8a; color: #333; font-size: 11px; font-weight: 600; cursor: grab; user-select: none; }
+.item.round { border-radius: 50%; }
+.item.rect { border-radius: 4px; }
+.item.selected { border-color: var(--green-dark); box-shadow: 0 0 0 3px rgba(47,122,60,0.25); }
+.item.dance { background: repeating-conic-gradient(#f2e7c6 0% 25%, #fff 0% 50%) 50% / 20px 20px; border: 2px dashed #b8a45c; }
+.chair-dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #444; pointer-events: none; }
+.price-list { font-size: 13px; display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
+.price-list .row { display: flex; justify-content: space-between; }
+.price-total { font-size: 16px; font-weight: 700; border-top: 1px solid var(--border); padding-top: 8px; margin-bottom: 16px; display: flex; justify-content: space-between; }
+.status-ok { color: var(--ok); font-weight: 600; }
+.status-warn { color: var(--warn); font-weight: 600; }
+.disclaimer { font-size: 12px; color: var(--muted); margin-top: 12px; }
+.site-footer { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
