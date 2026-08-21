@@ -106,7 +106,7 @@ $('btnCustomize').addEventListener('click', function () {
 
 function enterDesigner() {
     populateTentSelect();
-    populateChairSelect();
+    populateChairSelect(); showStep('step-designer');
     renderCanvas();
     renderSidePanels();
     showStep('step-designer');
@@ -155,8 +155,8 @@ $('chairSelect').addEventListener('change', function () { state.chairId = this.v
 
 $('addDanceFloor').addEventListener('click', function () { addDanceFloor(); });
 
-function nextGridPosition(index, tent) {
-    const spacing = 7;
+function nextGridPosition(index, tent, cellFt) {
+    const spacing = cellFt;
     const cols = Math.max(1, Math.floor((tent.widthFt - 4) / spacing));
     const col = index % cols;
     const row = Math.floor(index / cols);
@@ -167,7 +167,7 @@ function addTable(tableId, chairId) {
     const tent = byId(TENTS, state.tentId);
     const tableDef = byId(TABLES, tableId);
     const tableCount = state.items.filter(function (i) { return i.kind === 'table'; }).length;
-    const pos = nextGridPosition(tableCount, tent);
+    const pos = nextGridPosition(tableCount, tent, (tableDef.shape === 'round' ? tableDef.diameterFt : Math.max(tableDef.widthFt, tableDef.depthFt)) + 3.5);
     const item = {
           uid: state.nextUid++,
           kind: 'table',
@@ -213,7 +213,7 @@ function removeSelected() {
 }
 $('removeSelected').addEventListener('click', removeSelected);
 
-let canvasGeom = { scale: 1, offX: 0, offY: 0 };
+let canvasGeom = { scale: 1, offX: 0, offY: 0 }; window.addEventListener('resize', function () { if (document.getElementById('step-designer').classList.contains('active')) { renderCanvas(); } });
 
 function renderCanvas() {
     const canvas = $('canvas');
@@ -261,7 +261,7 @@ function renderItem(canvas, item) {
   if (item.kind === 'table' && item.shape === 'round' && item.seatCount > 0) {
         const cx = g.offX + (item.x + item.wFt / 2) * g.scale;
         const cy = g.offY + (item.y + item.hFt / 2) * g.scale;
-        const r = (wPx / 2) + 10;
+        const r = (wPx / 2) + Math.max(6, g.scale * 1.0);
         for (let i = 0; i < item.seatCount; i++) {
                 const angle = (i / item.seatCount) * Math.PI * 2;
                 const dotX = cx + r * Math.cos(angle) - 4;
