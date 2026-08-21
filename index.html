@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Friendly Event Designer | Friendly Party Rental</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Friendly Event Designer</h1>
+  <p>Plan your tent, tables, and chairs for your event with Friendly Party Rental</p>
+</header>
+
+<main id="app">
+
+  <section id="step-intake" class="step active">
+    <h2>Tell us about your event</h2>
+    <div class="field">
+      <label for="eventType">What are you planning?</label>
+      <select id="eventType">
+        <option value="wedding">Wedding</option>
+        <option value="graduation">Graduation</option>
+        <option value="birthday">Birthday</option>
+        <option value="corporate">Corporate Event</option>
+        <option value="backyard">Backyard Party</option>
+        <option value="other">Other</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="guestCount">How many guests?</label>
+      <input type="number" id="guestCount" min="1" max="300" value="50">
+    </div>
+    <div class="field">
+      <label for="spaceType">Where is the event?</label>
+      <select id="spaceType">
+        <option value="backyard">Backyard</option>
+        <option value="venue">Venue</option>
+        <option value="park">Park</option>
+        <option value="lot">Parking Lot</option>
+      </select>
+    </div>
+    <div class="field checkbox-field">
+      <label for="needDance">Do you need a dance floor?</label>
+      <input type="checkbox" id="needDance">
+    </div>
+    <button id="btnToRecommend" class="btn-primary">Build My Event</button>
+  </section>
+
+  <section id="step-recommend" class="step">
+    <h2>Recommended Starting Setup</h2>
+    <div id="recommendSummary" class="card"></div>
+    <div class="button-row">
+      <button id="btnUseRecommend" class="btn-primary">Use This Layout</button>
+      <button id="btnCustomize" class="btn-secondary">Customize From Scratch</button>
+    </div>
+    <button id="btnBackToIntake" class="btn-link">&larr; Back</button>
+  </section>
+
+  <section id="step-designer" class="step">
+    <h2>Design Your Layout</h2>
+    <div class="designer-grid">
+      <aside class="panel inventory-panel">
+        <h3>Tent</h3>
+        <div class="field">
+          <select id="tentSelect"></select>
+        </div>
+
+        <h3>Tables</h3>
+        <div id="tableButtons" class="button-list"></div>
+
+        <h3>Chairs (used when adding a table)</h3>
+        <div class="field">
+          <select id="chairSelect"></select>
+        </div>
+
+        <h3>Dance Floor</h3>
+        <div class="field">
+          <button id="addDanceFloor" class="btn-secondary small">+ Add 3x3 Section</button>
+        </div>
+
+        <h3>Selected Item</h3>
+        <div id="selectedItemPanel" class="card small">Click an item on the layout to select it.</div>
+        <button id="removeSelected" class="btn-danger small" disabled>Remove Selected</button>
+      </aside>
+
+      <div class="canvas-wrap">
+        <div id="canvas" class="canvas"></div>
+      </div>
+
+      <aside class="panel summary-panel">
+        <h3>Event Check</h3>
+        <div id="capacityCheck" class="card"></div>
+
+        <h3>Estimate</h3>
+        <div id="priceList" class="price-list"></div>
+        <div id="priceTotal" class="price-total"></div>
+
+        <button id="btnToReview" class="btn-primary">Review &amp; Request Quote</button>
+        <button id="btnBackToRecommend" class="btn-link">&larr; Back</button>
+      </aside>
+    </div>
+  </section>
+
+  <section id="step-review" class="step">
+    <h2>Review Your Event</h2>
+    <div id="reviewSummary" class="card"></div>
+    <div class="field">
+      <label for="customerName">Your Name</label>
+      <input type="text" id="customerName" placeholder="Full name">
+    </div>
+    <div class="field">
+      <label for="customerEmail">Your Email</label>
+      <input type="email" id="customerEmail" placeholder="you@example.com">
+    </div>
+    <div class="field">
+      <label for="customerDate">Event Date</label>
+      <input type="date" id="customerDate">
+    </div>
+    <div class="button-row">
+      <a id="btnEmailQuote" class="btn-primary" href="#">Email Quote Request</a>
+      <button id="btnBackToDesigner" class="btn-secondary">&larr; Back to Designer</button>
+    </div>
+    <p class="disclaimer">This creates a draft email only. Friendly Party Rental will confirm final pricing, availability, and details before anything is booked or charged.</p>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <p>Friendly Party Rental &middot; 315-884-1498 &middot; customerservice@friendlypartyrental.com</p>
+</footer>
+
+<script src="script.js"></script>
+</body>
+</html>
