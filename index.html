@@ -44,6 +44,12 @@
 <button id="addDanceFloor" class="btn-secondary small">+ Add 3x3 Section</button>
 </div>
 
+<h3>History</h3>
+<div class="button-row">
+<button id="btnUndo" class="btn-secondary small" disabled>&#8630; Undo</button>
+<button id="btnRedo" class="btn-secondary small" disabled>&#8631; Redo</button>
+</div>
+
 <h3>Selected Item</h3>
 <div id="selectedItemPanel" class="card small">Click an item on the layout to select it.</div>
 <button id="removeSelected" class="btn-danger small" disabled>Remove Selected</button>
@@ -56,6 +62,9 @@
 <aside class="panel summary-panel">
 <h3>Event Check</h3>
 <div id="capacityCheck" class="card"></div>
+
+<h3>Layout Warnings</h3>
+<div id="layoutWarnings" class="card small"></div>
 
 <h3>Estimate</h3>
 <div id="priceList" class="price-list"></div>
@@ -95,7 +104,7 @@
 <p>Friendly Party Rental &middot; 315-884-1498 &middot; customerservice@friendlypartyrental.com</p>
 </footer>
 
-<script src="script.js"></script>
+<script type="module" src="script.js"></script>
 <script type="module" src="js/ui/intake.js"></script>
 </body>
 </html>
