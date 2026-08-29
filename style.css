@@ -91,6 +91,12 @@ body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial
 .recommend-card-note.note-info { background: #eaf2fb; color: #24507a; }
 .recommend-warning { background: #fdf1e0; color: var(--warn); padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 14px; font-weight: 600; }
 
+.package-match { background: #eaf7ec; border: 2px solid var(--green); color: var(--green-dark); padding: 12px 14px; border-radius: 8px; margin-bottom: 16px; }
+.package-match-title { font-weight: 700; font-size: 14px; margin-bottom: 2px; }
+.package-match-meta { font-size: 13px; margin-bottom: 4px; }
+.package-match-hint { font-size: 12px; color: var(--muted); }
+.package-match-note { background: #eaf7ec; border: 1px solid var(--green); border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--green-dark); margin: 10px 0; }
+
 .warning-list { display: flex; flex-direction: column; gap: 6px; }
 .warning-item { font-size: 12px; padding: 8px 10px; border-radius: 6px; }
 .warning-item.severity-error { background: #fbe4e4; color: var(--danger); }
