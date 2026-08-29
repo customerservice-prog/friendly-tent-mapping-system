@@ -98,6 +98,10 @@ body { margin: 0; font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial
 .warning-item.severity-info { background: #eaf2fb; color: #24507a; }
 .no-warnings { color: var(--ok); font-weight: 600; font-size: 13px; }
 
+.table-add-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.table-add-row button { flex: 0 0 auto; }
+.linen-select { flex: 1 1 160px; min-width: 140px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; }
+
 @media (max-width: 900px) {
 .designer-grid { grid-template-columns: 1fr; }
 .canvas { max-width: 100%; }
