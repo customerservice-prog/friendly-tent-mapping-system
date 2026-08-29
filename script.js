@@ -7,6 +7,7 @@ import { runAllChecks } from './js/core/collision.js';
 import { LINENS, optionsForTable } from './js/data/linens.js';
 import { LIGHTING_OPTIONS, tentLightingPriceFor } from './js/data/lighting.js';
 import { DANCE_SECTION, DANCE_FLOOR_SIZES, sectionsForSize } from './js/data/danceFloor.js';
+import { PACKAGES } from './js/data/packages.js';
 
 const NL = String.fromCharCode(10);
 
@@ -65,6 +66,7 @@ spaceType: 'backyard',
 needDance: false,
 danceFloorSizeId: '18x18',
 customDanceFloorFt: null,
+matchedPackageId: null,
 tentId: 'pole-20x40',
 chairId: 'plastic-white',
 lightingId: 'lighting-none',
@@ -91,7 +93,6 @@ if (state.danceFloorSizeId === 'custom') return state.customDanceFloorFt || 18;
 const sz = byId(DANCE_FLOOR_SIZES, state.danceFloorSizeId);
 return sz ? sz.ft : 18;
 }
-
 function useRecommendedLayout() {
 store.reset({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
 state.selectedId = null;
@@ -331,7 +332,6 @@ function updateUndoRedoButtons() {
 $('btnUndo').disabled = !store.canUndo();
 $('btnRedo').disabled = !store.canRedo();
 }
-
 function renderCanvas(conflicts) {
 const canvas = $('canvas');
 canvas.innerHTML = '';
@@ -561,13 +561,16 @@ $('priceTotal').innerHTML = '<span>Estimated Total / day</span><span>' + money(t
 }
 
 $('btnBackToRecommend').addEventListener('click', function () { showStep('step-recommend'); });
-
 $('btnToReview').addEventListener('click', function () {
 const tent = byId(TENTS, state.tentId);
 const lines = computeLineItems();
 const total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
+const pkg = state.matchedPackageId ? byId(PACKAGES, state.matchedPackageId) : null;
 
 let html = '<p><strong>Event:</strong> ' + state.eventType + ' &middot; ' + state.guestCount + ' guests &middot; ' + state.spaceType + '</p>';
+if (pkg) {
+html += '<div class="package-match-note">This setup is similar to our <strong>' + pkg.name + '</strong> package (' + money(pkg.price) + '/day flat, up to ' + pkg.maxGuests + ' guests). Ask Friendly Party Rental about bundled package pricing.</div>';
+}
 html += '<p><strong>Tent:</strong> ' + tent.name + '</p><ul>';
 lines.forEach(function (l) {
 html += '<li>' + l.label + ' x' + l.qty + ' &mdash; ' + money(l.amount) + '</li>';
@@ -576,7 +579,11 @@ html += '</ul><p><strong>Estimated Total: ' + money(total) + ' / day</strong></p
 $('reviewSummary').innerHTML = html;
 
 const subject = encodeURIComponent('Quote Request: ' + state.eventType + ' for ' + state.guestCount + ' guests');
-let body = 'Event type: ' + state.eventType + NL + 'Guests: ' + state.guestCount + NL + 'Location type: ' + state.spaceType + NL + 'Tent: ' + tent.name + NL + NL + 'Items:' + NL;
+let body = 'Event type: ' + state.eventType + NL + 'Guests: ' + state.guestCount + NL + 'Location type: ' + state.spaceType + NL + 'Tent: ' + tent.name + NL;
+if (pkg) {
+body += 'Possible package match: ' + pkg.name + ' (' + money(pkg.price) + '/day, up to ' + pkg.maxGuests + ' guests)' + NL;
+}
+body += NL + 'Items:' + NL;
 lines.forEach(function (l) { body += '- ' + l.label + ' x' + l.qty + ' (' + money(l.amount) + ')' + NL; });
 body += NL + 'Estimated Total: ' + money(total) + ' / day' + NL;
 $('btnEmailQuote').addEventListener('click', function () {
@@ -597,6 +604,7 @@ state: state,
 TENTS: TENTS,
 TABLES: TABLES,
 CHAIRS: CHAIRS,
+PACKAGES: PACKAGES,
 byId: byId,
 showStep: showStep,
 enterDesigner: enterDesigner,
