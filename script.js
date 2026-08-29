@@ -4,6 +4,8 @@
 
 import { createLayoutStore } from './js/core/layoutStore.js';
 import { runAllChecks } from './js/core/collision.js';
+import { LINENS, optionsForTable } from './js/data/linens.js';
+import { LIGHTING_OPTIONS, tentLightingPriceFor } from './js/data/lighting.js';
 
 const NL = String.fromCharCode(10);
 
@@ -27,17 +29,17 @@ const TENTS = [
 ];
 
 function computeCenterPoles(type, widthFt, lengthFt) {
-  if (type !== 'pole') return [];
-  const bay = 10;
-  const count = Math.max(1, Math.round(lengthFt / bay) - 1);
-  const poles = [];
-  for (let i = 1; i <= count; i++) {
-    poles.push({ x: widthFt / 2, y: (lengthFt / (count + 1)) * i });
-  }
-  return poles;
+if (type !== 'pole') return [];
+const bay = 10;
+const count = Math.max(1, Math.round(lengthFt / bay) - 1);
+const poles = [];
+for (let i = 1; i <= count; i++) {
+poles.push({ x: widthFt / 2, y: (lengthFt / (count + 1)) * i });
+}
+return poles;
 }
 TENTS.forEach(function (t) {
-  t.centerPoles = computeCenterPoles(t.type, t.widthFt, t.lengthFt);
+t.centerPoles = computeCenterPoles(t.type, t.widthFt, t.lengthFt);
 });
 
 const TABLES = [
@@ -64,6 +66,7 @@ spaceType: 'backyard',
 needDance: false,
 tentId: 'pole-20x40',
 chairId: 'plastic-white',
+lightingId: 'lighting-none',
 selectedId: null,
 };
 
@@ -86,7 +89,7 @@ function useRecommendedLayout() {
 store.reset({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
 state.selectedId = null;
 const tablesNeeded = Math.ceil(state.guestCount / 8);
-for (let i = 0; i < tablesNeeded; i++) { addTable('round-5ft', state.chairId); }
+for (let i = 0; i < tablesNeeded; i++) { addTable('round-5ft', state.chairId, null); }
 if (state.needDance) {
 addDanceFloor(); addDanceFloor(); addDanceFloor(); addDanceFloor();
 }
@@ -102,6 +105,7 @@ enterDesigner();
 function enterDesigner() {
 populateTentSelect();
 populateChairSelect();
+populateLightingSelect();
 showStep('step-designer');
 refreshAll();
 }
@@ -119,6 +123,7 @@ sel.appendChild(opt);
 }
 $('tentSelect').addEventListener('change', function () {
 state.tentId = this.value;
+populateLightingSelect();
 refreshAll();
 });
 
@@ -135,14 +140,48 @@ sel.appendChild(opt);
 }
 $('chairSelect').addEventListener('change', function () { state.chairId = this.value; });
 
+function populateLightingSelect() {
+const sel = $('lightingSelect');
+const tent = byId(TENTS, state.tentId);
+sel.innerHTML = '';
+LIGHTING_OPTIONS.forEach(function (l) {
+const opt = document.createElement('option');
+opt.value = l.id;
+const price = l.dynamic ? tentLightingPriceFor(tent) : l.pricePerDay;
+opt.textContent = l.name + (price ? (' - ' + money(price) + '/day') : '');
+if (l.id === state.lightingId) opt.selected = true;
+sel.appendChild(opt);
+});
+}
+$('lightingSelect').addEventListener('change', function () {
+state.lightingId = this.value;
+refreshAll();
+});
+
 (function buildTableButtons() {
 const wrap = $('tableButtons');
 TABLES.forEach(function (t) {
+const row = document.createElement('div');
+row.className = 'table-add-row';
 const btn = document.createElement('button');
 btn.className = 'btn-secondary small';
 btn.textContent = '+ Add ' + t.name;
-btn.addEventListener('click', function () { addTable(t.id, state.chairId); });
-wrap.appendChild(btn);
+const linenSel = document.createElement('select');
+linenSel.className = 'linen-select';
+const noneOpt = document.createElement('option');
+noneOpt.value = '';
+noneOpt.textContent = 'No linen';
+linenSel.appendChild(noneOpt);
+optionsForTable(t.id).forEach(function (l) {
+const opt = document.createElement('option');
+opt.value = l.id;
+opt.textContent = l.name + ' - ' + money(l.pricePerDay) + '/day';
+linenSel.appendChild(opt);
+});
+btn.addEventListener('click', function () { addTable(t.id, state.chairId, linenSel.value || null); });
+row.appendChild(btn);
+row.appendChild(linenSel);
+wrap.appendChild(row);
 });
 })();
 
@@ -156,7 +195,7 @@ const row = Math.floor(index / cols);
 return { x: 3 + col * spacing, y: 3 + row * spacing };
 }
 
-function addTable(tableId, chairId) {
+function addTable(tableId, chairId, linenId) {
 const tent = byId(TENTS, state.tentId);
 const tableDef = byId(TABLES, tableId);
 const tableCount = store.getState().objects.filter(function (i) { return i.kind === 'table'; }).length;
@@ -172,6 +211,7 @@ x: pos.x,
 y: pos.y,
 seatCount: tableDef.seatsDefault,
 chairId: chairId,
+linenId: linenId || null,
 };
 store.addObject(item);
 }
@@ -376,8 +416,10 @@ panel.innerHTML = '<strong>Dance Floor Section</strong><br>' + DANCE_SECTION.ft 
 } else {
 const tableDef = byId(TABLES, item.tableId);
 const chairDef = byId(CHAIRS, item.chairId);
+const linenDef = item.linenId ? byId(LINENS, item.linenId) : null;
 panel.innerHTML = '<strong>' + tableDef.name + '</strong><br>' +
-(item.seatCount > 0 ? (item.seatCount + ' seats &mdash; ' + chairDef.name) : 'No seating (cocktail)');
+(item.seatCount > 0 ? (item.seatCount + ' seats &mdash; ' + chairDef.name) : 'No seating (cocktail)') +
+(linenDef ? ('<br>Linen: ' + linenDef.name) : '');
 }
 }
 
@@ -425,6 +467,7 @@ const lines = [{ label: tent.name + ' (tent)', qty: 1, amount: tent.pricePerDay 
 
 const tableCounts = {};
 const chairCounts = {};
+const linenCounts = {};
 let danceCount = 0;
 
 objects.forEach(function (item) {
@@ -432,6 +475,9 @@ if (item.kind === 'table') {
 tableCounts[item.tableId] = (tableCounts[item.tableId] || 0) + 1;
 if (item.seatCount > 0) {
 chairCounts[item.chairId] = (chairCounts[item.chairId] || 0) + item.seatCount;
+}
+if (item.linenId) {
+linenCounts[item.linenId] = (linenCounts[item.linenId] || 0) + 1;
 }
 } else if (item.kind === 'dance') {
 danceCount++;
@@ -446,8 +492,19 @@ Object.keys(chairCounts).forEach(function (cid) {
 const c = byId(CHAIRS, cid);
 lines.push({ label: c.name, qty: chairCounts[cid], amount: c.pricePerDay * chairCounts[cid] });
 });
+Object.keys(linenCounts).forEach(function (lid) {
+const l = byId(LINENS, lid);
+lines.push({ label: l.name, qty: linenCounts[lid], amount: l.pricePerDay * linenCounts[lid] });
+});
 if (danceCount > 0) {
 lines.push({ label: DANCE_SECTION.name, qty: danceCount, amount: DANCE_SECTION.pricePerDay * danceCount });
+}
+if (state.lightingId && state.lightingId !== 'lighting-none') {
+const lightOpt = byId(LIGHTING_OPTIONS, state.lightingId);
+const price = lightOpt.dynamic ? tentLightingPriceFor(tent) : lightOpt.pricePerDay;
+if (price) {
+lines.push({ label: lightOpt.name, qty: 1, amount: price });
+}
 }
 return lines;
 }
