@@ -6,6 +6,7 @@ import { createLayoutStore } from './js/core/layoutStore.js';
 import { runAllChecks } from './js/core/collision.js';
 import { LINENS, optionsForTable } from './js/data/linens.js';
 import { LIGHTING_OPTIONS, tentLightingPriceFor } from './js/data/lighting.js';
+import { DANCE_SECTION, DANCE_FLOOR_SIZES, sectionsForSize } from './js/data/danceFloor.js';
 
 const NL = String.fromCharCode(10);
 
@@ -57,13 +58,13 @@ const CHAIRS = [
 { id: 'chiavari-mahogany', name: 'Mahogany Chiavari Chair', pricePerDay: 12.00 },
 ];
 
-const DANCE_SECTION = { id: 'dance-3x3', name: '3x3 Dance Floor Section', pricePerDay: 35.00, ft: 3 };
-
 const state = {
 eventType: 'wedding',
 guestCount: 50,
 spaceType: 'backyard',
 needDance: false,
+danceFloorSizeId: '18x18',
+customDanceFloorFt: null,
 tentId: 'pole-20x40',
 chairId: 'plastic-white',
 lightingId: 'lighting-none',
@@ -85,13 +86,20 @@ $(id).classList.add('active');
 
 function money(n) { return '$' + n.toFixed(2); }
 
+function danceFloorSizeFt() {
+if (state.danceFloorSizeId === 'custom') return state.customDanceFloorFt || 18;
+const sz = byId(DANCE_FLOOR_SIZES, state.danceFloorSizeId);
+return sz ? sz.ft : 18;
+}
+
 function useRecommendedLayout() {
 store.reset({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
 state.selectedId = null;
 const tablesNeeded = Math.ceil(state.guestCount / 8);
 for (let i = 0; i < tablesNeeded; i++) { addTable('round-5ft', state.chairId, null); }
 if (state.needDance) {
-addDanceFloor(); addDanceFloor(); addDanceFloor(); addDanceFloor();
+const count = sectionsForSize(danceFloorSizeFt());
+for (let i = 0; i < count; i++) { addDanceFloor(); }
 }
 enterDesigner();
 }
@@ -106,6 +114,7 @@ function enterDesigner() {
 populateTentSelect();
 populateChairSelect();
 populateLightingSelect();
+populateDanceFloorSizeSelect();
 showStep('step-designer');
 refreshAll();
 }
@@ -158,6 +167,29 @@ state.lightingId = this.value;
 refreshAll();
 });
 
+function populateDanceFloorSizeSelect() {
+const sel = $('danceFloorSizeSelect');
+sel.innerHTML = '';
+DANCE_FLOOR_SIZES.forEach(function (sz) {
+const opt = document.createElement('option');
+opt.value = sz.id;
+opt.textContent = sz.ft + 'x' + sz.ft + ' ft (' + sectionsForSize(sz.ft) + ' sections)';
+if (sz.id === state.danceFloorSizeId) opt.selected = true;
+sel.appendChild(opt);
+});
+if (state.danceFloorSizeId === 'custom') {
+const opt = document.createElement('option');
+opt.value = 'custom';
+opt.textContent = 'Custom (' + (state.customDanceFloorFt || 18) + 'x' + (state.customDanceFloorFt || 18) + ' ft)';
+opt.selected = true;
+sel.appendChild(opt);
+}
+}
+$('danceFloorSizeSelect').addEventListener('change', function () { state.danceFloorSizeId = this.value; });
+$('setDanceFloorSize').addEventListener('click', function () {
+setDanceFloorToSize(danceFloorSizeFt());
+refreshAll();
+});
 (function buildTableButtons() {
 const wrap = $('tableButtons');
 TABLES.forEach(function (t) {
@@ -231,6 +263,17 @@ x: tent.widthFt - (col + 1) * DANCE_SECTION.ft - 2,
 y: tent.lengthFt - (row + 1) * DANCE_SECTION.ft - 2,
 };
 store.addObject(item);
+}
+
+function removeAllDanceFloors() {
+const ids = store.getState().objects.filter(function (i) { return i.kind === 'dance'; }).map(function (i) { return i.id; });
+ids.forEach(function (id) { store.removeObject(id); });
+}
+
+function setDanceFloorToSize(ft) {
+removeAllDanceFloors();
+const count = sectionsForSize(ft);
+for (let i = 0; i < count; i++) { addDanceFloor(); }
 }
 
 function removeSelected() {
@@ -314,7 +357,6 @@ canvas.appendChild(outline);
 const severityMap = conflictSeverityByItemId(conflicts || []);
 store.getState().objects.forEach(function (item) { renderItem(canvas, item, severityMap[item.id]); });
 }
-
 function renderItem(canvas, item, severity) {
 const g = canvasGeom;
 const div = document.createElement('div');
@@ -459,7 +501,6 @@ rows.push('<div class="warning-item severity-' + c.severity + '">' + c.message +
 });
 box.innerHTML = '<div class="warning-list">' + rows.join('') + '</div>';
 }
-
 function computeLineItems() {
 const tent = byId(TENTS, state.tentId);
 const objects = store.getState().objects;
