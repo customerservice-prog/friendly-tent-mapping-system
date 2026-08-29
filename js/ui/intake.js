@@ -4,6 +4,7 @@
 
 import { recommendTents, SEATING_STYLE_OPTIONS } from '../core/recommendation.js';
 import { DANCE_FLOOR_SIZES } from '../data/danceFloor.js';
+import { suggestPackage } from '../data/packages.js';
 
 const Bridge = window.FriendlyBridge;
 
@@ -94,6 +95,14 @@ return node;
 
 function needsDanceFloorStep() {
 return wiz.features.indexOf('danceFloor') !== -1;
+}
+
+function packageCategoryForEventType(eventType) {
+if (eventType === 'wedding' || eventType === 'ceremony' || eventType === 'bridalShower') return 'wedding';
+if (eventType === 'graduation') return 'graduation';
+if (eventType === 'corporate') return 'corporate';
+if (eventType === 'backyard') return 'backyard';
+return null;
 }
 
 function goToStep(index) {
@@ -194,7 +203,6 @@ wrap.appendChild(field);
 renderNav(wrap);
 return wrap;
 }
-
 function renderSeatingStyleStep() {
 const wrap = el('div', 'wizard-step');
 wrap.appendChild(el('h2', null, 'How will guests be seated?'));
@@ -327,7 +335,6 @@ wrap.appendChild(surfaceGrid);
 renderNav(wrap, { nextLabel: 'See My Recommendations', isLast: true });
 return wrap;
 }
-
 function computeAndShowRecommendations() {
 const result = recommendTents({
 guestCount: wiz.guestCount,
@@ -345,7 +352,11 @@ Bridge.state.needDance = wiz.features.indexOf('danceFloor') !== -1;
 Bridge.state.danceFloorSizeId = wiz.danceFloorSizeId;
 Bridge.state.customDanceFloorFt = wiz.customDanceFloorFt;
 
-renderRecommendations(result);
+const pkgCategory = packageCategoryForEventType(wiz.eventType);
+const matchedPackage = pkgCategory ? suggestPackage(pkgCategory, wiz.guestCount) : null;
+Bridge.state.matchedPackageId = matchedPackage ? matchedPackage.id : null;
+
+renderRecommendations(result, matchedPackage);
 Bridge.showStep('step-recommend');
 }
 
@@ -380,10 +391,18 @@ card.appendChild(useBtn);
 return card;
 }
 
-function renderRecommendations(result) {
+function renderRecommendations(result, matchedPackage) {
 const root = document.getElementById('recommendWizard');
 root.innerHTML = '';
 root.appendChild(el('h2', null, 'Recommended Starting Setup'));
+
+if (matchedPackage) {
+const box = el('div', 'package-match');
+box.appendChild(el('div', 'package-match-title', 'This matches our "' + matchedPackage.name + '" package'));
+box.appendChild(el('div', 'package-match-meta', money(matchedPackage.price) + '/day flat — up to ' + matchedPackage.maxGuests + ' guests'));
+box.appendChild(el('div', 'package-match-hint', 'Ask Friendly Party Rental about bundling into this package for potential savings.'));
+root.appendChild(box);
+}
 
 if (result.warnings && result.warnings.length) {
 result.warnings.forEach(function (w) {
