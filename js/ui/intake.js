@@ -342,6 +342,8 @@ Bridge.state.eventType = wiz.eventType || 'other';
 Bridge.state.guestCount = wiz.guestCount;
 Bridge.state.spaceType = wiz.spaceType || 'other';
 Bridge.state.needDance = wiz.features.indexOf('danceFloor') !== -1;
+Bridge.state.danceFloorSizeId = wiz.danceFloorSizeId;
+Bridge.state.customDanceFloorFt = wiz.customDanceFloorFt;
 
 renderRecommendations(result);
 Bridge.showStep('step-recommend');
