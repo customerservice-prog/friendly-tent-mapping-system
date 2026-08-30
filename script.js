@@ -99,8 +99,7 @@ state.selectedId = null;
 const tablesNeeded = Math.ceil(state.guestCount / 8);
 for (let i = 0; i < tablesNeeded; i++) { addTable('round-5ft', state.chairId, null); }
 if (state.needDance) {
-const count = sectionsForSize(danceFloorSizeFt());
-for (let i = 0; i < count; i++) { addDanceFloor(); }
+setDanceFloorCount(sectionsForSize(danceFloorSizeFt()));
 }
 enterDesigner();
 }
@@ -249,21 +248,20 @@ linenId: linenId || null,
 store.addObject(item);
 }
 
-function addDanceFloor() {
-const tent = byId(TENTS, state.tentId);
-const count = store.getState().objects.filter(function (i) { return i.kind === 'dance'; }).length;
-const cols = Math.max(1, Math.floor(tent.widthFt / DANCE_SECTION.ft));
-const col = count % cols;
-const row = Math.floor(count / cols);
-const item = {
-id: newItemId(),
-kind: 'dance',
-widthFt: DANCE_SECTION.ft,
-depthFt: DANCE_SECTION.ft,
-x: tent.widthFt - (col + 1) * DANCE_SECTION.ft - 2,
-y: tent.lengthFt - (row + 1) * DANCE_SECTION.ft - 2,
-};
-store.addObject(item);
+function layoutDanceFloorPositions(tent, totalCount) {
+const spacing = DANCE_SECTION.ft;
+const maxPerSide = Math.max(1, Math.floor((Math.min(tent.widthFt, tent.lengthFt) - 4) / spacing));
+const perSide = Math.min(maxPerSide, Math.max(1, Math.ceil(Math.sqrt(totalCount))));
+const blockFt = perSide * spacing;
+const originX = Math.max(2, tent.widthFt - 2 - blockFt);
+const originY = Math.max(2, tent.lengthFt - 2 - blockFt);
+const positions = [];
+for (let i = 0; i < totalCount; i++) {
+const col = i % perSide;
+const row = Math.floor(i / perSide);
+positions.push({ x: originX + col * spacing, y: originY + row * spacing });
+}
+return positions;
 }
 
 function removeAllDanceFloors() {
@@ -271,10 +269,29 @@ const ids = store.getState().objects.filter(function (i) { return i.kind === 'da
 ids.forEach(function (id) { store.removeObject(id); });
 }
 
-function setDanceFloorToSize(ft) {
+function setDanceFloorCount(totalCount) {
+const tent = byId(TENTS, state.tentId);
 removeAllDanceFloors();
-const count = sectionsForSize(ft);
-for (let i = 0; i < count; i++) { addDanceFloor(); }
+const positions = layoutDanceFloorPositions(tent, totalCount);
+positions.forEach(function (pos) {
+store.addObject({
+id: newItemId(),
+kind: 'dance',
+widthFt: DANCE_SECTION.ft,
+depthFt: DANCE_SECTION.ft,
+x: pos.x,
+y: pos.y,
+});
+});
+}
+
+function addDanceFloor() {
+const current = store.getState().objects.filter(function (i) { return i.kind === 'dance'; }).length;
+setDanceFloorCount(current + 1);
+}
+
+function setDanceFloorToSize(ft) {
+setDanceFloorCount(sectionsForSize(ft));
 }
 
 function removeSelected() {
