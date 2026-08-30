@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Friendly Event Designer | Friendly Party Rental</title>
 <link rel="stylesheet" href="style.css">
+<script type="importmap">
+{
+"imports": {
+"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+}
+}
+</script>
 </head>
 <body>
 <header class="site-header">
@@ -79,6 +87,7 @@
 <div id="priceList" class="price-list"></div>
 <div id="priceTotal" class="price-total"></div>
 
+<button id="btn3DView" class="btn-secondary">View in 3D</button>
 <button id="btnToReview" class="btn-primary">Review &amp; Request Quote</button>
 <button id="btnBackToRecommend" class="btn-link">&larr; Back</button>
 </aside>
@@ -108,6 +117,20 @@
 </section>
 
 </main>
+
+<div id="view3dModal" class="view3d-modal">
+<div class="view3d-panel">
+<div class="view3d-toolbar">
+<strong>3D Preview</strong>
+<div class="view3d-toolbar-actions">
+<button id="view3dDayNight" class="btn-secondary small">Switch to Night</button>
+<button id="view3dClose" class="btn-link">Close 3D View</button>
+</div>
+</div>
+<div id="view3dCanvas" class="view3d-canvas"></div>
+<p class="view3d-hint">Drag to rotate, scroll to zoom. This is a preview of the finished layout only &mdash; items cannot be moved here.</p>
+</div>
+</div>
 
 <footer class="site-footer">
 <p>Friendly Party Rental &middot; 315-884-1498 &middot; customerservice@friendlypartyrental.com</p>
