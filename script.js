@@ -599,6 +599,34 @@ showStep('step-review');
 
 $('btnBackToDesigner').addEventListener('click', function () { showStep('step-designer'); });
 
+function openView3D() {
+$('view3dModal').classList.add('active');
+$('view3dDayNight').textContent = 'Switch to Night';
+const tent = byId(TENTS, state.tentId);
+const snapshot = {
+tent: tent,
+objects: store.getState().objects,
+lightingOn: !!(state.lightingId && state.lightingId !== 'lighting-none'),
+};
+import('./js/ui/view3d.js').then(function (mod) {
+window.__view3d = mod;
+mod.mount($('view3dCanvas'), snapshot);
+});
+}
+
+function closeView3D() {
+$('view3dModal').classList.remove('active');
+if (window.__view3d) { window.__view3d.unmount(); }
+}
+
+$('btn3DView').addEventListener('click', openView3D);
+$('view3dClose').addEventListener('click', closeView3D);
+$('view3dDayNight').addEventListener('click', function () {
+if (!window.__view3d) return;
+const night = window.__view3d.toggleDayNight();
+this.textContent = night ? 'Switch to Day' : 'Switch to Night';
+});
+
 window.FriendlyBridge = {
 state: state,
 TENTS: TENTS,
