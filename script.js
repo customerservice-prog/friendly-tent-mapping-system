@@ -274,8 +274,17 @@ const spacing = DANCE_SECTION.ft;
 const maxPerSide = Math.max(1, Math.floor((Math.min(tent.widthFt, tent.lengthFt) - 4) / spacing));
 const perSide = Math.min(maxPerSide, Math.max(1, Math.ceil(Math.sqrt(totalCount))));
 const blockFt = perSide * spacing;
-const originX = Math.max(2, tent.widthFt - 2 - blockFt);
 const originY = Math.max(2, tent.lengthFt - 2 - blockFt);
+const rightX = Math.max(2, tent.widthFt - 2 - blockFt);
+const leftX = 2;
+const poles = (tent && tent.centerPoles) || [];
+const clearance = 1.25;
+function poleHits(ox) {
+return poles.filter(function (p) {
+return ox - clearance < p.x && p.x < ox + blockFt + clearance && p.y >= originY - clearance && p.y <= originY + blockFt + clearance;
+}).length;
+}
+const originX = poles.length && poleHits(leftX) < poleHits(rightX) ? leftX : rightX;
 const positions = [];
 for (let i = 0; i < totalCount; i++) {
 const col = i % perSide;
