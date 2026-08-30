@@ -229,7 +229,18 @@ const spacing = cellFt;
 const cols = Math.max(1, Math.floor((tent.widthFt - 4) / spacing));
 const col = index % cols;
 const row = Math.floor(index / cols);
-return { x: 3 + col * spacing, y: 3 + row * spacing };
+let x = 3 + col * spacing;
+const y = 3 + row * spacing;
+const footprint = Math.max(0, spacing - 3.5);
+const poles = (tent && tent.centerPoles) || [];
+if (poles.length) {
+const poleX = poles[0].x;
+const clearance = 1.25;
+if (x - clearance < poleX && poleX < x + footprint + clearance) {
+x = poleX + clearance + 0.01;
+}
+}
+return { x: x, y: y };
 }
 
 function tableCellSize(tableDef) {
