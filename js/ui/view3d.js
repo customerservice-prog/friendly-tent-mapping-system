@@ -31,6 +31,7 @@ let currentTentId = null;
 let callbacks = {};
 let raycaster = null;
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+let groundMaterial = null;
 
 let dragging = false;
 let dragMoved = false;
@@ -267,7 +268,8 @@ function addGround(tent) {
 const w = tent.widthFt + 40;
 const l = tent.lengthFt + 40;
 const geo = new THREE.PlaneGeometry(w, l);
-const mat = new THREE.MeshStandardMaterial({ color: 0x7cb87c });
+const mat = new THREE.MeshStandardMaterial({ color: isNight ? 0x24361f : 0x7cb87c });
+groundMaterial = mat;
 const mesh = new THREE.Mesh(geo, mat);
 mesh.rotation.x = -Math.PI / 2;
 mesh.position.y = 0;
@@ -330,6 +332,7 @@ hemiLight.intensity = 0.35;
 hemiLight.color.set(0x3b4d7a);
 hemiLight.groundColor.set(0x1a2a1a);
 }
+if (groundMaterial) groundMaterial.color.set(0x24361f);
 stringLightRigs.forEach(function (rig) {
 if (rig.light) rig.light.intensity = 0.9;
 rig.bulb.material.emissiveIntensity = 1;
@@ -345,6 +348,7 @@ hemiLight.intensity = 0.6;
 hemiLight.color.set(0xbfe3ff);
 hemiLight.groundColor.set(0x7cb87c);
 }
+if (groundMaterial) groundMaterial.color.set(0x7cb87c);
 stringLightRigs.forEach(function (rig) {
 if (rig.light) rig.light.intensity = 0;
 rig.bulb.material.emissiveIntensity = 0;
