@@ -42,11 +42,12 @@ let dragOrigY = 0;
 let dragLiveX = 0;
 let dragLiveY = 0;
 
-function chairColorFor(chairId) {
-if (chairId === 'chiavari-gold') return CHAIR_COLOR_GOLD;
-if (chairId === 'chiavari-mahogany') return CHAIR_COLOR_MAHOGANY;
-if (chairId === 'chiavari-white') return 0xf5f0e6;
-return CHAIR_COLOR_DEFAULT;
+function chairMaterialParamsFor(chairId) {
+if (chairId === 'chiavari-gold') return { color: CHAIR_COLOR_GOLD, roughness: 0.35, metalness: 0.6 };
+if (chairId === 'chiavari-mahogany') return { color: CHAIR_COLOR_MAHOGANY, roughness: 0.45, metalness: 0.08 };
+if (chairId === 'chiavari-white') return { color: 0xf5f0e6, roughness: 0.4, metalness: 0.05 };
+if (chairId === 'resin-white') return { color: 0xfffaf0, roughness: 0.25, metalness: 0.05 };
+return { color: CHAIR_COLOR_DEFAULT, roughness: 0.85, metalness: 0.02 };
 }
 
 function disposeObject3D(obj) {
@@ -212,7 +213,8 @@ group.add(leg);
 }
 
 if (item.seatCount > 0) {
-const chairMat = new THREE.MeshStandardMaterial({ color: chairColorFor(item.chairId), roughness: 0.7 });
+const chairParams = chairMaterialParamsFor(item.chairId);
+const chairMat = new THREE.MeshStandardMaterial({ color: chairParams.color, roughness: chairParams.roughness, metalness: chairParams.metalness });
 const chairR = radiusForChairs + 0.85;
 for (let i = 0; i < item.seatCount; i++) {
 const angle = (i / item.seatCount) * Math.PI * 2;
