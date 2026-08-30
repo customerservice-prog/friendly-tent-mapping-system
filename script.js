@@ -49,6 +49,7 @@ const TABLES = [
 { id: 'banquet-6ft', name: "6' Banquet Table", shape: 'rect', widthFt: 6, depthFt: 2.5, seatsDefault: 6, pricePerDay: 13.00 },
 { id: 'banquet-8ft', name: "8' Banquet Table", shape: 'rect', widthFt: 8, depthFt: 2.5, seatsDefault: 8, pricePerDay: 14.00 },
 { id: 'cocktail', name: "Cocktail Table", shape: 'round', diameterFt: 2.5, seatsDefault: 0, pricePerDay: 12.00 },
+{ id: 'fill-chill-4ft', name: "4' Fill & Chill Table", shape: 'round', diameterFt: 4, seatsDefault: 0, pricePerDay: 40.00 },
 ];
 
 const CHAIRS = [
@@ -57,6 +58,8 @@ const CHAIRS = [
 { id: 'chiavari-gold', name: 'Gold Chiavari Chair', pricePerDay: 11.99 },
 { id: 'chiavari-white', name: 'White Chiavari Chair', pricePerDay: 11.99 },
 { id: 'chiavari-mahogany', name: 'Mahogany Chiavari Chair', pricePerDay: 12.00 },
+{ id: 'throne-king', name: 'King Throne Chair', pricePerDay: 120.00 },
+{ id: 'throne-queen-tiffany', name: 'Queen Tiffany Throne Chair', pricePerDay: 125.00 },
 ];
 
 const state = {
