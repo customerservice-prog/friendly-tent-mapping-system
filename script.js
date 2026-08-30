@@ -152,8 +152,13 @@ $('chairSelect').addEventListener('change', function () { state.chairId = this.v
 function populateLightingSelect() {
 const sel = $('lightingSelect');
 const tent = byId(TENTS, state.tentId);
+const currentLightOpt = byId(LIGHTING_OPTIONS, state.lightingId);
+if (currentLightOpt && currentLightOpt.dynamic && tentLightingPriceFor(tent) == null) {
+state.lightingId = 'lighting-none';
+}
 sel.innerHTML = '';
 LIGHTING_OPTIONS.forEach(function (l) {
+if (l.dynamic && tentLightingPriceFor(tent) == null) return;
 const opt = document.createElement('option');
 opt.value = l.id;
 const price = l.dynamic ? tentLightingPriceFor(tent) : l.pricePerDay;
@@ -227,11 +232,17 @@ const row = Math.floor(index / cols);
 return { x: 3 + col * spacing, y: 3 + row * spacing };
 }
 
+function tableCellSize(tableDef) {
+const base = tableDef.shape === 'round' ? tableDef.diameterFt : Math.max(tableDef.widthFt, tableDef.depthFt);
+if (!tableDef.seatsDefault || tableDef.seatsDefault <= 0) return base + 3;
+return base + (tableDef.shape === 'round' ? 6 : 5);
+}
+
 function addTable(tableId, chairId, linenId) {
 const tent = byId(TENTS, state.tentId);
 const tableDef = byId(TABLES, tableId);
 const tableCount = store.getState().objects.filter(function (i) { return i.kind === 'table'; }).length;
-const pos = nextGridPosition(tableCount, tent, (tableDef.shape === 'round' ? tableDef.diameterFt : Math.max(tableDef.widthFt, tableDef.depthFt)) + 3.5);
+const pos = nextGridPosition(tableCount, tent, tableCellSize(tableDef));
 const item = {
 id: newItemId(),
 kind: 'table',
