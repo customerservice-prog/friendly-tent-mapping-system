@@ -404,7 +404,7 @@ function frameCameraForTent(tent) {
 const halfW = tent.widthFt / 2;
 const halfL = tent.lengthFt / 2;
 const roofY = WALL_H + POLE_PEAK_H;
-const radius = Math.sqrt(halfW * halfW + halfL * halfL + roofY * roofY) * 1.25;
+const radius = Math.sqrt(halfW * halfW + halfL * halfL + roofY * roofY) * 1.08;
 const vFov = (camera.fov * Math.PI) / 180;
 const dist = radius / Math.tan(vFov / 2);
 const dirLen = Math.sqrt(0.9 * 0.9 + 0.7 * 0.7 + 0.9 * 0.9);
