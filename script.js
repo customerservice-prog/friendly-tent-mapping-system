@@ -117,9 +117,9 @@ populateChairSelect();
 populateLightingSelect();
 populateDanceFloorSizeSelect();
 showStep('step-designer');
+mount3D();
 refreshAll();
 }
-
 function populateTentSelect() {
 const sel = $('tentSelect');
 sel.innerHTML = '';
@@ -314,13 +314,57 @@ if (!map[id] || rank[c.severity] > rank[map[id]]) map[id] = c.severity;
 });
 return map;
 }
+let view3dMod = null;
+let view3dPendingSnapshot = null;
 
-let canvasGeom = { scale: 1, offX: 0, offY: 0 };
-window.addEventListener('resize', function () { if (document.getElementById('step-designer').classList.contains('active')) { refreshAll(); } });
+function build3DSnapshot(conflicts) {
+const tent = byId(TENTS, state.tentId);
+return {
+tent: tent,
+objects: store.getState().objects,
+lightingOn: !!(state.lightingId && state.lightingId !== 'lighting-none'),
+selectedId: state.selectedId,
+severityMap: conflictSeverityByItemId(conflicts || []),
+};
+}
+
+function handle3DSelect(itemId) {
+state.selectedId = itemId;
+refreshAll();
+}
+
+function handle3DMove(itemId, x, y) {
+store.updateObject(itemId, { x: x, y: y });
+}
+
+function mount3D() {
+if (view3dMod) return;
+import('./js/ui/view3d.js').then(function (mod) {
+view3dMod = mod;
+const snapshot = view3dPendingSnapshot || build3DSnapshot(getConflicts());
+view3dPendingSnapshot = null;
+mod.mount($('canvas'), snapshot, { onSelect: handle3DSelect, onMove: handle3DMove });
+});
+}
+
+function render3D(conflicts) {
+const snapshot = build3DSnapshot(conflicts);
+if (view3dMod) {
+view3dMod.update(snapshot);
+} else {
+view3dPendingSnapshot = snapshot;
+}
+}
+
+$('view3dDayNight').addEventListener('click', function () {
+if (!view3dMod) return;
+const night = view3dMod.toggleDayNight();
+this.textContent = night ? 'Switch to Day' : 'Switch to Night';
+});
 
 function refreshAll() {
 const conflicts = getConflicts();
-renderCanvas(conflicts);
+render3D(conflicts);
 renderSelectedPanel();
 renderCapacityCheck();
 renderLayoutWarnings(conflicts);
@@ -331,116 +375,6 @@ updateUndoRedoButtons();
 function updateUndoRedoButtons() {
 $('btnUndo').disabled = !store.canUndo();
 $('btnRedo').disabled = !store.canRedo();
-}
-function renderCanvas(conflicts) {
-const canvas = $('canvas');
-canvas.innerHTML = '';
-const tent = byId(TENTS, state.tentId);
-const cw = canvas.clientWidth || 640;
-const ch = canvas.clientHeight || 480;
-const pad = 20;
-const scale = Math.min((cw - pad * 2) / tent.widthFt, (ch - pad * 2) / tent.lengthFt);
-const tentPxW = tent.widthFt * scale;
-const tentPxH = tent.lengthFt * scale;
-const offX = (cw - tentPxW) / 2;
-const offY = (ch - tentPxH) / 2;
-canvasGeom = { scale: scale, offX: offX, offY: offY };
-
-const outline = document.createElement('div');
-outline.className = 'tent-outline';
-outline.style.left = offX + 'px';
-outline.style.top = offY + 'px';
-outline.style.width = tentPxW + 'px';
-outline.style.height = tentPxH + 'px';
-canvas.appendChild(outline);
-
-const severityMap = conflictSeverityByItemId(conflicts || []);
-store.getState().objects.forEach(function (item) { renderItem(canvas, item, severityMap[item.id]); });
-}
-function renderItem(canvas, item, severity) {
-const g = canvasGeom;
-const div = document.createElement('div');
-div.className = 'item ' + (item.kind === 'dance' ? 'dance' : (item.shape === 'round' ? 'round' : 'rect'));
-if (item.id === state.selectedId) div.classList.add('selected');
-if (severity === 'error') div.classList.add('conflict-error');
-else if (severity === 'warning') div.classList.add('conflict-warning');
-const wPx = item.widthFt * g.scale;
-const hPx = item.depthFt * g.scale;
-div.style.width = wPx + 'px';
-div.style.height = hPx + 'px';
-div.style.left = (g.offX + item.x * g.scale) + 'px';
-div.style.top = (g.offY + item.y * g.scale) + 'px';
-div.dataset.id = item.id;
-
-if (item.kind === 'table') {
-div.textContent = item.seatCount > 0 ? (item.seatCount + ' seats') : 'cocktail';
-}
-canvas.appendChild(div);
-
-if (item.kind === 'table' && item.shape === 'round' && item.seatCount > 0) {
-const cx = g.offX + (item.x + item.widthFt / 2) * g.scale;
-const cy = g.offY + (item.y + item.depthFt / 2) * g.scale;
-const r = (wPx / 2) + Math.max(6, g.scale * 1.0);
-for (let i = 0; i < item.seatCount; i++) {
-const angle = (i / item.seatCount) * Math.PI * 2;
-const dotX = cx + r * Math.cos(angle) - 4;
-const dotY = cy + r * Math.sin(angle) - 4;
-const dot = document.createElement('div');
-dot.className = 'chair-dot';
-dot.style.left = dotX + 'px';
-dot.style.top = dotY + 'px';
-canvas.appendChild(dot);
-}
-}
-
-attachDrag(div, item);
-}
-
-function attachDrag(div, item) {
-let dragging = false;
-let moved = false;
-let startPx = 0, startPy = 0, startX = 0, startY = 0;
-let liveX = item.x, liveY = item.y;
-
-div.addEventListener('mousedown', function (e) {
-dragging = true;
-moved = false;
-startPx = e.clientX;
-startPy = e.clientY;
-startX = item.x;
-startY = item.y;
-liveX = item.x;
-liveY = item.y;
-e.preventDefault();
-});
-
-window.addEventListener('mousemove', function (e) {
-if (!dragging) return;
-const dx = e.clientX - startPx;
-const dy = e.clientY - startPy;
-if (Math.abs(dx) > 3 || Math.abs(dy) > 3) moved = true;
-const g = canvasGeom;
-const tent = byId(TENTS, state.tentId);
-let newX = startX + dx / g.scale;
-let newY = startY + dy / g.scale;
-newX = Math.max(0, Math.min(tent.widthFt - item.widthFt, newX));
-newY = Math.max(0, Math.min(tent.lengthFt - item.depthFt, newY));
-liveX = newX;
-liveY = newY;
-div.style.left = (g.offX + newX * g.scale) + 'px';
-div.style.top = (g.offY + newY * g.scale) + 'px';
-});
-
-window.addEventListener('mouseup', function () {
-if (!dragging) return;
-dragging = false;
-if (!moved) {
-state.selectedId = item.id;
-refreshAll();
-} else {
-store.updateObject(item.id, { x: liveX, y: liveY });
-}
-});
 }
 
 function renderSelectedPanel() {
@@ -559,7 +493,6 @@ return '<div class="row"><span>' + l.label + ' x' + l.qty + '</span><span>' + mo
 const total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
 $('priceTotal').innerHTML = '<span>Estimated Total / day</span><span>' + money(total) + '</span>';
 }
-
 $('btnBackToRecommend').addEventListener('click', function () { showStep('step-recommend'); });
 $('btnToReview').addEventListener('click', function () {
 const tent = byId(TENTS, state.tentId);
@@ -598,34 +531,6 @@ showStep('step-review');
 });
 
 $('btnBackToDesigner').addEventListener('click', function () { showStep('step-designer'); });
-
-function openView3D() {
-$('view3dModal').classList.add('active');
-$('view3dDayNight').textContent = 'Switch to Night';
-const tent = byId(TENTS, state.tentId);
-const snapshot = {
-tent: tent,
-objects: store.getState().objects,
-lightingOn: !!(state.lightingId && state.lightingId !== 'lighting-none'),
-};
-import('./js/ui/view3d.js').then(function (mod) {
-window.__view3d = mod;
-mod.mount($('view3dCanvas'), snapshot);
-});
-}
-
-function closeView3D() {
-$('view3dModal').classList.remove('active');
-if (window.__view3d) { window.__view3d.unmount(); }
-}
-
-$('btn3DView').addEventListener('click', openView3D);
-$('view3dClose').addEventListener('click', closeView3D);
-$('view3dDayNight').addEventListener('click', function () {
-if (!window.__view3d) return;
-const night = window.__view3d.toggleDayNight();
-this.textContent = night ? 'Switch to Day' : 'Switch to Night';
-});
 
 window.FriendlyBridge = {
 state: state,
