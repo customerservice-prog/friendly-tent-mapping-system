@@ -212,7 +212,7 @@ group.add(leg);
 
 if (item.seatCount > 0) {
 const chairMat = new THREE.MeshStandardMaterial({ color: chairColorFor(item.chairId), roughness: 0.7 });
-const chairR = radiusForChairs + 1.1;
+const chairR = radiusForChairs + 0.85;
 for (let i = 0; i < item.seatCount; i++) {
 const angle = (i / item.seatCount) * Math.PI * 2;
 const cx = chairR * Math.cos(angle);
