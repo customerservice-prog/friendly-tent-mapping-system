@@ -234,8 +234,7 @@ return { x: 3 + col * spacing, y: 3 + row * spacing };
 
 function tableCellSize(tableDef) {
 const base = tableDef.shape === 'round' ? tableDef.diameterFt : Math.max(tableDef.widthFt, tableDef.depthFt);
-if (!tableDef.seatsDefault || tableDef.seatsDefault <= 0) return base + 3;
-return base + (tableDef.shape === 'round' ? 6 : 5);
+return base + 3.5;
 }
 
 function addTable(tableId, chairId, linenId) {
