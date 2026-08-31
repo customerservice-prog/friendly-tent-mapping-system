@@ -230,12 +230,12 @@ $('addDanceFloor').addEventListener('click', function () { addDanceFloor(); });
 function nextGridPosition(index, tent, cellFt) {
   const spacing = cellFt;
   const cols = Math.max(1, Math.floor((tent.widthFt - 4) / spacing));
+  const col = index % cols;
+  const row = Math.floor(index / cols);
   const maxRows = Math.max(1, Math.floor((tent.lengthFt - 4) / spacing));
-  const cell = index % (cols * maxRows);
-  const col = cell % cols;
-  const row = Math.floor(cell / cols);
+  const rowSpacing = (row + 1) > maxRows ? (tent.lengthFt - 4) / (row + 1) : spacing;
   let x = 3 + col * spacing;
-  const y = 3 + row * spacing;
+  const y = 3 + row * rowSpacing;
   const footprint = Math.max(0, spacing - 3.5);
   const poles = (tent && tent.centerPoles) || [];
   if (poles.length) {
