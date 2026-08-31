@@ -137,6 +137,11 @@ return;
 const name = STEP_ORDER[stepIndex];
 const progress = el('div', 'wizard-progress', 'Step ' + (stepIndex + 1) + ' of ' + STEP_ORDER.length);
 root.appendChild(progress);
+const progressBar = el('div', 'wizard-progress-bar', null);
+const progressFill = el('div', 'wizard-progress-fill', null);
+progressFill.style.width = Math.round(((stepIndex + 1) / STEP_ORDER.length) * 100) + '%';
+progressBar.appendChild(progressFill);
+root.appendChild(progressBar);
 
 if (name === 'eventType') root.appendChild(renderEventTypeStep());
 else if (name === 'guestCount') root.appendChild(renderGuestCountStep());
