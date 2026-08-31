@@ -314,7 +314,7 @@ bulb.position.set(p[0], y, p[1]);
 dynamicGroup.add(bulb);
 let light = null;
 if (idx % 2 === 0) {
-light = new THREE.PointLight(0xffdd88, 0, 16, 2);
+light = new THREE.PointLight(0xffdd88, 0, 26, 1.5);
 light.position.set(p[0], y, p[1]);
 dynamicGroup.add(light);
 }
@@ -326,20 +326,20 @@ return rigs;
 function applyLighting() {
 if (!scene) return;
 if (isNight) {
-scene.background = new THREE.Color(0x0b1a33);
-ambientLight.intensity = 0.45;
+scene.background = new THREE.Color(0x162b4d);
+ambientLight.intensity = 0.6;
 ambientLight.color.set(0x8fa5cc);
-sunLight.intensity = 0.35;
+sunLight.intensity = 0.45;
 sunLight.color.set(0xaebedd);
 if (hemiLight) {
-hemiLight.intensity = 0.35;
+hemiLight.intensity = 0.45;
 hemiLight.color.set(0x3b4d7a);
-hemiLight.groundColor.set(0x1a2a1a);
+hemiLight.groundColor.set(0x22331f);
 }
-if (groundMaterial) groundMaterial.color.set(0x24361f);
+if (groundMaterial) groundMaterial.color.set(0x314d2c);
 stringLightRigs.forEach(function (rig) {
-if (rig.light) rig.light.intensity = 0.9;
-rig.bulb.material.emissiveIntensity = 1;
+if (rig.light) rig.light.intensity = 6;
+rig.bulb.material.emissiveIntensity = 1.6;
 });
 } else {
 scene.background = new THREE.Color(0xbfe3ff);
