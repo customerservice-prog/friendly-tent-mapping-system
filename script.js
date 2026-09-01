@@ -53,7 +53,7 @@ var TABLES = [
 { id: 'banquet-6ft', name: "6' Banquet Table", shape: 'rect', widthFt: 6, depthFt: 2.5, seatsDefault: 6, pricePerDay: 13.00 },
 { id: 'banquet-8ft', name: "8' Banquet Table", shape: 'rect', widthFt: 8, depthFt: 2.5, seatsDefault: 8, pricePerDay: 14.00 },
 { id: 'cocktail', name: "Cocktail Table", shape: 'round', diameterFt: 2.5, seatsDefault: 0, pricePerDay: 12.00 },
-{ id: 'fill-chill-4ft', name: "4' Fill & Chill Table", shape: 'round', diameterFt: 4, seatsDefault: 0, pricePerDay: 40.00 },
+{ id: 'fill-chill-4ft', name: "4' Fill & Chill Table", shape: 'rect', widthFt: 4, depthFt: 2, seatsDefault: 0, pricePerDay: 40.00 },
 ];
 
 var CHAIRS = [
