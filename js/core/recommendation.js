@@ -61,9 +61,29 @@ export function recommendTents(input) {
   const extraGuestUnits = Math.ceil(extraSqft / sqftPerGuest);
   const requiredUnits = guestCount + extraGuestUnits;
   const eligible = TENTS.filter(function (t) { return t.active; }).slice().sort(function (a, b) { return a.capacity[capacityKey] - b.capacity[capacityKey]; });
+
+  // Area-per-guest math alone can under-estimate space needs for narrow tents:
+  // a 20ft-wide tent can only ever fit ONE column of round dining tables no
+  // matter how long it is, so it can silently run out of room and force
+  // tables to overlap or spill past the tent edge. Cross-check the tent's
+  // real grid capacity (matching the designer's actual table placement
+  // logic) before recommending a dining-table tent, so 'Use This Layout'
+  // never starts a customer off with an overlapping/out-of-bounds layout.
+  const ROUND_TABLE_SEATS = 8;
+  const ROUND_TABLE_CELL_FT = 8.5; // 5ft round table + safe chair clearance
+  const GRID_MARGIN_FT = 4; // matches the designer's real placement margin
+  function diningRoundsGridCapacity(tent) {
+    const cols = Math.max(1, Math.floor((tent.widthFt - GRID_MARGIN_FT) / ROUND_TABLE_CELL_FT));
+    const rows = Math.max(1, Math.floor((tent.lengthFt - GRID_MARGIN_FT) / ROUND_TABLE_CELL_FT));
+    return cols * rows * ROUND_TABLE_SEATS;
+  }
+  const roundTableSeatsNeeded = Math.ceil(guestCount / ROUND_TABLE_SEATS) * ROUND_TABLE_SEATS;
+
   let recommendedIndex = -1;
   for (let i = 0; i < eligible.length; i++) {
-    if (eligible[i].capacity[capacityKey] >= requiredUnits) { recommendedIndex = i; break; }
+    const areaFits = eligible[i].capacity[capacityKey] >= requiredUnits;
+    const gridFits = capacityKey !== 'diningRounds' || diningRoundsGridCapacity(eligible[i]) >= roundTableSeatsNeeded;
+    if (areaFits && gridFits) { recommendedIndex = i; break; }
   }
   const result = { requiredUnits: requiredUnits, capacityKey: capacityKey, guestCount: guestCount, extraGuestUnits: extraGuestUnits, recommended: null, tighter: null, moreSpacious: null, warnings: [] };
   if (recommendedIndex === -1) {
