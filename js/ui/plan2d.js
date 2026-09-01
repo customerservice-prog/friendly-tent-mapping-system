@@ -23,8 +23,18 @@ let pxPerFt = 20;
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 
 function computeStageSize(tent) {
-  const availW = Math.max(80, container.clientWidth - 32);
-  const availH = Math.max(80, container.clientHeight - 32);
+  const rawW = container.clientWidth - 32;
+  const rawH = container.clientHeight - 32;
+  // Guard against reading the container's size before the browser has finished
+  // laying it out (e.g. immediately on mount, or right after a view switch).
+  // In that case clientWidth/clientHeight can briefly read as 0, which used to
+  // permanently collapse the whole plan to a tiny fixed scale. Instead, keep the
+  // last known-good pxPerFt until we get a real measurement.
+  if (rawW <= 0 || rawH <= 0) {
+    return { w: tent.widthFt * pxPerFt, h: tent.lengthFt * pxPerFt };
+  }
+  const availW = Math.max(80, rawW);
+  const availH = Math.max(80, rawH);
   const scale = Math.min(availW / tent.widthFt, availH / tent.lengthFt);
   pxPerFt = Math.max(4, scale);
   return { w: tent.widthFt * pxPerFt, h: tent.lengthFt * pxPerFt };
@@ -210,7 +220,13 @@ export function mount(containerEl, data, cbs) {
   stageEl = document.createElement('div');
   stageEl.className = 'plan2d-stage';
   container.appendChild(stageEl);
-  render(data);
+  currentData = data;
+  // Defer the first paint by a couple of frames so the container has a real,
+  // stable measured size (fixes the plan rendering at a tiny collapsed scale
+  // right after mount or after switching back from 3D view).
+  requestAnimationFrame(function () {
+    requestAnimationFrame(function () { render(data); });
+  });
   if (window.ResizeObserver) {
     resizeObserver = new ResizeObserver(function () { onResize(); });
     resizeObserver.observe(container);
