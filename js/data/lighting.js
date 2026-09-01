@@ -21,13 +21,13 @@ export function tentLightingPriceFor(tent) {
 }
 
 export const LIGHTING_OPTIONS = [
-  { id: 'lighting-none', name: 'None', pricePerDay: 0, dynamic: false },
-  { id: 'lighting-tent', name: 'Tent Lighting (sized to your tent)', pricePerDay: null, dynamic: true },
-  { id: 'lighting-bistro', name: 'Bistro String Lights', pricePerDay: 125.00, dynamic: false },
-  { id: 'lighting-uplighting-12', name: 'Uplighting Package (12 Lights)', pricePerDay: 225.00, dynamic: false },
-  { id: 'lighting-uplight-single', name: 'Wireless LED Uplight (each)', pricePerDay: 25.00, dynamic: false },
-  { id: 'lighting-chandelier', name: 'Battery-Operated Crystal Chandelier', pricePerDay: 99.00, dynamic: false },
-  { id: 'lighting-custom-300', name: 'Custom Lighting — 300ft', pricePerDay: 200.00, dynamic: false },
+  { id: 'lighting-none', name: 'None', pricePerDay: 0, dynamic: false, visual: 'none' },
+  { id: 'lighting-tent', name: 'Tent Lighting (sized to your tent)', pricePerDay: null, dynamic: true, visual: 'grid-canopy' },
+  { id: 'lighting-bistro', name: 'Bistro String Lights', pricePerDay: 125.00, dynamic: false, visual: 'perimeter-swag' },
+  { id: 'lighting-uplighting-12', name: 'Uplighting Package (12 Lights)', pricePerDay: 225.00, dynamic: false, visual: 'uplight-ring' },
+  { id: 'lighting-uplight-single', name: 'Wireless LED Uplight (each)', pricePerDay: 25.00, dynamic: false, visual: 'uplight-single' },
+  { id: 'lighting-chandelier', name: 'Battery-Operated Crystal Chandelier', pricePerDay: 99.00, dynamic: false, visual: 'chandelier' },
+  { id: 'lighting-custom-300', name: 'Custom Lighting — 300ft', pricePerDay: 200.00, dynamic: false, visual: 'perimeter-strand' },
   ];
 
 export function byId(id) {
