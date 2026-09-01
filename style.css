@@ -65,6 +65,8 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .btn-link { background: none; border: none; color: var(--green-dark); cursor: pointer; padding: 8px 0; font-size: 15px; text-decoration: underline; }
 .btn-primary.small, .btn-secondary.small, .btn-danger.small { padding: 8px 12px; font-size: 13px; min-height: 34px; }
 .button-row { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+.share-row { display: flex; gap: 12px; align-items: center; margin: 16px 0; flex-wrap: wrap; }
+
 .card { background: var(--tan); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; }
 .card.small { padding: 10px; font-size: 13px; }
 .card ul { margin: 8px 0 0 18px; padding: 0; }
@@ -315,4 +317,16 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
   background: rgba(212, 201, 163, 0.9);
   border-radius: 3px;
   pointer-events: none;
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .site-header, .site-header *,
+  #step-review, #step-review * { visibility: visible; }
+  .site-header { position: relative; }
+  #step-review { position: absolute; left: 0; top: 0; width: 100%; padding: 24px; }
+  #step-review .field,
+  #step-review .share-row,
+  #step-review .button-row,
+  #step-review .disclaimer { display: none !important; }
 }
