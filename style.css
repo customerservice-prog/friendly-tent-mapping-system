@@ -24,9 +24,10 @@
 html, body { margin: 0; }
 body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: var(--text); background: var(--tan); font-size: 16px; line-height: 1.45; }
 h1, h2, h3, h4 { line-height: 1.25; }
-.site-header { background: var(--green); color: #fff; padding: 24px 32px; }
-.site-header h1 { margin: 0 0 4px 0; font-size: 26px; }
-.site-header p { margin: 0; opacity: 0.9; font-size: 15px; }
+.site-header { background: #fff; padding: 28px 32px 22px; text-align: center; border-bottom: 4px solid var(--green); }
+.site-header-logo { display: block; margin: 0 auto 12px; max-height: clamp(90px, 20vw, 220px); width: auto; }
+.site-header h1 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; margin: 0; }
+.site-header p { margin: 0; color: var(--muted); font-size: 15px; }
 #app { max-width: 1280px; margin: 24px auto; padding: 0 16px 48px 16px; }
 .step { display: none; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 24px; }
 .step.active { display: block; }
