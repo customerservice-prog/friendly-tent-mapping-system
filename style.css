@@ -56,7 +56,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .btn-danger { background: transparent; color: var(--danger); border: 1px solid transparent; padding: 10px 14px; font-size: 14px; }
 .btn-danger:hover { background: var(--danger-bg); }
 .btn-danger:disabled, .btn-secondary:disabled, .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
-.btn-icon { background: #fff; border: 1px solid var(--border); color: var(--text); width: 40px; height: 40px; font-size: 17px; display: inline-flex; align-items: center; justify-content: center; }
+.btn-icon { background: #fff; border: 1px solid var(--border); color: var(--text); width: 44px; height: 44px; font-size: 17px; display: inline-flex; align-items: center; justify-content: center; }
 .btn-icon:hover:not(:disabled) { border-color: var(--green); color: var(--green-dark); }
 .btn-icon:disabled { opacity: 0.35; cursor: not-allowed; }
 .btn-chip { background: rgba(0,0,0,0.55); color: #fff; padding: 8px 14px; font-size: 13px; border-radius: 999px; }
@@ -126,7 +126,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .toolbar-cta { white-space: nowrap; }
 
 .view-toggle { display: inline-flex; background: var(--tan); border-radius: 999px; padding: 3px; gap: 2px; }
-.view-toggle-btn { border: none; background: transparent; padding: 8px 16px; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.view-toggle-btn { border: none; background: transparent; padding: 8px 16px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; font-size: 14px; font-weight: 600; color: var(--muted); cursor: pointer; }
 .view-toggle-btn.active { background: #fff; color: var(--green-dark); box-shadow: var(--shadow); }
 
 .designer-body { flex: 1 1 auto; display: flex; min-height: 0; position: relative; }
@@ -231,7 +231,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .drawer-step-back:hover { color: var(--green-dark); }
 .drawer-summary-row { display: flex; justify-content: space-between; align-items: center; background: var(--tan); border-radius: var(--radius-sm); padding: 10px 12px; font-size: 13px; margin-bottom: 14px; }
 .qty-stepper { display: flex; align-items: center; gap: 10px; }
-.qty-stepper button { width: 34px; height: 34px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: #fff; font-size: 16px; cursor: pointer; }
+.qty-stepper button { width: 44px; height: 44px; border-radius: var(--radius-sm); border: 1px solid var(--border); background: #fff; font-size: 16px; cursor: pointer; }
 .qty-stepper span { min-width: 24px; text-align: center; font-weight: 700; }
 .drawer-add-btn { width: 100%; margin-top: 16px; }
 .no-seat-note { font-size: 13px; color: var(--muted); background: var(--tan); padding: 10px 12px; border-radius: var(--radius-sm); margin-bottom: 12px; }
