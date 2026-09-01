@@ -4,6 +4,8 @@
 // default editing surface: it is easier to scan and arrange a layout from
 // directly above than in a 3D perspective view.
 
+import { byId as chairById } from '../data/chairs.js';
+
 let container = null;
 let stageEl = null;
 let resizeObserver = null;
@@ -28,18 +30,65 @@ function computeStageSize(tent) {
   return { w: tent.widthFt * pxPerFt, h: tent.lengthFt * pxPerFt };
 }
 
+function chairIconSvg(silhouette) {
+  if (silhouette === 'resin') {
+    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' +
+      '<ellipse cx="50" cy="42" rx="38" ry="34" fill="var(--chair-frame)" stroke="rgba(0,0,0,0.3)" stroke-width="3"/>' +
+      '<path d="M20 70 Q50 95 80 70" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="5" stroke-linecap="round"/>' +
+      '</svg>';
+  }
+  if (silhouette === 'chiavari') {
+    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' +
+      '<path d="M26 64 Q50 92 74 64" fill="none" stroke="var(--chair-frame)" stroke-width="4" stroke-linecap="round"/>' +
+      '<circle cx="50" cy="44" r="25" fill="var(--chair-accent)" stroke="var(--chair-frame)" stroke-width="5"/>' +
+      '<circle cx="17" cy="26" r="3" fill="var(--chair-frame)"/>' +
+      '<circle cx="83" cy="26" r="3" fill="var(--chair-frame)"/>' +
+      '<circle cx="17" cy="62" r="3" fill="var(--chair-frame)"/>' +
+      '<circle cx="83" cy="62" r="3" fill="var(--chair-frame)"/>' +
+      '</svg>';
+  }
+  if (silhouette === 'throne') {
+    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' +
+      '<path d="M6 40 Q6 4 50 4 Q94 4 94 40 L94 46 Q50 30 6 46 Z" fill="var(--chair-frame)" stroke="rgba(0,0,0,0.3)" stroke-width="2"/>' +
+      '<rect x="18" y="38" width="64" height="46" rx="10" fill="var(--chair-accent)" stroke="var(--chair-frame)" stroke-width="4"/>' +
+      '<rect x="4" y="46" width="14" height="30" rx="6" fill="var(--chair-frame)"/>' +
+      '<rect x="82" y="46" width="14" height="30" rx="6" fill="var(--chair-frame)"/>' +
+      '<circle cx="50" cy="10" r="5" fill="var(--chair-frame)"/>' +
+      '</svg>';
+  }
+  return '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' +
+    '<rect x="14" y="10" width="72" height="58" rx="10" fill="var(--chair-frame)" stroke="rgba(0,0,0,0.35)" stroke-width="3"/>' +
+    '<rect x="24" y="64" width="52" height="16" rx="4" fill="var(--chair-frame)" stroke="rgba(0,0,0,0.35)" stroke-width="3"/>' +
+    '<line x1="16" y1="70" x2="6" y2="92" stroke="rgba(0,0,0,0.45)" stroke-width="4"/>' +
+    '<line x1="84" y1="70" x2="94" y2="92" stroke="rgba(0,0,0,0.45)" stroke-width="4"/>' +
+    '</svg>';
+}
+
 function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
   const count = item.seatCount || 0;
   if (!count) return;
-  const chairR = radiusFt + 0.85;
+  const chair = chairById(item.chairId) || {};
+  const wFt = chair.seatWidthFt || 1.5;
+  const dFt = chair.seatDepthFt || 1.5;
+  const chairR = radiusFt + Math.max(wFt, dFt) / 2 + 0.35;
+  const silhouette = chair.silhouette || 'folding';
+  const frameColor = chair.frameColor || '#ffffff';
+  const accentColor = chair.accentColor || frameColor;
   for (let i = 0; i < count; i++) {
     const angle = (i / count) * Math.PI * 2;
     const fx = cxFt + chairR * Math.cos(angle);
     const fy = cyFt + chairR * Math.sin(angle);
+    const bearingDeg = Math.atan2(-Math.cos(angle), Math.sin(angle)) * 180 / Math.PI;
     const dot = document.createElement('div');
-    dot.className = 'plan2d-chair';
+    dot.className = 'plan2d-chair plan2d-chair--' + silhouette;
+    dot.style.width = (wFt * pxPerFt) + 'px';
+    dot.style.height = (dFt * pxPerFt) + 'px';
     dot.style.left = (fx * pxPerFt) + 'px';
     dot.style.top = (fy * pxPerFt) + 'px';
+    dot.style.setProperty('--chair-frame', frameColor);
+    dot.style.setProperty('--chair-accent', accentColor);
+    dot.style.transform = 'translate(-50%, -50%) rotate(' + bearingDeg + 'deg)';
+    dot.innerHTML = chairIconSvg(silhouette);
     host.appendChild(dot);
   }
 }
