@@ -11,6 +11,7 @@ import { LIGHTING_OPTIONS, tentLightingPriceFor } from './js/data/lighting.js';
 import { DANCE_SECTION, DANCE_FLOOR_SIZES, sectionsForSize, priceForSize } from './js/data/danceFloor.js';
 import { PACKAGES } from './js/data/packages.js';
 import * as plan2dMod from './js/ui/plan2d.js';
+import { byId as chairVisualById } from './js/data/chairs.js';
 
 var NL = String.fromCharCode(10);
 
@@ -187,16 +188,26 @@ x = poleX + clearance + 0.01;
 return { x: x, y: y };
 }
 
-function tableCellSize(tableDef) {
+function tableCellSize(tableDef, chairId) {
 var base = tableDef.shape === 'round' ? tableDef.diameterFt : Math.max(tableDef.widthFt, tableDef.depthFt);
-return base + 3.5;
+var chair = chairVisualById(chairId) || {};
+var chairSpan = Math.max(chair.seatWidthFt || 1.5, chair.seatDepthFt || 1.5);
+// Radial clearance for the chair itself (matches js/ui/plan2d.js's
+// buildChairDots anchor offset: tableRadius + chairSpan/2 + 0.35, plus the
+// chair's own outward half-depth) so a table's chairs never reach past the
+// midpoint between it and its neighbor, plus a walking aisle between the
+// backs of chairs at adjacent tables. This keeps every chair style --
+// including much larger throne chairs -- from visually overlapping.
+var chairClearance = chairSpan + 0.35;
+var aisleFt = 2;
+return base + 2 * chairClearance + aisleFt;
 }
 
 function addTableCustom(tableId, chairId, seatCount, linenId) {
 var tent = byId(TENTS, state.tentId);
 var tableDef = byId(TABLES, tableId);
 var tableCount = store.getState().objects.filter(function (i) { return i.kind === 'table'; }).length;
-var pos = nextGridPosition(tableCount, tent, tableCellSize(tableDef));
+var pos = nextGridPosition(tableCount, tent, tableCellSize(tableDef, chairId));
 var item = {
 id: newItemId(),
 kind: 'table',
