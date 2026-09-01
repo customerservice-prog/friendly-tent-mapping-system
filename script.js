@@ -477,7 +477,7 @@ CHAIRS.forEach(function (c) {
 var sel = c.id === tableDraft.chairId;
 html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="chair-card" data-id="' + c.id + '">';
 if (sel) html += '<span class="item-card-check">&#10003;</span>';
-html += '<span class="item-card-icon">&#128081;</span>';
+html += '<span class="item-card-icon">&#128186;</span>';
 html += '<span class="item-card-name">' + c.name + '</span>';
 html += '<span class="item-card-price">' + money(c.pricePerDay) + '/day</span>';
 html += '</button>';
@@ -524,7 +524,7 @@ var danceObjs = store.getState().objects.filter(function (i) { return i.kind ===
 if (danceObjs.length) {
 var perSide = Math.round(Math.sqrt(danceObjs.length));
 var ftSide = perSide * DANCE_SECTION.ft;
-html += '<div class="drawer-summary-row"><span>Current: ' + ftSide + '&times;' + ftSide + ' ft (' + danceObjs.length + ' sections)</span></div>';
+html += '<div class="drawer-summary-row"><span>Current: ' + ftSide + '&times;' + ftSide + ' ft dance floor</span></div>';
 html += '<button type="button" class="btn-danger small" data-role="remove-dance">Remove Dance Floor</button>';
 }
 html += '<div class="drawer-section-title">Choose a Size</div>';
@@ -533,7 +533,7 @@ DANCE_FLOOR_SIZES.forEach(function (sz) {
 var sel = state.danceFloorSizeId === sz.id;
 html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="dance-size-card" data-ft="' + sz.ft + '" data-preset-id="' + sz.id + '">';
 if (sel) html += '<span class="item-card-check">&#10003;</span>';
-html += '<span class="item-card-icon">&#127943;</span>';
+html += '<span class="item-card-icon">&#9835;</span>';
 html += '<span class="item-card-name">' + sz.ft + '&times;' + sz.ft + ' ft</span>';
 html += '<span class="item-card-price">' + money(priceForSize(sz.ft)) + '/day</span>';
 html += '</button>';
@@ -795,7 +795,9 @@ var l = byId(LINENS, lid);
 lines.push({ label: l.name, qty: linenCounts[lid], amount: l.pricePerDay * linenCounts[lid] });
 });
 if (danceCount > 0) {
-lines.push({ label: DANCE_SECTION.name, qty: danceCount, amount: DANCE_SECTION.pricePerDay * danceCount });
+var dPerSide = Math.round(Math.sqrt(danceCount));
+var dFt = dPerSide * DANCE_SECTION.ft;
+lines.push({ label: 'Dance Floor (' + dFt + 'x' + dFt + ' ft)', qty: 1, amount: DANCE_SECTION.pricePerDay * danceCount });
 }
 if (state.lightingId && state.lightingId !== 'lighting-none') {
 var lightOpt = byId(LIGHTING_OPTIONS, state.lightingId);
