@@ -167,10 +167,14 @@ var spacing = cellFt;
 var cols = Math.max(1, Math.floor((tent.widthFt - 4) / spacing));
 var col = index % cols;
 var row = Math.floor(index / cols);
-var maxRows = Math.max(1, Math.floor((tent.lengthFt - 4) / spacing));
-var rowSpacing = (row + 1) > maxRows ? (tent.lengthFt - 4) / (row + 1) : spacing;
+// Always use the full, collision-safe spacing for every row. Previously this
+// compressed row spacing once the tent ran out of vertical room, which could
+// shrink the gap between tables below their real footprint and cause tables
+// (and their chairs) to visually overlap. It is better to allow a layout to
+// extend slightly beyond the drawn tent outline than to render overlapping
+// furniture, so we never compress spacing below the safe value.
 var x = 3 + col * spacing;
-var y = 3 + row * rowSpacing;
+var y = 3 + row * spacing;
 var footprint = Math.max(0, spacing - 3.5);
 var poles = (tent && tent.centerPoles) || [];
 if (poles.length) {
