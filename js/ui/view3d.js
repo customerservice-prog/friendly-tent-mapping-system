@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { byId as chairById } from '../data/chairs.js';
+import { byId as tableById } from '../data/tables.js';
 
 const WALL_H = 9;
 const POLE_PEAK_H = 2.5;
@@ -355,11 +356,54 @@ return group;
 
 function tableLocalGroup(item) {
 const group = new THREE.Group();
-const topY = 2.4;
+const tableDef = tableById(item.tableId);
+const silhouette = tableDef ? tableDef.silhouette : 'dining-round';
 const topMat = new THREE.MeshStandardMaterial({ color: 0xfaf6ee, roughness: 0.6 });
 let radiusForChairs;
+const topY = silhouette === 'cocktail-pedestal' ? 3.5 : 2.4;
 
-if (item.shape === 'round') {
+if (silhouette === 'cocktail-pedestal') {
+const r = item.widthFt / 2;
+const topGeo = new THREE.CylinderGeometry(r, r, 0.12, 32);
+const top = new THREE.Mesh(topGeo, topMat);
+top.position.set(0, topY, 0);
+group.add(top);
+radiusForChairs = r;
+
+const poleMat = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, metalness: 0.4, roughness: 0.5 });
+const poleGeo = new THREE.CylinderGeometry(0.1, 0.1, topY - 0.3, 12);
+const pole = new THREE.Mesh(poleGeo, poleMat);
+pole.position.set(0, (topY - 0.3) / 2 + 0.2, 0);
+group.add(pole);
+
+const footGeo = new THREE.CylinderGeometry(r * 0.55, r * 0.55, 0.2, 24);
+const foot = new THREE.Mesh(footGeo, poleMat);
+foot.position.set(0, 0.1, 0);
+group.add(foot);
+} else if (silhouette === 'fillchill-tub') {
+const tubMat = new THREE.MeshStandardMaterial({ color: 0x1c1e22, roughness: 0.45, metalness: 0.1 });
+const tubGeo = new THREE.BoxGeometry(item.widthFt, 0.4, item.depthFt);
+const tub = new THREE.Mesh(tubGeo, tubMat);
+tub.position.set(0, topY, 0);
+group.add(tub);
+
+const basinMat = new THREE.MeshStandardMaterial({ color: 0x2c3036, roughness: 0.5 });
+const basinGeo = new THREE.BoxGeometry(Math.max(item.widthFt - 0.4, 0.2), 0.08, Math.max(item.depthFt - 0.4, 0.2));
+const basin = new THREE.Mesh(basinGeo, basinMat);
+basin.position.set(0, topY + 0.16, 0);
+group.add(basin);
+radiusForChairs = Math.max(item.widthFt, item.depthFt) / 2;
+
+const legMat = new THREE.MeshStandardMaterial({ color: 0x2b2b2b });
+const legGeo = new THREE.BoxGeometry(0.18, topY - 0.2, 0.18);
+const lx = item.widthFt / 2 - 0.3;
+const lz = item.depthFt / 2 - 0.3;
+[[-lx, -lz], [lx, -lz], [lx, lz], [-lx, lz]].forEach(function (p) {
+const leg = new THREE.Mesh(legGeo, legMat);
+leg.position.set(p[0], (topY - 0.2) / 2, p[1]);
+group.add(leg);
+});
+} else if (item.shape === 'round') {
 const r = item.widthFt / 2;
 const topGeo = new THREE.CylinderGeometry(r, r, 0.15, 32);
 const top = new THREE.Mesh(topGeo, topMat);
@@ -388,6 +432,14 @@ const leg = new THREE.Mesh(legGeo, legMat);
 leg.position.set(p[0], (topY - 0.15) / 2, p[1]);
 group.add(leg);
 });
+
+if (silhouette === 'banquet-rect') {
+const seamMat = new THREE.MeshStandardMaterial({ color: 0xd8cdb0, roughness: 0.7 });
+const seamGeo = new THREE.BoxGeometry(0.03, 0.02, item.depthFt - 0.1);
+const seam = new THREE.Mesh(seamGeo, seamMat);
+seam.position.set(0, topY + 0.075, 0);
+group.add(seam);
+}
 }
 
 if (item.seatCount > 0) {
