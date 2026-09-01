@@ -12,27 +12,11 @@ import { DANCE_SECTION, DANCE_FLOOR_SIZES, sectionsForSize, priceForSize } from 
 import { PACKAGES } from './js/data/packages.js';
 import * as plan2dMod from './js/ui/plan2d.js';
 import { byId as chairVisualById } from './js/data/chairs.js';
+import { FRIENDLY_TENANT, TENTS, TABLES, CHAIRS } from './js/data/tenant.js';
 
 var NL = String.fromCharCode(10);
 
-var TENTS = [
-{ id: 'pole-20x20', type: 'pole', name: "20x20 Pole Tent", widthFt: 20, lengthFt: 20, pricePerDay: 250, maxGuests: { dining: 33, cocktail: 66 } },
-{ id: 'pole-20x30', type: 'pole', name: "20x30 Pole Tent", widthFt: 20, lengthFt: 30, pricePerDay: 350, maxGuests: { dining: 50, cocktail: 100 } },
-{ id: 'pole-20x40', type: 'pole', name: "20x40 Pole Tent", widthFt: 20, lengthFt: 40, pricePerDay: 450, maxGuests: { dining: 66, cocktail: 133 } },
-{ id: 'pole-30x30', type: 'pole', name: "30x30 Pole Tent", widthFt: 30, lengthFt: 30, pricePerDay: 575, maxGuests: { dining: 75, cocktail: 150 } },
-{ id: 'pole-30x45', type: 'pole', name: "30x45 Pole Tent", widthFt: 30, lengthFt: 45, pricePerDay: 700, maxGuests: { dining: 112, cocktail: 225 } },
-{ id: 'pole-30x60', type: 'pole', name: "30x60 Pole Tent", widthFt: 30, lengthFt: 60, pricePerDay: 850, maxGuests: { dining: 150, cocktail: 300 } },
-{ id: 'pole-40x40', type: 'pole', name: "40x40 Pole Tent", widthFt: 40, lengthFt: 40, pricePerDay: 1500, maxGuests: { dining: 133, cocktail: 266 } },
-{ id: 'pole-40x60', type: 'pole', name: "40x60 Pole Tent", widthFt: 40, lengthFt: 60, pricePerDay: 850, maxGuests: { dining: 200, cocktail: 400 } },
-{ id: 'pole-40x80', type: 'pole', name: "40x80 Pole Tent", widthFt: 40, lengthFt: 80, pricePerDay: 1850, maxGuests: { dining: 266, cocktail: 533 } },
-{ id: 'pole-40x100', type: 'pole', name: "40x100 Pole Tent", widthFt: 40, lengthFt: 100, pricePerDay: 1950, maxGuests: { dining: 333, cocktail: 666 } },
-{ id: 'frame-20x20', type: 'frame', name: "20x20 Frame Tent", widthFt: 20, lengthFt: 20, pricePerDay: 400, maxGuests: { dining: 33, cocktail: 66 } },
-{ id: 'frame-20x30', type: 'frame', name: "20x30 Frame Tent", widthFt: 20, lengthFt: 30, pricePerDay: 475, maxGuests: { dining: 50, cocktail: 100 } },
-{ id: 'frame-20x40', type: 'frame', name: "20x40 Frame Tent", widthFt: 20, lengthFt: 40, pricePerDay: 550, maxGuests: { dining: 66, cocktail: 133 } },
-{ id: 'frame-30x40', type: 'frame', name: "30x40 Frame Tent", widthFt: 30, lengthFt: 40, pricePerDay: 700, maxGuests: { dining: 100, cocktail: 200 } },
-{ id: 'canopy-10x10', type: 'canopy', name: "10x10 Pop-Up Canopy", widthFt: 10, lengthFt: 10, pricePerDay: 100, maxGuests: { dining: 8, cocktail: 16 } },
-{ id: 'canopy-10x20', type: 'canopy', name: "10x20 Pop-Up Canopy", widthFt: 10, lengthFt: 20, pricePerDay: 175, maxGuests: { dining: 16, cocktail: 33 } },
-];
+
 
 function computeCenterPoles(type, widthFt, lengthFt) {
 if (type !== 'pole') return [];
@@ -48,23 +32,9 @@ TENTS.forEach(function (t) {
 t.centerPoles = computeCenterPoles(t.type, t.widthFt, t.lengthFt);
 });
 
-var TABLES = [
-{ id: 'round-5ft', name: "5' Round Table", shape: 'round', diameterFt: 5, seatsDefault: 8, pricePerDay: 15.00 },
-{ id: 'banquet-6ft', name: "6' Banquet Table", shape: 'rect', widthFt: 6, depthFt: 2.5, seatsDefault: 6, pricePerDay: 13.00 },
-{ id: 'banquet-8ft', name: "8' Banquet Table", shape: 'rect', widthFt: 8, depthFt: 2.5, seatsDefault: 8, pricePerDay: 14.00 },
-{ id: 'cocktail', name: "Cocktail Table", shape: 'round', diameterFt: 2.5, seatsDefault: 0, pricePerDay: 12.00 },
-{ id: 'fill-chill-4ft', name: "4' Fill & Chill Table", shape: 'rect', widthFt: 4, depthFt: 2, seatsDefault: 0, pricePerDay: 40.00 },
-];
 
-var CHAIRS = [
-{ id: 'plastic-white', name: 'White Plastic Folding Chair', pricePerDay: 2.50 },
-{ id: 'resin-white', name: 'White Resin Folding Chair', pricePerDay: 4.75 },
-{ id: 'chiavari-gold', name: 'Gold Chiavari Chair', pricePerDay: 11.99 },
-{ id: 'chiavari-white', name: 'White Chiavari Chair', pricePerDay: 11.99 },
-{ id: 'chiavari-mahogany', name: 'Mahogany Chiavari Chair', pricePerDay: 12.00 },
-{ id: 'throne-king', name: 'King Throne Chair', pricePerDay: 120.00 },
-{ id: 'throne-queen-tiffany', name: 'Queen Tiffany Throne Chair', pricePerDay: 125.00 },
-];
+
+
 
 var state = {
 eventType: 'wedding',
