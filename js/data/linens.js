@@ -40,3 +40,18 @@ export function optionsForTable(tableId) {
 export function byId(id) {
     return LINENS.find(function (l) { return l.id === id; });
 }
+
+export const LINEN_VISUALS = {
+  'linen-round-90': 'skirt-round',
+  'linen-round-108': 'skirt-round',
+  'linen-spandex-6ft': 'skirt-rect',
+  'linen-spandex-8ft': 'skirt-rect',
+  'linen-banquet-54x120': 'skirt-rect',
+  'linen-banquet-72x120': 'skirt-rect',
+  'linen-cocktail-cover': 'skirt-round',
+  'linen-runner-9ft': 'runner',
+};
+
+export function linenVisual(linenId) {
+  return LINEN_VISUALS[linenId] || null;
+}
