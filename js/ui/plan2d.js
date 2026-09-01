@@ -5,6 +5,7 @@
 // directly above than in a 3D perspective view.
 
 import { byId as chairById } from '../data/chairs.js';
+import { byId as tableById } from '../data/tables.js';
 
 let container = null;
 let stageEl = null;
@@ -132,8 +133,11 @@ function render(data) {
   (data.objects || []).forEach(function (item) {
     const wrap = document.createElement('div');
     const isDance = item.kind === 'dance';
+    const tableDef = (!isDance && item.kind === 'table') ? tableById(item.tableId) : null;
+    const silhouette = tableDef ? tableDef.silhouette : null;
     const shapeClass = isDance ? 'rect dance' : (item.shape === 'round' ? 'round' : 'rect');
-    wrap.className = 'plan2d-object ' + shapeClass + ' ' + severityClass(data, item.id) + (data.selectedId === item.id ? ' selected' : '');
+    const silhouetteClass = silhouette ? ' plan2d-table--' + silhouette : '';
+    wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + ' ' + severityClass(data, item.id) + (data.selectedId === item.id ? ' selected' : '');
     wrap.style.left = (item.x * pxPerFt) + 'px';
     wrap.style.top = (item.y * pxPerFt) + 'px';
     wrap.style.width = (item.widthFt * pxPerFt) + 'px';
@@ -142,11 +146,15 @@ function render(data) {
 
     const top = document.createElement('div');
     top.className = 'plan2d-table-top';
+    top.innerHTML = tableTopDetailHtml(silhouette);
+    const label = document.createElement('span');
+    label.className = 'plan2d-table-label';
     if (isDance) {
-      top.textContent = '';
+      label.textContent = '';
     } else {
-      top.textContent = item.seatCount > 0 ? (item.seatCount + ' seats') : '';
+      label.textContent = item.seatCount > 0 ? (item.seatCount + ' seats') : '';
     }
+    top.appendChild(label);
     wrap.appendChild(top);
     stageEl.appendChild(wrap);
 
@@ -157,6 +165,22 @@ function render(data) {
 
     wrap.addEventListener('pointerdown', function (e) { onPointerDown(e, item); });
   });
+}
+
+// Small top-down visual detail per real Friendly Party Rental table type so tables
+// are recognizable on the plan without reading the label (e.g. a fold seam on
+// banquet tables, a pedestal mark on cocktail tables, a basin on Fill & Chill).
+function tableTopDetailHtml(silhouette) {
+  if (silhouette === 'banquet-rect') {
+    return '<span class="plan2d-table-seam"></span>';
+  }
+  if (silhouette === 'cocktail-pedestal') {
+    return '<span class="plan2d-table-pedestal"></span>';
+  }
+  if (silhouette === 'fillchill-tub') {
+    return '<span class="plan2d-table-basin"><span class="plan2d-table-drain"></span></span>';
+  }
+  return '';
 }
 
 function onPointerDown(e, item) {
