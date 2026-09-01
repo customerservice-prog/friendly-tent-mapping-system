@@ -9,6 +9,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { byId as chairById } from '../data/chairs.js';
 import { byId as tableById } from '../data/tables.js';
 import { byId as lightingById } from '../data/lighting.js';
+import { linenVisual } from '../data/linens.js';
 
 const WALL_H = 9;
 const POLE_PEAK_H = 2.5;
@@ -359,6 +360,27 @@ function tableLocalGroup(item) {
 const group = new THREE.Group();
 const tableDef = tableById(item.tableId);
 const silhouette = tableDef ? tableDef.silhouette : 'dining-round';
+    var linenVisualType = linenVisual(item.linenId);
+    if (linenVisualType === 'skirt-round' || linenVisualType === 'skirt-rect') {
+      var skirtR = (item.widthFt || 5) / 2 + 0.15;
+      var skirtD = (item.depthFt || item.widthFt || 5) / 2 + 0.15;
+      var skirtTopY = silhouette === 'cocktail-pedestal' ? 3.5 : 2.4;
+      var skirtMat = new THREE.MeshStandardMaterial({ color: 0xf7f3ec, roughness: 0.85 });
+      var skirtMesh;
+      if (linenVisualType === 'skirt-round') {
+        skirtMesh = new THREE.Mesh(new THREE.CylinderGeometry(skirtR, skirtR, skirtTopY - 0.05, 24), skirtMat);
+      } else {
+        skirtMesh = new THREE.Mesh(new THREE.BoxGeometry(skirtR * 2, skirtTopY - 0.05, skirtD * 2), skirtMat);
+      }
+      skirtMesh.position.y = (skirtTopY - 0.05) / 2;
+      group.add(skirtMesh);
+    } else if (linenVisualType === 'runner') {
+      var runnerTopY = (silhouette === 'cocktail-pedestal' ? 3.5 : 2.4) + 0.03;
+      var runnerMat = new THREE.MeshStandardMaterial({ color: 0xd4c9a3, roughness: 0.7 });
+      var runnerMesh = new THREE.Mesh(new THREE.BoxGeometry((item.widthFt || 5) * 0.9, 0.03, 1.4), runnerMat);
+      runnerMesh.position.y = runnerTopY;
+      group.add(runnerMesh);
+    }
 const topMat = new THREE.MeshStandardMaterial({ color: 0xfaf6ee, roughness: 0.6 });
 let radiusForChairs;
 const topY = silhouette === 'cocktail-pedestal' ? 3.5 : 2.4;
