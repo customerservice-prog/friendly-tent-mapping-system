@@ -222,6 +222,7 @@ chairId: chairId,
 linenId: linenId || null,
 };
 store.addObject(item);
+return item.id;
 }
 
 function addTable(tableId, chairId, linenId) {
@@ -240,8 +241,9 @@ return tableDraft;
 function addTableFromDraft() {
 var tableDef = byId(TABLES, tableDraft.tableId);
 var seatCount = tableDef.seatsDefault > 0 ? tableDraft.seatCount : 0;
-addTableCustom(tableDraft.tableId, tableDraft.chairId, seatCount, tableDraft.linenId);
+var newId = addTableCustom(tableDraft.tableId, tableDraft.chairId, seatCount, tableDraft.linenId);
 state.lastTableConfig = { tableId: tableDraft.tableId, chairId: tableDraft.chairId, seatCount: seatCount, linenId: tableDraft.linenId };
+return newId;
 }
 
 function addTableFromConfig(cfg, n) {
@@ -335,6 +337,7 @@ return {
 tent: tent,
 objects: store.getState().objects,
 lightingOn: !!(state.lightingId && state.lightingId !== 'lighting-none'),
+lightingId: state.lightingId,
 selectedId: state.selectedId,
 severityMap: conflictSeverityByItemId(conflicts || []),
 };
@@ -436,6 +439,7 @@ return '';
 
 function openDrawer(kind) {
 state.activeDrawer = kind;
+if (kind === 'tables' && tableDraft) tableDraft.activeItemId = null;
 document.querySelectorAll('.rail-btn').forEach(function (b) {
 b.classList.toggle('active', b.dataset.drawer === kind);
 });
@@ -564,7 +568,7 @@ html += '</button>';
 html += '</div>';
 }
 
-html += '<button type="button" class="btn-primary drawer-add-btn" data-role="add-table">+ Add ' + tableDef.name + '</button>';
+html += '<button type="button" class="btn-primary drawer-add-btn" data-role="add-table">+ Add Another ' + tableDef.name + '</button>';
 return html;
 }
 
@@ -950,17 +954,31 @@ if (!el) return;
 var role = el.dataset.role;
 if (role === 'tent-card') { selectTent(el.dataset.id); }
 else if (role === 'table-card') {
-var t = byId(TABLES, el.dataset.id);
+var newTableDef = byId(TABLES, el.dataset.id);
 tableDraft.tableId = el.dataset.id;
-tableDraft.seatCount = t.seatsDefault;
+tableDraft.seatCount = newTableDef.seatsDefault;
 tableDraft.linenId = null;
+if (tableDraft.activeItemId && store.getState().objects.some(function (i) { return i.id === tableDraft.activeItemId; })) {
+store.updateObject(tableDraft.activeItemId, {
+tableId: newTableDef.id,
+shape: newTableDef.shape,
+widthFt: newTableDef.shape === 'round' ? newTableDef.diameterFt : newTableDef.widthFt,
+depthFt: newTableDef.shape === 'round' ? newTableDef.diameterFt : newTableDef.depthFt,
+seatCount: tableDraft.seatCount,
+linenId: null,
+});
+state.selectedId = tableDraft.activeItemId;
+} else {
+tableDraft.activeItemId = addTableFromDraft();
+state.selectedId = tableDraft.activeItemId;
+}
 renderDrawerBody('tables');
 }
-else if (role === 'chair-card') { tableDraft.chairId = el.dataset.id; renderDrawerBody('tables'); }
-else if (role === 'linen-card') { tableDraft.linenId = el.dataset.id || null; renderDrawerBody('tables'); }
-else if (role === 'seat-minus') { tableDraft.seatCount = Math.max(0, tableDraft.seatCount - 1); renderDrawerBody('tables'); }
-else if (role === 'seat-plus') { tableDraft.seatCount = Math.min(16, tableDraft.seatCount + 1); renderDrawerBody('tables'); }
-else if (role === 'add-table') { addTableFromDraft(); }
+else if (role === 'chair-card') { tableDraft.chairId = el.dataset.id; if (tableDraft.activeItemId) store.updateObject(tableDraft.activeItemId, { chairId: tableDraft.chairId }); renderDrawerBody('tables'); }
+else if (role === 'linen-card') { tableDraft.linenId = el.dataset.id || null; if (tableDraft.activeItemId) store.updateObject(tableDraft.activeItemId, { linenId: tableDraft.linenId }); renderDrawerBody('tables'); }
+else if (role === 'seat-minus') { tableDraft.seatCount = Math.max(0, tableDraft.seatCount - 1); if (tableDraft.activeItemId) store.updateObject(tableDraft.activeItemId, { seatCount: tableDraft.seatCount }); renderDrawerBody('tables'); }
+else if (role === 'seat-plus') { tableDraft.seatCount = Math.min(16, tableDraft.seatCount + 1); if (tableDraft.activeItemId) store.updateObject(tableDraft.activeItemId, { seatCount: tableDraft.seatCount }); renderDrawerBody('tables'); }
+else if (role === 'add-table') { tableDraft.activeItemId = addTableFromDraft(); state.selectedId = tableDraft.activeItemId; }
 else if (role === 'quick-add') { addTableFromConfig(state.lastTableConfig, parseInt(el.dataset.count, 10)); }
 else if (role === 'dance-size-card') {
 var ft = parseInt(el.dataset.ft, 10);
@@ -1038,6 +1056,15 @@ this.textContent = night ? 'Day' : 'Night';
 $('btnUndo').addEventListener('click', function () { store.undo(); });
 $('btnRedo').addEventListener('click', function () { store.redo(); });
 store.subscribe(function () { refreshAll(); });
+
+document.addEventListener('keydown', function (e) {
+if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+var tag = (document.activeElement && document.activeElement.tagName) || '';
+if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+if (!state.selectedId) return;
+store.removeObject(state.selectedId);
+state.selectedId = null;
+});
 
 $('btnBackToRecommend').addEventListener('click', function () {
 document.body.classList.remove('designer-active');
