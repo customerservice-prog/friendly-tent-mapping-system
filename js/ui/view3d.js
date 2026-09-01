@@ -8,6 +8,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { byId as chairById } from '../data/chairs.js';
 import { byId as tableById } from '../data/tables.js';
+import { byId as lightingById } from '../data/lighting.js';
 
 const WALL_H = 9;
 const POLE_PEAK_H = 2.5;
@@ -533,6 +534,158 @@ rigs.push({ bulb: bulb, light: light });
 return rigs;
 }
 
+
+function addTentLightingGrid(tent) {
+const rigs = [];
+const halfW = tent.widthFt / 2;
+const halfL = tent.lengthFt / 2;
+const y = WALL_H + POLE_PEAK_H - 0.5;
+const spacing = 5;
+const bulbGeo = new THREE.SphereGeometry(0.12, 8, 8);
+const cols = [];
+for (let x = -halfW + 2.2; x <= halfW - 1.2; x += spacing) cols.push(x);
+if (!cols.length) cols.push(0);
+const rows = [];
+for (let z = -halfL + 2.2; z <= halfL - 1.2; z += spacing) rows.push(z);
+if (!rows.length) rows.push(0);
+const lineMat = new THREE.LineBasicMaterial({ color: 0x33321f });
+cols.forEach(function (x) {
+const pts = [new THREE.Vector3(x, y, -halfL), new THREE.Vector3(x, y, halfL)];
+dynamicGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+});
+rows.forEach(function (z) {
+const pts = [new THREE.Vector3(-halfW, y, z), new THREE.Vector3(halfW, y, z)];
+dynamicGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+});
+let idx = 0;
+cols.forEach(function (x) {
+rows.forEach(function (z) {
+const bulbMat = new THREE.MeshStandardMaterial({ color: 0x554422, emissive: 0xffdd88, emissiveIntensity: 0 });
+const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+bulb.position.set(x, y, z);
+dynamicGroup.add(bulb);
+let light = null;
+if (idx % 3 === 0) {
+light = new THREE.PointLight(0xffdd88, 0, 18, 1.6);
+light.position.set(x, y, z);
+dynamicGroup.add(light);
+}
+rigs.push({ bulb: bulb, light: light });
+idx++;
+});
+});
+return rigs;
+}
+
+function addBistroSwagLights(tent) {
+const rigs = [];
+const halfW = tent.widthFt / 2;
+const halfL = tent.lengthFt / 2;
+const y = WALL_H + 1.4;
+const sag = 1.3;
+const bulbGeo = new THREE.SphereGeometry(0.15, 8, 8);
+const lineMat = new THREE.LineBasicMaterial({ color: 0x2a2a2a });
+function swag(a, b) {
+const steps = 16;
+const pts = [];
+for (let i = 0; i <= steps; i++) {
+const tt = i / steps;
+const x = a[0] + (b[0] - a[0]) * tt;
+const z = a[1] + (b[1] - a[1]) * tt;
+const droop = Math.sin(Math.PI * tt) * sag;
+pts.push(new THREE.Vector3(x, y - droop, z));
+}
+dynamicGroup.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), lineMat));
+for (let i = 2; i < steps; i += 2) {
+const p = pts[i];
+const bulbMat = new THREE.MeshStandardMaterial({ color: 0x554422, emissive: 0xffb347, emissiveIntensity: 0 });
+const bulb = new THREE.Mesh(bulbGeo, bulbMat);
+bulb.position.copy(p);
+dynamicGroup.add(bulb);
+let light = null;
+if (i % 4 === 2) {
+light = new THREE.PointLight(0xffb347, 0, 16, 1.6);
+light.position.copy(p);
+dynamicGroup.add(light);
+}
+rigs.push({ bulb: bulb, light: light });
+}
+}
+swag([-halfW, -halfL], [halfW, halfL]);
+swag([halfW, -halfL], [-halfW, halfL]);
+return rigs;
+}
+
+function addUplightingPucks(tent, count) {
+const rigs = [];
+const inset = 0.9;
+const w = Math.max(1, tent.widthFt - inset * 2);
+const l = Math.max(1, tent.lengthFt - inset * 2);
+const perimLen = 2 * (w + l);
+const puckGeo = new THREE.CylinderGeometry(0.22, 0.26, 0.2, 12);
+const puckMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a });
+const glowGeo = new THREE.SphereGeometry(0.14, 8, 8);
+const uplightColor = 0x7c4fe0;
+for (let i = 0; i < count; i++) {
+const d = count === 1 ? perimLen * 0.5 : (i / count) * perimLen;
+let x, z;
+if (d < w) { x = -w / 2 + d; z = -l / 2; }
+else if (d < w + l) { x = w / 2; z = -l / 2 + (d - w); }
+else if (d < 2 * w + l) { x = w / 2 - (d - w - l); z = l / 2; }
+else { x = -w / 2; z = l / 2 - (d - 2 * w - l); }
+const puck = new THREE.Mesh(puckGeo, puckMat);
+puck.position.set(x, 0.1, z);
+dynamicGroup.add(puck);
+const glowMat = new THREE.MeshStandardMaterial({ color: 0x2a1a3a, emissive: uplightColor, emissiveIntensity: 0 });
+const glow = new THREE.Mesh(glowGeo, glowMat);
+glow.position.set(x, 0.28, z);
+dynamicGroup.add(glow);
+const light = new THREE.PointLight(uplightColor, 0, 9, 2);
+light.position.set(x, 1.4, z);
+dynamicGroup.add(light);
+rigs.push({ bulb: glow, light: light });
+}
+return rigs;
+}
+
+function addChandelier(tent) {
+const rigs = [];
+const y = WALL_H + POLE_PEAK_H - 0.5;
+const group = new THREE.Group();
+const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.6, roughness: 0.3 });
+const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6), goldMat);
+rod.position.set(0, y - 0.45, 0);
+group.add(rod);
+const tiers = [0.55, 0.4, 0.25];
+tiers.forEach(function (r, i) {
+const torus = new THREE.Mesh(new THREE.TorusGeometry(r, 0.03, 8, 16), goldMat);
+torus.rotation.x = Math.PI / 2;
+const ty = y - 0.95 - i * 0.32;
+torus.position.set(0, ty, 0);
+group.add(torus);
+const dropCount = 8;
+for (let j = 0; j < dropCount; j++) {
+const ang = (j / dropCount) * Math.PI * 2;
+const dropMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff3d0, emissiveIntensity: 0, transparent: true, opacity: 0.85 });
+const drop = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 6), dropMat);
+drop.position.set(Math.cos(ang) * r, ty - 0.15, Math.sin(ang) * r);
+group.add(drop);
+if (i === tiers.length - 1 && j % 2 === 0) rigs.push({ bulb: drop, light: null });
+}
+});
+const centerY = y - 0.95 - (tiers.length - 1) * 0.32 - 0.55;
+const bulbMat = new THREE.MeshStandardMaterial({ color: 0xfff3d0, emissive: 0xffe9b0, emissiveIntensity: 0 });
+const centerBulb = new THREE.Mesh(new THREE.SphereGeometry(0.09, 8, 8), bulbMat);
+centerBulb.position.set(0, centerY, 0);
+group.add(centerBulb);
+const light = new THREE.PointLight(0xffe9b0, 0, 22, 1.8);
+light.position.set(0, centerY, 0);
+group.add(light);
+rigs.push({ bulb: centerBulb, light: light });
+dynamicGroup.add(group);
+return rigs;
+}
+
 function applyLighting() {
 if (!scene) return;
 if (isNight) {
@@ -611,8 +764,21 @@ local.add(highlightRing(item.widthFt, item.depthFt, 0x2f7a3c));
 dynamicGroup.add(local);
 });
 
-if (data.lightingOn) {
+const lightingOpt = data.lightingId ? lightingById(data.lightingId) : null;
+if (lightingOpt && lightingOpt.visual && lightingOpt.visual !== 'none') {
+if (lightingOpt.visual === 'grid-canopy') {
+stringLightRigs = addTentLightingGrid(currentTent);
+} else if (lightingOpt.visual === 'perimeter-swag') {
+stringLightRigs = addBistroSwagLights(currentTent);
+} else if (lightingOpt.visual === 'uplight-ring') {
+stringLightRigs = addUplightingPucks(currentTent, 12);
+} else if (lightingOpt.visual === 'uplight-single') {
+stringLightRigs = addUplightingPucks(currentTent, 1);
+} else if (lightingOpt.visual === 'chandelier') {
+stringLightRigs = addChandelier(currentTent);
+} else if (lightingOpt.visual === 'perimeter-strand') {
 stringLightRigs = addStringLights(currentTent);
+}
 }
 
 applyLighting();
