@@ -8,6 +8,7 @@
 // TENTS array that used to live inline in script.js.
 import { CHAIRS } from './chairs.js';
 import { TABLES } from './tables.js';
+export { CHAIRS, TABLES };
 
 export const TENTS = [
 { id: 'pole-20x20', type: 'pole', name: "20x20 Pole Tent", widthFt: 20, lengthFt: 20, pricePerDay: 250, maxGuests: { dining: 33, cocktail: 66 } },
