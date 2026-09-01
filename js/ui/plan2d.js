@@ -6,6 +6,7 @@
 
 import { byId as chairById } from '../data/chairs.js';
 import { byId as tableById } from '../data/tables.js';
+import { linenVisual } from '../data/linens.js';
 
 let container = null;
 let stageEl = null;
@@ -137,7 +138,8 @@ function render(data) {
     const silhouette = tableDef ? tableDef.silhouette : null;
     const shapeClass = isDance ? 'rect dance' : (item.shape === 'round' ? 'round' : 'rect');
     const silhouetteClass = silhouette ? ' plan2d-table--' + silhouette : '';
-    wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + ' ' + severityClass(data, item.id) + (data.selectedId === item.id ? ' selected' : '');
+    var linenClass = linenVisual(item.linenId) ? ' plan2d-linen--' + linenVisual(item.linenId) : '';
+    wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + linenClass + ' ' + severityClass(data, item.id) + (data.selectedId === item.id ? ' selected' : '');
     wrap.style.left = (item.x * pxPerFt) + 'px';
     wrap.style.top = (item.y * pxPerFt) + 'px';
     wrap.style.width = (item.widthFt * pxPerFt) + 'px';
