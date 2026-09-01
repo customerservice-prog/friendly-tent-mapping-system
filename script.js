@@ -1,17 +1,20 @@
-// Friendly Event Designer - v1 client-side logic
-// Pricing below reflects Friendly Party Rental's published per-day pricing
-// (see FRIENDLY-EVENT-DESIGNER.md, section 7). Update here if prices change.
+// Friendly Event Designer - v2 client-side logic
+// Customer-facing designer: contextual drawers, visual cards, a 2D-first
+// canvas, a contextual inspector, actionable Event Check feedback, and a
+// persistent status bar. Pricing reflects Friendly Party Rental's published
+// per-day pricing (see FRIENDLY-EVENT-DESIGNER.md, section 7).
 
 import { createLayoutStore } from './js/core/layoutStore.js';
 import { runAllChecks } from './js/core/collision.js';
 import { LINENS, optionsForTable } from './js/data/linens.js';
 import { LIGHTING_OPTIONS, tentLightingPriceFor } from './js/data/lighting.js';
-import { DANCE_SECTION, DANCE_FLOOR_SIZES, sectionsForSize } from './js/data/danceFloor.js';
+import { DANCE_SECTION, DANCE_FLOOR_SIZES, sectionsForSize, priceForSize } from './js/data/danceFloor.js';
 import { PACKAGES } from './js/data/packages.js';
+import * as plan2dMod from './js/ui/plan2d.js';
 
-const NL = String.fromCharCode(10);
+var NL = String.fromCharCode(10);
 
-const TENTS = [
+var TENTS = [
 { id: 'pole-20x20', type: 'pole', name: "20x20 Pole Tent", widthFt: 20, lengthFt: 20, pricePerDay: 250, maxGuests: { dining: 33, cocktail: 66 } },
 { id: 'pole-20x30', type: 'pole', name: "20x30 Pole Tent", widthFt: 20, lengthFt: 30, pricePerDay: 350, maxGuests: { dining: 50, cocktail: 100 } },
 { id: 'pole-20x40', type: 'pole', name: "20x40 Pole Tent", widthFt: 20, lengthFt: 40, pricePerDay: 450, maxGuests: { dining: 66, cocktail: 133 } },
@@ -32,10 +35,10 @@ const TENTS = [
 
 function computeCenterPoles(type, widthFt, lengthFt) {
 if (type !== 'pole') return [];
-const bay = 10;
-const count = Math.max(1, Math.round(lengthFt / bay) - 1);
-const poles = [];
-for (let i = 1; i <= count; i++) {
+var bay = 10;
+var count = Math.max(1, Math.round(lengthFt / bay) - 1);
+var poles = [];
+for (var i = 1; i <= count; i++) {
 poles.push({ x: widthFt / 2, y: (lengthFt / (count + 1)) * i });
 }
 return poles;
@@ -44,7 +47,7 @@ TENTS.forEach(function (t) {
 t.centerPoles = computeCenterPoles(t.type, t.widthFt, t.lengthFt);
 });
 
-const TABLES = [
+var TABLES = [
 { id: 'round-5ft', name: "5' Round Table", shape: 'round', diameterFt: 5, seatsDefault: 8, pricePerDay: 15.00 },
 { id: 'banquet-6ft', name: "6' Banquet Table", shape: 'rect', widthFt: 6, depthFt: 2.5, seatsDefault: 6, pricePerDay: 13.00 },
 { id: 'banquet-8ft', name: "8' Banquet Table", shape: 'rect', widthFt: 8, depthFt: 2.5, seatsDefault: 8, pricePerDay: 14.00 },
@@ -52,7 +55,7 @@ const TABLES = [
 { id: 'fill-chill-4ft', name: "4' Fill & Chill Table", shape: 'round', diameterFt: 4, seatsDefault: 0, pricePerDay: 40.00 },
 ];
 
-const CHAIRS = [
+var CHAIRS = [
 { id: 'plastic-white', name: 'White Plastic Folding Chair', pricePerDay: 2.50 },
 { id: 'resin-white', name: 'White Resin Folding Chair', pricePerDay: 4.75 },
 { id: 'chiavari-gold', name: 'Gold Chiavari Chair', pricePerDay: 11.99 },
@@ -62,7 +65,7 @@ const CHAIRS = [
 { id: 'throne-queen-tiffany', name: 'Queen Tiffany Throne Chair', pricePerDay: 125.00 },
 ];
 
-const state = {
+var state = {
 eventType: 'wedding',
 guestCount: 50,
 spaceType: 'backyard',
@@ -74,12 +77,18 @@ tentId: 'pole-20x40',
 chairId: 'plastic-white',
 lightingId: 'lighting-none',
 selectedId: null,
+viewMode: 'plan',
+activeDrawer: null,
+lastTableConfig: null,
+eventCheckOpen: false,
+estimateOpen: false,
 };
 
-let nextItemNum = 1;
+var nextItemNum = 1;
 function newItemId() { return 'item-' + (nextItemNum++); }
 
-const store = createLayoutStore({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
+var store = createLayoutStore({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
+var tableDraft = null;
 
 function byId(arr, id) { return arr.find(function (a) { return a.id === id; }); }
 function $(id) { return document.getElementById(id); }
@@ -93,14 +102,32 @@ function money(n) { return '$' + n.toFixed(2); }
 
 function danceFloorSizeFt() {
 if (state.danceFloorSizeId === 'custom') return state.customDanceFloorFt || 18;
-const sz = byId(DANCE_FLOOR_SIZES, state.danceFloorSizeId);
+var sz = byId(DANCE_FLOOR_SIZES, state.danceFloorSizeId);
 return sz ? sz.ft : 18;
 }
+
+function recommendDanceFloorFt() {
+var g = state.guestCount;
+if (g <= 30) return 12;
+if (g <= 60) return 15;
+if (g <= 100) return 18;
+if (g <= 150) return 21;
+return 24;
+}
+
+function validateLighting() {
+var tent = byId(TENTS, state.tentId);
+var opt = byId(LIGHTING_OPTIONS, state.lightingId);
+if (opt && opt.dynamic && tentLightingPriceFor(tent) == null) state.lightingId = 'lighting-none';
+}
+
 function useRecommendedLayout() {
 store.reset({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
 state.selectedId = null;
-const tablesNeeded = Math.ceil(state.guestCount / 8);
-for (let i = 0; i < tablesNeeded; i++) { addTable('round-5ft', state.chairId, null); }
+state.lastTableConfig = null;
+var tablesNeeded = Math.ceil(state.guestCount / 8);
+for (var i = 0; i < tablesNeeded; i++) { addTable('round-5ft', state.chairId, null); }
+if (tablesNeeded > 0) state.lastTableConfig = { tableId: 'round-5ft', chairId: state.chairId, seatCount: 8, linenId: null };
 if (state.needDance) {
 setDanceFloorCount(sectionsForSize(danceFloorSizeFt()));
 }
@@ -110,155 +137,63 @@ enterDesigner();
 function customizeFromScratch() {
 store.reset({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
 state.selectedId = null;
+state.lastTableConfig = null;
 enterDesigner();
 }
 
 function enterDesigner() {
-populateTentSelect();
-populateChairSelect();
-populateLightingSelect();
-populateDanceFloorSizeSelect();
+document.body.classList.add('designer-active');
+state.viewMode = 'plan';
+state.selectedId = null;
+state.activeDrawer = null;
+state.eventCheckOpen = false;
+state.estimateOpen = false;
+validateLighting();
 showStep('step-designer');
-mount3D();
+closeDrawer();
+mountPlan();
+setViewMode('plan');
 refreshAll();
 }
-function populateTentSelect() {
-const sel = $('tentSelect');
-sel.innerHTML = '';
-TENTS.forEach(function (t) {
-const opt = document.createElement('option');
-opt.value = t.id;
-opt.textContent = t.name + ' (' + t.widthFt + 'x' + t.lengthFt + ') - ' + money(t.pricePerDay) + '/day';
-if (t.id === state.tentId) opt.selected = true;
-sel.appendChild(opt);
-});
-}
-$('tentSelect').addEventListener('change', function () {
-state.tentId = this.value;
-populateLightingSelect();
+
+function selectTent(tentId) {
+state.tentId = tentId;
+validateLighting();
 refreshAll();
-});
-
-function populateChairSelect() {
-const sel = $('chairSelect');
-sel.innerHTML = '';
-CHAIRS.forEach(function (c) {
-const opt = document.createElement('option');
-opt.value = c.id;
-opt.textContent = c.name + ' - ' + money(c.pricePerDay) + '/day';
-if (c.id === state.chairId) opt.selected = true;
-sel.appendChild(opt);
-});
 }
-$('chairSelect').addEventListener('change', function () { state.chairId = this.value; });
-
-function populateLightingSelect() {
-const sel = $('lightingSelect');
-const tent = byId(TENTS, state.tentId);
-const currentLightOpt = byId(LIGHTING_OPTIONS, state.lightingId);
-if (currentLightOpt && currentLightOpt.dynamic && tentLightingPriceFor(tent) == null) {
-state.lightingId = 'lighting-none';
-}
-sel.innerHTML = '';
-LIGHTING_OPTIONS.forEach(function (l) {
-if (l.dynamic && tentLightingPriceFor(tent) == null) return;
-const opt = document.createElement('option');
-opt.value = l.id;
-const price = l.dynamic ? tentLightingPriceFor(tent) : l.pricePerDay;
-opt.textContent = l.name + (price ? (' - ' + money(price) + '/day') : '');
-if (l.id === state.lightingId) opt.selected = true;
-sel.appendChild(opt);
-});
-}
-$('lightingSelect').addEventListener('change', function () {
-state.lightingId = this.value;
-refreshAll();
-});
-
-function populateDanceFloorSizeSelect() {
-const sel = $('danceFloorSizeSelect');
-sel.innerHTML = '';
-DANCE_FLOOR_SIZES.forEach(function (sz) {
-const opt = document.createElement('option');
-opt.value = sz.id;
-opt.textContent = sz.ft + 'x' + sz.ft + ' ft (' + sectionsForSize(sz.ft) + ' sections)';
-if (sz.id === state.danceFloorSizeId) opt.selected = true;
-sel.appendChild(opt);
-});
-if (state.danceFloorSizeId === 'custom') {
-const opt = document.createElement('option');
-opt.value = 'custom';
-opt.textContent = 'Custom (' + (state.customDanceFloorFt || 18) + 'x' + (state.customDanceFloorFt || 18) + ' ft)';
-opt.selected = true;
-sel.appendChild(opt);
-}
-}
-$('danceFloorSizeSelect').addEventListener('change', function () { state.danceFloorSizeId = this.value; });
-$('setDanceFloorSize').addEventListener('click', function () {
-setDanceFloorToSize(danceFloorSizeFt());
-refreshAll();
-});
-(function buildTableButtons() {
-const wrap = $('tableButtons');
-TABLES.forEach(function (t) {
-const row = document.createElement('div');
-row.className = 'table-add-row';
-const btn = document.createElement('button');
-btn.className = 'btn-secondary small';
-btn.textContent = '+ Add ' + t.name;
-const linenSel = document.createElement('select');
-linenSel.className = 'linen-select';
-const noneOpt = document.createElement('option');
-noneOpt.value = '';
-noneOpt.textContent = 'No linen';
-linenSel.appendChild(noneOpt);
-optionsForTable(t.id).forEach(function (l) {
-const opt = document.createElement('option');
-opt.value = l.id;
-opt.textContent = l.name + ' - ' + money(l.pricePerDay) + '/day';
-linenSel.appendChild(opt);
-});
-btn.addEventListener('click', function () { addTable(t.id, state.chairId, linenSel.value || null); });
-row.appendChild(btn);
-row.appendChild(linenSel);
-wrap.appendChild(row);
-});
-})();
-
-$('addDanceFloor').addEventListener('click', function () { addDanceFloor(); });
 
 function nextGridPosition(index, tent, cellFt) {
-  const spacing = cellFt;
-  const cols = Math.max(1, Math.floor((tent.widthFt - 4) / spacing));
-  const col = index % cols;
-  const row = Math.floor(index / cols);
-  const maxRows = Math.max(1, Math.floor((tent.lengthFt - 4) / spacing));
-  const rowSpacing = (row + 1) > maxRows ? (tent.lengthFt - 4) / (row + 1) : spacing;
-  let x = 3 + col * spacing;
-  const y = 3 + row * rowSpacing;
-  const footprint = Math.max(0, spacing - 3.5);
-  const poles = (tent && tent.centerPoles) || [];
-  if (poles.length) {
-    const poleX = poles[0].x;
-    const clearance = 1.25;
-    if (x - clearance < poleX && poleX < x + footprint + clearance) {
-      x = poleX + clearance + 0.01;
-    }
-  }
-  return { x: x, y: y };
+var spacing = cellFt;
+var cols = Math.max(1, Math.floor((tent.widthFt - 4) / spacing));
+var col = index % cols;
+var row = Math.floor(index / cols);
+var maxRows = Math.max(1, Math.floor((tent.lengthFt - 4) / spacing));
+var rowSpacing = (row + 1) > maxRows ? (tent.lengthFt - 4) / (row + 1) : spacing;
+var x = 3 + col * spacing;
+var y = 3 + row * rowSpacing;
+var footprint = Math.max(0, spacing - 3.5);
+var poles = (tent && tent.centerPoles) || [];
+if (poles.length) {
+var poleX = poles[0].x;
+var clearance = 1.25;
+if (x - clearance < poleX && poleX < x + footprint + clearance) {
+x = poleX + clearance + 0.01;
+}
+}
+return { x: x, y: y };
 }
 
 function tableCellSize(tableDef) {
-const base = tableDef.shape === 'round' ? tableDef.diameterFt : Math.max(tableDef.widthFt, tableDef.depthFt);
+var base = tableDef.shape === 'round' ? tableDef.diameterFt : Math.max(tableDef.widthFt, tableDef.depthFt);
 return base + 3.5;
 }
 
-function addTable(tableId, chairId, linenId) {
-const tent = byId(TENTS, state.tentId);
-const tableDef = byId(TABLES, tableId);
-const tableCount = store.getState().objects.filter(function (i) { return i.kind === 'table'; }).length;
-const pos = nextGridPosition(tableCount, tent, tableCellSize(tableDef));
-const item = {
+function addTableCustom(tableId, chairId, seatCount, linenId) {
+var tent = byId(TENTS, state.tentId);
+var tableDef = byId(TABLES, tableId);
+var tableCount = store.getState().objects.filter(function (i) { return i.kind === 'table'; }).length;
+var pos = nextGridPosition(tableCount, tent, tableCellSize(tableDef));
+var item = {
 id: newItemId(),
 kind: 'table',
 tableId: tableId,
@@ -267,47 +202,72 @@ widthFt: tableDef.shape === 'round' ? tableDef.diameterFt : tableDef.widthFt,
 depthFt: tableDef.shape === 'round' ? tableDef.diameterFt : tableDef.depthFt,
 x: pos.x,
 y: pos.y,
-seatCount: tableDef.seatsDefault,
+seatCount: seatCount,
 chairId: chairId,
 linenId: linenId || null,
 };
 store.addObject(item);
 }
 
+function addTable(tableId, chairId, linenId) {
+var tableDef = byId(TABLES, tableId);
+addTableCustom(tableId, chairId, tableDef.seatsDefault, linenId);
+}
+
+function ensureTableDraft() {
+if (!tableDraft) {
+var t = TABLES[0];
+tableDraft = { tableId: t.id, chairId: state.chairId, seatCount: t.seatsDefault, linenId: null };
+}
+return tableDraft;
+}
+
+function addTableFromDraft() {
+var tableDef = byId(TABLES, tableDraft.tableId);
+var seatCount = tableDef.seatsDefault > 0 ? tableDraft.seatCount : 0;
+addTableCustom(tableDraft.tableId, tableDraft.chairId, seatCount, tableDraft.linenId);
+state.lastTableConfig = { tableId: tableDraft.tableId, chairId: tableDraft.chairId, seatCount: seatCount, linenId: tableDraft.linenId };
+}
+
+function addTableFromConfig(cfg, n) {
+if (!cfg) return;
+for (var i = 0; i < n; i++) { addTableCustom(cfg.tableId, cfg.chairId, cfg.seatCount, cfg.linenId); }
+}
+
 function layoutDanceFloorPositions(tent, totalCount) {
-const spacing = DANCE_SECTION.ft;
-const maxPerSide = Math.max(1, Math.floor((Math.min(tent.widthFt, tent.lengthFt) - 4) / spacing));
-const perSide = Math.min(maxPerSide, Math.max(1, Math.ceil(Math.sqrt(totalCount))));
-const blockFt = perSide * spacing;
-const originY = Math.max(2, tent.lengthFt - 2 - blockFt);
-const rightX = Math.max(2, tent.widthFt - 2 - blockFt);
-const leftX = 2;
-const poles = (tent && tent.centerPoles) || [];
-const clearance = 1.25;
+var spacing = DANCE_SECTION.ft;
+var maxPerSide = Math.max(1, Math.floor((Math.min(tent.widthFt, tent.lengthFt) - 4) / spacing));
+var perSide = Math.min(maxPerSide, Math.max(1, Math.ceil(Math.sqrt(totalCount))));
+var blockFt = perSide * spacing;
+var originY = Math.max(2, tent.lengthFt - 2 - blockFt);
+var rightX = Math.max(2, tent.widthFt - 2 - blockFt);
+var leftX = 2;
+var poles = (tent && tent.centerPoles) || [];
+var clearance = 1.25;
 function poleHits(ox) {
 return poles.filter(function (p) {
 return ox - clearance < p.x && p.x < ox + blockFt + clearance && p.y >= originY - clearance && p.y <= originY + blockFt + clearance;
 }).length;
 }
-const originX = poles.length && poleHits(leftX) < poleHits(rightX) ? leftX : rightX;
-const positions = [];
-for (let i = 0; i < totalCount; i++) {
-const col = i % perSide;
-const row = Math.floor(i / perSide);
+var originX = poles.length && poleHits(leftX) < poleHits(rightX) ? leftX : rightX;
+var positions = [];
+for (var i = 0; i < totalCount; i++) {
+var col = i % perSide;
+var row = Math.floor(i / perSide);
 positions.push({ x: originX + col * spacing, y: originY + row * spacing });
 }
 return positions;
 }
 
 function removeAllDanceFloors() {
-const ids = store.getState().objects.filter(function (i) { return i.kind === 'dance'; }).map(function (i) { return i.id; });
+var ids = store.getState().objects.filter(function (i) { return i.kind === 'dance'; }).map(function (i) { return i.id; });
 ids.forEach(function (id) { store.removeObject(id); });
 }
 
 function setDanceFloorCount(totalCount) {
-const tent = byId(TENTS, state.tentId);
+var tent = byId(TENTS, state.tentId);
 removeAllDanceFloors();
-const positions = layoutDanceFloorPositions(tent, totalCount);
+var positions = layoutDanceFloorPositions(tent, totalCount);
 positions.forEach(function (pos) {
 store.addObject({
 id: newItemId(),
@@ -320,30 +280,13 @@ y: pos.y,
 });
 }
 
-function addDanceFloor() {
-const current = store.getState().objects.filter(function (i) { return i.kind === 'dance'; }).length;
-setDanceFloorCount(current + 1);
-}
-
 function setDanceFloorToSize(ft) {
 setDanceFloorCount(sectionsForSize(ft));
 }
 
-function removeSelected() {
-if (state.selectedId == null) return;
-store.removeObject(state.selectedId);
-state.selectedId = null;
-refreshAll();
-}
-$('removeSelected').addEventListener('click', removeSelected);
-
-$('btnUndo').addEventListener('click', function () { store.undo(); });
-$('btnRedo').addEventListener('click', function () { store.redo(); });
-store.subscribe(function () { refreshAll(); });
-
 function forCollision(objects) {
 return objects.map(function (o) {
-let kind = o.kind;
+var kind = o.kind;
 if (kind === 'table') kind = 'tableGroup';
 else if (kind === 'dance') kind = 'danceFloor';
 return Object.assign({}, o, { kind: kind });
@@ -351,14 +294,14 @@ return Object.assign({}, o, { kind: kind });
 }
 
 function getConflicts() {
-const tent = byId(TENTS, state.tentId);
-const objects = store.getState().objects;
+var tent = byId(TENTS, state.tentId);
+var objects = store.getState().objects;
 return runAllChecks({ objects: forCollision(objects), aisles: [] }, tent, state.guestCount);
 }
 
 function conflictSeverityByItemId(conflicts) {
-const map = {};
-const rank = { info: 1, warning: 2, error: 3 };
+var map = {};
+var rank = { info: 1, warning: 2, error: 3 };
 conflicts.forEach(function (c) {
 c.objectIds.forEach(function (id) {
 if (!map[id] || rank[c.severity] > rank[map[id]]) map[id] = c.severity;
@@ -366,11 +309,13 @@ if (!map[id] || rank[c.severity] > rank[map[id]]) map[id] = c.severity;
 });
 return map;
 }
-let view3dMod = null;
-let view3dPendingSnapshot = null;
 
-function build3DSnapshot(conflicts) {
-const tent = byId(TENTS, state.tentId);
+var view3dMod = null;
+var view3dPendingSnapshot = null;
+var planMounted = false;
+
+function buildSnapshot(conflicts) {
+var tent = byId(TENTS, state.tentId);
 return {
 tent: tent,
 objects: store.getState().objects,
@@ -380,122 +325,448 @@ severityMap: conflictSeverityByItemId(conflicts || []),
 };
 }
 
-function handle3DSelect(itemId) {
+function handleSelect(itemId) {
 state.selectedId = itemId;
 refreshAll();
 }
 
-function handle3DMove(itemId, x, y) {
+function handleMove(itemId, x, y) {
 store.updateObject(itemId, { x: x, y: y });
+}
+
+function mountPlan() {
+if (planMounted) return;
+planMounted = true;
+plan2dMod.mount($('plan2d'), buildSnapshot(getConflicts()), { onSelect: handleSelect, onMove: handleMove });
 }
 
 function mount3D() {
 if (view3dMod) return;
 import('./js/ui/view3d.js').then(function (mod) {
 view3dMod = mod;
-const snapshot = view3dPendingSnapshot || build3DSnapshot(getConflicts());
+var snapshot = view3dPendingSnapshot || buildSnapshot(getConflicts());
 view3dPendingSnapshot = null;
-mod.mount($('canvas'), snapshot, { onSelect: handle3DSelect, onMove: handle3DMove });
+mod.mount($('canvas'), snapshot, { onSelect: handleSelect, onMove: handleMove });
 });
 }
 
-function render3D(conflicts) {
-const snapshot = build3DSnapshot(conflicts);
+function renderViews(conflicts) {
+var snapshot = buildSnapshot(conflicts);
+if (planMounted) plan2dMod.update(snapshot);
 if (view3dMod) {
 view3dMod.update(snapshot);
-} else {
+} else if (state.viewMode === '3d') {
 view3dPendingSnapshot = snapshot;
 }
 }
 
-$('view3dDayNight').addEventListener('click', function () {
-if (!view3dMod) return;
-const night = view3dMod.toggleDayNight();
-this.textContent = night ? 'Switch to Day' : 'Switch to Night';
+function setViewMode(mode) {
+state.viewMode = mode;
+$('viewModePlan').classList.toggle('active', mode === 'plan');
+$('viewModePlan').setAttribute('aria-selected', mode === 'plan' ? 'true' : 'false');
+$('viewMode3d').classList.toggle('active', mode === '3d');
+$('viewMode3d').setAttribute('aria-selected', mode === '3d' ? 'true' : 'false');
+$('plan2d').style.display = mode === 'plan' ? 'flex' : 'none';
+$('canvas').style.display = mode === '3d' ? 'block' : 'none';
+$('view3dDayNight').style.display = mode === '3d' ? '' : 'none';
+$('canvasHint').textContent = mode === '3d' ? 'Drag to rotate • Scroll to zoom' : 'Click or drag items to arrange your layout';
+if (mode === '3d') mount3D();
+}
+
+function tableIcon(t) {
+return t.shape === 'round' ? '●' : '▬';
+}
+
+function titleForDrawer(kind) {
+if (kind === 'tent') return 'Tent';
+if (kind === 'tables') return 'Tables & Chairs';
+if (kind === 'dance') return 'Dance Floor';
+if (kind === 'lighting') return 'Lighting';
+return '';
+}
+
+function openDrawer(kind) {
+state.activeDrawer = kind;
+document.querySelectorAll('.rail-btn').forEach(function (b) {
+b.classList.toggle('active', b.dataset.drawer === kind);
 });
-
-function refreshAll() {
-const conflicts = getConflicts();
-render3D(conflicts);
-renderSelectedPanel();
-renderCapacityCheck();
-renderLayoutWarnings(conflicts);
-renderPricing();
-updateUndoRedoButtons();
+$('drawerBackdrop').hidden = false;
+$('drawer').hidden = false;
+$('drawerTitle').textContent = titleForDrawer(kind);
+renderDrawerBody(kind);
 }
 
-function updateUndoRedoButtons() {
-$('btnUndo').disabled = !store.canUndo();
-$('btnRedo').disabled = !store.canRedo();
+function closeDrawer() {
+state.activeDrawer = null;
+document.querySelectorAll('.rail-btn').forEach(function (b) { b.classList.remove('active'); });
+$('drawerBackdrop').hidden = true;
+$('drawer').hidden = true;
 }
 
-function renderSelectedPanel() {
-const panel = $('selectedItemPanel');
-const removeBtn = $('removeSelected');
-const item = store.getState().objects.find(function (i) { return i.id === state.selectedId; });
+function renderDrawerBody(kind) {
+var body = $('drawerBody');
+if (kind === 'tent') body.innerHTML = buildTentDrawerHtml();
+else if (kind === 'tables') body.innerHTML = buildTablesDrawerHtml();
+else if (kind === 'dance') body.innerHTML = buildDanceDrawerHtml();
+else if (kind === 'lighting') body.innerHTML = buildLightingDrawerHtml();
+}
+
+function buildTentDrawerHtml() {
+var html = '';
+var groups = [['pole', 'Pole Tents'], ['frame', 'Frame Tents'], ['canopy', 'Pop-Up Canopies']];
+groups.forEach(function (g) {
+var list = TENTS.filter(function (t) { return t.type === g[0]; });
+if (!list.length) return;
+html += '<div class="drawer-section-title">' + g[1] + '</div>';
+html += '<div class="item-card-grid">';
+list.forEach(function (t) {
+var sel = t.id === state.tentId;
+html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="tent-card" data-id="' + t.id + '">';
+if (sel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-icon">&#9974;</span>';
+html += '<span class="item-card-name">' + t.name + '</span>';
+html += '<span class="tent-card-meta">' + t.widthFt + '&times;' + t.lengthFt + ' ft &middot; seats ' + t.maxGuests.dining + '</span>';
+html += '<span class="item-card-price">' + money(t.pricePerDay) + '/day</span>';
+html += '</button>';
+});
+html += '</div>';
+});
+return html;
+}
+
+function buildTablesDrawerHtml() {
+ensureTableDraft();
+var html = '';
+if (state.lastTableConfig) {
+var cfg = state.lastTableConfig;
+var cfgTable = byId(TABLES, cfg.tableId);
+var cfgChair = cfg.chairId ? byId(CHAIRS, cfg.chairId) : null;
+var cfgLinen = cfg.linenId ? byId(LINENS, cfg.linenId) : null;
+html += '<div class="drawer-section-title">Quick Add</div>';
+html += '<div class="quick-add-card">';
+html += '<div class="quick-add-card-info">';
+html += '<div class="quick-add-card-title">Same as Last: ' + cfgTable.name + '</div>';
+html += '<div class="quick-add-card-meta">' + (cfg.seatCount > 0 ? (cfg.seatCount + ' seats &middot; ' + cfgChair.name) : 'No seating') + (cfgLinen ? (' &middot; ' + cfgLinen.name) : '') + '</div>';
+html += '<div class="quick-add-actions">';
+html += '<button type="button" class="btn-secondary small" data-role="quick-add" data-count="1">+1</button>';
+html += '<button type="button" class="btn-secondary small" data-role="quick-add" data-count="5">+5</button>';
+html += '<button type="button" class="btn-secondary small" data-role="quick-add" data-count="10">+10</button>';
+html += '</div>';
+html += '</div>';
+html += '</div>';
+}
+html += '<div class="drawer-section-title">Choose a Table</div>';
+html += '<div class="item-card-grid">';
+TABLES.forEach(function (t) {
+var sel = t.id === tableDraft.tableId;
+html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="table-card" data-id="' + t.id + '">';
+if (sel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-icon">' + tableIcon(t) + '</span>';
+html += '<span class="item-card-name">' + t.name + '</span>';
+html += '<span class="item-card-desc">' + (t.seatsDefault > 0 ? ('Seats ' + t.seatsDefault) : 'No seating') + '</span>';
+html += '<span class="item-card-price">' + money(t.pricePerDay) + '/day</span>';
+html += '</button>';
+});
+html += '</div>';
+
+var tableDef = byId(TABLES, tableDraft.tableId);
+if (tableDef.seatsDefault > 0) {
+html += '<div class="drawer-section-title">Choose Chairs</div>';
+html += '<div class="item-card-grid">';
+CHAIRS.forEach(function (c) {
+var sel = c.id === tableDraft.chairId;
+html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="chair-card" data-id="' + c.id + '">';
+if (sel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-icon">&#128081;</span>';
+html += '<span class="item-card-name">' + c.name + '</span>';
+html += '<span class="item-card-price">' + money(c.pricePerDay) + '/day</span>';
+html += '</button>';
+});
+html += '</div>';
+
+html += '<div class="drawer-section-title">Number of Seats</div>';
+html += '<div class="qty-stepper">';
+html += '<button type="button" data-role="seat-minus">&minus;</button>';
+html += '<span>' + tableDraft.seatCount + '</span>';
+html += '<button type="button" data-role="seat-plus">+</button>';
+html += '</div>';
+} else {
+html += '<div class="no-seat-note">This table does not include seating.</div>';
+}
+
+var linenOptions = optionsForTable(tableDraft.tableId);
+if (linenOptions.length) {
+html += '<div class="drawer-section-title">Linen</div>';
+html += '<div class="item-card-grid">';
+var noneSel = !tableDraft.linenId;
+html += '<button type="button" class="item-card' + (noneSel ? ' selected' : '') + '" data-role="linen-card" data-id="">';
+if (noneSel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-name">No Linen</span>';
+html += '</button>';
+linenOptions.forEach(function (l) {
+var sel = l.id === tableDraft.linenId;
+html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="linen-card" data-id="' + l.id + '">';
+if (sel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-name">' + l.name + '</span>';
+html += '<span class="item-card-price">' + money(l.pricePerDay) + '/day</span>';
+html += '</button>';
+});
+html += '</div>';
+}
+
+html += '<button type="button" class="btn-primary drawer-add-btn" data-role="add-table">+ Add ' + tableDef.name + '</button>';
+return html;
+}
+
+function buildDanceDrawerHtml() {
+var html = '';
+var danceObjs = store.getState().objects.filter(function (i) { return i.kind === 'dance'; });
+if (danceObjs.length) {
+var perSide = Math.round(Math.sqrt(danceObjs.length));
+var ftSide = perSide * DANCE_SECTION.ft;
+html += '<div class="drawer-summary-row"><span>Current: ' + ftSide + '&times;' + ftSide + ' ft (' + danceObjs.length + ' sections)</span></div>';
+html += '<button type="button" class="btn-danger small" data-role="remove-dance">Remove Dance Floor</button>';
+}
+html += '<div class="drawer-section-title">Choose a Size</div>';
+html += '<div class="item-card-grid">';
+DANCE_FLOOR_SIZES.forEach(function (sz) {
+var sel = state.danceFloorSizeId === sz.id;
+html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="dance-size-card" data-ft="' + sz.ft + '" data-preset-id="' + sz.id + '">';
+if (sel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-icon">&#127943;</span>';
+html += '<span class="item-card-name">' + sz.ft + '&times;' + sz.ft + ' ft</span>';
+html += '<span class="item-card-price">' + money(priceForSize(sz.ft)) + '/day</span>';
+html += '</button>';
+});
+html += '</div>';
+html += '<button type="button" class="btn-secondary" data-role="dance-recommend">Recommend a Size for Me</button>';
+return html;
+}
+
+function buildLightingDrawerHtml() {
+var html = '';
+var tent = byId(TENTS, state.tentId);
+html += '<div class="item-card-grid">';
+LIGHTING_OPTIONS.forEach(function (l) {
+if (l.dynamic && tentLightingPriceFor(tent) == null) return;
+var price = l.dynamic ? tentLightingPriceFor(tent) : l.pricePerDay;
+var sel = l.id === state.lightingId;
+html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="lighting-card" data-id="' + l.id + '">';
+if (sel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-icon">&#128161;</span>';
+html += '<span class="item-card-name">' + l.name + '</span>';
+if (price) html += '<span class="item-card-price">' + money(price) + '/day</span>';
+html += '</button>';
+});
+html += '</div>';
+return html;
+}
+
+function renderInspector() {
+var panel = $('inspectorPanel');
+var item = store.getState().objects.find(function (i) { return i.id === state.selectedId; });
 if (!item) {
-panel.textContent = 'Click an item on the layout to select it.';
-removeBtn.disabled = true;
+panel.hidden = true;
+panel.innerHTML = '';
 return;
 }
-removeBtn.disabled = false;
+panel.hidden = false;
+var html = '<button type="button" class="btn-tertiary inspector-close" data-role="inspector-close">Close</button>';
 if (item.kind === 'dance') {
-panel.innerHTML = '<strong>Dance Floor Section</strong><br>' + DANCE_SECTION.ft + 'x' + DANCE_SECTION.ft + ' ft';
+html += '<h3 class="inspector-title">Dance Floor Section</h3>';
+html += '<p class="inspector-subtitle">' + DANCE_SECTION.ft + '&times;' + DANCE_SECTION.ft + ' ft section</p>';
+html += '<div class="inspector-actions">';
+html += '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="' + item.id + '" data-count="1">Duplicate</button>';
+html += '<button type="button" class="btn-danger" data-role="insp-delete" data-id="' + item.id + '">Delete Section</button>';
+html += '<button type="button" class="btn-danger" data-role="remove-dance">Remove Entire Dance Floor</button>';
+html += '</div>';
 } else {
-const tableDef = byId(TABLES, item.tableId);
-const chairDef = byId(CHAIRS, item.chairId);
-const linenDef = item.linenId ? byId(LINENS, item.linenId) : null;
-panel.innerHTML = '<strong>' + tableDef.name + '</strong><br>' +
-(item.seatCount > 0 ? (item.seatCount + ' seats &mdash; ' + chairDef.name) : 'No seating (cocktail)') +
-(linenDef ? ('<br>Linen: ' + linenDef.name) : '');
+var tableDef = byId(TABLES, item.tableId);
+var chairDef = item.chairId ? byId(CHAIRS, item.chairId) : null;
+var linenDef = item.linenId ? byId(LINENS, item.linenId) : null;
+html += '<h3 class="inspector-title">' + tableDef.name + '</h3>';
+html += '<p class="inspector-subtitle">' + (item.seatCount > 0 ? (item.seatCount + ' seats &middot; ' + chairDef.name) : 'No seating (cocktail)') + '</p>';
+if (linenDef) html += '<div class="inspector-row"><span>Linen</span><span>' + linenDef.name + '</span></div>';
+
+if (item.seatCount > 0) {
+html += '<div class="drawer-section-title">Change Chairs</div>';
+html += '<div class="item-card-grid">';
+CHAIRS.forEach(function (c) {
+var sel = c.id === item.chairId;
+html += '<button type="button" class="item-card small' + (sel ? ' selected' : '') + '" data-role="insp-set-chair" data-id="' + item.id + '" data-chair="' + c.id + '">';
+if (sel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-name">' + c.name + '</span>';
+html += '</button>';
+});
+html += '</div>';
 }
+
+var linenOptions = optionsForTable(item.tableId);
+if (linenOptions.length) {
+html += '<div class="drawer-section-title">Change Linen</div>';
+html += '<div class="item-card-grid">';
+var noneSel = !item.linenId;
+html += '<button type="button" class="item-card small' + (noneSel ? ' selected' : '') + '" data-role="insp-set-linen" data-id="' + item.id + '" data-linen="">';
+if (noneSel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-name">No Linen</span></button>';
+linenOptions.forEach(function (l) {
+var sel = l.id === item.linenId;
+html += '<button type="button" class="item-card small' + (sel ? ' selected' : '') + '" data-role="insp-set-linen" data-id="' + item.id + '" data-linen="' + l.id + '">';
+if (sel) html += '<span class="item-card-check">&#10003;</span>';
+html += '<span class="item-card-name">' + l.name + '</span></button>';
+});
+html += '</div>';
 }
 
-function renderCapacityCheck() {
-const tent = byId(TENTS, state.tentId);
-const objects = store.getState().objects;
-const totalSeats = objects.reduce(function (sum, i) { return sum + (i.seatCount || 0); }, 0);
-const tableCount = objects.filter(function (i) { return i.kind === 'table'; }).length;
+html += '<div class="inspector-actions">';
+html += '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="' + item.id + '" data-count="1">Duplicate</button>';
+html += '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="' + item.id + '" data-count="5">Duplicate &times;5</button>';
+html += '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="' + item.id + '" data-count="10">Duplicate &times;10</button>';
+html += '<button type="button" class="btn-danger" data-role="insp-delete" data-id="' + item.id + '">Delete</button>';
+html += '</div>';
+}
+panel.innerHTML = html;
+}
 
-let html = '<div>Guests: <strong>' + state.guestCount + '</strong></div>';
-html += '<div>Seats provided: <strong>' + totalSeats + '</strong> (' + tableCount + ' tables)</div>';
-html += '<div>Tent: <strong>' + tent.name + '</strong> (fits up to ' + tent.maxGuests.dining + ' dining)</div>';
-
-if (totalSeats < state.guestCount) {
-html += '<div class="status-warn">&#9888; Not enough seats yet for your guest count.</div>';
-} else if (state.guestCount > tent.maxGuests.dining) {
-html += '<div class="status-warn">&#9888; This tent may be too small for ' + state.guestCount + ' guests dining. Consider a larger tent.</div>';
+function renderStatusBar(conflicts) {
+var tent = byId(TENTS, state.tentId);
+var objects = store.getState().objects;
+var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0);
+var errorCount = 0, warnCount = 0;
+conflicts.forEach(function (c) {
+if (c.severity === 'error') errorCount++;
+else if (c.severity === 'warning') warnCount++;
+});
+var seatsOk = totalSeats >= state.guestCount;
+var flagClass, flagText;
+var shortfall = state.guestCount - totalSeats;
+if (errorCount > 0) {
+flagClass = 'warn';
+flagText = '⚠ ' + errorCount + (errorCount === 1 ? ' issue' : ' issues') + ' to fix';
+} else if (!seatsOk) {
+flagClass = 'warn';
+flagText = '⚠ Add ' + shortfall + ' more seat' + (shortfall === 1 ? '' : 's');
+} else if (warnCount > 0) {
+flagClass = 'warn';
+flagText = '⚠ ' + warnCount + ' to review';
 } else {
-html += '<div class="status-ok">&#10003; Looks good so far.</div>';
-}
-$('capacityCheck').innerHTML = html;
+flagClass = 'ok';
+flagText = '✓ Layout Ready';
 }
 
-function renderLayoutWarnings(conflicts) {
-const box = $('layoutWarnings');
-if (!conflicts || conflicts.length === 0) {
-box.innerHTML = '<div class="no-warnings">&#10003; No layout conflicts detected.</div>';
+var lines = computeLineItems();
+var total = lines.reduce(function (s, l) { return s + l.amount; }, 0);
+
+var html = '';
+html += '<div class="status-pill-group" data-role="open-event-check">';
+html += '<span class="status-item">' + state.guestCount + ' Guests</span>';
+html += '<span class="status-item"><strong>' + totalSeats + '</strong>/' + state.guestCount + ' Seats</span>';
+html += '<span class="status-item hide-mobile">' + tent.name + '</span>';
+html += '<span class="status-flag ' + flagClass + '">' + flagText + '</span>';
+html += '</div>';
+html += '<div class="status-estimate" data-role="open-estimate">';
+html += '<span>' + money(total) + ' <span class="muted">/day</span></span>';
+html += '<span class="muted">View Estimate &rsaquo;</span>';
+html += '</div>';
+$('statusBar').innerHTML = html;
+}
+
+function renderEmptyState() {
+var objects = store.getState().objects;
+var overlay = $('emptyStateOverlay');
+if (objects.length > 0) {
+overlay.hidden = true;
+overlay.innerHTML = '';
 return;
 }
-const seen = {};
-const rows = [];
+overlay.hidden = false;
+var recTables = Math.max(1, Math.ceil(state.guestCount / 8));
+var recSeats = recTables * 8;
+var html = '';
+html += '<h3>Let\'s Add Your Seating</h3>';
+html += '<p>Start with a layout sized for your event, then customize anything.</p>';
+html += '<div class="empty-state-recommend"><strong>' + recTables + ' &times; 5\' Round Tables</strong> &mdash; ' + recSeats + ' chairs</div>';
+html += '<div class="empty-state-actions">';
+html += '<button type="button" class="btn-primary" data-role="empty-add-recommended" data-count="' + recTables + '">Add Recommended Seating</button>';
+html += '<button type="button" class="btn-tertiary" data-role="empty-choose-own">Choose Something Else</button>';
+html += '</div>';
+overlay.innerHTML = html;
+}
+
+function renderEventCheckFlyout(conflicts) {
+var flyout = $('eventCheckFlyout');
+if (!state.eventCheckOpen) {
+flyout.hidden = true;
+return;
+}
+flyout.hidden = false;
+var objects = store.getState().objects;
+var tent = byId(TENTS, state.tentId);
+var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0);
+var html = '<button type="button" class="flyout-close" data-role="close-event-check">&#10005;</button>';
+html += '<h3>Event Check</h3>';
+if (!objects.length) {
+html += '<div class="checklist-item"><span class="checklist-mark done">&#10003;</span> Tent selected &mdash; ' + tent.name + '</div>';
+html += '<div class="checklist-item"><span class="checklist-mark warn">!</span> Add seating for your guests</div>';
+html += '<div class="checklist-item"><span class="checklist-mark pending">&#9675;</span> Dance floor (optional)</div>';
+html += '<div class="checklist-item"><span class="checklist-mark pending">&#9675;</span> Lighting (optional)</div>';
+} else {
+var shown = false;
+if (totalSeats < state.guestCount) {
+shown = true;
+var shortfall = state.guestCount - totalSeats;
+html += '<div class="action-banner">';
+html += '<div class="action-banner-title">You still need ' + shortfall + ' more seat' + (shortfall === 1 ? '' : 's') + '</div>';
+html += '<p>Add more tables or increase seats per table to fit all your guests.</p>';
+html += '<button type="button" class="btn-secondary small" data-role="cta-add-seating">Add Seating</button>';
+html += '</div>';
+}
+var seen = {};
 conflicts.forEach(function (c) {
-const key = c.type + '|' + c.message;
+var key = c.type + '|' + c.message;
 if (seen[key]) return;
 seen[key] = true;
-rows.push('<div class="warning-item severity-' + c.severity + '">' + c.message + '</div>');
+shown = true;
+html += '<div class="action-banner">';
+html += '<div class="action-banner-title">' + (c.severity === 'error' ? 'Needs Attention' : 'Heads Up') + '</div>';
+html += '<p>' + c.message + '</p>';
+html += '</div>';
 });
-box.innerHTML = '<div class="warning-list">' + rows.join('') + '</div>';
+if (!shown) {
+html += '<div class="action-banner ok-banner"><div class="action-banner-title">Looks Great</div><p>No layout issues detected. You are ready to review your event.</p></div>';
 }
-function computeLineItems() {
-const tent = byId(TENTS, state.tentId);
-const objects = store.getState().objects;
-const lines = [{ label: tent.name + ' (tent)', qty: 1, amount: tent.pricePerDay }];
+}
+flyout.innerHTML = html;
+}
 
-const tableCounts = {};
-const chairCounts = {};
-const linenCounts = {};
-let danceCount = 0;
+function renderEstimateFlyout() {
+var flyout = $('estimateFlyout');
+if (!state.estimateOpen) {
+flyout.hidden = true;
+return;
+}
+flyout.hidden = false;
+var lines = computeLineItems();
+var total = lines.reduce(function (s, l) { return s + l.amount; }, 0);
+var html = '<button type="button" class="flyout-close" data-role="close-estimate">&#10005;</button>';
+html += '<h3>Estimate</h3>';
+lines.forEach(function (l) {
+html += '<div class="inspector-row"><span>' + l.label + ' &times;' + l.qty + '</span><span>' + money(l.amount) + '</span></div>';
+});
+html += '<div class="inspector-row"><span><strong>Total / day</strong></span><span><strong>' + money(total) + '</strong></span></div>';
+html += '<button type="button" class="btn-primary drawer-add-btn" data-role="cta-review">Review Event</button>';
+flyout.innerHTML = html;
+}
+
+function computeLineItems() {
+var tent = byId(TENTS, state.tentId);
+var objects = store.getState().objects;
+var lines = [{ label: tent.name + ' (tent)', qty: 1, amount: tent.pricePerDay }];
+
+var tableCounts = {};
+var chairCounts = {};
+var linenCounts = {};
+var danceCount = 0;
 
 objects.forEach(function (item) {
 if (item.kind === 'table') {
@@ -512,23 +783,23 @@ danceCount++;
 });
 
 Object.keys(tableCounts).forEach(function (tid) {
-const t = byId(TABLES, tid);
+var t = byId(TABLES, tid);
 lines.push({ label: t.name, qty: tableCounts[tid], amount: t.pricePerDay * tableCounts[tid] });
 });
 Object.keys(chairCounts).forEach(function (cid) {
-const c = byId(CHAIRS, cid);
+var c = byId(CHAIRS, cid);
 lines.push({ label: c.name, qty: chairCounts[cid], amount: c.pricePerDay * chairCounts[cid] });
 });
 Object.keys(linenCounts).forEach(function (lid) {
-const l = byId(LINENS, lid);
+var l = byId(LINENS, lid);
 lines.push({ label: l.name, qty: linenCounts[lid], amount: l.pricePerDay * linenCounts[lid] });
 });
 if (danceCount > 0) {
 lines.push({ label: DANCE_SECTION.name, qty: danceCount, amount: DANCE_SECTION.pricePerDay * danceCount });
 }
 if (state.lightingId && state.lightingId !== 'lighting-none') {
-const lightOpt = byId(LIGHTING_OPTIONS, state.lightingId);
-const price = lightOpt.dynamic ? tentLightingPriceFor(tent) : lightOpt.pricePerDay;
+var lightOpt = byId(LIGHTING_OPTIONS, state.lightingId);
+var price = lightOpt.dynamic ? tentLightingPriceFor(tent) : lightOpt.pricePerDay;
 if (price) {
 lines.push({ label: lightOpt.name, qty: 1, amount: price });
 }
@@ -536,23 +807,51 @@ lines.push({ label: lightOpt.name, qty: 1, amount: price });
 return lines;
 }
 
-function renderPricing() {
-const lines = computeLineItems();
-const list = $('priceList');
-list.innerHTML = lines.map(function (l) {
-return '<div class="row"><span>' + l.label + ' x' + l.qty + '</span><span>' + money(l.amount) + '</span></div>';
-}).join('');
-const total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
-$('priceTotal').innerHTML = '<span>Estimated Total / day</span><span>' + money(total) + '</span>';
+function updateUndoRedoButtons() {
+$('btnUndo').disabled = !store.canUndo();
+$('btnRedo').disabled = !store.canRedo();
 }
-$('btnBackToRecommend').addEventListener('click', function () { showStep('step-recommend'); });
-$('btnToReview').addEventListener('click', function () {
-const tent = byId(TENTS, state.tentId);
-const lines = computeLineItems();
-const total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
-const pkg = state.matchedPackageId ? byId(PACKAGES, state.matchedPackageId) : null;
 
-let html = '<p><strong>Event:</strong> ' + state.eventType + ' &middot; ' + state.guestCount + ' guests &middot; ' + state.spaceType + '</p>';
+function eventTypeLabel(id) {
+if (!id) return 'Your Event';
+var s = id.replace(/([A-Z])/g, ' $1');
+return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function renderToolbarEventInfo() {
+$('toolbarEventTitle').textContent = eventTypeLabel(state.eventType) + ' · ' + state.guestCount + ' Guests';
+var tent = byId(TENTS, state.tentId);
+$('toolbarEventMeta').textContent = tent.name;
+}
+
+function updateToolbarCta() {
+var objects = store.getState().objects;
+var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0);
+var btn = $('btnToReview');
+btn.textContent = totalSeats < state.guestCount ? 'Add Seating' : 'Review Event';
+}
+
+function refreshAll() {
+var conflicts = getConflicts();
+renderViews(conflicts);
+renderInspector();
+renderStatusBar(conflicts);
+renderEmptyState();
+renderEventCheckFlyout(conflicts);
+renderEstimateFlyout();
+updateUndoRedoButtons();
+updateToolbarCta();
+renderToolbarEventInfo();
+if (state.activeDrawer) renderDrawerBody(state.activeDrawer);
+}
+
+function goToReview() {
+var tent = byId(TENTS, state.tentId);
+var lines = computeLineItems();
+var total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
+var pkg = state.matchedPackageId ? byId(PACKAGES, state.matchedPackageId) : null;
+
+var html = '<p><strong>Event:</strong> ' + state.eventType + ' &middot; ' + state.guestCount + ' guests &middot; ' + state.spaceType + '</p>';
 if (pkg) {
 html += '<div class="package-match-note">This setup is similar to our <strong>' + pkg.name + '</strong> package (' + money(pkg.price) + '/day flat, up to ' + pkg.maxGuests + ' guests). Ask Friendly Party Rental about bundled package pricing.</div>';
 }
@@ -563,26 +862,147 @@ html += '<li>' + l.label + ' x' + l.qty + ' &mdash; ' + money(l.amount) + '</li>
 html += '</ul><p><strong>Estimated Total: ' + money(total) + ' / day</strong></p>';
 $('reviewSummary').innerHTML = html;
 
-const subject = encodeURIComponent('Quote Request: ' + state.eventType + ' for ' + state.guestCount + ' guests');
-let body = 'Event type: ' + state.eventType + NL + 'Guests: ' + state.guestCount + NL + 'Location type: ' + state.spaceType + NL + 'Tent: ' + tent.name + NL;
+var subject = encodeURIComponent('Quote Request: ' + state.eventType + ' for ' + state.guestCount + ' guests');
+var body = 'Event type: ' + state.eventType + NL + 'Guests: ' + state.guestCount + NL + 'Location type: ' + state.spaceType + NL + 'Tent: ' + tent.name + NL;
 if (pkg) {
 body += 'Possible package match: ' + pkg.name + ' (' + money(pkg.price) + '/day, up to ' + pkg.maxGuests + ' guests)' + NL;
 }
 body += NL + 'Items:' + NL;
 lines.forEach(function (l) { body += '- ' + l.label + ' x' + l.qty + ' (' + money(l.amount) + ')' + NL; });
 body += NL + 'Estimated Total: ' + money(total) + ' / day' + NL;
-$('btnEmailQuote').addEventListener('click', function () {
-const name = $('customerName').value;
-const email = $('customerEmail').value;
-const date = $('customerDate').value;
-const fullBody = encodeURIComponent('Name: ' + name + NL + 'Email: ' + email + NL + 'Requested Date: ' + date + NL + NL + body);
+
+$('btnEmailQuote').onclick = function () {
+var name = $('customerName').value;
+var email = $('customerEmail').value;
+var date = $('customerDate').value;
+var fullBody = encodeURIComponent('Name: ' + name + NL + 'Email: ' + email + NL + 'Requested Date: ' + date + NL + NL + body);
 this.href = 'mailto:customerservice@friendlypartyrental.com?subject=' + subject + '&body=' + fullBody;
-});
+};
 
+document.body.classList.remove('designer-active');
 showStep('step-review');
+}
+
+document.querySelectorAll('.rail-btn').forEach(function (btn) {
+btn.addEventListener('click', function () {
+var kind = btn.dataset.drawer;
+if (state.activeDrawer === kind) { closeDrawer(); } else { openDrawer(kind); }
+});
+});
+$('drawerClose').addEventListener('click', closeDrawer);
+$('drawerBackdrop').addEventListener('click', closeDrawer);
+
+$('drawerBody').addEventListener('click', function (e) {
+var el = e.target.closest('[data-role]');
+if (!el) return;
+var role = el.dataset.role;
+if (role === 'tent-card') { selectTent(el.dataset.id); }
+else if (role === 'table-card') {
+var t = byId(TABLES, el.dataset.id);
+tableDraft.tableId = el.dataset.id;
+tableDraft.seatCount = t.seatsDefault;
+tableDraft.linenId = null;
+renderDrawerBody('tables');
+}
+else if (role === 'chair-card') { tableDraft.chairId = el.dataset.id; renderDrawerBody('tables'); }
+else if (role === 'linen-card') { tableDraft.linenId = el.dataset.id || null; renderDrawerBody('tables'); }
+else if (role === 'seat-minus') { tableDraft.seatCount = Math.max(0, tableDraft.seatCount - 1); renderDrawerBody('tables'); }
+else if (role === 'seat-plus') { tableDraft.seatCount = Math.min(16, tableDraft.seatCount + 1); renderDrawerBody('tables'); }
+else if (role === 'add-table') { addTableFromDraft(); }
+else if (role === 'quick-add') { addTableFromConfig(state.lastTableConfig, parseInt(el.dataset.count, 10)); }
+else if (role === 'dance-size-card') {
+var ft = parseInt(el.dataset.ft, 10);
+setDanceFloorToSize(ft);
+state.danceFloorSizeId = el.dataset.presetId || 'custom';
+state.customDanceFloorFt = el.dataset.presetId ? null : ft;
+refreshAll();
+}
+else if (role === 'dance-recommend') {
+var recFt = recommendDanceFloorFt();
+setDanceFloorToSize(recFt);
+var preset = byId(DANCE_FLOOR_SIZES, DANCE_FLOOR_SIZES.filter(function (s) { return s.ft === recFt; }).map(function (s) { return s.id; })[0]);
+state.danceFloorSizeId = preset ? preset.id : 'custom';
+state.customDanceFloorFt = preset ? null : recFt;
+refreshAll();
+}
+else if (role === 'remove-dance') { removeAllDanceFloors(); refreshAll(); }
+else if (role === 'lighting-card') { state.lightingId = el.dataset.id; refreshAll(); }
 });
 
-$('btnBackToDesigner').addEventListener('click', function () { showStep('step-designer'); });
+$('inspectorPanel').addEventListener('click', function (e) {
+var el = e.target.closest('[data-role]');
+if (!el) return;
+var role = el.dataset.role;
+if (role === 'inspector-close') { state.selectedId = null; refreshAll(); }
+else if (role === 'insp-duplicate') { store.duplicateObject(el.dataset.id, parseInt(el.dataset.count, 10), { x: 2, y: 2 }); }
+else if (role === 'insp-delete') { store.removeObject(el.dataset.id); state.selectedId = null; }
+else if (role === 'insp-set-chair') { store.updateObject(el.dataset.id, { chairId: el.dataset.chair }); }
+else if (role === 'insp-set-linen') { store.updateObject(el.dataset.id, { linenId: el.dataset.linen || null }); }
+else if (role === 'remove-dance') { removeAllDanceFloors(); state.selectedId = null; }
+});
+
+$('statusBar').addEventListener('click', function (e) {
+var el = e.target.closest('[data-role]');
+if (!el) return;
+if (el.dataset.role === 'open-event-check') { state.eventCheckOpen = !state.eventCheckOpen; state.estimateOpen = false; refreshAll(); }
+else if (el.dataset.role === 'open-estimate') { state.estimateOpen = !state.estimateOpen; state.eventCheckOpen = false; refreshAll(); }
+});
+
+$('eventCheckFlyout').addEventListener('click', function (e) {
+var el = e.target.closest('[data-role]');
+if (!el) return;
+if (el.dataset.role === 'close-event-check') { state.eventCheckOpen = false; refreshAll(); }
+else if (el.dataset.role === 'cta-add-seating') { state.eventCheckOpen = false; openDrawer('tables'); }
+});
+
+$('estimateFlyout').addEventListener('click', function (e) {
+var el = e.target.closest('[data-role]');
+if (!el) return;
+if (el.dataset.role === 'close-estimate') { state.estimateOpen = false; refreshAll(); }
+else if (el.dataset.role === 'cta-review') { state.estimateOpen = false; goToReview(); }
+});
+
+$('emptyStateOverlay').addEventListener('click', function (e) {
+var el = e.target.closest('[data-role]');
+if (!el) return;
+if (el.dataset.role === 'empty-add-recommended') {
+var count = parseInt(el.dataset.count, 10) || 1;
+for (var i = 0; i < count; i++) { addTable('round-5ft', state.chairId, null); }
+state.lastTableConfig = { tableId: 'round-5ft', chairId: state.chairId, seatCount: 8, linenId: null };
+refreshAll();
+} else if (el.dataset.role === 'empty-choose-own') {
+openDrawer('tables');
+}
+});
+
+$('viewModePlan').addEventListener('click', function () { setViewMode('plan'); });
+$('viewMode3d').addEventListener('click', function () { setViewMode('3d'); });
+$('view3dDayNight').addEventListener('click', function () {
+if (!view3dMod) return;
+var night = view3dMod.toggleDayNight();
+this.textContent = night ? 'Day' : 'Night';
+});
+
+$('btnUndo').addEventListener('click', function () { store.undo(); });
+$('btnRedo').addEventListener('click', function () { store.redo(); });
+store.subscribe(function () { refreshAll(); });
+
+$('btnBackToRecommend').addEventListener('click', function () {
+document.body.classList.remove('designer-active');
+showStep('step-recommend');
+});
+
+$('btnToReview').addEventListener('click', function () {
+var objects = store.getState().objects;
+var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0);
+if (totalSeats < state.guestCount) { openDrawer('tables'); return; }
+goToReview();
+});
+
+$('btnBackToDesigner').addEventListener('click', function () {
+document.body.classList.add('designer-active');
+showStep('step-designer');
+});
 
 window.FriendlyBridge = {
 state: state,
