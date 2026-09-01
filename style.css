@@ -296,3 +296,22 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
   .status-item.hide-mobile { display: none; }
   .empty-state-overlay { width: calc(100% - 24px); top: 12px; }
 }
+
+/* Linen visual treatment for tables with tablecloths/runners applied */
+.plan2d-object.plan2d-linen--skirt-round,
+.plan2d-object.plan2d-linen--skirt-rect {
+  box-shadow: 0 0 0 5px rgba(247, 243, 236, 0.95), 0 2px 5px rgba(0, 0, 0, 0.18);
+}
+
+.plan2d-object.plan2d-linen--runner::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 12%;
+  bottom: 12%;
+  width: 28%;
+  transform: translateX(-50%);
+  background: rgba(212, 201, 163, 0.9);
+  border-radius: 3px;
+  pointer-events: none;
+}
