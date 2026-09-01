@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { byId as chairById } from '../data/chairs.js';
 
 const WALL_H = 9;
 const POLE_PEAK_H = 2.5;
@@ -42,14 +43,189 @@ let dragOrigY = 0;
 let dragLiveX = 0;
 let dragLiveY = 0;
 
-function chairMaterialParamsFor(chairId) {
-if (chairId === 'chiavari-gold') return { color: CHAIR_COLOR_GOLD, roughness: 0.35, metalness: 0.6 };
-if (chairId === 'chiavari-mahogany') return { color: CHAIR_COLOR_MAHOGANY, roughness: 0.45, metalness: 0.08 };
-if (chairId === 'chiavari-white') return { color: 0xf5f0e6, roughness: 0.4, metalness: 0.05 };
-if (chairId === 'resin-white') return { color: 0xf1e8d5, roughness: 0.2, metalness: 0.05 };
-if (chairId === 'throne-king') return { color: 0x7a1020, roughness: 0.5, metalness: 0.1 };
-if (chairId === 'throne-queen-tiffany') return { color: 0xf7f5f0, roughness: 0.45, metalness: 0.05 };
-return { color: CHAIR_COLOR_DEFAULT, roughness: 0.85, metalness: 0.02 };
+const chairGeometryCache = {};
+function cachedGeo(key, factory) {
+  if (!chairGeometryCache[key]) chairGeometryCache[key] = factory();
+  return chairGeometryCache[key];
+}
+
+const chairMaterialCache = {};
+function cachedMat(key, factory) {
+  if (!chairMaterialCache[key]) chairMaterialCache[key] = factory();
+  return chairMaterialCache[key];
+}
+
+function chairSpacingFor(chairId) {
+  const chair = chairById(chairId) || {};
+  const w = chair.seatWidthFt || 1.5;
+  const d = chair.seatDepthFt || 1.5;
+  return Math.max(w, d) / 2 + 0.5;
+}
+
+function buildFoldingChairGroup(chair, frameMat) {
+  const group = new THREE.Group();
+  const w = chair.seatWidthFt || 1.5;
+  const d = chair.seatDepthFt || 1.5;
+  const backH = chair.backHeightFt || 2.6;
+  const seatH = 0.9;
+  const seat = new THREE.Mesh(cachedGeo('fold-seat-' + w + 'x' + d, function () {
+    return new THREE.BoxGeometry(w * 0.9, 0.08, d * 0.85);
+  }), frameMat);
+  seat.position.set(0, seatH, 0.03);
+  group.add(seat);
+
+  const backHeight = Math.max(0.4, backH - seatH);
+  const back = new THREE.Mesh(cachedGeo('fold-back-' + w + 'x' + backHeight, function () {
+    return new THREE.BoxGeometry(w * 0.85, backHeight, 0.06);
+  }), frameMat);
+  back.position.set(0, seatH + backHeight / 2, -d * 0.4);
+  back.rotation.x = -0.08;
+  group.add(back);
+
+  const legGeo = cachedGeo('fold-leg-' + seatH, function () { return new THREE.CylinderGeometry(0.035, 0.035, seatH, 6); });
+  [[-w * 0.4, -d * 0.38], [w * 0.4, -d * 0.38], [-w * 0.4, d * 0.38], [w * 0.4, d * 0.38]].forEach(function (p) {
+    const legMesh = new THREE.Mesh(legGeo, frameMat);
+    legMesh.position.set(p[0], seatH / 2, p[1]);
+    legMesh.rotation.z = p[1] < 0 ? 0.1 : -0.1;
+    group.add(legMesh);
+  });
+  return group;
+}
+
+function buildResinChairGroup(chair, frameMat) {
+  const group = new THREE.Group();
+  const w = chair.seatWidthFt || 1.55;
+  const d = chair.seatDepthFt || 1.6;
+  const backH = chair.backHeightFt || 2.75;
+  const seatH = 0.92;
+  const seat = new THREE.Mesh(cachedGeo('resin-seat-' + w, function () {
+    return new THREE.CylinderGeometry(w * 0.46, w * 0.5, 0.16, 16);
+  }), frameMat);
+  seat.position.set(0, seatH, 0.02);
+  group.add(seat);
+
+  const backHeight = Math.max(0.5, backH - seatH);
+  const back = new THREE.Mesh(cachedGeo('resin-back-' + w + 'x' + backHeight, function () {
+    return new THREE.CylinderGeometry(w * 0.48, w * 0.52, backHeight, 12, 1, true, Math.PI * 0.15, Math.PI * 0.7);
+  }), frameMat);
+  back.position.set(0, seatH + backHeight / 2, -d * 0.42);
+  group.add(back);
+
+  const legGeo = cachedGeo('resin-leg-' + seatH, function () { return new THREE.CylinderGeometry(0.05, 0.05, seatH, 8); });
+  [[-w * 0.38, -d * 0.35], [w * 0.38, -d * 0.35], [-w * 0.38, d * 0.35], [w * 0.38, d * 0.35]].forEach(function (p) {
+    const legMesh = new THREE.Mesh(legGeo, frameMat);
+    legMesh.position.set(p[0], seatH / 2, p[1]);
+    group.add(legMesh);
+  });
+  return group;
+}
+
+function buildChiavariChairGroup(chair, frameMat, accentMat) {
+  const group = new THREE.Group();
+  const w = chair.seatWidthFt || 1.3;
+  const d = chair.seatDepthFt || 1.4;
+  const backH = chair.backHeightFt || 3.0;
+  const seatH = 0.95;
+  const seat = new THREE.Mesh(cachedGeo('chiavari-seat-' + w, function () {
+    return new THREE.CylinderGeometry(w * 0.42, w * 0.42, 0.12, 16);
+  }), accentMat);
+  seat.position.set(0, seatH, 0);
+  group.add(seat);
+
+  const rail = new THREE.Mesh(cachedGeo('chiavari-rail-' + w, function () {
+    return new THREE.TorusGeometry(w * 0.4, 0.03, 6, 16, Math.PI);
+  }), frameMat);
+  rail.position.set(0, backH, -d * 0.32);
+  rail.rotation.set(Math.PI / 2, 0, Math.PI);
+  group.add(rail);
+
+  const spindleH = Math.max(0.3, backH - seatH);
+  const spindleGeo = cachedGeo('chiavari-spindle-' + spindleH, function () {
+    return new THREE.CylinderGeometry(0.02, 0.02, spindleH, 4);
+  });
+  for (let i = 0; i < 5; i++) {
+    const t = (i / 4) - 0.5;
+    const spindle = new THREE.Mesh(spindleGeo, frameMat);
+    spindle.position.set(t * w * 0.7, seatH + spindleH / 2, -d * 0.32);
+    group.add(spindle);
+  }
+
+  const legGeo = cachedGeo('chiavari-leg-' + seatH, function () { return new THREE.CylinderGeometry(0.025, 0.03, seatH, 6); });
+  [[-w * 0.36, -d * 0.34], [w * 0.36, -d * 0.34], [-w * 0.36, d * 0.34], [w * 0.36, d * 0.34]].forEach(function (p) {
+    const legMesh = new THREE.Mesh(legGeo, frameMat);
+    legMesh.position.set(p[0], seatH / 2, p[1]);
+    group.add(legMesh);
+  });
+  return group;
+}
+
+function buildThroneChairGroup(chair, frameMat, accentMat) {
+  const group = new THREE.Group();
+  const w = chair.seatWidthFt || 2.6;
+  const d = chair.seatDepthFt || 2.4;
+  const backH = chair.backHeightFt || 4.4;
+  const seatH = 1.15;
+  const seat = new THREE.Mesh(cachedGeo('throne-seat-' + w + 'x' + d, function () {
+    return new THREE.BoxGeometry(w * 0.75, 0.28, d * 0.7);
+  }), accentMat);
+  seat.position.set(0, seatH, 0.02);
+  group.add(seat);
+
+  const backHeight = Math.max(0.8, backH - seatH);
+  const back = new THREE.Mesh(cachedGeo('throne-back-' + w + 'x' + backHeight, function () {
+    return new THREE.BoxGeometry(w * 0.85, backHeight, 0.18);
+  }), accentMat);
+  back.position.set(0, seatH + backHeight / 2, -d * 0.36);
+  group.add(back);
+
+  const frameBack = new THREE.Mesh(cachedGeo('throne-frame-' + w + 'x' + backHeight, function () {
+    return new THREE.BoxGeometry(w * 0.95, backHeight + 0.3, 0.1);
+  }), frameMat);
+  frameBack.position.set(0, seatH + backHeight / 2, -d * 0.42);
+  group.add(frameBack);
+
+  const armGeo = cachedGeo('throne-arm-' + d, function () { return new THREE.BoxGeometry(0.14, 0.35, d * 0.6); });
+  [-w * 0.42, w * 0.42].forEach(function (ax) {
+    const armMesh = new THREE.Mesh(armGeo, frameMat);
+    armMesh.position.set(ax, seatH + 0.22, 0);
+    group.add(armMesh);
+  });
+
+  const finial = new THREE.Mesh(cachedGeo('throne-finial', function () {
+    return new THREE.SphereGeometry(0.14, 10, 10);
+  }), frameMat);
+  finial.position.set(0, seatH + backHeight + 0.1, -d * 0.42);
+  group.add(finial);
+
+  const legGeo = cachedGeo('throne-leg-' + seatH, function () { return new THREE.CylinderGeometry(0.07, 0.09, seatH, 8); });
+  [[-w * 0.4, -d * 0.32], [w * 0.4, -d * 0.32], [-w * 0.4, d * 0.32], [w * 0.4, d * 0.32]].forEach(function (p) {
+    const legMesh = new THREE.Mesh(legGeo, frameMat);
+    legMesh.position.set(p[0], seatH / 2, p[1]);
+    group.add(legMesh);
+  });
+  return group;
+}
+
+function buildChairGroup(chairId) {
+  const chair = chairById(chairId) || {};
+  const silhouette = chair.silhouette || 'folding';
+  const frameColor = chair.frameColor || '#f2f1ec';
+  const accentColor = chair.accentColor || frameColor;
+  const frameMat = cachedMat('frame-' + frameColor + '-' + silhouette, function () {
+    return new THREE.MeshStandardMaterial({
+      color: frameColor,
+      roughness: silhouette === 'chiavari' ? 0.35 : (silhouette === 'throne' ? 0.5 : 0.8),
+      metalness: silhouette === 'chiavari' ? 0.5 : (silhouette === 'throne' ? 0.25 : 0.03),
+      side: THREE.DoubleSide,
+    });
+  });
+  const accentMat = cachedMat('accent-' + accentColor, function () {
+    return new THREE.MeshStandardMaterial({ color: accentColor, roughness: 0.65, metalness: 0.05 });
+  });
+  if (silhouette === 'resin') return buildResinChairGroup(chair, frameMat);
+  if (silhouette === 'chiavari') return buildChiavariChairGroup(chair, frameMat, accentMat);
+  if (silhouette === 'throne') return buildThroneChairGroup(chair, frameMat, accentMat);
+  return buildFoldingChairGroup(chair, frameMat);
 }
 
 function disposeObject3D(obj) {
@@ -215,36 +391,18 @@ group.add(leg);
 }
 
 if (item.seatCount > 0) {
-const chairParams = chairMaterialParamsFor(item.chairId);
-const chairMat = new THREE.MeshStandardMaterial({ color: chairParams.color, roughness: chairParams.roughness, metalness: chairParams.metalness });
-const chairR = radiusForChairs + 0.85;
-for (let i = 0; i < item.seatCount; i++) {
-const angle = (i / item.seatCount) * Math.PI * 2;
-const cx = chairR * Math.cos(angle);
-const cz = chairR * Math.sin(angle);
-const chairGroup = new THREE.Group();
-
-const seatGeo = new THREE.CylinderGeometry(0.35, 0.3, 0.15, 10);
-const seat = new THREE.Mesh(seatGeo, chairMat);
-seat.position.set(0, 0.9, 0);
-chairGroup.add(seat);
-
-const legGeo2 = new THREE.CylinderGeometry(0.05, 0.05, 0.9, 6);
-const leg2 = new THREE.Mesh(legGeo2, chairMat);
-leg2.position.set(0, 0.45, 0);
-chairGroup.add(leg2);
-
-const backGeo = new THREE.BoxGeometry(0.62, 0.7, 0.08);
-const back = new THREE.Mesh(backGeo, chairMat);
-back.position.set(0, 1.3, -0.32);
-chairGroup.add(back);
-
-chairGroup.position.set(cx, 0, cz);
-chairGroup.rotation.y = -angle - Math.PI / 2;
-group.add(chairGroup);
-}
-}
-return group;
+    const chairR = radiusForChairs + chairSpacingFor(item.chairId);
+    for (let i = 0; i < item.seatCount; i++) {
+      const angle = (i / item.seatCount) * Math.PI * 2;
+      const cx = chairR * Math.cos(angle);
+      const cz = chairR * Math.sin(angle);
+      const chairGroup = buildChairGroup(item.chairId);
+      chairGroup.position.set(cx, 0, cz);
+      chairGroup.rotation.y = -angle - Math.PI / 2;
+      group.add(chairGroup);
+    }
+  }
+  return group;
 }
 
 function danceLocalGroup(item) {
