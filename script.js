@@ -1083,6 +1083,55 @@ document.body.classList.add('designer-active');
 showStep('step-designer');
 });
 
+function buildPlanText() {
+var tent = byId(TENTS, state.tentId);
+var lines = computeLineItems();
+var total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
+var text = 'Friendly Event Designer - My Event Plan' + NL;
+text += '========================================' + NL + NL;
+text += 'Event type: ' + state.eventType + NL;
+text += 'Guests: ' + state.guestCount + NL;
+text += 'Location type: ' + state.spaceType + NL;
+text += 'Tent: ' + (tent ? tent.name : 'N/A') + NL + NL;
+text += 'Items:' + NL;
+lines.forEach(function (l) {
+text += '- ' + l.label + ' x' + l.qty + ' - ' + money(l.amount) + NL;
+});
+text += NL + 'Estimated Total: ' + money(total) + ' / day' + NL;
+return text;
+}
+
+$('btnPrint').addEventListener('click', function () {
+window.print();
+});
+
+$('btnDownload').addEventListener('click', function () {
+var text = buildPlanText();
+var blob = new Blob([text], { type: 'text/plain' });
+var url = URL.createObjectURL(blob);
+var a = document.createElement('a');
+a.href = url;
+a.download = 'friendly-event-plan.txt';
+document.body.appendChild(a);
+a.click();
+document.body.removeChild(a);
+setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+});
+
+$('btnShare').addEventListener('click', function () {
+var text = buildPlanText();
+var shareBtn = $('btnShare');
+var original = shareBtn.textContent;
+if (navigator.share) {
+navigator.share({ title: 'My Friendly Event Plan', text: text }).catch(function () {});
+} else if (navigator.clipboard && navigator.clipboard.writeText) {
+navigator.clipboard.writeText(text).then(function () {
+shareBtn.textContent = 'Copied!';
+setTimeout(function () { shareBtn.textContent = original; }, 1500);
+});
+}
+});
+
 window.FriendlyBridge = {
 state: state,
 TENTS: TENTS,
