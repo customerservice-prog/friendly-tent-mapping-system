@@ -244,9 +244,19 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .plan2d-pole { position: absolute; border-radius: 50%; background: #9a9a9a; transform: translate(-50%, -50%); }
 .plan2d-object { position: absolute; cursor: grab; display: flex; align-items: center; justify-content: center; }
 .plan2d-object.dragging { cursor: grabbing; opacity: 0.85; }
-.plan2d-table-top { width: 100%; height: 100%; background: #fdfaf3; border: 2px solid #c9bd9a; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--green-dark); }
+.plan2d-table-top { position: relative; width: 100%; height: 100%; background: #fdfaf3; border: 2px solid #c9bd9a; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--green-dark); overflow: hidden; }
 .plan2d-object.round .plan2d-table-top { border-radius: 50%; }
 .plan2d-object.rect .plan2d-table-top { border-radius: 4px; }
+.plan2d-table-label { position: relative; z-index: 2; }
+/* Banquet table: thin center fold seam, like a real folding table */
+.plan2d-table-seam { position: absolute; left: 50%; top: 10%; bottom: 10%; width: 2px; background: rgba(0,0,0,0.16); transform: translateX(-50%); z-index: 1; }
+/* Cocktail table: small dark pedestal-base mark visible from directly above */
+.plan2d-object.plan2d-table--cocktail-pedestal .plan2d-table-top { background: #f4efe3; }
+.plan2d-table-pedestal { position: absolute; left: 50%; top: 50%; width: 36%; height: 36%; border-radius: 50%; background: rgba(30,30,30,0.28); transform: translate(-50%, -50%); z-index: 1; }
+/* Fill & Chill: dark ice basin with raised rim, like the real rental tub */
+.plan2d-object.plan2d-table--fillchill-tub .plan2d-table-top { background: #23262b; border-color: #101214; }
+.plan2d-table-basin { position: absolute; left: 8%; top: 14%; right: 8%; bottom: 14%; border-radius: 5px; background: #30343b; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08); z-index: 1; }
+.plan2d-table-drain { position: absolute; left: 50%; top: 50%; width: 18%; height: 18%; border-radius: 50%; background: #000; transform: translate(-50%, -50%); }
 .plan2d-object.selected .plan2d-table-top { border-color: var(--green); box-shadow: 0 0 0 3px rgba(47,122,60,0.3); }
 .plan2d-object.severity-warning .plan2d-table-top { border-color: var(--warn); box-shadow: 0 0 0 3px rgba(180,83,9,0.25); }
 .plan2d-object.severity-error .plan2d-table-top { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(185,28,28,0.28); }
