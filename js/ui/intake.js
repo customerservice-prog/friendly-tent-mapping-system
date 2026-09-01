@@ -9,63 +9,63 @@ import { suggestPackage } from '../data/packages.js';
 const Bridge = window.FriendlyBridge;
 
 const EVENT_TYPES = [
-{ id: 'wedding', label: 'Wedding' },
-{ id: 'graduation', label: 'Graduation Party' },
-{ id: 'birthday', label: 'Birthday Party' },
-{ id: 'corporate', label: 'Corporate Event' },
-{ id: 'school', label: 'School Event' },
-{ id: 'festival', label: 'Festival' },
-{ id: 'community', label: 'Community Event' },
-{ id: 'backyard', label: 'Backyard Party' },
-{ id: 'anniversary', label: 'Anniversary' },
-{ id: 'babyShower', label: 'Baby Shower' },
-{ id: 'bridalShower', label: 'Bridal Shower' },
-{ id: 'ceremony', label: 'Ceremony' },
-{ id: 'other', label: 'Other' },
+{ id: 'wedding', label: '💍 Wedding' },
+{ id: 'graduation', label: '🎓 Graduation Party' },
+{ id: 'birthday', label: '🎂 Birthday Party' },
+{ id: 'corporate', label: '💼 Corporate Event' },
+{ id: 'school', label: '🏫 School Event' },
+{ id: 'festival', label: '🎪 Festival' },
+{ id: 'community', label: '🤝 Community Event' },
+{ id: 'backyard', label: '🏡 Backyard Party' },
+{ id: 'anniversary', label: '💞 Anniversary' },
+{ id: 'babyShower', label: '🍼 Baby Shower' },
+{ id: 'bridalShower', label: '💐 Bridal Shower' },
+{ id: 'ceremony', label: '⛪ Ceremony' },
+{ id: 'other', label: '✨ Other' },
 ];
 
 const SEATING_STYLE_CARDS = [
-{ id: SEATING_STYLE_OPTIONS.DINING, label: 'Dinner at Tables', hint: 'Guests seated at round or banquet tables for a meal.' },
-{ id: SEATING_STYLE_OPTIONS.CEREMONY, label: 'Ceremony Rows', hint: 'Rows of chairs facing forward, like a wedding ceremony.' },
-{ id: SEATING_STYLE_OPTIONS.COCKTAIL, label: 'Cocktail / Mostly Standing', hint: 'Standing room with a few cocktail tables.' },
-{ id: SEATING_STYLE_OPTIONS.MIXED, label: 'Mixed Seating', hint: 'A mix of seated and standing areas.' },
-{ id: SEATING_STYLE_OPTIONS.NOT_SURE, label: 'Not Sure', hint: "We will plan around a flexible layout." },
+{ id: SEATING_STYLE_OPTIONS.DINING, label: '🍽️ Dinner at Tables', hint: 'Guests seated at round or banquet tables for a meal.' },
+{ id: SEATING_STYLE_OPTIONS.CEREMONY, label: '💒 Ceremony Rows', hint: 'Rows of chairs facing forward, like a wedding ceremony.' },
+{ id: SEATING_STYLE_OPTIONS.COCKTAIL, label: '🥂 Cocktail / Mostly Standing', hint: 'Standing room with a few cocktail tables.' },
+{ id: SEATING_STYLE_OPTIONS.MIXED, label: '🔀 Mixed Seating', hint: 'A mix of seated and standing areas.' },
+{ id: SEATING_STYLE_OPTIONS.NOT_SURE, label: '🤔 Not Sure', hint: "We will plan around a flexible layout." },
 ];
 
 const FEATURES = [
-{ id: 'danceFloor', label: 'Dance Floor' },
-{ id: 'dj', label: 'DJ' },
-{ id: 'band', label: 'Live Band' },
-{ id: 'buffet', label: 'Buffet' },
-{ id: 'bar', label: 'Bar' },
-{ id: 'cocktailTables', label: 'Cocktail Tables' },
-{ id: 'cakeTable', label: 'Cake Table' },
-{ id: 'giftTable', label: 'Gift Table' },
-{ id: 'photoBooth', label: 'Photo Booth' },
-{ id: 'stage', label: 'Stage' },
-{ id: 'lounge', label: 'Lounge Area' },
-{ id: 'catering', label: 'Catering / Service Area' },
+{ id: 'danceFloor', label: '💃 Dance Floor' },
+{ id: 'dj', label: '🎧 DJ' },
+{ id: 'band', label: '🎸 Live Band' },
+{ id: 'buffet', label: '🍲 Buffet' },
+{ id: 'bar', label: '🍸 Bar' },
+{ id: 'cocktailTables', label: '🍹 Cocktail Tables' },
+{ id: 'cakeTable', label: '🎂 Cake Table' },
+{ id: 'giftTable', label: '🎁 Gift Table' },
+{ id: 'photoBooth', label: '📸 Photo Booth' },
+{ id: 'stage', label: '🎤 Stage' },
+{ id: 'lounge', label: '🛋️ Lounge Area' },
+{ id: 'catering', label: '👨‍🍳 Catering / Service Area' },
 ];
 const FEATURE_NONE = 'none';
 const FEATURE_NOT_SURE = 'notSure';
 
 const LOCATION_TYPES = [
-{ id: 'backyard', label: 'Backyard' },
-{ id: 'venue', label: 'Venue' },
-{ id: 'park', label: 'Park' },
-{ id: 'lot', label: 'Parking Lot' },
-{ id: 'indoor', label: 'Indoor Space' },
-{ id: 'other', label: 'Other' },
+{ id: 'backyard', label: '🏡 Backyard' },
+{ id: 'venue', label: '🏛️ Venue' },
+{ id: 'park', label: '🌳 Park' },
+{ id: 'lot', label: '🅿️ Parking Lot' },
+{ id: 'indoor', label: '🏢 Indoor Space' },
+{ id: 'other', label: '📍 Other' },
 ];
 
 const SURFACE_TYPES = [
-{ id: 'grass', label: 'Grass' },
-{ id: 'dirt', label: 'Dirt / Gravel' },
-{ id: 'asphalt', label: 'Asphalt' },
-{ id: 'concrete', label: 'Concrete' },
-{ id: 'deck', label: 'Deck / Patio' },
-{ id: 'indoor', label: 'Indoor Floor' },
-{ id: 'notSure', label: 'Not Sure' },
+{ id: 'grass', label: '🌱 Grass' },
+{ id: 'dirt', label: '🪨 Dirt / Gravel' },
+{ id: 'asphalt', label: '🛣️ Asphalt' },
+{ id: 'concrete', label: '🧱 Concrete' },
+{ id: 'deck', label: '🪵 Deck / Patio' },
+{ id: 'indoor', label: '🏠 Indoor Floor' },
+{ id: 'notSure', label: '❓ Not Sure' },
 ];
 
 const STEP_ORDER = ['eventType', 'guestCount', 'seatingStyle', 'features', 'danceFloorSize', 'location'];
@@ -256,11 +256,11 @@ render();
 });
 grid.appendChild(chip);
 });
-const noneChip = el('button', 'feature-chip' + (wiz.features.indexOf(FEATURE_NONE) !== -1 ? ' selected' : ''), 'None of These');
+const noneChip = el('button', 'feature-chip' + (wiz.features.indexOf(FEATURE_NONE) !== -1 ? ' selected' : ''), '🚫 None of These');
 noneChip.type = 'button';
 noneChip.addEventListener('click', function () { toggleFeature(FEATURE_NONE); render(); });
 grid.appendChild(noneChip);
-const notSureChip = el('button', 'feature-chip' + (wiz.features.indexOf(FEATURE_NOT_SURE) !== -1 ? ' selected' : ''), 'Not Sure Yet');
+const notSureChip = el('button', 'feature-chip' + (wiz.features.indexOf(FEATURE_NOT_SURE) !== -1 ? ' selected' : ''), '🤷 Not Sure Yet');
 notSureChip.type = 'button';
 notSureChip.addEventListener('click', function () { toggleFeature(FEATURE_NOT_SURE); render(); });
 grid.appendChild(notSureChip);
