@@ -373,6 +373,40 @@ $('canvasHint').textContent = mode === '3d' ? 'Drag to rotate • Scroll to zoom
 if (mode === '3d') mount3D();
 }
 
+// Real product photos, sourced from Friendly Party Rental's own live catalog
+// (friendlypartyrental.com) so option cards show the actual rental item instead
+// of a generic icon.
+var ITEM_PHOTOS = {
+'plastic-white': 'white-plastic-folding-chair',
+'resin-white': 'white-resin-folding-chair',
+'chiavari-gold': 'gold-chiavari-chair',
+'chiavari-white': 'white-chiavari-chair',
+'chiavari-mahogany': 'mahogany-chiavari-chair',
+'throne-king': 'king-throne-chair',
+'throne-queen-tiffany': 'queen-tiffany-throne-chair',
+'round-5ft': '5ft-round-table',
+'banquet-6ft': '6ft-plastic-folding-table',
+'banquet-8ft': '8ft-banquet-table',
+'cocktail': 'cocktail-table',
+'fill-chill-4ft': '4ft-fill-and-chill-table',
+};
+
+function itemIconHtml(id, fallbackEmoji) {
+var slug = ITEM_PHOTOS[id];
+if (!slug) return '<span class="item-card-icon">' + fallbackEmoji + '</span>';
+var url = 'https://www.friendlypartyrental.com/api/item-image/' + slug;
+return '<span class="item-card-photo-wrap"><img class="item-card-photo" src="' + url + '" alt="" loading="lazy" data-fallback="' + fallbackEmoji + '"></span>';
+}
+
+function attachPhotoFallback(container) {
+container.querySelectorAll('.item-card-photo').forEach(function (img) {
+img.addEventListener('error', function () {
+var wrap = img.closest('.item-card-photo-wrap');
+if (wrap) wrap.outerHTML = '<span class="item-card-icon">' + (img.dataset.fallback || '') + '</span>';
+});
+});
+}
+
 function tableIcon(t) {
 return t.shape === 'round' ? '●' : '▬';
 }
@@ -409,6 +443,7 @@ if (kind === 'tent') body.innerHTML = buildTentDrawerHtml();
 else if (kind === 'tables') body.innerHTML = buildTablesDrawerHtml();
 else if (kind === 'dance') body.innerHTML = buildDanceDrawerHtml();
 else if (kind === 'lighting') body.innerHTML = buildLightingDrawerHtml();
+attachPhotoFallback(body);
 }
 
 function buildTentDrawerHtml() {
@@ -461,7 +496,7 @@ TABLES.forEach(function (t) {
 var sel = t.id === tableDraft.tableId;
 html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="table-card" data-id="' + t.id + '">';
 if (sel) html += '<span class="item-card-check">&#10003;</span>';
-html += '<span class="item-card-icon">' + tableIcon(t) + '</span>';
+html += itemIconHtml(t.id, tableIcon(t));
 html += '<span class="item-card-name">' + t.name + '</span>';
 html += '<span class="item-card-desc">' + (t.seatsDefault > 0 ? ('Seats ' + t.seatsDefault) : 'No seating') + '</span>';
 html += '<span class="item-card-price">' + money(t.pricePerDay) + '/day</span>';
@@ -477,7 +512,7 @@ CHAIRS.forEach(function (c) {
 var sel = c.id === tableDraft.chairId;
 html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="chair-card" data-id="' + c.id + '">';
 if (sel) html += '<span class="item-card-check">&#10003;</span>';
-html += '<span class="item-card-icon">&#128186;</span>';
+html += itemIconHtml(c.id, '&#128186;');
 html += '<span class="item-card-name">' + c.name + '</span>';
 html += '<span class="item-card-price">' + money(c.pricePerDay) + '/day</span>';
 html += '</button>';
