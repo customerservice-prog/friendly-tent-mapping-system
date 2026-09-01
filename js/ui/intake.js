@@ -60,10 +60,10 @@ const LOCATION_TYPES = [
 
 const SURFACE_TYPES = [
 { id: 'grass', label: '🌱 Grass' },
-{ id: 'dirt', label: '🪨 Dirt / Gravel' },
+{ id: 'dirt', label: '🚧 Dirt / Gravel' },
 { id: 'asphalt', label: '🛣️ Asphalt' },
 { id: 'concrete', label: '🧱 Concrete' },
-{ id: 'deck', label: '🪵 Deck / Patio' },
+{ id: 'deck', label: '⛱️ Deck / Patio' },
 { id: 'indoor', label: '🏠 Indoor Floor' },
 { id: 'notSure', label: '❓ Not Sure' },
 ];
