@@ -168,7 +168,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .inspector-close { float: right; }
 
 /* Status bar */
-.status-bar { flex: 0 0 var(--status-h); display: flex; align-items: center; gap: 0; background: #fff; border-top: 1px solid var(--border); padding: 0 16px; overflow-x: auto; }
+.status-bar { flex: 0 0 var(--status-h); display: flex; align-items: center; gap: 0; background: var(--brand-primary-tint); border-top: none; border-bottom: 1px solid var(--border); padding: 0 16px; overflow-x: auto; }
 .status-pill-group { display: flex; align-items: center; gap: 18px; flex: 1; cursor: pointer; min-width: 0; }
 .status-pill-group:hover { background: var(--brand-secondary); }
 .status-item { font-size: 14px; color: var(--text); white-space: nowrap; }
@@ -192,7 +192,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .drawer-body { flex: 1; overflow-y: auto; padding: 16px 18px; }
 
 /* Flyouts (event check / estimate) anchored near the status bar */
-.flyout { position: fixed; bottom: calc(var(--status-h) + 14px); width: 360px; max-width: 92vw; max-height: 70vh; overflow-y: auto; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 18px; z-index: 22; }
+.flyout { position: fixed; bottom: 14px; width: 360px; max-width: 92vw; max-height: 70vh; overflow-y: auto; background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 18px; z-index: 22; }
 .flyout[hidden] { display: none; }
 #eventCheckFlyout { left: 16px; }
 #estimateFlyout { right: 16px; }
@@ -271,7 +271,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 /* ===================== Responsive breakpoints ===================== */
 @media (max-width: 1280px) {
   :root { --inspector-w: 300px; }
-  .inspector-panel { position: fixed; top: var(--toolbar-h); right: 0; bottom: var(--status-h); width: var(--inspector-w); box-shadow: var(--shadow-lg); z-index: 19; }
+    .inspector-panel { position: fixed; top: calc(var(--toolbar-h) + var(--status-h)); right: 0; bottom: 0; width: var(--inspector-w); box-shadow: var(--shadow-lg); z-index: 19; }
 }
 
 @media (max-width: 1024px) {
@@ -289,12 +289,12 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
   .designer-toolbar { padding: 0 8px; gap: 8px; }
   .toolbar-event-info { display: none; }
   .designer-body { flex-direction: column; }
-  .tool-rail { position: fixed; left: 0; right: 0; bottom: var(--status-h); top: auto; flex-direction: row; justify-content: space-around; border-right: none; border-top: 1px solid var(--border); padding: 4px; z-index: 18; height: 60px; }
+      .tool-rail { position: fixed; left: 0; right: 0; bottom: 0; top: auto; flex-direction: row; justify-content: space-around; border-right: none; border-top: 1px solid var(--border); padding: 4px; z-index: 18; height: 60px; }
   .rail-btn { flex: 1; }
-  .canvas-area { margin-bottom: calc(60px + var(--status-h)); }
-  .drawer { left: 0; right: 0; top: auto; bottom: calc(60px + var(--status-h)); height: 70vh; width: 100%; max-width: 100%; border-radius: var(--radius) var(--radius) 0 0; border-right: none; box-shadow: var(--shadow-lg); }
-  .inspector-panel { position: fixed; left: 0; right: 0; top: auto; bottom: calc(60px + var(--status-h)); width: 100%; height: 60vh; border-radius: var(--radius) var(--radius) 0 0; border-left: none; }
-  .flyout { left: 8px !important; right: 8px !important; width: auto; bottom: calc(60px + var(--status-h) + 10px); }
+      .canvas-area { margin-bottom: 60px; }
+      .drawer { left: 0; right: 0; top: auto; bottom: 60px; height: 70vh; width: 100%; max-width: 100%; border-radius: var(--radius) var(--radius) 0 0; border-right: none; box-shadow: var(--shadow-lg); }
+      .inspector-panel { position: fixed; left: 0; right: 0; top: auto; bottom: 60px; width: 100%; height: 60vh; border-radius: var(--radius) var(--radius) 0 0; border-left: none; }
+      .flyout { left: 8px !important; right: 8px !important; width: auto; bottom: 70px; }
   .status-bar { padding: 0 10px; }
   .status-item.hide-mobile { display: none; }
   .empty-state-overlay { width: calc(100% - 24px); top: 12px; }
