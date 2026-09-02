@@ -50,6 +50,7 @@ export const FRIENDLY_TENANT = {
 Object.assign(FRIENDLY_TENANT, {
   tagline: 'Plan your tent, tables, and chairs for your event with Friendly Party Rental',
   phone: '315-884-1498',
+  shortName: 'Friendly',
   showPackages: true,
 });
 
@@ -64,6 +65,7 @@ export const GENERIC_TENANT = {
   id: 'generic',
   slug: 'generic',
   name: 'RentSketch',
+  shortName: 'RentSketch',
   logo: 'logo.png',
   contactEmail: '',
   phone: '',
