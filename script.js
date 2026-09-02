@@ -402,6 +402,7 @@ return t.shape === 'round' ? '●' : '▬';
 function titleForDrawer(kind) {
 if (kind === 'tent') return 'Tent';
 if (kind === 'tables') return 'Tables & Chairs';
+  if (kind === 'chairs') return 'Chairs';
 if (kind === 'dance') return 'Dance Floor';
 if (kind === 'lighting') return 'Lighting';
 return '';
@@ -430,6 +431,7 @@ function renderDrawerBody(kind) {
 var body = $('drawerBody');
 if (kind === 'tent') body.innerHTML = buildTentDrawerHtml();
 else if (kind === 'tables') body.innerHTML = buildTablesDrawerHtml();
+  else if (kind === 'chairs') body.innerHTML = buildChairsDrawerHtml();
 else if (kind === 'dance') body.innerHTML = buildDanceDrawerHtml();
 else if (kind === 'lighting') body.innerHTML = buildLightingDrawerHtml();
 attachPhotoFallback(body);
@@ -539,6 +541,30 @@ html += '</div>';
 }
 
 html += '<button type="button" class="btn-primary drawer-add-btn" data-role="add-table">+ Add Another ' + tableDef.name + '</button>';
+return html;
+}
+
+function buildChairsDrawerHtml() {
+var html = '';
+html += '<div class="drawer-section-title">Choose a Chair Style</div>';
+html += '<div class="item-card-grid">';
+CHAIRS.forEach(function (c) {
+var sel = c.id === state.chairId;
+html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="chair-card-global" data-id="' + c.id + '">';
+if (sel) html += '<span class="item-card-check">&#10003;</span>';
+html += itemIconHtml(c.id, '&#128186;');
+html += '<span class="item-card-name">' + c.name + '</span>';
+html += '<span class="item-card-price">' + money(c.pricePerDay) + '/day</span>';
+html += '</button>';
+});
+html += '</div>';
+var seatedTableCount = store.getState().objects.filter(function (i) { return i.kind === 'table' && i.seatCount > 0; }).length;
+if (seatedTableCount > 0) {
+html += '<div class="drawer-summary-row"><span>' + seatedTableCount + ' seated table' + (seatedTableCount === 1 ? '' : 's') + ' in your layout</span></div>';
+html += '<button type="button" class="btn-primary drawer-add-btn" data-role="apply-chairs-all">Apply This Chair to All Tables</button>';
+} else {
+html += '<div class="no-seat-note">This sets the default chair style for new tables you add.</div>';
+}
 return html;
 }
 
@@ -963,6 +989,8 @@ refreshAll();
 }
 else if (role === 'remove-dance') { removeAllDanceFloors(); refreshAll(); }
 else if (role === 'lighting-card') { state.lightingId = el.dataset.id; refreshAll(); }
+  else if (role === 'chair-card-global') { state.chairId = el.dataset.id; if (tableDraft) tableDraft.chairId = el.dataset.id; renderDrawerBody('chairs'); }
+  else if (role === 'apply-chairs-all') { store.getState().objects.forEach(function (o) { if (o.kind === 'table' && o.seatCount > 0) store.updateObject(o.id, { chairId: state.chairId }); }); renderDrawerBody('chairs'); }
 });
 
 $('inspectorPanel').addEventListener('click', function (e) {
