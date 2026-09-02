@@ -1,140 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Friendly Event Designer | Friendly Party Rental</title>
-<link rel="icon" type="image/png" href="logo.png">
-<link rel="stylesheet" href="style.css">
-<script type="importmap">
-{
-"imports": {
-"three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-"three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
-}
-}
-</script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RentSketch | Visual Event Design for Rental Companies</title>
+  <meta name="description" content="RentSketch is a visual event design platform. Plan tents, tables, chairs, dance floors and more in a real-scale 2D and 3D layout before you rent.">
+  <link rel="icon" type="image/png" href="logo.png">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    body.home { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: #0b1a2e; color: #f5f7fa; }
+    .home-header { display: flex; align-items: center; gap: 12px; padding: 24px 32px; }
+    .home-header img { height: 48px; }
+    .home-header span { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+    .home-hero { max-width: 720px; margin: 0 auto; padding: 60px 24px 100px; text-align: center; }
+    .home-hero h1 { font-size: 44px; margin: 0 0 12px; }
+    .home-hero .tagline { font-size: 22px; color: #9fd3ff; margin: 0 0 20px; }
+    .home-hero .sub { font-size: 16px; line-height: 1.5; color: #cbd5e1; margin: 0 0 36px; }
+    .home-cta { display: inline-block; background: #2f8fff; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 18px; padding: 16px 36px; border-radius: 8px; }
+    .home-cta:hover { background: #1c73df; }
+    .home-footer { text-align: center; padding: 24px; color: #6b7d94; font-size: 13px; }
+  </style>
 </head>
-<body>
-<header class="site-header">
-<img src="logo.png" alt="Friendly Event Designer - Friendly Party Rental" class="site-header-logo">
-<h1>Friendly Event Designer</h1>
-<p>Plan your tent, tables, and chairs for your event with Friendly Party Rental</p>
-</header>
-
-<main id="app">
-
-<section id="step-intake" class="step active">
-<div id="intakeWizard"></div>
-</section>
-
-<section id="step-recommend" class="step">
-<div id="recommendWizard"></div>
-</section>
-
-<section id="step-designer" class="step">
-<div class="designer-shell">
-<header class="designer-toolbar">
-<div class="toolbar-left">
-<button id="btnBackToRecommend" class="btn-icon" title="Back to event details" aria-label="Back to event details">&larr;</button>
-<div class="toolbar-event-info">
-<div class="toolbar-event-title" id="toolbarEventTitle">Your Event</div>
-<div class="toolbar-event-meta" id="toolbarEventMeta"></div>
-</div>
-</div>
-<div class="toolbar-center">
-<div class="view-toggle" role="tablist">
-<button id="viewModePlan" class="view-toggle-btn active" data-mode="plan" role="tab" aria-selected="true">2D Plan</button>
-<button id="viewMode3d" class="view-toggle-btn" data-mode="3d" role="tab" aria-selected="false">3D View</button>
-</div>
-</div>
-<div class="toolbar-right">
-<button id="btnUndo" class="btn-icon" disabled title="Undo">&#8630;</button>
-<button id="btnRedo" class="btn-icon" disabled title="Redo">&#8631;</button>
-<button id="btnToReview" class="btn-primary toolbar-cta">Review Event</button>
-</div>
-</header>
-
-<div class="designer-body">
-<nav class="tool-rail" id="toolRail">
-<button class="rail-btn" data-drawer="tent" title="Tent">
-<span class="rail-icon" aria-hidden="true">&#9974;</span>
-<span class="rail-label">Tent</span>
-</button>
-<button class="rail-btn" data-drawer="tables" title="Tables &amp; Chairs">
-<span class="rail-icon" aria-hidden="true">&#127869;</span>
-<span class="rail-label">Tables</span>
-</button>
-<button class="rail-btn" data-drawer="dance" title="Dance Floor">
-<span class="rail-icon" aria-hidden="true">&#9835;</span>
-<span class="rail-label">Dance</span>
-</button>
-<button class="rail-btn" data-drawer="lighting" title="Lighting">
-<span class="rail-icon" aria-hidden="true">&#128161;</span>
-<span class="rail-label">Lighting</span>
-</button>
-</nav>
-
-<div class="canvas-area">
-<div class="canvas-viewport">
-<div id="plan2d" class="plan2d"></div>
-<div id="canvas" class="canvas3d"></div>
-<div class="canvas-view-controls">
-<button id="view3dDayNight" class="btn-chip">Night</button>
-<span class="canvas-hint" id="canvasHint">Drag to rotate &bull; Scroll to zoom</span>
-</div>
-<div class="empty-state-overlay" id="emptyStateOverlay" hidden></div>
-</div>
-</div>
-
-<aside class="inspector-panel" id="inspectorPanel" hidden></aside>
-</div>
-
-<footer class="status-bar" id="statusBar"></footer>
-</div>
-
-<div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
-<div class="drawer" id="drawer" hidden>
-<div class="drawer-header">
-<h3 id="drawerTitle">Add</h3>
-<button class="drawer-close" id="drawerClose" aria-label="Close">&#10005;</button>
-</div>
-<div class="drawer-body" id="drawerBody"></div>
-</div>
-
-<div class="flyout" id="eventCheckFlyout" hidden></div>
-<div class="flyout" id="estimateFlyout" hidden></div>
-</section>
-
-<section id="step-review" class="step">
-<h2>Review Your Event</h2>
-<div id="reviewSummary" class="card"></div><div class="share-row" id="shareRow"><button type="button" id="btnPrint" class="btn-secondary">🖨️ Print</button><button type="button" id="btnDownload" class="btn-secondary">⬇️ Download</button><button type="button" id="btnShare" class="btn-secondary">📤 Share</button></div>
-<div class="field">
-<label for="customerName">Your Name</label>
-<input type="text" id="customerName" placeholder="Full name">
-</div>
-<div class="field">
-<label for="customerEmail">Your Email</label>
-<input type="email" id="customerEmail" placeholder="you@example.com">
-</div>
-<div class="field">
-<label for="customerDate">Event Date</label>
-<input type="date" id="customerDate">
-</div>
-<div class="button-row">
-<a id="btnEmailQuote" class="btn-primary" href="#">Email Quote Request</a>
-<button id="btnBackToDesigner" class="btn-secondary">&larr; Back to Designer</button>
-</div>
-<p class="disclaimer">This creates a draft email only. Friendly Party Rental will confirm final pricing, availability, and details before anything is booked or charged.</p>
-</section>
-
-</main>
-
-<footer class="site-footer">
-<p>Friendly Party Rental &middot; 315-884-1498 &middot; customerservice@friendlypartyrental.com</p>
-</footer>
-
-<script type="module" src="script.js"></script>
-<script type="module" src="js/ui/intake.js"></script>
+<body class="home">
+  <header class="home-header">
+    <img src="logo.png" alt="RentSketch">
+    <span>RentSketch</span>
+  </header>
+  <main class="home-hero">
+    <h1>RentSketch</h1>
+    <p class="tagline">See your event before you rent it.</p>
+    <p class="sub">Plan tents, tables, chairs, dance floors and more in a real-scale event layout, then see the same setup in 3D, before anything is delivered.</p>
+    <a class="home-cta" href="/designer/">Start Designing</a>
+  </main>
+  <footer class="home-footer">&copy; RentSketch</footer>
 </body>
 </html>
