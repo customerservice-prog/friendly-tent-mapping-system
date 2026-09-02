@@ -115,7 +115,7 @@ export function checkServiceConflicts(objects, guestCount) {
     const area = rect.width * rect.depth;
     const recommendedArea = Math.ceil((guestCount || 1) / 50) * 60;
     if (area < recommendedArea) {
-      results.push(conflict(CONFLICT_TYPES.SERVICE_CONFLICT, SEVERITY.INFO, [buffet.id], 'The buffet area may be tight for this guest count. Friendly Party Rental can help plan additional service space.'));
+      results.push(conflict(CONFLICT_TYPES.SERVICE_CONFLICT, SEVERITY.INFO, [buffet.id], 'The buffet area may be tight for this guest count. ' + ((window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' can help plan additional service space.'));
     }
   }
   return results;
