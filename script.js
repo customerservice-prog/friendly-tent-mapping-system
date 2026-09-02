@@ -585,15 +585,11 @@ html += '</button>';
 html += '</div>';
 return html;
 }
-
-function renderInspector() {
+function renderOverviewHtml(conflicts) { var tent = byId(TENTS, state.tentId); var objects = store.getState().objects; var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0); var lines = computeLineItems(); var total = lines.reduce(function (s, l) { return s + l.amount; }, 0); var errorCount = 0, warnCount = 0; (conflicts || []).forEach(function (c) { if (c.severity === 'error') errorCount++; else if (c.severity === 'warning') warnCount++; }); var checkText, checkClass; if (errorCount > 0) { checkClass = 'warn'; checkText = errorCount + (errorCount === 1 ? ' issue' : ' issues') + ' need attention'; } else if (totalSeats < state.guestCount) { checkClass = 'warn'; checkText = 'Add ' + (state.guestCount - totalSeats) + ' more seats'; } else if (warnCount > 0) { checkClass = 'warn'; checkText = warnCount + ' item' + (warnCount === 1 ? '' : 's') + ' to review'; } else { checkClass = 'ok'; checkText = 'Layout looks good'; } var html = '<h3 class="inspector-title">Event Overview</h3>'; html += '<div class="inspector-row"><span>Guests</span><span>' + state.guestCount + '</span></div>'; html += '<div class="inspector-row"><span>Seats</span><span>' + totalSeats + '</span></div>'; html += '<div class="inspector-row"><span>Tent</span><span>' + tent.name + '</span></div>'; html += '<div class="inspector-row"><span>Estimated</span><span>' + money(total) + '/day</span></div>'; html += '<div class="inspector-row"><span>Event Check</span><span class="status-flag ' + checkClass + '">' + checkText + '</span></div>'; html += '<div class="inspector-actions"><button type="button" class="btn-primary" data-role="overview-review">Review Event</button></div>'; return html; }
+function renderInspector(conflicts) {
 var panel = $('inspectorPanel');
 var item = store.getState().objects.find(function (i) { return i.id === state.selectedId; });
-if (!item) {
-panel.hidden = true;
-panel.innerHTML = '';
-return;
-}
+if (!item) { panel.hidden = false; panel.innerHTML = renderOverviewHtml(conflicts); return; }
 panel.hidden = false;
 var html = '<button type="button" class="btn-tertiary inspector-close" data-role="inspector-close">Close</button>';
 if (item.kind === 'dance') {
@@ -860,7 +856,7 @@ btn.textContent = totalSeats < state.guestCount ? 'Add Seating' : 'Review Event'
 function refreshAll() {
 var conflicts = getConflicts();
 renderViews(conflicts);
-renderInspector();
+renderInspector(conflicts);
 renderStatusBar(conflicts);
 renderEmptyState();
 renderEventCheckFlyout(conflicts);
@@ -978,7 +974,7 @@ else if (role === 'insp-duplicate') { store.duplicateObject(el.dataset.id, parse
 else if (role === 'insp-delete') { store.removeObject(el.dataset.id); state.selectedId = null; }
 else if (role === 'insp-set-chair') { store.updateObject(el.dataset.id, { chairId: el.dataset.chair }); }
 else if (role === 'insp-set-linen') { store.updateObject(el.dataset.id, { linenId: el.dataset.linen || null }); }
-else if (role === 'remove-dance') { removeAllDanceFloors(); state.selectedId = null; }
+else if (role === 'remove-dance') { removeAllDanceFloors(); state.selectedId = null; } else if (role === 'overview-review') { var objs = store.getState().objects; var totalSeats = objs.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0); if (totalSeats < state.guestCount) { openDrawer('tables'); } else { goToReview(); } }
 });
 
 $('statusBar').addEventListener('click', function (e) {
