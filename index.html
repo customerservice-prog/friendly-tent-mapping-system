@@ -1,37 +1,46 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RentSketch | Visual Event Design for Rental Companies</title>
-  <meta name="description" content="RentSketch is a visual event design platform. Plan tents, tables, chairs, dance floors and more in a real-scale 2D and 3D layout before you rent.">
-  <link rel="icon" type="image/png" href="logo.png">
-  <link rel="stylesheet" href="style.css">
-  <style>
-    body.home { margin: 0; font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; background: #0b1a2e; color: #f5f7fa; }
-    .home-header { display: flex; align-items: center; gap: 12px; padding: 24px 32px; }
-    .home-header img { height: 48px; }
-    .home-header span { font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
-    .home-hero { max-width: 720px; margin: 0 auto; padding: 60px 24px 100px; text-align: center; }
-    .home-hero h1 { font-size: 44px; margin: 0 0 12px; }
-    .home-hero .tagline { font-size: 22px; color: #9fd3ff; margin: 0 0 20px; }
-    .home-hero .sub { font-size: 16px; line-height: 1.5; color: #cbd5e1; margin: 0 0 36px; }
-    .home-cta { display: inline-block; background: #2f8fff; color: #ffffff; text-decoration: none; font-weight: 600; font-size: 18px; padding: 16px 36px; border-radius: 8px; }
-    .home-cta:hover { background: #1c73df; }
-    .home-footer { text-align: center; padding: 24px; color: #6b7d94; font-size: 13px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RentSketch | Visual Event Design for Rental Companies</title>
+<meta name="description" content="RentSketch is a visual event design platform. Plan tents, tables, chairs, dance floors and more in a real-scale layout, then see it in 3D before anything is delivered.">
+<link rel="icon" type="image/png" href="logo.png">
+<link rel="stylesheet" href="style.css">
+<style>
+  body.home { margin:0; font-family:'Segoe UI', system-ui, -apple-system, sans-serif; background:#0b1a2e; color:#f5f7fa; }
+  .home-header { display:flex; align-items:center; gap:14px; padding:24px 32px; }
+  .home-header img { height:42px; }
+  .home-header span { font-size:22px; font-weight:700; letter-spacing:0.5px; }
+  .home-hero { max-width:720px; margin:0 auto; padding:100px 24px 60px; text-align:center; }
+  .home-hero h1 { font-size:42px; margin:0 0 10px; }
+  .home-hero .tagline { font-size:20px; color:#9fd3ff; margin:0 0 20px; }
+  .home-hero .sub { font-size:17px; line-height:1.5; color:#cbd5e1; margin:0 0 36px; }
+  .home-cta-row { display:flex; gap:16px; justify-content:center; flex-wrap:wrap; margin-bottom:18px; }
+  .home-cta { display:inline-block; background:#2f8fff; color:#ffffff; text-decoration:none; font-weight:600; font-size:17px; padding:16px 32px; border-radius:8px; }
+  .home-cta:hover { background:#1c73df; }
+  .home-cta.secondary { background:transparent; border:1px solid #3a5578; color:#dbe9ff; }
+  .home-cta.secondary:hover { background:#132743; }
+  .home-biz-link { display:block; margin-top:8px; color:#9fd3ff; text-decoration:none; font-size:15px; }
+  .home-biz-link:hover { text-decoration:underline; }
+  .home-footer { text-align:center; padding:24px; color:#6b7d94; font-size:14px; }
+</style>
 </head>
 <body class="home">
-  <header class="home-header">
-    <img src="logo.png" alt="RentSketch">
-    <span>RentSketch</span>
-  </header>
-  <main class="home-hero">
-    <h1>RentSketch</h1>
-    <p class="tagline">See your event before you rent it.</p>
-    <p class="sub">Plan tents, tables, chairs, dance floors and more in a real-scale event layout, then see the same setup in 3D, before anything is delivered.</p>
-    <a class="home-cta" href="/designer/">Start Designing</a>
-  </main>
-  <footer class="home-footer">&copy; RentSketch</footer>
+<header class="home-header">
+<img src="logo.png" alt="RentSketch">
+<span>RentSketch</span>
+</header>
+<main class="home-hero">
+<h1>RentSketch</h1>
+<p class="tagline">See your event before you rent it.</p>
+<p class="sub">Plan tents, tables, chairs, dance floors and more in a real-scale event layout, then see the same setup in 3D, before anything is delivered.</p>
+<div class="home-cta-row">
+<a class="home-cta" href="/designer/">Start Designing</a>
+<a class="home-cta secondary" href="/demo/">Try a Demo</a>
+</div>
+<a class="home-biz-link" href="/business/">Own a rental company? See RentSketch for Business &rarr;</a>
+</main>
+<footer class="home-footer">&copy; RentSketch</footer>
 </body>
 </html>
