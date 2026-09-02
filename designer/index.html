@@ -17,10 +17,36 @@
 </head>
 <body>
 <header class="site-header">
-<img src="../logo.png" alt="Friendly Event Designer - Friendly Party Rental" class="site-header-logo">
-<h1>Friendly Event Designer</h1>
-<p>Plan your tent, tables, and chairs for your event with Friendly Party Rental</p>
-</header>
+<img src="../logo.png" alt="Friendly Event Designer - Friendly Party Rental" class="site-header-logo" id="siteHeaderLogo">
+  <h1 id="siteHeaderTitle">Friendly Event Designer</h1>
+  <p id="siteHeaderTagline">Plan your tent, tables, and chairs for your event with Friendly Party Rental</p>
+  </header>
+
+  <script type="module">
+    import { getTenant } from '../js/data/tenant.js';
+    var params = new URLSearchParams(window.location.search);
+    var tenant = getTenant(params.get('tenant'));
+    window.ACTIVE_TENANT = tenant;
+    var isGeneric = tenant.slug === 'generic';
+    document.title = isGeneric ? 'RentSketch Designer' : (tenant.name + ' Event Designer | ' + tenant.name);
+    var titleEl = document.getElementById('siteHeaderTitle');
+    var taglineEl = document.getElementById('siteHeaderTagline');
+    var logoEl = document.getElementById('siteHeaderLogo');
+    var disclaimerEl = document.getElementById('quoteDisclaimer');
+    if (disclaimerEl) {
+      disclaimerEl.textContent = 'This creates a draft email only. ' + tenant.name + ' will confirm final pricing, availability, and details before anything is booked or charged.';
+    }
+    var footerEl = document.getElementById('siteFooterText');
+    if (titleEl) titleEl.textContent = isGeneric ? 'RentSketch Designer' : (tenant.name + ' Event Designer');
+    if (taglineEl) taglineEl.textContent = tenant.tagline || '';
+    if (logoEl) logoEl.alt = tenant.name;
+    if (footerEl) {
+      var bits = [tenant.name];
+      if (tenant.phone) bits.push(tenant.phone);
+      if (tenant.contactEmail) bits.push(tenant.contactEmail);
+      footerEl.textContent = bits.join(' · ');
+    }
+  </script>
 
 <main id="app">
 
@@ -125,13 +151,13 @@
 <a id="btnEmailQuote" class="btn-primary" href="#">Email Quote Request</a>
 <button id="btnBackToDesigner" class="btn-secondary">&larr; Back to Designer</button>
 </div>
-<p class="disclaimer">This creates a draft email only. Friendly Party Rental will confirm final pricing, availability, and details before anything is booked or charged.</p>
+<p class="disclaimer" id="quoteDisclaimer">This creates a draft email only. Friendly Party Rental will confirm final pricing, availability, and details before anything is booked or charged.</p>
 </section>
 
 </main>
 
 <footer class="site-footer">
-<p>Friendly Party Rental &middot; 315-884-1498 &middot; customerservice@friendlypartyrental.com</p>
+<p id="siteFooterText">Friendly Party Rental &middot; 315-884-1498 &middot; customerservice@friendlypartyrental.com</p>
 </footer>
 
 <script type="module" src="../script.js"></script>
