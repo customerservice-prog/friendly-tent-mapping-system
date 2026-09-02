@@ -45,3 +45,41 @@ export const FRIENDLY_TENANT = {
   tables: TABLES,
   chairs: CHAIRS,
 };
+
+// --- Extended tenant branding fields (additive; does not change existing behavior) ---
+Object.assign(FRIENDLY_TENANT, {
+  tagline: 'Plan your tent, tables, and chairs for your event with Friendly Party Rental',
+  phone: '315-884-1498',
+  showPackages: true,
+});
+
+// Generic, tenant-neutral RentSketch branding. Used when the designer is
+// accessed without a specific rental-company tenant context (e.g. the public
+// RentSketch demo and marketing site), so Friendly Party Rental's brand name
+// and package suggestions never leak into a generic visitor's experience.
+// NOTE: this still uses the same underlying product/pricing data as Friendly
+// today since there is not yet a separate master/generic catalog - only the
+// branding, contact info and package-suggestion behavior are neutral.
+export const GENERIC_TENANT = {
+  id: 'generic',
+  slug: 'generic',
+  name: 'RentSketch',
+  logo: 'logo.png',
+  contactEmail: '',
+  phone: '',
+  tagline: 'Plan tents, tables, chairs, dance floors and more in a real-scale event layout.',
+  showPackages: false,
+  colors: {
+    primary: '#2f6fed',
+    primaryDark: '#1f4fbf',
+    primaryTint: '#eaf1ff',
+    secondary: '#0b1b3a',
+  },
+  tents: TENTS,
+  tables: TABLES,
+  chairs: CHAIRS,
+};
+
+export function getTenant(slug) {
+  return slug === 'generic' ? GENERIC_TENANT : FRIENDLY_TENANT;
+}
