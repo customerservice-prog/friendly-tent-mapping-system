@@ -401,11 +401,11 @@ const root = document.getElementById('recommendWizard');
 root.innerHTML = '';
 root.appendChild(el('h2', null, 'Recommended Starting Setup'));
 
-if (matchedPackage) {
+if (matchedPackage && (!window.ACTIVE_TENANT || window.ACTIVE_TENANT.showPackages !== false)) {
 const box = el('div', 'package-match');
 box.appendChild(el('div', 'package-match-title', 'This matches our "' + matchedPackage.name + '" package'));
 box.appendChild(el('div', 'package-match-meta', money(matchedPackage.price) + '/day flat — up to ' + matchedPackage.maxGuests + ' guests'));
-box.appendChild(el('div', 'package-match-hint', 'Ask Friendly Party Rental about bundling into this package for potential savings.'));
+box.appendChild(el('div', 'package-match-hint', 'Ask ' + ((window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' about bundling into this package for potential savings.'));
 root.appendChild(box);
 }
 
