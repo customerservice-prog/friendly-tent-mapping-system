@@ -321,7 +321,7 @@ refreshAll();
 function handleMove(itemId, x, y) {
 store.updateObject(itemId, { x: x, y: y });
 }
-
+function focusConflictObject(id) { state.eventCheckOpen = false; if (state.viewMode !== 'plan') setViewMode('plan'); state.selectedId = id; refreshAll(); setTimeout(function () { var el = document.querySelector('#plan2d [data-item-id="' + id + '"]'); if (el && el.scrollIntoView) { el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); } }, 60); } function autoFixConflict(id) { var objects = store.getState().objects; var target = objects.find(function (o) { return o.id === id; }); if (!target) return; var tent = byId(TENTS, state.tentId); var maxX = Math.max(0, tent.widthFt - target.widthFt); var maxY = Math.max(0, tent.lengthFt - target.depthFt); var startX = Math.min(Math.max(target.x, 0), maxX); var startY = Math.min(Math.max(target.y, 0), maxY); function isClear(x, y) { var trial = objects.map(function (o) { return o.id === id ? Object.assign({}, o, { x: x, y: y }) : o; }); var conflicts = runAllChecks({ objects: forCollision(trial), aisles: [] }, tent, state.guestCount); return !conflicts.some(function (c) { return c.objectIds.indexOf(id) !== -1; }); } if (isClear(startX, startY)) { store.updateObject(id, { x: startX, y: startY }); refreshAll(); return; } for (var radius = 1; radius <= 60; radius++) { var r = radius * 0.5; var steps = Math.max(8, radius * 4); for (var s = 0; s < steps; s++) { var angle = (Math.PI * 2 * s) / steps; var cx = Math.min(Math.max(startX + r * Math.cos(angle), 0), maxX); var cy = Math.min(Math.max(startY + r * Math.sin(angle), 0), maxY); if (isClear(cx, cy)) { store.updateObject(id, { x: Math.round(cx * 2) / 2, y: Math.round(cy * 2) / 2 }); refreshAll(); return; } } } alert('We could not find an automatic fix for this item. Try moving it manually.'); }
 function mountPlan() {
 if (planMounted) return;
 planMounted = true;
@@ -753,7 +753,7 @@ seen[key] = true;
 shown = true;
 html += '<div class="action-banner">';
 html += '<div class="action-banner-title">' + (c.severity === 'error' ? 'Needs Attention' : 'Heads Up') + '</div>';
-html += '<p>' + c.message + '</p>';
+html += '<p>' + c.message + '</p>'; var fixTargetId = c.objectIds[c.objectIds.length - 1]; html += '<div class="action-banner-actions">'; html += '<button type="button" class="btn-secondary small" data-role="event-check-show" data-id="' + fixTargetId + '">Show Me</button>'; if (c.type !== 'serviceConflict') { html += '<button type="button" class="btn-primary small" data-role="event-check-fix" data-id="' + fixTargetId + '">Fix It</button>'; } html += '</div>';
 html += '</div>';
 });
 if (!shown) {
@@ -992,7 +992,7 @@ $('eventCheckFlyout').addEventListener('click', function (e) {
 var el = e.target.closest('[data-role]');
 if (!el) return;
 if (el.dataset.role === 'close-event-check') { state.eventCheckOpen = false; refreshAll(); }
-else if (el.dataset.role === 'cta-add-seating') { state.eventCheckOpen = false; openDrawer('tables'); }
+else if (el.dataset.role === 'cta-add-seating') { state.eventCheckOpen = false; openDrawer('tables'); } else if (el.dataset.role === 'event-check-show') { focusConflictObject(el.dataset.id); } else if (el.dataset.role === 'event-check-fix') { autoFixConflict(el.dataset.id); }
 });
 
 $('estimateFlyout').addEventListener('click', function (e) {
