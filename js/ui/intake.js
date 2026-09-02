@@ -441,4 +441,24 @@ row.appendChild(backBtn);
 root.appendChild(row);
 }
 
-render();
+// Demo mode: ?demo=1 skips the wizard and jumps straight into a curated,
+// fully populated example so first-time visitors can explore the designer
+// without answering any questions. This never runs unless that exact query
+// parameter is present, so the normal customer wizard flow is unaffected.
+function maybeStartDemoMode() {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('demo') !== '1') return false;
+  wiz.eventType = 'wedding';
+  wiz.guestCount = 100;
+  wiz.seatingStyle = SEATING_STYLE_OPTIONS.DINING;
+  wiz.features = ['danceFloor', 'buffet', 'bar', 'cakeTable'];
+  wiz.danceFloorSizeId = '18x18';
+  wiz.spaceType = 'backyard';
+  wiz.surfaceType = 'grass';
+  computeAndShowRecommendations();
+  return true;
+}
+
+if (!maybeStartDemoMode()) {
+  render();
+}
