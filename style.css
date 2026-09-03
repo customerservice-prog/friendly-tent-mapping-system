@@ -70,6 +70,15 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .card { background: var(--brand-secondary); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; }
 .card.small { padding: 10px; font-size: 13px; }
 .card ul { margin: 8px 0 0 18px; padding: 0; }
+.review-section { margin-bottom: 20px; }
+.review-section:last-child { margin-bottom: 0; }
+.review-section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 8px; }
+.review-visual-preview { position: relative; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--brand-primary-tint); min-height: 120px; }
+.review-preview-empty { margin: 0; padding: 24px; text-align: center; color: var(--muted); font-size: 14px; }
+.plan2d-stage-preview { pointer-events: none; }
+.review-event-check-summary { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.review-issue-list { margin: 8px 0 0 18px; padding: 0; font-size: 14px; color: var(--muted); }
+.review-issue-list li { margin-bottom: 4px; }
 .status-ok { color: var(--ok); font-weight: 600; }
 .status-warn { color: var(--warn); font-weight: 600; }
 .disclaimer { font-size: 13px; color: var(--muted); margin-top: 12px; }
