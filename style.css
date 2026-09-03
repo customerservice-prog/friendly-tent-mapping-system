@@ -272,7 +272,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .plan2d-table-top { position: relative; width: 100%; height: 100%; background: #fdfaf3; border: 2px solid #c9bd9a; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; color: var(--brand-primary-dark); overflow: hidden; }
 .plan2d-object.round .plan2d-table-top { border-radius: 50%; }
 .plan2d-object.rect .plan2d-table-top { border-radius: 4px; }
-.plan2d-table-label { position: relative; z-index: 2; }
+.plan2d-table-label { position: relative; z-index: 2; text-align: center; }
 /* Banquet table: thin center fold seam, like a real folding table */
 .plan2d-table-seam { position: absolute; left: 50%; top: 10%; bottom: 10%; width: 2px; background: rgba(0,0,0,0.16); transform: translateX(-50%); z-index: 1; }
 /* Cocktail table: small dark pedestal-base mark visible from directly above */
