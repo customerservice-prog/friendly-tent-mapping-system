@@ -340,8 +340,21 @@ wrap.appendChild(surfaceGrid);
 renderNav(wrap, { nextLabel: 'See My Recommendations', isLast: true });
 return wrap;
 }
-function computeAndShowRecommendations() {
-const result = recommendTents({
+function applyWizardStateToBridge() {
+Bridge.state.eventType = wiz.eventType || 'other';
+Bridge.state.guestCount = wiz.guestCount;
+Bridge.state.spaceType = wiz.spaceType || 'other';
+Bridge.state.needDance = wiz.features.indexOf('danceFloor') !== -1;
+Bridge.state.danceFloorSizeId = wiz.danceFloorSizeId;
+Bridge.state.customDanceFloorFt = wiz.customDanceFloorFt;
+const pkgCategory = packageCategoryForEventType(wiz.eventType);
+const matchedPackage = pkgCategory ? suggestPackage(pkgCategory, wiz.guestCount) : null;
+Bridge.state.matchedPackageId = matchedPackage ? matchedPackage.id : null;
+return matchedPackage;
+}
+
+function recommendTentsForWiz() {
+return recommendTents({
 guestCount: wiz.guestCount,
 seatingStyle: wiz.seatingStyle || SEATING_STYLE_OPTIONS.NOT_SURE,
 features: wiz.features,
@@ -349,18 +362,11 @@ surfaceType: wiz.surfaceType || 'notSure',
 danceFloorSizeId: wiz.danceFloorSizeId,
 customDanceFloorFt: wiz.customDanceFloorFt,
 });
+}
 
-Bridge.state.eventType = wiz.eventType || 'other';
-Bridge.state.guestCount = wiz.guestCount;
-Bridge.state.spaceType = wiz.spaceType || 'other';
-Bridge.state.needDance = wiz.features.indexOf('danceFloor') !== -1;
-Bridge.state.danceFloorSizeId = wiz.danceFloorSizeId;
-Bridge.state.customDanceFloorFt = wiz.customDanceFloorFt;
-
-const pkgCategory = packageCategoryForEventType(wiz.eventType);
-const matchedPackage = pkgCategory ? suggestPackage(pkgCategory, wiz.guestCount) : null;
-Bridge.state.matchedPackageId = matchedPackage ? matchedPackage.id : null;
-
+function computeAndShowRecommendations() {
+const result = recommendTentsForWiz();
+const matchedPackage = applyWizardStateToBridge();
 renderRecommendations(result, matchedPackage);
 Bridge.showStep('step-recommend');
 }
@@ -446,17 +452,21 @@ root.appendChild(row);
 // without answering any questions. This never runs unless that exact query
 // parameter is present, so the normal customer wizard flow is unaffected.
 function maybeStartDemoMode() {
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('demo') !== '1') return false;
-  wiz.eventType = 'wedding';
-  wiz.guestCount = 100;
-  wiz.seatingStyle = SEATING_STYLE_OPTIONS.DINING;
-  wiz.features = ['danceFloor', 'buffet', 'bar', 'cakeTable'];
-  wiz.danceFloorSizeId = '18x18';
-  wiz.spaceType = 'backyard';
-  wiz.surfaceType = 'grass';
-  computeAndShowRecommendations();
-  return true;
+const params = new URLSearchParams(window.location.search);
+if (params.get('demo') !== '1') return false;
+wiz.eventType = 'wedding';
+wiz.guestCount = 100;
+wiz.seatingStyle = SEATING_STYLE_OPTIONS.DINING;
+wiz.features = ['danceFloor', 'buffet', 'bar', 'cakeTable'];
+wiz.danceFloorSizeId = '18x18';
+wiz.spaceType = 'backyard';
+wiz.surfaceType = 'grass';
+const result = recommendTentsForWiz();
+applyWizardStateToBridge();
+const entry = result.recommended || result.moreSpacious || result.tighter;
+if (entry) Bridge.state.tentId = entry.tent.id;
+Bridge.useRecommendedLayout();
+return true;
 }
 
 if (!maybeStartDemoMode()) {
