@@ -951,23 +951,24 @@ html += '<li>' + l.label + ' x' + l.qty + ' &mdash; ' + money(l.amount) + '</li>
 });
 html += '</ul><p><strong>Estimated Total: ' + money(total) + ' / day</strong></p></div>';
 
+var liveStage = document.querySelector('#plan2d .plan2d-stage');
+var stageWidth = liveStage ? (liveStage.offsetWidth || 1) : 1;
+var stageHeight = liveStage ? (liveStage.offsetHeight || 0) : 0;
+var stageClone = (liveStage && liveStage.children.length) ? liveStage.cloneNode(true) : null;
+
 $('reviewSummary').innerHTML = html;
 
 document.body.classList.remove('designer-active');
 showStep('step-review');
 
 var previewHost = $('reviewDesignPreview');
-var liveStage = document.querySelector('#plan2d .plan2d-stage');
-if (previewHost && liveStage && liveStage.children.length) {
-var clone = liveStage.cloneNode(true);
-clone.classList.add('plan2d-stage-preview');
-previewHost.appendChild(clone);
+if (previewHost && stageClone) {
+stageClone.classList.add('plan2d-stage-preview');
+previewHost.appendChild(stageClone);
 var hostWidth = previewHost.clientWidth;
-var stageWidth = liveStage.offsetWidth || 1;
-var stageHeight = liveStage.offsetHeight || 0;
 var scale = hostWidth > 0 ? Math.min(1, hostWidth / stageWidth) : 1;
-clone.style.transform = 'scale(' + scale + ')';
-clone.style.transformOrigin = 'top left';
+stageClone.style.transform = 'scale(' + scale + ')';
+stageClone.style.transformOrigin = 'top left';
 previewHost.style.height = Math.max(60, stageHeight * scale) + 'px';
 } else if (previewHost) {
 previewHost.innerHTML = '<p class="review-preview-empty">Your design preview will appear here.</p>';
