@@ -173,7 +173,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 /* Inspector (contextual right panel) */
 .inspector-panel { flex: 0 0 var(--inspector-w); background: #fff; border-left: 1px solid var(--border); padding: 18px; overflow-y: auto; }
 .inspector-panel[hidden] { display: none; }
-.try-these-card { position: absolute; top: 14px; right: 14px; z-index: 6; width: min(260px, calc(100% - 32px)); background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 16px; }
+.try-these-card { position: absolute; bottom: 14px; left: 14px; z-index: 6; width: min(260px, calc(100% - 32px)); background: #fff; border-radius: var(--radius); box-shadow: var(--shadow-lg); padding: 16px; }
 .try-these-close { position: absolute; top: 10px; right: 10px; background: none; border: none; font-size: 14px; color: var(--muted); cursor: pointer; width: 28px; height: 28px; border-radius: 50%; }
 .try-these-close:hover { background: var(--brand-secondary); }
 .try-these-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--brand-primary-dark); margin: 0 28px 10px 0; }
