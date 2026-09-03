@@ -300,6 +300,7 @@ return map;
 }
 
 var view3dMod = null;
+function pickFixTarget(objectIds) { var objs = store.getState().objects; for (var i = objectIds.length - 1; i >= 0; i--) { var o = objs.find(function (x) { return x.id === objectIds[i]; }); if (o && o.kind !== 'dance') return objectIds[i]; } return objectIds[objectIds.length - 1]; }
 var view3dPendingSnapshot = null;
 var planMounted = false;
 
@@ -780,7 +781,7 @@ seen[key] = true;
 shown = true;
 html += '<div class="action-banner">';
 html += '<div class="action-banner-title">' + (c.severity === 'error' ? 'Needs Attention' : 'Heads Up') + '</div>';
-html += '<p>' + c.message + '</p>'; var fixTargetId = c.objectIds[c.objectIds.length - 1]; html += '<div class="action-banner-actions">'; html += '<button type="button" class="btn-secondary small" data-role="event-check-show" data-id="' + fixTargetId + '">Show Me</button>'; if (c.type !== 'serviceConflict') { html += '<button type="button" class="btn-primary small" data-role="event-check-fix" data-id="' + fixTargetId + '">Fix It</button>'; } html += '</div>';
+html += '<p>' + c.message + '</p>'; var fixTargetId = pickFixTarget(c.objectIds); html += '<div class="action-banner-actions">'; html += '<button type="button" class="btn-secondary small" data-role="event-check-show" data-id="' + fixTargetId + '">Show Me</button>'; if (c.type !== 'serviceConflict') { html += '<button type="button" class="btn-primary small" data-role="event-check-fix" data-id="' + fixTargetId + '">Fix It</button>'; } html += '</div>';
 html += '</div>';
 });
 if (!shown) {
@@ -941,7 +942,7 @@ conflicts.forEach(function (c) {
 var key = c.type + '|' + c.message;
 if (seen[key]) return;
 seen[key] = true;
-var fixTargetId = c.objectIds[c.objectIds.length - 1];
+var fixTargetId = pickFixTarget(c.objectIds);
 issueHtml += '<li class="review-issue-row"><span class="review-issue-message">' + c.message + '</span><span class="review-issue-actions"><button type="button" class="btn-secondary small" data-role="review-check-show" data-id="' + fixTargetId + '">Show Me</button>' + (c.type !== 'serviceConflict' ? '<button type="button" class="btn-primary small" data-role="review-check-fix" data-id="' + fixTargetId + '">Fix It</button>' : '') + '</span></li>';
 });
 if (issueHtml) html += '<ul class="review-issue-list">' + issueHtml + '</ul>';
