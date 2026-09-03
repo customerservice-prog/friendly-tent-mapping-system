@@ -304,6 +304,7 @@ function pickFixTarget(objectIds) { var objs = store.getState().objects; for (va
 var view3dPendingSnapshot = null;
 var planMounted = false;
 
+function dedupeConflicts(conflicts) { var seen = {}; var result = []; (conflicts || []).forEach(function (c) { var key = c.type + '|' + c.message; if (seen[key]) return; seen[key] = true; result.push(c); }); return result; }
 function buildSnapshot(conflicts) {
 var tent = byId(TENTS, state.tentId);
 return {
@@ -615,7 +616,7 @@ html += '</button>';
 html += '</div>';
 return html;
 }
-function renderOverviewHtml(conflicts) { var tent = byId(TENTS, state.tentId); var objects = store.getState().objects; var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0); var lines = computeLineItems(); var total = lines.reduce(function (s, l) { return s + l.amount; }, 0); var errorCount = 0, warnCount = 0; (conflicts || []).forEach(function (c) { if (c.severity === 'error') errorCount++; else if (c.severity === 'warning') warnCount++; }); var checkText, checkClass; if (errorCount > 0) { checkClass = 'warn'; checkText = errorCount + (errorCount === 1 ? ' issue' : ' issues') + ' need attention'; } else if (totalSeats < state.guestCount) { checkClass = 'warn'; checkText = 'Add ' + (state.guestCount - totalSeats) + ' more seats'; } else if (warnCount > 0) { checkClass = 'warn'; checkText = warnCount + ' item' + (warnCount === 1 ? '' : 's') + ' to review'; } else { checkClass = 'ok'; checkText = 'Layout looks good'; } var isDemo = new URLSearchParams(window.location.search).get('demo') === '1'; var html = '<div class="inspector-collapse-bar" data-role="inspector-toggle"><span>' + checkText + ' &middot; ' + money(total) + '/day</span><span class="inspector-collapse-chevron">' + (state.inspectorCollapsed ? '&#9650;' : '&#9660;') + '</span></div><h3 class="inspector-title">Event Overview</h3>'; html += '<div class="inspector-row"><span>Guests</span><span>' + state.guestCount + '</span></div>'; html += '<div class="inspector-row"><span>Seats</span><span>' + totalSeats + '</span></div>'; html += '<div class="inspector-row"><span>Tent</span><span>' + tent.name + '</span></div>'; html += '<div class="inspector-row"><span>Estimated</span><span>' + money(total) + '/day</span></div>'; html += '<div class="inspector-row"><span>Event Check</span><span class="status-flag ' + checkClass + '">' + checkText + '</span></div>'; html += '<div class="inspector-actions"><button type="button" class="btn-primary" data-role="overview-review">Review Event</button>' + (isDemo ? '<button type="button" class="btn-tertiary" data-role="reset-demo">Reset Demo</button>' : '') + '</div>'; return html; }
+function renderOverviewHtml(conflicts) { conflicts = dedupeConflicts(conflicts); var tent = byId(TENTS, state.tentId); var objects = store.getState().objects; var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0); var lines = computeLineItems(); var total = lines.reduce(function (s, l) { return s + l.amount; }, 0); var errorCount = 0, warnCount = 0; (conflicts || []).forEach(function (c) { if (c.severity === 'error') errorCount++; else if (c.severity === 'warning') warnCount++; }); var checkText, checkClass; if (errorCount > 0) { checkClass = 'warn'; checkText = errorCount + (errorCount === 1 ? ' issue' : ' issues') + ' need attention'; } else if (totalSeats < state.guestCount) { checkClass = 'warn'; checkText = 'Add ' + (state.guestCount - totalSeats) + ' more seats'; } else if (warnCount > 0) { checkClass = 'warn'; checkText = warnCount + ' item' + (warnCount === 1 ? '' : 's') + ' to review'; } else { checkClass = 'ok'; checkText = 'Layout looks good'; } var isDemo = new URLSearchParams(window.location.search).get('demo') === '1'; var html = '<div class="inspector-collapse-bar" data-role="inspector-toggle"><span>' + checkText + ' &middot; ' + money(total) + '/day</span><span class="inspector-collapse-chevron">' + (state.inspectorCollapsed ? '&#9650;' : '&#9660;') + '</span></div><h3 class="inspector-title">Event Overview</h3>'; html += '<div class="inspector-row"><span>Guests</span><span>' + state.guestCount + '</span></div>'; html += '<div class="inspector-row"><span>Seats</span><span>' + totalSeats + '</span></div>'; html += '<div class="inspector-row"><span>Tent</span><span>' + tent.name + '</span></div>'; html += '<div class="inspector-row"><span>Estimated</span><span>' + money(total) + '/day</span></div>'; html += '<div class="inspector-row"><span>Event Check</span><span class="status-flag ' + checkClass + '">' + checkText + '</span></div>'; html += '<div class="inspector-actions"><button type="button" class="btn-primary" data-role="overview-review">Review Event</button>' + (isDemo ? '<button type="button" class="btn-tertiary" data-role="reset-demo">Reset Demo</button>' : '') + '</div>'; return html; }
 function renderInspector(conflicts) {
 var panel = $('inspectorPanel');
 var item = store.getState().objects.find(function (i) { return i.id === state.selectedId; });
@@ -681,6 +682,7 @@ panel.innerHTML = html;
 }
 
 function renderStatusBar(conflicts) {
+  conflicts = dedupeConflicts(conflicts);
 var tent = byId(TENTS, state.tentId);
 var objects = store.getState().objects;
 var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0);
@@ -907,6 +909,7 @@ var lines = computeLineItems();
 var total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
 var pkg = state.matchedPackageId ? byId(PACKAGES, state.matchedPackageId) : null;
 var conflicts = getConflicts();
+  conflicts = dedupeConflicts(conflicts);
 var objects = store.getState().objects;
 var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0);
 var tenant = window.ACTIVE_TENANT || null;
