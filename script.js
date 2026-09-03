@@ -56,6 +56,7 @@ estimateOpen: false,
 };
 
 var nextItemNum = 1;
+var tryTheseDismissed = false;
 function newItemId() { return 'item-' + (nextItemNum++); }
 
 var store = createLayoutStore({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
@@ -880,6 +881,7 @@ var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0);
 var btn = $('btnToReview');
 btn.textContent = totalSeats < state.guestCount ? 'Add Seating' : 'Review Event';
 }
+function renderTryThese() { var card = $('tryTheseCard'); if (!card) return; var isDemo = new URLSearchParams(window.location.search).get('demo') === '1'; card.hidden = !isDemo || tryTheseDismissed; }
 
 function refreshAll() {
 var conflicts = getConflicts();
@@ -887,6 +889,7 @@ renderViews(conflicts);
 renderInspector(conflicts);
 renderStatusBar(conflicts);
 renderEmptyState();
+renderTryThese();
 renderEventCheckFlyout(conflicts);
 renderEstimateFlyout();
 updateUndoRedoButtons();
@@ -1107,6 +1110,8 @@ refreshAll();
 openDrawer('tables');
 }
 });
+if ($('tryTheseClose')) { $('tryTheseClose').addEventListener('click', function () { tryTheseDismissed = true; $('tryTheseCard').hidden = true; }); }
+if ($('tryTheseList')) { $('tryTheseList').addEventListener('click', function (e) { var el = e.target.closest('[data-role]'); if (!el) return; var role = el.dataset.role; if (role === 'try-drawer') { openDrawer(el.dataset.drawer); } else if (role === 'try-event-check') { state.eventCheckOpen = true; state.estimateOpen = false; refreshAll(); } else if (role === 'try-3d') { setViewMode('3d'); } el.classList.add('done'); }); }
 
 $('viewModePlan').addEventListener('click', function () { setViewMode('plan'); });
 $('viewMode3d').addEventListener('click', function () { setViewMode('3d'); });
