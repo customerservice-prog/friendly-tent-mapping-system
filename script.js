@@ -953,13 +953,15 @@ html += '</ul><p><strong>Estimated Total: ' + money(total) + ' / day</strong></p
 
 $('reviewSummary').innerHTML = html;
 
+document.body.classList.remove('designer-active');
+showStep('step-review');
+
 var previewHost = $('reviewDesignPreview');
 var liveStage = document.querySelector('#plan2d .plan2d-stage');
 if (previewHost && liveStage && liveStage.children.length) {
 var clone = liveStage.cloneNode(true);
 clone.classList.add('plan2d-stage-preview');
 previewHost.appendChild(clone);
-requestAnimationFrame(function () {
 var hostWidth = previewHost.clientWidth;
 var stageWidth = liveStage.offsetWidth || 1;
 var stageHeight = liveStage.offsetHeight || 0;
@@ -967,7 +969,6 @@ var scale = hostWidth > 0 ? Math.min(1, hostWidth / stageWidth) : 1;
 clone.style.transform = 'scale(' + scale + ')';
 clone.style.transformOrigin = 'top left';
 previewHost.style.height = Math.max(60, stageHeight * scale) + 'px';
-});
 } else if (previewHost) {
 previewHost.innerHTML = '<p class="review-preview-empty">Your design preview will appear here.</p>';
 }
@@ -989,9 +990,6 @@ var date = $('customerDate').value;
 var fullBody = encodeURIComponent('Name: ' + name + NL + 'Email: ' + email + NL + 'Requested Date: ' + date + NL + NL + body);
 this.href = 'mailto:' + tenantEmail + '?subject=' + subject + '&body=' + fullBody;
 };
-
-document.body.classList.remove('designer-active');
-showStep('step-review');
 }
 
 document.querySelectorAll('.rail-btn').forEach(function (btn) {
