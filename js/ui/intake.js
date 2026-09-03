@@ -6,7 +6,7 @@ import { recommendTents, SEATING_STYLE_OPTIONS } from '../core/recommendation.js
 import { DANCE_FLOOR_SIZES } from '../data/danceFloor.js';
 import { suggestPackage } from '../data/packages.js';
 
-const Bridge = window.FriendlyBridge;
+let Bridge = window.FriendlyBridge;
 
 const EVENT_TYPES = [
 { id: 'wedding', label: '💍 Wedding' },
@@ -469,6 +469,20 @@ Bridge.useRecommendedLayout();
 return true;
 }
 
-if (!maybeStartDemoMode()) {
-  render();
+function startIntake() {
+  Bridge = window.FriendlyBridge;
+  if (!maybeStartDemoMode()) {
+      render();
+  }
+}
+if (window.FriendlyBridge) {
+  startIntake();
+} else {
+  var intakeBridgeWaitCount = 0;
+  (function waitForFriendlyBridge() {
+    if (window.FriendlyBridge) { startIntake(); return; }
+    intakeBridgeWaitCount++;
+    if (intakeBridgeWaitCount > 200) { startIntake(); return; }
+    setTimeout(waitForFriendlyBridge, 10);
+  })();
 }
