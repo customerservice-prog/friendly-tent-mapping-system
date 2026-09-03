@@ -644,6 +644,7 @@ CHAIRS.forEach(function (c) {
 var sel = c.id === item.chairId;
 html += '<button type="button" class="item-card small' + (sel ? ' selected' : '') + '" data-role="insp-set-chair" data-id="' + item.id + '" data-chair="' + c.id + '">';
 if (sel) html += '<span class="item-card-check">&#10003;</span>';
+  html += itemIconHtml(c.id, '&#128186;');
 html += '<span class="item-card-name">' + c.name + '</span>';
 html += '</button>';
 });
