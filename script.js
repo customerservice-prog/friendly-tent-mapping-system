@@ -968,7 +968,7 @@ if (previewHost && stageClone) {
 stageClone.classList.add('plan2d-stage-preview');
 previewHost.appendChild(stageClone);
 var hostWidth = previewHost.clientWidth;
-var scale = hostWidth > 0 ? Math.min(1, hostWidth / stageWidth) : 1;
+var scale = hostWidth > 0 ? Math.min(2, hostWidth / stageWidth) : 1;
 stageClone.style.transform = 'scale(' + scale + ')';
 stageClone.style.transformOrigin = 'top left';
 previewHost.style.height = Math.max(60, stageHeight * scale) + 'px';
