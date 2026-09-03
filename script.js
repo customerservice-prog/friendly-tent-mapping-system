@@ -900,17 +900,73 @@ var tent = byId(TENTS, state.tentId);
 var lines = computeLineItems();
 var total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
 var pkg = state.matchedPackageId ? byId(PACKAGES, state.matchedPackageId) : null;
+var conflicts = getConflicts();
+var objects = store.getState().objects;
+var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0);
+var tenant = window.ACTIVE_TENANT || null;
+var tenantName = (tenant && tenant.name) || 'Friendly Party Rental';
+var tenantEmail = (tenant && tenant.contactEmail) || 'customerservice@friendlypartyrental.com';
 
-var html = '<p><strong>Event:</strong> ' + state.eventType + ' &middot; ' + state.guestCount + ' guests &middot; ' + state.spaceType + '</p>';
+var errorCount = 0, warnCount = 0;
+conflicts.forEach(function (c) { if (c.severity === 'error') errorCount++; else if (c.severity === 'warning') warnCount++; });
+var checkClass, checkText;
+if (errorCount > 0) { checkClass = 'warn'; checkText = errorCount + (errorCount === 1 ? ' issue' : ' issues') + ' need attention'; }
+else if (totalSeats < state.guestCount) { checkClass = 'warn'; checkText = 'Add ' + (state.guestCount - totalSeats) + ' more seat' + ((state.guestCount - totalSeats) === 1 ? '' : 's'); }
+else if (warnCount > 0) { checkClass = 'warn'; checkText = warnCount + ' item' + (warnCount === 1 ? '' : 's') + ' to review'; }
+else { checkClass = 'ok'; checkText = 'Layout looks good'; }
+
+var html = '';
+html += '<div class="review-section"><div class="review-section-title">Your Event</div>';
+html += '<p><strong>Event:</strong> ' + state.eventType + ' &middot; ' + state.guestCount + ' guests &middot; ' + state.spaceType + '</p>';
 if (pkg) {
-html += '<div class="package-match-note">This setup is similar to our <strong>' + pkg.name + '</strong> package (' + money(pkg.price) + '/day flat, up to ' + pkg.maxGuests + ' guests). Ask Friendly Party Rental about bundled package pricing.</div>';
+html += '<div class="package-match-note">This setup is similar to our <strong>' + pkg.name + '</strong> package (' + money(pkg.price) + '/day flat, up to ' + pkg.maxGuests + ' guests). Ask ' + tenantName + ' about bundled package pricing.</div>';
 }
-html += '<p><strong>Tent:</strong> ' + tent.name + '</p><ul>';
+html += '<p><strong>Tent:</strong> ' + tent.name + '</p>';
+html += '</div>';
+
+html += '<div class="review-section"><div class="review-section-title">Your Design</div>';
+html += '<div class="review-visual-preview" id="reviewDesignPreview"></div>';
+html += '</div>';
+
+html += '<div class="review-section"><div class="review-section-title">Event Check</div>';
+html += '<div class="review-event-check-summary"><span class="status-flag ' + checkClass + '">' + (checkClass === 'ok' ? '&#10003; ' : '&#9888; ') + checkText + '</span></div>';
+var seen = {};
+var issueHtml = '';
+conflicts.forEach(function (c) {
+var key = c.type + '|' + c.message;
+if (seen[key]) return;
+seen[key] = true;
+issueHtml += '<li>' + c.message + '</li>';
+});
+if (issueHtml) html += '<ul class="review-issue-list">' + issueHtml + '</ul>';
+html += '</div>';
+
+html += '<div class="review-section"><div class="review-section-title">Estimate</div><ul>';
 lines.forEach(function (l) {
 html += '<li>' + l.label + ' x' + l.qty + ' &mdash; ' + money(l.amount) + '</li>';
 });
-html += '</ul><p><strong>Estimated Total: ' + money(total) + ' / day</strong></p>';
+html += '</ul><p><strong>Estimated Total: ' + money(total) + ' / day</strong></p></div>';
+
 $('reviewSummary').innerHTML = html;
+
+var previewHost = $('reviewDesignPreview');
+var liveStage = document.querySelector('#plan2d .plan2d-stage');
+if (previewHost && liveStage && liveStage.children.length) {
+var clone = liveStage.cloneNode(true);
+clone.classList.add('plan2d-stage-preview');
+previewHost.appendChild(clone);
+requestAnimationFrame(function () {
+var hostWidth = previewHost.clientWidth;
+var stageWidth = liveStage.offsetWidth || 1;
+var stageHeight = liveStage.offsetHeight || 0;
+var scale = hostWidth > 0 ? Math.min(1, hostWidth / stageWidth) : 1;
+clone.style.transform = 'scale(' + scale + ')';
+clone.style.transformOrigin = 'top left';
+previewHost.style.height = Math.max(60, stageHeight * scale) + 'px';
+});
+} else if (previewHost) {
+previewHost.innerHTML = '<p class="review-preview-empty">Your design preview will appear here.</p>';
+}
 
 var subject = encodeURIComponent('Quote Request: ' + state.eventType + ' for ' + state.guestCount + ' guests');
 var body = 'Event type: ' + state.eventType + NL + 'Guests: ' + state.guestCount + NL + 'Location type: ' + state.spaceType + NL + 'Tent: ' + tent.name + NL;
@@ -921,12 +977,13 @@ body += NL + 'Items:' + NL;
 lines.forEach(function (l) { body += '- ' + l.label + ' x' + l.qty + ' (' + money(l.amount) + ')' + NL; });
 body += NL + 'Estimated Total: ' + money(total) + ' / day' + NL;
 
+$('btnEmailQuote').textContent = 'Request a Quote from ' + tenantName;
 $('btnEmailQuote').onclick = function () {
 var name = $('customerName').value;
 var email = $('customerEmail').value;
 var date = $('customerDate').value;
 var fullBody = encodeURIComponent('Name: ' + name + NL + 'Email: ' + email + NL + 'Requested Date: ' + date + NL + NL + body);
-this.href = 'mailto:customerservice@friendlypartyrental.com?subject=' + subject + '&body=' + fullBody;
+this.href = 'mailto:' + tenantEmail + '?subject=' + subject + '&body=' + fullBody;
 };
 
 document.body.classList.remove('designer-active');
