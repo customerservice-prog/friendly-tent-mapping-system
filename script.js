@@ -452,7 +452,7 @@ list.forEach(function (t) {
 var sel = t.id === state.tentId;
 html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="tent-card" data-id="' + t.id + '">';
 if (sel) html += '<span class="item-card-check">&#10003;</span>';
-html += '<span class="item-card-icon">&#9974;</span>';
+html += '<span class="item-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 20h18L12 3Z"/><path d="M12 3v17"/><path d="M9 20l3-7 3 7"/></svg></span>';
 html += '<span class="item-card-name">' + t.name + '</span>';
 html += '<span class="tent-card-meta">' + t.widthFt + '&times;' + t.lengthFt + ' ft &middot; seats ' + t.maxGuests.dining + '</span>';
 html += '<span class="item-card-price">' + money(t.pricePerDay) + '/day</span>';
@@ -586,7 +586,7 @@ DANCE_FLOOR_SIZES.forEach(function (sz) {
 var sel = state.danceFloorSizeId === sz.id;
 html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="dance-size-card" data-ft="' + sz.ft + '" data-preset-id="' + sz.id + '">';
 if (sel) html += '<span class="item-card-check">&#10003;</span>';
-html += '<span class="item-card-icon">&#9835;</span>';
+html += '<span class="item-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M12 3v18M3 12h18"/></svg></span>';
 html += '<span class="item-card-name">' + sz.ft + '&times;' + sz.ft + ' ft</span>';
 html += '<span class="item-card-price">' + money(priceForSize(sz.ft)) + '/day</span>';
 html += '</button>';
@@ -606,7 +606,7 @@ var price = l.dynamic ? tentLightingPriceFor(tent) : l.pricePerDay;
 var sel = l.id === state.lightingId;
 html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="lighting-card" data-id="' + l.id + '">';
 if (sel) html += '<span class="item-card-check">&#10003;</span>';
-html += '<span class="item-card-icon">&#128161;</span>';
+html += '<span class="item-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11.2c.55.36.9 1 .9 1.7V16h4.2v-.1c0-.7.35-1.34.9-1.7A6 6 0 0 0 12 3Z"/></svg></span>';
 html += '<span class="item-card-name">' + l.name + '</span>';
 if (price) html += '<span class="item-card-price">' + money(price) + '/day</span>';
 html += '</button>';
