@@ -322,6 +322,7 @@ function handleMove(itemId, x, y) {
 store.updateObject(itemId, { x: x, y: y });
 }
 function focusConflictObject(id) { state.eventCheckOpen = false; if (state.viewMode !== 'plan') setViewMode('plan'); state.selectedId = id; refreshAll(); setTimeout(function () { var el = document.querySelector('#plan2d [data-item-id="' + id + '"]'); if (el && el.scrollIntoView) { el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); } }, 60); } function autoFixConflict(id) { var objects = store.getState().objects; var target = objects.find(function (o) { return o.id === id; }); if (!target) return; var tent = byId(TENTS, state.tentId); var maxX = Math.max(0, tent.widthFt - target.widthFt); var maxY = Math.max(0, tent.lengthFt - target.depthFt); var startX = Math.min(Math.max(target.x, 0), maxX); var startY = Math.min(Math.max(target.y, 0), maxY); function isClear(x, y) { var trial = objects.map(function (o) { return o.id === id ? Object.assign({}, o, { x: x, y: y }) : o; }); var conflicts = runAllChecks({ objects: forCollision(trial), aisles: [] }, tent, state.guestCount); return !conflicts.some(function (c) { return c.objectIds.indexOf(id) !== -1; }); } if (isClear(startX, startY)) { store.updateObject(id, { x: startX, y: startY }); refreshAll(); return; } for (var radius = 1; radius <= 60; radius++) { var r = radius * 0.5; var steps = Math.max(8, radius * 4); for (var s = 0; s < steps; s++) { var angle = (Math.PI * 2 * s) / steps; var cx = Math.min(Math.max(startX + r * Math.cos(angle), 0), maxX); var cy = Math.min(Math.max(startY + r * Math.sin(angle), 0), maxY); if (isClear(cx, cy)) { store.updateObject(id, { x: Math.round(cx * 2) / 2, y: Math.round(cy * 2) / 2 }); refreshAll(); return; } } } alert('We could not find an automatic fix for this item. Try moving it manually.'); }
+function rotateItem(id) { var item = store.getState().objects.find(function (o) { return o.id === id; }); if (!item || item.kind !== 'table' || item.shape === 'round') return; var tent = byId(TENTS, state.tentId); var cx = item.x + item.widthFt / 2; var cy = item.y + item.depthFt / 2; var newW = item.depthFt, newD = item.widthFt; var newX = Math.max(0, Math.min(tent.widthFt - newW, cx - newW / 2)); var newY = Math.max(0, Math.min(tent.lengthFt - newD, cy - newD / 2)); store.updateObject(id, { widthFt: newW, depthFt: newD, x: newX, y: newY }); }
 function mountPlan() {
 if (planMounted) return;
 planMounted = true;
@@ -665,7 +666,8 @@ html += '</div>';
 }
 
 html += '<div class="inspector-actions">';
-html += '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="' + item.id + '" data-count="1">Duplicate</button>';
+html += (item.shape !== 'round' ? '<button type="button" class="btn-secondary" data-role="insp-rotate" data-id="' + item.id + '">Rotate 90&deg;</button>' : '');
+  html += '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="' + item.id + '" data-count="1">Duplicate</button>';
 html += '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="' + item.id + '" data-count="5">Duplicate &times;5</button>';
 html += '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="' + item.id + '" data-count="10">Duplicate &times;10</button>';
 html += '<button type="button" class="btn-danger" data-role="insp-delete" data-id="' + item.id + '">Delete</button>';
@@ -1002,6 +1004,7 @@ else if (role === 'insp-duplicate') { store.duplicateObject(el.dataset.id, parse
 else if (role === 'insp-delete') { store.removeObject(el.dataset.id); state.selectedId = null; }
 else if (role === 'insp-set-chair') { store.updateObject(el.dataset.id, { chairId: el.dataset.chair }); }
 else if (role === 'insp-set-linen') { store.updateObject(el.dataset.id, { linenId: el.dataset.linen || null }); }
+  else if (role === 'insp-rotate') { rotateItem(el.dataset.id); }
 else if (role === 'remove-dance') { removeAllDanceFloors(); state.selectedId = null; } else if (role === 'overview-review') { var objs = store.getState().objects; var totalSeats = objs.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0); if (totalSeats < state.guestCount) { openDrawer('tables'); } else { goToReview(); } }
 });
 
