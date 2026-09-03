@@ -929,14 +929,15 @@ html += '<div class="review-visual-preview" id="reviewDesignPreview"></div>';
 html += '</div>';
 
 html += '<div class="review-section"><div class="review-section-title">Event Check</div>';
-html += '<div class="review-event-check-summary"><span class="status-flag ' + checkClass + '">' + (checkClass === 'ok' ? '&#10003; ' : '&#9888; ') + checkText + '</span></div>';
+html += '<div class="review-event-check-summary"><span class="status-flag ' + checkClass + '">' + (checkClass === 'ok' ? '&#10003; ' : '&#9888; ') + checkText + '</span>' + (totalSeats < state.guestCount ? '<button type="button" class="btn-secondary small" data-role="review-add-seating">Add Seating</button>' : '') + '</div>';
 var seen = {};
 var issueHtml = '';
 conflicts.forEach(function (c) {
 var key = c.type + '|' + c.message;
 if (seen[key]) return;
 seen[key] = true;
-issueHtml += '<li>' + c.message + '</li>';
+var fixTargetId = c.objectIds[c.objectIds.length - 1];
+issueHtml += '<li class="review-issue-row"><span class="review-issue-message">' + c.message + '</span><span class="review-issue-actions"><button type="button" class="btn-secondary small" data-role="review-check-show" data-id="' + fixTargetId + '">Show Me</button>' + (c.type !== 'serviceConflict' ? '<button type="button" class="btn-primary small" data-role="review-check-fix" data-id="' + fixTargetId + '">Fix It</button>' : '') + '</span></li>';
 });
 if (issueHtml) html += '<ul class="review-issue-list">' + issueHtml + '</ul>';
 html += '</div>';
@@ -1086,6 +1087,14 @@ if (el.dataset.role === 'close-estimate') { state.estimateOpen = false; refreshA
 else if (el.dataset.role === 'cta-review') { state.estimateOpen = false; goToReview(); }
 });
 
+$('reviewSummary').addEventListener('click', function (e) {
+var el = e.target.closest('[data-role]');
+if (!el) return;
+var role = el.dataset.role;
+if (role === 'review-check-show') { document.body.classList.add('designer-active'); showStep('step-designer'); focusConflictObject(el.dataset.id); }
+else if (role === 'review-check-fix') { autoFixConflict(el.dataset.id); goToReview(); }
+else if (role === 'review-add-seating') { document.body.classList.add('designer-active'); showStep('step-designer'); openDrawer('tables'); }
+});
 $('emptyStateOverlay').addEventListener('click', function (e) {
 var el = e.target.closest('[data-role]');
 if (!el) return;
