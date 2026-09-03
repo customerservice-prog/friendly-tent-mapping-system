@@ -186,6 +186,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .inspector-row { display: flex; justify-content: space-between; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
 .inspector-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
 .inspector-close { float: right; }
+.status-overview-toggle { display: none; }
 
 /* Status bar */
 .status-bar { flex: 0 0 var(--status-h); display: flex; align-items: center; gap: 0; background: var(--brand-primary-tint); border-top: none; border-bottom: 1px solid var(--border); padding: 0 16px; overflow-x: auto; }
@@ -292,6 +293,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 @media (max-width: 1280px) {
   :root { --inspector-w: 300px; }
     .inspector-panel { position: fixed; top: calc(var(--toolbar-h) + var(--status-h)); right: 0; bottom: 0; width: var(--inspector-w); box-shadow: var(--shadow-lg); z-index: 19; }
+.status-overview-toggle { display: flex; }
 }
 
 @media (max-width: 1024px) {
