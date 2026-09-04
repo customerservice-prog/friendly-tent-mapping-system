@@ -144,20 +144,24 @@ function selectTent(tentId) {
 
 function nextGridPosition(index, tent, cellFt, danceZone) {
   var spacing = cellFt;
-  var cols = Math.max(1, Math.floor((tent.widthFt - 4) / spacing));
   var footprint = Math.max(0, spacing - 3.5);
+  // Bound placement by BOTH tent dimensions, not just width. Filling in
+  // row-major order but wrapping into a fresh column once a row would run
+  // past the tent's actual length keeps every incrementally-added table
+  // inside the tent's footprint, instead of silently stacking rows forever
+  // down a narrow tent (which could push tables far past the tent's far
+  // wall). Sideways growth beyond the tent's drawn width is still possible
+  // as a last resort for a badly mismatched tent/guest-count combination,
+  // but that is a lesser visual problem than tables floating off the tent
+  // entirely, and the tent recommendation engine now cross-checks this same
+  // spacing so guided flows should rarely hit this fallback.
+  var maxRowsByLength = Math.max(1, Math.floor((tent.lengthFt - 4) / spacing));
   var poles = (tent && tent.centerPoles) || [];
   var zoneClearance = 3;
   function cellAt(i) {
-    var col = i % cols;
-    var row = Math.floor(i / cols);
-    // Always use the full, collision-safe spacing for every row. Previously this
-  // compressed row spacing once the tent ran out of vertical room, which could
-  // shrink the gap between tables below their real footprint and cause tables
-  // (and their chairs) to visually overlap. It is better to allow a layout to
-  // extend slightly beyond the drawn tent outline than to render overlapping
-  // furniture, so we never compress spacing below the safe value.
-  var x = 3 + col * spacing;
+    var col = Math.floor(i / maxRowsByLength);
+    var row = i % maxRowsByLength;
+    var x = 3 + col * spacing;
     var y = 3 + row * spacing;
     if (poles.length) {
       var poleX = poles[0].x;
@@ -190,6 +194,10 @@ function nextGridPosition(index, tent, cellFt, danceZone) {
 // the grid (more columns) over growing downward into the dance floor's
 // protected band -- filling out sideways reads as a deliberate layout,
 // whereas silently stacking extra rows on top of the reserved zone does not.
+// Rows are also bounded by the tent's actual lengthFt so a narrow/long tent
+// with many tables can never silently stack rows past the tent's far wall;
+// columns widen (even beyond the tent's own width-based cap, as a last
+// resort) before rows are ever allowed to exceed that bound.
 function computeBalancedGridPositions(tent, count, cellFt, danceZone) {
   var spacing = cellFt;
   var footprint = Math.max(0, spacing - 3.5);
@@ -198,13 +206,28 @@ function computeBalancedGridPositions(tent, count, cellFt, danceZone) {
   var rows = Math.ceil(count / cols);
   var zoneClearance = 3;
 
+  var maxRowsByLength = Math.max(1, Math.floor((tent.lengthFt - 4) / spacing));
+  var effectiveMaxRows = maxRowsByLength;
   if (danceZone) {
     var zoneTop = danceZone.y - zoneClearance;
-    var maxRows = Math.max(1, Math.floor((zoneTop - 3) / spacing));
-    if (rows > maxRows && maxRows >= 1) {
-      var widerCols = Math.min(maxCols, Math.ceil(count / maxRows));
-      if (widerCols > cols) {
-        cols = widerCols;
+    var maxRowsByZone = Math.max(1, Math.floor((zoneTop - 3) / spacing));
+    effectiveMaxRows = Math.min(effectiveMaxRows, maxRowsByZone);
+  }
+  if (rows > effectiveMaxRows && effectiveMaxRows >= 1) {
+    var widerCols = Math.min(maxCols, Math.ceil(count / effectiveMaxRows));
+    if (widerCols > cols) {
+      cols = widerCols;
+      rows = Math.ceil(count / cols);
+    }
+    if (rows > effectiveMaxRows) {
+      // Even the widest width-safe grid can't fit within the tent's length
+      // (or the reserved dance-floor band). As a last resort, allow more
+      // columns than the tent's width would normally allow so tables stay
+      // within the tent's length/dance-clearance bound rather than spilling
+      // downward past it indefinitely.
+      var extraCols = Math.ceil(count / effectiveMaxRows);
+      if (extraCols > cols) {
+        cols = extraCols;
         rows = Math.ceil(count / cols);
       }
     }
@@ -219,7 +242,7 @@ function computeBalancedGridPositions(tent, count, cellFt, danceZone) {
       return poleX + poleClearance + 0.01;
     }
     return x;
-  }
+        }
 
   // Even after widening columns as much as the tent allows, a narrow tent
   // combined with a large table count can still leave more rows than fit
