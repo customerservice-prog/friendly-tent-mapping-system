@@ -45,8 +45,9 @@ function toDispWD(wFt, dFt) {
 }
 
 function computeStageSize(tent) {
-  const rawW = container.clientWidth - 32;
-  const rawH = container.clientHeight - 32;
+  const overlap = inspectorOverlap();
+  const rawW = container.clientWidth - 32 - overlap.w;
+  const rawH = container.clientHeight - 32 - overlap.h;
   if (rawW <= 0 || rawH <= 0) {
     const w = rotate90 ? tent.lengthFt : tent.widthFt;
     const h = rotate90 ? tent.widthFt : tent.lengthFt;
@@ -62,6 +63,33 @@ function computeStageSize(tent) {
   const effW = rotate90 ? tent.lengthFt : tent.widthFt;
   const effH = rotate90 ? tent.widthFt : tent.lengthFt;
   return { w: effW * pxPerFt, h: effH * pxPerFt };
+}
+
+// At narrower viewport widths the Event Overview inspector panel switches
+// to a fixed-position overlay (a right-hand card, or a bottom sheet on
+// very narrow/mobile widths -- see style.css's inspector-panel media
+// rules) so it can float above the canvas instead of taking its own flex
+// column. A fixed element is removed from normal layout flow, so the
+// plan2d container's own measured width/height does NOT shrink to make
+// room for it. Without this check the plan sizes itself using the full
+// container and can end up drawing part of the layout (in practice, often
+// the dance floor, since it tends to sit toward one edge) directly
+// underneath that overlay, where it is completely invisible to the
+// customer. This measures how much of the container the overlay actually
+// covers so the stage can be kept clear of it.
+function inspectorOverlap() {
+  const inspector = document.getElementById('inspectorPanel');
+  if (!inspector || inspector.hidden || !container) return { w: 0, h: 0 };
+  const cs = window.getComputedStyle(inspector);
+  if (cs.position !== 'fixed') return { w: 0, h: 0 };
+  const c = container.getBoundingClientRect();
+  const p = inspector.getBoundingClientRect();
+  const ix = Math.min(c.right, p.right) - Math.max(c.left, p.left);
+  const iy = Math.min(c.bottom, p.bottom) - Math.max(c.top, p.top);
+  if (ix <= 0 || iy <= 0) return { w: 0, h: 0 };
+  if (iy >= c.height * 0.5) return { w: ix, h: 0 };
+  if (ix >= c.width * 0.5) return { w: 0, h: iy };
+  return { w: 0, h: 0 };
 }
 
 function chairIconSvg(silhouette) {
