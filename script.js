@@ -157,20 +157,32 @@ function nextGridPosition(index, tent, cellFt, danceZone) {
   // spacing so guided flows should rarely hit this fallback.
   var maxRowsByLength = Math.max(1, Math.floor((tent.lengthFt - 4) / spacing));
   var poles = (tent && tent.centerPoles) || [];
+  function poleShift(x) {
+    if (!poles.length) return x;
+    var poleX = poles[0].x;
+    var poleClearance = 1.25;
+    if (x - poleClearance < poleX && poleX < x + footprint + poleClearance) {
+      return poleX + poleClearance + 0.01;
+    }
+    return x;
+  }
+  // Compute each column's x sequentially from the previous column's actual
+  // (already pole-shifted) position, rather than shifting each column
+  // independently. Otherwise nudging one column sideways to dodge a center
+  // pole could land it right next to the following column and cause a real
+  // overlap between two tables that were never near the pole at all.
+  function colX(col) {
+    var x = 3;
+    for (var c = 0; c < col; c++) {
+      x = poleShift(x) + spacing;
+    }
+    return poleShift(x);
+  }
   var zoneClearance = 3;
   function cellAt(i) {
     var col = Math.floor(i / maxRowsByLength);
     var row = i % maxRowsByLength;
-    var x = 3 + col * spacing;
-    var y = 3 + row * spacing;
-    if (poles.length) {
-      var poleX = poles[0].x;
-      var poleClearance = 1.25;
-      if (x - poleClearance < poleX && poleX < x + footprint + poleClearance) {
-        x = poleX + poleClearance + 0.01;
-      }
-    }
-    return { x: x, y: y };
+    return { x: colX(col), y: 3 + row * spacing };
   }
   function hitsDanceZone(pos) {
     if (!danceZone) return false;
@@ -242,7 +254,7 @@ function computeBalancedGridPositions(tent, count, cellFt, danceZone) {
       return poleX + poleClearance + 0.01;
     }
     return x;
-        }
+  }
 
   // Even after widening columns as much as the tent allows, a narrow tent
   // combined with a large table count can still leave more rows than fit
@@ -267,9 +279,14 @@ function computeBalancedGridPositions(tent, count, cellFt, danceZone) {
     var inRow = Math.min(cols, remaining);
     var rowWidth = inRow * spacing;
     var xOffset = 3 + (fullWidth - rowWidth) / 2;
+    // Advance column x sequentially from each column's actual (post-shift)
+    // position rather than independently, so a pole-avoidance shift on one
+    // column can never land it too close to the next column.
+    var colX = xOffset;
     for (var col = 0; col < inRow; col++) {
-      var x = xOffset + col * spacing;
-      positions.push({ x: poleShift(x), y: y });
+      var shiftedX = poleShift(colX);
+      positions.push({ x: shiftedX, y: y });
+      colX = shiftedX + spacing;
     }
     remaining -= inRow;
     y += spacing;
