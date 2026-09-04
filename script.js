@@ -394,6 +394,11 @@ function addTableFromConfig(cfg, n) {
 function layoutDanceFloorPositions(tent, totalCount) {
         var spacing = DANCE_SECTION.ft;
         var maxPerSide = Math.max(1, Math.floor((Math.min(tent.widthFt, tent.lengthFt) - 4) / spacing));
+    // Never generate more tiles than can actually fit in a maxPerSide x
+    // maxPerSide block -- otherwise, once perSide is capped down to fit the
+    // tent's width, this would keep stacking extra rows to hold the full
+    // original count and push tiles past the tent's actual length.
+    totalCount = Math.min(totalCount, maxPerSide * maxPerSide);
         var perSide = Math.min(maxPerSide, Math.max(1, Math.ceil(Math.sqrt(totalCount))));
         var blockFt = perSide * spacing;
         var bottomY = Math.max(2, tent.lengthFt - 2 - blockFt);
