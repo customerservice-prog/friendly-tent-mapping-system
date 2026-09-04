@@ -72,9 +72,20 @@ export function recommendTents(input) {
   const ROUND_TABLE_SEATS = 8;
     const ROUND_TABLE_CELL_FT = 10.7; // 5ft round table + safe chair clearance (matches script.js tableCellSize)
   const GRID_MARGIN_FT = 4; // matches the designer's real placement margin
-  function diningRoundsGridCapacity(tent) {
+  function diningRoundsGridCapacity(tent, features, danceFloorSizeId, customDanceFloorFt) {
+    var usableLengthFt = tent.lengthFt;
+    // A requested dance floor is reserved out of the tent before dining tables
+    // are placed (see script.js useRecommendedLayout), so a tent that looks
+    // big enough for dining tables ALONE can still be too small once the
+    // dance floor's footprint is carved out of it. Approximate that reserved
+    // depth here so this capacity check matches what the designer will
+    // actually be able to fit.
+    if (features && features.indexOf('danceFloor') !== -1) {
+      var danceSideFt = Math.sqrt(danceFloorSqft(danceFloorSizeId, customDanceFloorFt));
+      usableLengthFt = Math.max(GRID_MARGIN_FT, tent.lengthFt - danceSideFt - 3);
+    }
     const cols = Math.max(1, Math.floor((tent.widthFt - GRID_MARGIN_FT) / ROUND_TABLE_CELL_FT));
-    const rows = Math.max(1, Math.floor((tent.lengthFt - GRID_MARGIN_FT) / ROUND_TABLE_CELL_FT));
+    const rows = Math.max(1, Math.floor((usableLengthFt - GRID_MARGIN_FT) / ROUND_TABLE_CELL_FT));
     return cols * rows * ROUND_TABLE_SEATS;
   }
   const roundTableSeatsNeeded = Math.ceil(guestCount / ROUND_TABLE_SEATS) * ROUND_TABLE_SEATS;
@@ -82,7 +93,7 @@ export function recommendTents(input) {
   let recommendedIndex = -1;
   for (let i = 0; i < eligible.length; i++) {
     const areaFits = eligible[i].capacity[capacityKey] >= requiredUnits;
-    const gridFits = capacityKey !== 'diningRounds' || diningRoundsGridCapacity(eligible[i]) >= roundTableSeatsNeeded;
+    const gridFits = capacityKey !== 'diningRounds' || diningRoundsGridCapacity(eligible[i], features, input.danceFloorSizeId, input.customDanceFloorFt) >= roundTableSeatsNeeded;
     if (areaFits && gridFits) { recommendedIndex = i; break; }
   }
   const result = { requiredUnits: requiredUnits, capacityKey: capacityKey, guestCount: guestCount, extraGuestUnits: extraGuestUnits, recommended: null, tighter: null, moreSpacious: null, warnings: [] };
