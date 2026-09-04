@@ -198,19 +198,19 @@ function computeBalancedGridPositions(tent, count, cellFt, danceZone) {
   var rows = Math.ceil(count / cols);
   var zoneClearance = 3;
 
-if (danceZone) {
-  var zoneTop = danceZone.y - zoneClearance;
-  var maxRows = Math.max(1, Math.floor((zoneTop - 3) / spacing));
-  if (rows > maxRows && maxRows >= 1) {
-    var widerCols = Math.min(maxCols, Math.ceil(count / maxRows));
-    if (widerCols > cols) {
-      cols = widerCols;
-      rows = Math.ceil(count / cols);
+  if (danceZone) {
+    var zoneTop = danceZone.y - zoneClearance;
+    var maxRows = Math.max(1, Math.floor((zoneTop - 3) / spacing));
+    if (rows > maxRows && maxRows >= 1) {
+      var widerCols = Math.min(maxCols, Math.ceil(count / maxRows));
+      if (widerCols > cols) {
+        cols = widerCols;
+        rows = Math.ceil(count / cols);
+      }
     }
   }
-}
 
-var poles = (tent && tent.centerPoles) || [];
+  var poles = (tent && tent.centerPoles) || [];
   function poleShift(x) {
     if (!poles.length) return x;
     var poleX = poles[0].x;
@@ -221,19 +221,35 @@ var poles = (tent && tent.centerPoles) || [];
     return x;
   }
 
-var fullWidth = cols * spacing;
+  // Even after widening columns as much as the tent allows, a narrow tent
+  // combined with a large table count can still leave more rows than fit
+  // above the reserved dance-floor band. Rather than let those extra rows
+  // silently land on top of the dance floor, jump the row cursor straight
+  // past the dance zone's bottom edge (plus clearance) whenever a row would
+  // otherwise land inside it, and keep placing remaining tables from there.
+  function rowHitsZone(y) {
+    if (!danceZone) return false;
+    var minY = danceZone.y - zoneClearance, maxY = danceZone.y + danceZone.depth + zoneClearance;
+    return y < maxY && y + footprint > minY;
+  }
+
+  var fullWidth = cols * spacing;
   var positions = [];
   var remaining = count;
-  for (var row = 0; row < rows; row++) {
+  var y = 3;
+  while (remaining > 0) {
+    if (rowHitsZone(y)) {
+      y = danceZone.y + danceZone.depth + zoneClearance;
+    }
     var inRow = Math.min(cols, remaining);
     var rowWidth = inRow * spacing;
     var xOffset = 3 + (fullWidth - rowWidth) / 2;
-    var y = 3 + row * spacing;
     for (var col = 0; col < inRow; col++) {
       var x = xOffset + col * spacing;
       positions.push({ x: poleShift(x), y: y });
     }
     remaining -= inRow;
+    y += spacing;
   }
   return positions;
 }
