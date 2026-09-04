@@ -70,7 +70,7 @@ export function recommendTents(input) {
   // logic) before recommending a dining-table tent, so 'Use This Layout'
   // never starts a customer off with an overlapping/out-of-bounds layout.
   const ROUND_TABLE_SEATS = 8;
-  const ROUND_TABLE_CELL_FT = 8.5; // 5ft round table + safe chair clearance
+    const ROUND_TABLE_CELL_FT = 10.7; // 5ft round table + safe chair clearance (matches script.js tableCellSize)
   const GRID_MARGIN_FT = 4; // matches the designer's real placement margin
   function diningRoundsGridCapacity(tent) {
     const cols = Math.max(1, Math.floor((tent.widthFt - GRID_MARGIN_FT) / ROUND_TABLE_CELL_FT));
