@@ -61,6 +61,7 @@ export function checkCenterPoleConflicts(objects, tent) {
   var results = [];
   var poles = (tent && tent.centerPoles) || [];
   objects.forEach(function (obj) {
+    if (obj.kind === 'danceFloor') return; // Dance floor tiles are excluded: real dance floor panels are installed with a keyhole cutout around a tent pole, so a pole line crossing the floor's footprint is normal and is not something the customer needs to move.
     var rect = rectFromObject(obj);
     poles.forEach(function (pole) {
       var circle = { x: pole.x, y: pole.y, radius: POLE_RADIUS_FT };
