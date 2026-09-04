@@ -19,18 +19,51 @@ export const SEVERITY = { ERROR: 'error', WARNING: 'warning', INFO: 'info' };
 
 const POLE_RADIUS_FT = 0.75;
 const CHAIR_CLEARANCE_FT = 1.0;
+// Protected breathing room kept around the dance floor's outer edge so no
+// other furniture is allowed to sit directly against it. This is what makes
+// the dance floor behave like one first-class event zone instead of a loose
+// pile of tiles other objects can crowd right up to.
+const DANCE_FLOOR_CLEARANCE_FT = 2.0;
 
 function conflict(type, severity, objectIds, message) {
   return { type: type, severity: severity, objectIds: objectIds, message: message };
 }
 
+// The dance floor is stored internally as many small 3x3 tiles (see
+// js/data/danceFloor.js), but for every layout/collision decision it must be
+// treated as ONE logical rectangular zone -- never as unrelated individual
+// tiles that other furniture can slip between or overlap. This merges every
+// object of kind 'danceFloor' into a single bounding rectangle plus the list
+// of tile ids it represents.
+export function mergeDanceFloorZone(objects) {
+  var tiles = (objects || []).filter(function (o) { return o.kind === 'danceFloor'; });
+  if (!tiles.length) return null;
+  var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  tiles.forEach(function (t) {
+    var r = rectFromObject(t);
+    minX = Math.min(minX, r.x);
+    minY = Math.min(minY, r.y);
+    maxX = Math.max(maxX, r.x + r.width);
+    maxY = Math.max(maxY, r.y + r.depth);
+  });
+  return {
+    id: 'danceFloorZone',
+    kind: 'danceFloor',
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    depth: maxY - minY,
+    memberIds: tiles.map(function (t) { return t.id; }),
+  };
+}
+
 export function checkCenterPoleConflicts(objects, tent) {
-  const results = [];
-  const poles = (tent && tent.centerPoles) || [];
+  var results = [];
+  var poles = (tent && tent.centerPoles) || [];
   objects.forEach(function (obj) {
-    const rect = rectFromObject(obj);
+    var rect = rectFromObject(obj);
     poles.forEach(function (pole) {
-      const circle = { x: pole.x, y: pole.y, radius: POLE_RADIUS_FT };
+      var circle = { x: pole.x, y: pole.y, radius: POLE_RADIUS_FT };
       if (circleIntersectsRect(circle, rect)) {
         results.push(conflict(CONFLICT_TYPES.HARD_CONFLICT, SEVERITY.ERROR, [obj.id], 'This item overlaps a tent center pole. Move it to clear the pole line.'));
       }
@@ -39,14 +72,20 @@ export function checkCenterPoleConflicts(objects, tent) {
   return results;
 }
 
+// Generic pairwise overlap check for everything except the dance floor.
+// Dance-floor-vs-other-object overlap is handled exclusively by
+// checkDanceFloorConflicts against the merged zone rectangle below, and
+// individual dance tiles never conflict with each other -- they are one
+// object, not many.
 export function checkObjectOverlaps(objects) {
-  const results = [];
-  for (let i = 0; i < objects.length; i++) {
-    for (let j = i + 1; j < objects.length; j++) {
-      const a = rectFromObject(objects[i]);
-      const b = rectFromObject(objects[j]);
+  var results = [];
+  var candidates = objects.filter(function (o) { return o.kind !== 'danceFloor'; });
+  for (var i = 0; i < candidates.length; i++) {
+    for (var j = i + 1; j < candidates.length; j++) {
+      var a = rectFromObject(candidates[i]);
+      var b = rectFromObject(candidates[j]);
       if (rectsOverlap(a, b)) {
-        results.push(conflict(CONFLICT_TYPES.OBJECT_OVERLAP, SEVERITY.WARNING, [objects[i].id, objects[j].id], 'These two items overlap and need to be spaced apart.'));
+        results.push(conflict(CONFLICT_TYPES.OBJECT_OVERLAP, SEVERITY.WARNING, [candidates[i].id, candidates[j].id], 'These two items overlap and need to be spaced apart.'));
       }
     }
   }
@@ -54,12 +93,12 @@ export function checkObjectOverlaps(objects) {
 }
 
 export function checkChairClearance(objects) {
-  const results = [];
-  const chairGroups = objects.filter(function (o) { return o.kind === 'tableGroup'; });
-  for (let i = 0; i < chairGroups.length; i++) {
-    for (let j = i + 1; j < chairGroups.length; j++) {
-      const a = expandRect(rectFromObject(chairGroups[i]), CHAIR_CLEARANCE_FT);
-      const b = rectFromObject(chairGroups[j]);
+  var results = [];
+  var chairGroups = objects.filter(function (o) { return o.kind === 'tableGroup'; });
+  for (var i = 0; i < chairGroups.length; i++) {
+    for (var j = i + 1; j < chairGroups.length; j++) {
+      var a = expandRect(rectFromObject(chairGroups[i]), CHAIR_CLEARANCE_FT);
+      var b = rectFromObject(chairGroups[j]);
       if (rectsOverlap(a, b)) {
         results.push(conflict(CONFLICT_TYPES.CHAIR_CLEARANCE, SEVERITY.WARNING, [chairGroups[i].id, chairGroups[j].id], 'Chairs at these tables are seated back-to-back with little walking room. Consider adding spacing.'));
       }
@@ -69,11 +108,11 @@ export function checkChairClearance(objects) {
 }
 
 export function checkTentEdgeConflicts(objects, tent) {
-  const results = [];
+  var results = [];
   if (!tent) return results;
-  const tentRect = { x: 0, y: 0, width: tent.widthFt, depth: tent.lengthFt };
+  var tentRect = { x: 0, y: 0, width: tent.widthFt, depth: tent.lengthFt };
   objects.forEach(function (obj) {
-    const rect = rectFromObject(obj);
+    var rect = rectFromObject(obj);
     if (!rectContains(tentRect, rect)) {
       results.push(conflict(CONFLICT_TYPES.TENT_EDGE_CONFLICT, SEVERITY.ERROR, [obj.id], 'This item extends beyond the tent boundary.'));
     }
@@ -82,10 +121,10 @@ export function checkTentEdgeConflicts(objects, tent) {
 }
 
 export function checkAisleConflicts(objects, aisles) {
-  const results = [];
+  var results = [];
   (aisles || []).forEach(function (aisle) {
     objects.forEach(function (obj) {
-      const rect = rectFromObject(obj);
+      var rect = rectFromObject(obj);
       if (rectsOverlap(rect, aisle)) {
         results.push(conflict(CONFLICT_TYPES.AISLE_CONFLICT, SEVERITY.WARNING, [obj.id], 'This item intrudes into a reserved aisle or walkway.'));
       }
@@ -94,26 +133,32 @@ export function checkAisleConflicts(objects, aisles) {
   return results;
 }
 
+// Checks every non-dance-floor object against the single merged dance floor
+// zone (expanded by a protected clearance) rather than against one arbitrary
+// tile. This is what lets the dance floor act as a first-class zone: nothing
+// -- not even a chair's edge -- should sit inside its protected perimeter.
 export function checkDanceFloorConflicts(objects, danceFloorZone) {
-  const results = [];
+  var results = [];
   if (!danceFloorZone) return results;
+  var protectedZone = expandRect(rectFromObject(danceFloorZone), DANCE_FLOOR_CLEARANCE_FT);
+  var memberIds = danceFloorZone.memberIds || [];
   objects.forEach(function (obj) {
-    if (obj.id === danceFloorZone.id) return;
-    const rect = rectFromObject(obj);
-    if (rectsOverlap(rect, danceFloorZone)) {
-      results.push(conflict(CONFLICT_TYPES.DANCE_FLOOR_CONFLICT, SEVERITY.WARNING, [obj.id], 'This item overlaps the dance floor area.'));
+    if (memberIds.indexOf(obj.id) !== -1) return;
+    var rect = rectFromObject(obj);
+    if (rectsOverlap(rect, protectedZone)) {
+      results.push(conflict(CONFLICT_TYPES.DANCE_FLOOR_CONFLICT, SEVERITY.WARNING, [obj.id], 'This item is too close to the dance floor. Leave clear space around it for guests to move.'));
     }
   });
   return results;
 }
 
 export function checkServiceConflicts(objects, guestCount) {
-  const results = [];
-  const buffet = objects.find(function (o) { return o.kind === 'buffet'; });
+  var results = [];
+  var buffet = objects.find(function (o) { return o.kind === 'buffet'; });
   if (buffet) {
-    const rect = rectFromObject(buffet);
-    const area = rect.width * rect.depth;
-    const recommendedArea = Math.ceil((guestCount || 1) / 50) * 60;
+    var rect = rectFromObject(buffet);
+    var area = rect.width * rect.depth;
+    var recommendedArea = Math.ceil((guestCount || 1) / 50) * 60;
     if (area < recommendedArea) {
       results.push(conflict(CONFLICT_TYPES.SERVICE_CONFLICT, SEVERITY.INFO, [buffet.id], 'The buffet area may be tight for this guest count. ' + ((window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' can help plan additional service space.'));
     }
@@ -122,10 +167,10 @@ export function checkServiceConflicts(objects, guestCount) {
 }
 
 export function runAllChecks(layoutState, tent, guestCount) {
-  const objects = layoutState.objects || [];
-  const aisles = layoutState.aisles || [];
-  const danceFloorZone = objects.find(function (o) { return o.kind === 'danceFloor'; });
-  let all = [];
+  var objects = layoutState.objects || [];
+  var aisles = layoutState.aisles || [];
+  var danceFloorZone = mergeDanceFloorZone(objects);
+  var all = [];
   all = all.concat(checkCenterPoleConflicts(objects, tent));
   all = all.concat(checkTentEdgeConflicts(objects, tent));
   all = all.concat(checkObjectOverlaps(objects));
