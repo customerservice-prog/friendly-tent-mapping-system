@@ -364,28 +364,43 @@ function addTableFromConfig(cfg, n) {
 }
 
 function layoutDanceFloorPositions(tent, totalCount) {
-  var spacing = DANCE_SECTION.ft;
-  var maxPerSide = Math.max(1, Math.floor((Math.min(tent.widthFt, tent.lengthFt) - 4) / spacing));
-  var perSide = Math.min(maxPerSide, Math.max(1, Math.ceil(Math.sqrt(totalCount))));
-  var blockFt = perSide * spacing;
-  var originY = Math.max(2, tent.lengthFt - 2 - blockFt);
-  var rightX = Math.max(2, tent.widthFt - 2 - blockFt);
-  var leftX = 2;
-  var poles = (tent && tent.centerPoles) || [];
-  var clearance = 1.25;
-  function poleHits(ox) {
-    return poles.filter(function (p) {
-      return ox - clearance < p.x && p.x < ox + blockFt + clearance && p.y >= originY - clearance && p.y <= originY + blockFt + clearance;
-    }).length;
-  }
-  var originX = poles.length && poleHits(leftX) < poleHits(rightX) ? leftX : rightX;
-  var positions = [];
-  for (var i = 0; i < totalCount; i++) {
-    var col = i % perSide;
-    var row = Math.floor(i / perSide);
-    positions.push({ x: originX + col * spacing, y: originY + row * spacing });
-  }
-  return positions;
+        var spacing = DANCE_SECTION.ft;
+        var maxPerSide = Math.max(1, Math.floor((Math.min(tent.widthFt, tent.lengthFt) - 4) / spacing));
+        var perSide = Math.min(maxPerSide, Math.max(1, Math.ceil(Math.sqrt(totalCount))));
+        var blockFt = perSide * spacing;
+        var bottomY = Math.max(2, tent.lengthFt - 2 - blockFt);
+        var topY = 2;
+        var rightX = Math.max(2, tent.widthFt - 2 - blockFt);
+        var leftX = 2;
+        var poles = (tent && tent.centerPoles) || [];
+        var clearance = 1.25;
+        function poleHits(ox, oy) {
+                return poles.filter(function (p) {
+                        return ox - clearance < p.x && p.x < ox + blockFt + clearance && oy - clearance < p.y && p.y < oy + blockFt + clearance;
+                }).length;
+        }
+        var candidates = [
+          { x: rightX, y: bottomY },
+          { x: leftX, y: bottomY },
+          { x: rightX, y: topY },
+          { x: leftX, y: topY }
+                ];
+        var best = candidates[0];
+        var bestHits = poles.length ? poleHits(best.x, best.y) : 0;
+        if (poles.length) {
+                for (var c = 1; c < candidates.length && bestHits > 0; c++) {
+                        var hits = poleHits(candidates[c].x, candidates[c].y);
+                        if (hits < bestHits) { best = candidates[c]; bestHits = hits; }
+                }
+        }
+        var originX = best.x, originY = best.y;
+        var positions = [];
+        for (var i = 0; i < totalCount; i++) {
+                var col = i % perSide;
+                var row = Math.floor(i / perSide);
+                positions.push({ x: originX + col * spacing, y: originY + row * spacing });
+        }
+        return positions;
 }
 
 function removeAllDanceFloors() {
