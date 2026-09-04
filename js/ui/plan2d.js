@@ -46,6 +46,8 @@ function toDispWD(wFt, dFt) {
 
 function computeStageSize(tent) {
   const overlap = inspectorOverlap();
+  container.style.paddingRight = overlap.w ? (overlap.w + 'px') : '';
+  container.style.paddingBottom = overlap.h ? (overlap.h + 'px') : '';
   const rawW = container.clientWidth - 32 - overlap.w;
   const rawH = container.clientHeight - 32 - overlap.h;
   if (rawW <= 0 || rawH <= 0) {
