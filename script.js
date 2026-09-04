@@ -106,7 +106,7 @@ if (state.needDance) {
     var cellFt = tableCellSize(tableDef, state.chairId);
     var danceZone = mergeDanceFloorZone(forCollision(store.getState().objects));
     var positions = computeBalancedGridPositions(tent, tablesNeeded, cellFt, danceZone);
-    for (var i = 0; i < tablesNeeded; i++) {
+    for (var i = 0; i < Math.min(tablesNeeded, positions.length); i++) {
       addTableCustom('round-5ft', state.chairId, tableDef.seatsDefault, null, positions[i]);
     }
     state.lastTableConfig = { tableId: 'round-5ft', chairId: state.chairId, seatCount: tableDef.seatsDefault, linenId: null };
@@ -201,97 +201,125 @@ function nextGridPosition(index, tent, cellFt, danceZone) {
   return { x: 3, y: 3 };
 }
 
-// Lays out `count` dining tables in a centered, balanced grid rather than a
-// simple row-major fill. If a dance floor zone is reserved, prefer widening
-// the grid (more columns) over growing downward into the dance floor's
-// protected band -- filling out sideways reads as a deliberate layout,
-// whereas silently stacking extra rows on top of the reserved zone does not.
-// Rows are also bounded by the tent's actual lengthFt so a narrow/long tent
-// with many tables can never silently stack rows past the tent's far wall;
-// columns widen (even beyond the tent's own width-based cap, as a last
-// resort) before rows are ever allowed to exceed that bound.
+// Lays out `count` dining tables in a centered, balanced grid. Every table
+// placement produced here is verified (by simulating it) to stay inside the
+// tent's real boundary (0..widthFt / 0..lengthFt -- the same rectangle
+// Event Check enforces) and to never overlap another table. Comfortable
+// spacing and a tidy wall margin are tried first; if the requested count
+// doesn't fit that way, the margin is relaxed, then spacing is tightened
+// (never below the table+chairs' own footprint, so tables never visually
+// overlap each other), before ever placing fewer tables than requested.
+// This replaces an earlier "add extra columns as a last resort" fallback
+// that could silently push table columns past the tent's actual width.
 function computeBalancedGridPositions(tent, count, cellFt, danceZone) {
-  var spacing = cellFt;
-  var footprint = Math.max(0, spacing - 3.5);
-  var maxCols = Math.max(1, Math.floor((tent.widthFt - 4) / spacing));
-  var cols = Math.min(maxCols, count);
-  var rows = Math.ceil(count / cols);
-  var zoneClearance = 3;
+    var idealSpacing = cellFt;
+    var footprint = Math.max(0, idealSpacing - 3.5);
+    var startMarginDefault = 3;
+    var minSpacing = footprint > 0 ? footprint : idealSpacing * 0.5;
+    var zoneClearance = 3;
+    var poles = (tent && tent.centerPoles) || [];
 
-  var maxRowsByLength = Math.max(1, Math.floor((tent.lengthFt - 4) / spacing));
-  var effectiveMaxRows = maxRowsByLength;
-  if (danceZone) {
-    var zoneTop = danceZone.y - zoneClearance;
-    var maxRowsByZone = Math.max(1, Math.floor((zoneTop - 3) / spacing));
-    effectiveMaxRows = Math.min(effectiveMaxRows, maxRowsByZone);
-  }
-  if (rows > effectiveMaxRows && effectiveMaxRows >= 1) {
-    var widerCols = Math.min(maxCols, Math.ceil(count / effectiveMaxRows));
-    if (widerCols > cols) {
-      cols = widerCols;
-      rows = Math.ceil(count / cols);
+    function chooseCols(sp, n, margin) {
+          var maxCols = Math.max(1, Math.floor((tent.widthFt - margin - footprint) / sp) + 1);
+          var cols = Math.min(maxCols, n);
+          var rows = Math.ceil(n / cols);
+          var maxRowsByLength = Math.max(1, Math.floor((tent.lengthFt - margin - footprint) / sp) + 1);
+          var effectiveMaxRows = maxRowsByLength;
+          if (danceZone) {
+                  var zoneTop = danceZone.y - zoneClearance;
+                  var maxRowsByZone = Math.max(1, Math.floor((zoneTop - margin - footprint) / sp) + 1);
+                  effectiveMaxRows = Math.min(effectiveMaxRows, maxRowsByZone);
+          }
+          if (rows > effectiveMaxRows && effectiveMaxRows >= 1) {
+                  var widerCols = Math.min(maxCols, Math.ceil(n / effectiveMaxRows));
+                  if (widerCols > cols) cols = widerCols;
+          }
+          return cols;
     }
-    if (rows > effectiveMaxRows) {
-      // Even the widest width-safe grid can't fit within the tent's length
-      // (or the reserved dance-floor band). As a last resort, allow more
-      // columns than the tent's width would normally allow so tables stay
-      // within the tent's length/dance-clearance bound rather than spilling
-      // downward past it indefinitely.
-      var extraCols = Math.ceil(count / effectiveMaxRows);
-      if (extraCols > cols) {
-        cols = extraCols;
-        rows = Math.ceil(count / cols);
-      }
-    }
-  }
 
-  var poles = (tent && tent.centerPoles) || [];
-  function poleShift(x) {
-    if (!poles.length) return x;
-    var poleX = poles[0].x;
-    var poleClearance = 1.25;
-    if (x - poleClearance < poleX && poleX < x + footprint + poleClearance) {
-      return poleX + poleClearance + 0.01;
+    function poleShift(x) {
+          if (!poles.length) return x;
+          var poleX = poles[0].x;
+          var poleClearance = 1.25;
+          if (x - poleClearance < poleX && poleX < x + footprint + poleClearance) {
+                  return poleX + poleClearance + 0.01;
+          }
+          return x;
     }
-    return x;
-  }
 
-  // Even after widening columns as much as the tent allows, a narrow tent
-  // combined with a large table count can still leave more rows than fit
-  // above the reserved dance-floor band. Rather than let those extra rows
-  // silently land on top of the dance floor, jump the row cursor straight
-  // past the dance zone's bottom edge (plus clearance) whenever a row would
-  // otherwise land inside it, and keep placing remaining tables from there.
-  function rowHitsZone(y) {
-    if (!danceZone) return false;
-    var minY = danceZone.y - zoneClearance, maxY = danceZone.y + danceZone.depth + zoneClearance;
-    return y < maxY && y + footprint > minY;
-  }
+    function rowHitsZone(y) {
+          if (!danceZone) return false;
+          var minY = danceZone.y - zoneClearance, maxY = danceZone.y + danceZone.depth + zoneClearance;
+          return y < maxY && y + footprint > minY;
+    }
 
-  var fullWidth = cols * spacing;
-  var positions = [];
-  var remaining = count;
-  var y = 3;
-  while (remaining > 0) {
-    if (rowHitsZone(y)) {
-      y = danceZone.y + danceZone.depth + zoneClearance;
+    // Places `n` tables at the given column count/spacing/margin, applying
+    // center-pole avoidance, then reports whether every resulting position
+    // truly stays inside the tent and clear of every other table.
+    function simulate(cols, sp, n, margin) {
+          var fullWidth = cols * sp;
+          var positions = [];
+          var remaining = n;
+          var y = margin;
+          var guard = 0;
+          while (remaining > 0 && guard < 5000) {
+                  guard++;
+                  if (rowHitsZone(y)) { y = danceZone.y + danceZone.depth + zoneClearance; continue; }
+                  var inRow = Math.min(cols, remaining);
+                  var rowWidth = inRow * sp;
+                  var xOffset = margin + (fullWidth - rowWidth) / 2;
+                  var colX = xOffset;
+                  var prevRight = -Infinity;
+                  for (var col = 0; col < inRow; col++) {
+                            var shiftedX = poleShift(colX);
+                            if (shiftedX < prevRight) shiftedX = prevRight;
+                            positions.push({ x: shiftedX, y: y });
+                            prevRight = shiftedX + footprint;
+                            colX = shiftedX + sp;
+                  }
+                  remaining -= inRow;
+                  y += sp;
+          }
+          var ok = true;
+          positions.forEach(function (p) {
+                  if (p.x < -0.01 || p.x + footprint > tent.widthFt + 0.01) ok = false;
+                  if (p.y < -0.01 || p.y + footprint > tent.lengthFt + 0.01) ok = false;
+          });
+          for (var i = 0; i < positions.length && ok; i++) {
+                  for (var j = i + 1; j < positions.length; j++) {
+                            var a = positions[i], b = positions[j];
+                            var ax2 = a.x + footprint, ay2 = a.y + footprint, bx2 = b.x + footprint, by2 = b.y + footprint;
+                            if (a.x < bx2 - 0.02 && ax2 > b.x + 0.02 && a.y < by2 - 0.02 && ay2 > b.y + 0.02) { ok = false; break; }
+                  }
+          }
+          return { positions: positions, ok: ok };
     }
-    var inRow = Math.min(cols, remaining);
-    var rowWidth = inRow * spacing;
-    var xOffset = 3 + (fullWidth - rowWidth) / 2;
-    // Advance column x sequentially from each column's actual (post-shift)
-    // position rather than independently, so a pole-avoidance shift on one
-    // column can never land it too close to the next column.
-    var colX = xOffset;
-    for (var col = 0; col < inRow; col++) {
-      var shiftedX = poleShift(colX);
-      positions.push({ x: shiftedX, y: y });
-      colX = shiftedX + spacing;
+
+    var toPlaceCount = count;
+    var result = null;
+    while (toPlaceCount >= 0) {
+          var found = null;
+          if (toPlaceCount === 0) {
+                  found = { positions: [] };
+          } else {
+                  for (var marginTry = 0; marginTry < 2 && !found; marginTry++) {
+                            var margin = marginTry === 0 ? startMarginDefault : 0.25;
+                            var spacing = idealSpacing;
+                            var innerGuard = 0;
+                            while (innerGuard < 400) {
+                                        innerGuard++;
+                                        var cols = chooseCols(spacing, toPlaceCount, margin);
+                                        var sim = simulate(cols, spacing, toPlaceCount, margin);
+                                        if (sim.ok) { found = sim; break; }
+                                        if (spacing <= minSpacing + 1e-9) break;
+                                        spacing = Math.max(minSpacing, spacing - 0.05);
+                            }
+                  }
+          }
+          if (found) { result = found.positions; break; }
+          toPlaceCount--;
     }
-    remaining -= inRow;
-    y += spacing;
-  }
-  return positions;
+    return result || [];
 }
 
 function tableCellSize(tableDef, chairId) {
