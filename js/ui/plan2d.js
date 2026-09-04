@@ -186,7 +186,10 @@ function render(data) {
   stageEl.appendChild(pole);
 });
 
-(data.objects || []).forEach(function (item) {
+const selectedItem = (data.objects || []).find(function (o) { return o.id === data.selectedId; });
+  const selectedDanceGroup = !!(selectedItem && selectedItem.kind === 'dance');
+  
+  (data.objects || []).forEach(function (item) {
   const wrap = document.createElement('div');
   const isDance = item.kind === 'dance';
   const tableDef = (!isDance && item.kind === 'table') ? tableById(item.tableId) : null;
@@ -194,7 +197,7 @@ function render(data) {
   const shapeClass = isDance ? 'rect dance' : (item.shape === 'round' ? 'round' : 'rect');
   const silhouetteClass = silhouette ? ' plan2d-table--' + silhouette : '';
   var linenClass = linenVisual(item.linenId) ? ' plan2d-linen--' + linenVisual(item.linenId) : '';
-  wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + linenClass + ' ' + severityClass(data, item.id) + (data.selectedId === item.id ? ' selected' : '');
+  wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + linenClass + ' ' + severityClass(data, item.id) + ((selectedDanceGroup ? item.kind === 'dance' : data.selectedId === item.id) ? ' selected' : '');
   const disp = toDispXY(item.x, item.y);
   const dispSize = toDispWD(item.widthFt, item.depthFt);
   wrap.style.left = (disp.x * pxPerFt) + 'px';
