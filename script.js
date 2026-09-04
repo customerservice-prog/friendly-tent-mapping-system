@@ -780,13 +780,15 @@ function renderInspector(conflicts) {
   panel.classList.remove('collapsed'); panel.hidden = false;
   var html = '<button type="button" class="btn-tertiary inspector-close" data-role="inspector-close">Close</button>';
   if (item.kind === 'dance') {
-    html += '<h3 class="inspector-title">Dance Floor Section</h3>';
-    html += '<p class="inspector-subtitle">' + DANCE_SECTION.ft + '&times;' + DANCE_SECTION.ft + ' ft section</p>';
-    html += '<div class="inspector-actions">';
-    html += '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="' + item.id + '" data-count="1">Duplicate</button>';
-    html += '<button type="button" class="btn-danger" data-role="insp-delete" data-id="' + item.id + '">Delete Section</button>';
-    html += '<button type="button" class="btn-danger" data-role="remove-dance">Remove Entire Dance Floor</button>';
-    html += '</div>';
+          var groupObjs = store.getState().objects.filter(function (i) { return i.kind === 'dance'; });
+          var perSide = Math.round(Math.sqrt(groupObjs.length));
+          var ftSide = perSide * DANCE_SECTION.ft;
+          html += '<h3 class="inspector-title">' + ftSide + '&times;' + ftSide + ' ft Dance Floor</h3>';
+          html += '<p class="inspector-subtitle">' + groupObjs.length + ' section' + (groupObjs.length === 1 ? '' : 's') + '</p>';
+          html += '<div class="inspector-actions">';
+          html += '<button type="button" class="btn-secondary" data-role="insp-change-dance-size">Change Size</button>';
+          html += '<button type="button" class="btn-danger" data-role="remove-dance">Remove Dance Floor</button>';
+          html += '</div>';
   } else {
     var tableDef = byId(TABLES, item.tableId);
     var chairDef = item.chairId ? byId(CHAIRS, item.chairId) : null;
@@ -1228,7 +1230,7 @@ $('inspectorPanel').addEventListener('click', function (e) {
   else if (role === 'insp-set-chair') { store.updateObject(el.dataset.id, { chairId: el.dataset.chair }); }
   else if (role === 'insp-set-linen') { store.updateObject(el.dataset.id, { linenId: el.dataset.linen || null }); }
   else if (role === 'insp-rotate') { rotateItem(el.dataset.id); }
-  else if (role === 'remove-dance') { removeAllDanceFloors(); state.selectedId = null; } else if (role === 'overview-review') { var objs = store.getState().objects; var totalSeats = objs.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0); if (totalSeats < state.guestCount) { openDrawer('tables'); } else { goToReview(); } } else if (role === 'reset-demo') { window.location.href = window.location.pathname + '?demo=1'; } else if (role === 'inspector-toggle') { state.inspectorCollapsed = !state.inspectorCollapsed; refreshAll(); }
+  else if (role === 'remove-dance') { removeAllDanceFloors(); state.selectedId = null; } else if (role === 'overview-review') { var objs = store.getState().objects; var totalSeats = objs.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0); if (totalSeats < state.guestCount) { openDrawer('tables'); } else { goToReview(); } } else if (role === 'reset-demo') { window.location.href = window.location.pathname + '?demo=1'; } else if (role === 'inspector-toggle') { state.inspectorCollapsed = !state.inspectorCollapsed; refreshAll(); } else if (role === 'insp-change-dance-size') { openDrawer('dance'); }
 });
 
 $('statusBar').addEventListener('click', function (e) {
