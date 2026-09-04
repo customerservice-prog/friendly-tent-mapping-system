@@ -22,24 +22,46 @@ let dragOrigFt = { x: 0, y: 0 };
 let dragLiveFt = { x: 0, y: 0 };
 let pxPerFt = 20;
 
+// When true, the entire scene is presented rotated 90 degrees from the
+// tent's stored widthFt/lengthFt orientation. This NEVER changes the actual
+// rental dimensions or any stored object coordinates in state -- it only
+// changes how the plan is drawn, so a tent that is physically "tall and
+// narrow" can still be framed as a wide, landscape-filling floor plan on a
+// landscape canvas (and vice versa). See computeStageSize().
+let rotate90 = false;
+
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
+
+// Maps a model-space point/footprint (feet, in the tent's own widthFt x
+// lengthFt axes) to display-space feet after the presentation rotation, if
+// any. This is a pure axis swap, so it is its own inverse -- the same
+// function converts display-space deltas back to model-space during drags.
+function toDispXY(xFt, yFt) {
+  return rotate90 ? { x: yFt, y: xFt } : { x: xFt, y: yFt };
+}
+
+function toDispWD(wFt, dFt) {
+  return rotate90 ? { w: dFt, d: wFt } : { w: wFt, d: dFt };
+}
 
 function computeStageSize(tent) {
   const rawW = container.clientWidth - 32;
   const rawH = container.clientHeight - 32;
-  // Guard against reading the container's size before the browser has finished
-  // laying it out (e.g. immediately on mount, or right after a view switch).
-  // In that case clientWidth/clientHeight can briefly read as 0, which used to
-  // permanently collapse the whole plan to a tiny fixed scale. Instead, keep the
-  // last known-good pxPerFt until we get a real measurement.
   if (rawW <= 0 || rawH <= 0) {
-    return { w: tent.widthFt * pxPerFt, h: tent.lengthFt * pxPerFt };
+    const w = rotate90 ? tent.lengthFt : tent.widthFt;
+    const h = rotate90 ? tent.widthFt : tent.lengthFt;
+    return { w: w * pxPerFt, h: h * pxPerFt };
   }
   const availW = Math.max(80, rawW);
   const availH = Math.max(80, rawH);
-  const scale = Math.min(availW / tent.widthFt, availH / tent.lengthFt);
+  const scaleNormal = Math.min(availW / tent.widthFt, availH / tent.lengthFt);
+  const scaleRotated = Math.min(availW / tent.lengthFt, availH / tent.widthFt);
+  rotate90 = scaleRotated > scaleNormal;
+  const scale = rotate90 ? scaleRotated : scaleNormal;
   pxPerFt = Math.max(4, scale);
-  return { w: tent.widthFt * pxPerFt, h: tent.lengthFt * pxPerFt };
+  const effW = rotate90 ? tent.lengthFt : tent.widthFt;
+  const effH = rotate90 ? tent.widthFt : tent.lengthFt;
+  return { w: effW * pxPerFt, h: effH * pxPerFt };
 }
 
 function chairIconSvg(silhouette) {
@@ -90,13 +112,15 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
     const angle = (i / count) * Math.PI * 2;
     const fx = cxFt + chairR * Math.cos(angle);
     const fy = cyFt + chairR * Math.sin(angle);
-    const bearingDeg = Math.atan2(-Math.cos(angle), Math.sin(angle)) * 180 / Math.PI;
+    const disp = toDispXY(fx, fy);
+    const effAngle = rotate90 ? (Math.PI / 2 - angle) : angle;
+    const bearingDeg = Math.atan2(-Math.cos(effAngle), Math.sin(effAngle)) * 180 / Math.PI;
     const dot = document.createElement('div');
     dot.className = 'plan2d-chair plan2d-chair--' + silhouette;
     dot.style.width = (wFt * pxPerFt) + 'px';
     dot.style.height = (dFt * pxPerFt) + 'px';
-    dot.style.left = (fx * pxPerFt) + 'px';
-    dot.style.top = (fy * pxPerFt) + 'px';
+    dot.style.left = (disp.x * pxPerFt) + 'px';
+    dot.style.top = (disp.y * pxPerFt) + 'px';
     dot.style.setProperty('--chair-frame', frameColor);
     dot.style.setProperty('--chair-accent', accentColor);
     dot.style.transform = 'translate(-50%, -50%) rotate(' + bearingDeg + 'deg)';
@@ -120,53 +144,56 @@ function render(data) {
   stageEl.style.width = size.w + 'px';
   stageEl.style.height = size.h + 'px';
 
-  (tent.centerPoles || []).forEach(function (p) {
-    const pole = document.createElement('div');
-    pole.className = 'plan2d-pole';
-    const r = 6;
-    pole.style.width = r + 'px';
-    pole.style.height = r + 'px';
-    pole.style.left = (p.x * pxPerFt) + 'px';
-    pole.style.top = (p.y * pxPerFt) + 'px';
-    stageEl.appendChild(pole);
-  });
+(tent.centerPoles || []).forEach(function (p) {
+  const pole = document.createElement('div');
+  pole.className = 'plan2d-pole';
+  const r = 6;
+  const disp = toDispXY(p.x, p.y);
+  pole.style.width = r + 'px';
+  pole.style.height = r + 'px';
+  pole.style.left = (disp.x * pxPerFt) + 'px';
+  pole.style.top = (disp.y * pxPerFt) + 'px';
+  stageEl.appendChild(pole);
+});
 
-  (data.objects || []).forEach(function (item) {
-    const wrap = document.createElement('div');
-    const isDance = item.kind === 'dance';
-    const tableDef = (!isDance && item.kind === 'table') ? tableById(item.tableId) : null;
-    const silhouette = tableDef ? tableDef.silhouette : null;
-    const shapeClass = isDance ? 'rect dance' : (item.shape === 'round' ? 'round' : 'rect');
-    const silhouetteClass = silhouette ? ' plan2d-table--' + silhouette : '';
-    var linenClass = linenVisual(item.linenId) ? ' plan2d-linen--' + linenVisual(item.linenId) : '';
-    wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + linenClass + ' ' + severityClass(data, item.id) + (data.selectedId === item.id ? ' selected' : '');
-    wrap.style.left = (item.x * pxPerFt) + 'px';
-    wrap.style.top = (item.y * pxPerFt) + 'px';
-    wrap.style.width = (item.widthFt * pxPerFt) + 'px';
-    wrap.style.height = (item.depthFt * pxPerFt) + 'px';
-    wrap.dataset.itemId = item.id;
+(data.objects || []).forEach(function (item) {
+  const wrap = document.createElement('div');
+  const isDance = item.kind === 'dance';
+  const tableDef = (!isDance && item.kind === 'table') ? tableById(item.tableId) : null;
+  const silhouette = tableDef ? tableDef.silhouette : null;
+  const shapeClass = isDance ? 'rect dance' : (item.shape === 'round' ? 'round' : 'rect');
+  const silhouetteClass = silhouette ? ' plan2d-table--' + silhouette : '';
+  var linenClass = linenVisual(item.linenId) ? ' plan2d-linen--' + linenVisual(item.linenId) : '';
+  wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + linenClass + ' ' + severityClass(data, item.id) + (data.selectedId === item.id ? ' selected' : '');
+  const disp = toDispXY(item.x, item.y);
+  const dispSize = toDispWD(item.widthFt, item.depthFt);
+  wrap.style.left = (disp.x * pxPerFt) + 'px';
+  wrap.style.top = (disp.y * pxPerFt) + 'px';
+  wrap.style.width = (dispSize.w * pxPerFt) + 'px';
+  wrap.style.height = (dispSize.d * pxPerFt) + 'px';
+  wrap.dataset.itemId = item.id;
 
-    const top = document.createElement('div');
-    top.className = 'plan2d-table-top';
-    top.innerHTML = tableTopDetailHtml(silhouette);
-    const label = document.createElement('span');
-    label.className = 'plan2d-table-label';
-    if (isDance) {
-      label.textContent = '';
-    } else {
-      label.textContent = item.seatCount > 0 ? (item.seatCount + ' seats') : '';
-    }
-    top.appendChild(label);
-    wrap.appendChild(top);
-    stageEl.appendChild(wrap);
+                             const top = document.createElement('div');
+  top.className = 'plan2d-table-top';
+  top.innerHTML = tableTopDetailHtml(silhouette);
+  const label = document.createElement('span');
+  label.className = 'plan2d-table-label';
+  if (isDance) {
+    label.textContent = '';
+  } else {
+    label.textContent = item.seatCount > 0 ? (item.seatCount + ' seats') : '';
+  }
+  top.appendChild(label);
+  wrap.appendChild(top);
+  stageEl.appendChild(wrap);
 
-    if (!isDance && item.seatCount > 0) {
-      const radiusFt = item.shape === 'round' ? item.widthFt / 2 : Math.max(item.widthFt, item.depthFt) / 2;
-      buildChairDots(stageEl, item, radiusFt, item.x + item.widthFt / 2, item.y + item.depthFt / 2);
-    }
+                             if (!isDance && item.seatCount > 0) {
+                               const radiusFt = item.shape === 'round' ? item.widthFt / 2 : Math.max(item.widthFt, item.depthFt) / 2;
+                               buildChairDots(stageEl, item, radiusFt, item.x + item.widthFt / 2, item.y + item.depthFt / 2);
+                             }
 
-    wrap.addEventListener('pointerdown', function (e) { onPointerDown(e, item); });
-  });
+                             wrap.addEventListener('pointerdown', function (e) { onPointerDown(e, item); });
+});
 }
 
 // Small top-down visual detail per real Friendly Party Rental table type so tables
@@ -206,15 +233,21 @@ function onPointerMove(e) {
   const dyPx = e.clientY - dragStartPx.y;
   if (Math.abs(dxPx) > 3 || Math.abs(dyPx) > 3) dragMoved = true;
   const tent = currentData.tent;
-  let newX = dragOrigFt.x + dxPx / pxPerFt;
-  let newY = dragOrigFt.y + dyPx / pxPerFt;
+  // Mouse deltas are measured in display space; convert back through the
+// current presentation rotation (toDispXY is a pure axis swap, so it is
+// its own inverse) so dragging still feels natural regardless of whether
+// the scene is being shown rotated 90 degrees for framing.
+const dModel = toDispXY(dxPx / pxPerFt, dyPx / pxPerFt);
+  let newX = dragOrigFt.x + dModel.x;
+  let newY = dragOrigFt.y + dModel.y;
   newX = Math.max(0, Math.min(tent.widthFt - dragTarget.widthFt, newX));
   newY = Math.max(0, Math.min(tent.lengthFt - dragTarget.depthFt, newY));
   dragLiveFt = { x: newX, y: newY };
   const el = stageEl.querySelector('[data-item-id="' + dragTarget.id + '"]');
   if (el) {
-    el.style.left = (newX * pxPerFt) + 'px';
-    el.style.top = (newY * pxPerFt) + 'px';
+    const disp = toDispXY(newX, newY);
+    el.style.left = (disp.x * pxPerFt) + 'px';
+    el.style.top = (disp.y * pxPerFt) + 'px';
   }
 }
 
@@ -248,11 +281,11 @@ export function mount(containerEl, data, cbs) {
   container.appendChild(stageEl);
   currentData = data;
   // Defer the first paint by a couple of frames so the container has a real,
-  // stable measured size (fixes the plan rendering at a tiny collapsed scale
-  // right after mount or after switching back from 3D view).
-  requestAnimationFrame(function () {
-    requestAnimationFrame(function () { render(data); });
-  });
+// stable measured size (fixes the plan rendering at a tiny collapsed scale
+// right after mount or after switching back from 3D view).
+requestAnimationFrame(function () {
+  requestAnimationFrame(function () { render(data); });
+});
   if (window.ResizeObserver) {
     resizeObserver = new ResizeObserver(function () { onResize(); });
     resizeObserver.observe(container);
