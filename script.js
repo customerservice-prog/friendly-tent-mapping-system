@@ -595,7 +595,7 @@ function tableIcon(t) {
 function titleForDrawer(kind) {
   if (kind === 'tent') return 'Tent';
   if (kind === 'tables') return 'Tables & Chairs';
-  if (kind === 'chairs') return 'Chairs';
+  if (kind === 'chairs') return 'Chair Style';
   if (kind === 'dance') return 'Dance Floor';
   if (kind === 'lighting') return 'Lighting';
   return '';
@@ -740,6 +740,7 @@ html += '<button type="button" class="btn-primary drawer-add-btn" data-role="add
 function buildChairsDrawerHtml() {
   var html = '';
   html += '<div class="drawer-section-title">Choose a Chair Style</div>';
+  html += '<p class="no-seat-note">Chairs attach automatically to the tables you add — use this to set the default style.</p>';
   html += '<div class="item-card-grid">';
   CHAIRS.forEach(function (c) {
     var sel = c.id === state.chairId;
@@ -755,8 +756,6 @@ function buildChairsDrawerHtml() {
   if (seatedTableCount > 0) {
     html += '<div class="drawer-summary-row"><span>' + seatedTableCount + ' seated table' + (seatedTableCount === 1 ? '' : 's') + ' in your layout</span></div>';
     html += '<button type="button" class="btn-primary drawer-add-btn" data-role="apply-chairs-all">Apply This Chair to All Tables</button>';
-  } else {
-    html += '<div class="no-seat-note">This sets the default chair style for new tables you add.</div>';
   }
   return html;
 }
