@@ -265,7 +265,12 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .tent-card-meta { font-size: 12px; color: var(--muted); }
 
 /* ===================== 2D plan view ===================== */
-.plan2d-stage { position: relative; background: #cfe8b8; box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--brand-primary); }
+.plan2d-stage { position: relative; background: #cfe8b8; box-shadow: 0 0 0 3px #fff, 0 0 0 5px var(--brand-primary), 0 14px 30px rgba(0,0,0,0.22); }
+/* Decorative scalloped valance trim along the top/bottom edges of the tent footprint, echoing the real tent's eave line */
+.plan2d-stage::before, .plan2d-stage::after { content: ''; position: absolute; left: -5px; right: -5px; height: 14px; pointer-events: none; background: radial-gradient(circle at 10px 0, transparent 9px, var(--brand-primary) 10px); background-size: 20px 14px; background-repeat: repeat-x; }
+.plan2d-stage::before { top: -12px; transform: scaleY(-1); }
+.plan2d-stage::after { bottom: -12px; }
+
 .plan2d-pole { position: absolute; border-radius: 50%; background: #9a9a9a; transform: translate(-50%, -50%); }
 .plan2d-object { position: absolute; cursor: grab; display: flex; align-items: center; justify-content: center; }
 .plan2d-object.dragging { cursor: grabbing; opacity: 0.85; }
