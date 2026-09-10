@@ -36,6 +36,7 @@ let callbacks = {};
 let raycaster = null;
 const groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 let groundMaterial = null;
+let fabricTextureCache = null;
 
 let dragging = false;
 let dragMoved = false;
@@ -256,9 +257,28 @@ p1[0], p1[1], p1[2], p3[0], p3[1], p3[2], p4[0], p4[1], p4[2],
 ]);
 const geo = new THREE.BufferGeometry();
 geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  const uvs = new Float32Array([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]);
+  geo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
 geo.computeVertexNormals();
 return geo;
 }
+
+  function createFabricTexture() {
+if (fabricTextureCache) return fabricTextureCache;
+    const size = 128;
+    const cnv = document.createElement('canvas');
+    cnv.width = size; cnv.height = size;
+    const ctx = cnv.getContext('2d');
+    ctx.fillStyle = '#fffaf0'; ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = 'rgba(0,0,0,0.05)'; ctx.lineWidth = 1;
+    for (let x = 4; x < size; x += 8) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, size); ctx.stroke(); }
+    for (let y = 4; y < size; y += 8) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(size, y); ctx.stroke(); }
+    for (let i = 0; i < 500; i++) { const rx = Math.random() * size; const ry = Math.random() * size; ctx.fillStyle = 'rgba(0,0,0,' + (Math.random() * 0.05) + ')'; ctx.fillRect(rx, ry, 1, 1); }
+    const tex = new THREE.CanvasTexture(cnv);
+    tex.wrapS = THREE.RepeatWrapping; tex.wrapT = THREE.RepeatWrapping;
+    fabricTextureCache = tex;
+    return tex;
+  }
 
 function addTentGroup(tent) {
 const group = new THREE.Group();
@@ -304,7 +324,9 @@ wall(tent.widthFt, WALL_H, 0, halfL, 0);
 wall(tent.lengthFt, WALL_H, -halfW, 0, Math.PI / 2);
 wall(tent.lengthFt, WALL_H, halfW, 0, Math.PI / 2);
 
-const roofMat = new THREE.MeshStandardMaterial({ color: 0xfffaf0, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 0.7 });
+const roofTex = createFabricTexture();
+  roofTex.repeat.set(Math.max(1, tent.widthFt / 8), Math.max(1, tent.lengthFt / 8));
+  const roofMat = new THREE.MeshStandardMaterial({ color: 0xfffaf0, map: roofTex, transparent: true, opacity: 0.55, side: THREE.DoubleSide, roughness: 0.7 });
 const roofEdgeMat = new THREE.LineBasicMaterial({ color: 0x2f7a3c });
 if (isPole) {
 const left = quad([0, roofY, -halfL], [0, roofY, halfL], [-halfW, WALL_H, halfL], [-halfW, WALL_H, -halfL]);
