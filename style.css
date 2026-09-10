@@ -270,6 +270,8 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .plan2d-stage::before, .plan2d-stage::after { content: ''; position: absolute; left: -5px; right: -5px; height: 14px; pointer-events: none; background: radial-gradient(circle at 10px 0, transparent 9px, var(--brand-primary) 10px); background-size: 20px 14px; background-repeat: repeat-x; }
 .plan2d-stage::before { top: -12px; transform: scaleY(-1); }
 .plan2d-stage::after { bottom: -12px; }
+/* Hide the scallop trim inside the small Review-screen thumbnail, since its overflow:hidden clips the -12px offset */
+.review-visual-preview .plan2d-stage::before, .review-visual-preview .plan2d-stage::after { display: none; }
 
 .plan2d-pole { position: absolute; border-radius: 50%; background: #9a9a9a; transform: translate(-50%, -50%); }
 .plan2d-object { position: absolute; cursor: grab; display: flex; align-items: center; justify-content: center; }
