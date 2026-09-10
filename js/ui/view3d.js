@@ -352,7 +352,57 @@ const pole = new THREE.Mesh(poleGeo, poleMat);
 pole.position.set(cx, poleH / 2, cz);
 group.add(pole);
 });
+  // --- Decorative valance (scalloped trim) along the roof eave ---
+    const valanceMat = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide, roughness: 0.85 });
+    const valanceDrop = 0.9;
+    const scallopAmp = 0.35;
+    const scallopWidthFt = 2.5;
 
+    function addValanceSide(x1, z1, x2, z2) {
+    const sideLen = Math.hypot(x2 - x1, z2 - z1);
+          const scallops = Math.max(2, Math.round(sideLen / scallopWidthFt));
+      const samplesPerScallop = 6;
+      const totalSamples = scallops * samplesPerScallop;
+      const dx = (x2 - x1) / totalSamples;
+      const dz = (z2 - z1) / totalSamples;
+      let prevTop = [x1, WALL_H, z1];
+      let prevBot = [x1, WALL_H - valanceDrop - scallopAmp, z1];
+                               for (let i = 1; i <= totalSamples; i++) {
+                                 const x = x1 + dx * i;
+                                 const z = z1 + dz * i;
+                                 const wave = Math.sin((i / samplesPerScallop) * Math.PI * 2 - Math.PI / 2);
+                  const bottomY = WALL_H - valanceDrop - scallopAmp * (0.5 + 0.5 * wave);
+                                 const top = [x, WALL_H, z];
+  const bot = [x, bottomY, z];
+                                   const vGeo = quad(prevTop, top, bot, prevBot);
+                                 group.add(new THREE.Mesh(vGeo, valanceMat));
+                                 prevTop = top;
+      prevBot = bot;
+                               }
+    }
+  addValanceSide(-halfW, -halfL, halfW, -halfL);
+  addValanceSide(halfW, -halfL, halfW, halfL);
+  addValanceSide(halfW, halfL, -halfW, halfL);
+  addValanceSide(-halfW, halfL, -halfW, -halfL);
+
+  // --- Guy-lines and ground stakes from the corner poles ---
+      const guyMat = new THREE.LineBasicMaterial({ color: 0xd9d2b8 });
+  const stakeMat = new THREE.MeshStandardMaterial({ color: 0x6b6b6b, metalness: 0.4, roughness: 0.6 });
+  const guyOutset = 2.2;
+  cornerXs.forEach(function (cx) {
+    cornerZs.forEach(function (cz) {
+      const outX = cx + (cx < 0 ? -guyOutset : guyOutset);
+      const outZ = cz + (cz < 0 ? -guyOutset : guyOutset);
+      const topPt = new THREE.Vector3(cx, WALL_H * 0.82, cz);
+      const stakePt = new THREE.Vector3(outX, 0, outZ);
+const guyGeo = new THREE.BufferGeometry().setFromPoints([topPt, stakePt]);
+      group.add(new THREE.Line(guyGeo, guyMat));
+      const stake = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.5, 6), stakeMat);
+      stake.position.set(outX, 0.25, outZ);
+      group.add(stake);
+        });
+  });
+  
 return group;
 }
 
