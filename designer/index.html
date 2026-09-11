@@ -23,30 +23,125 @@
   </header>
 
   <script type="module">
-    import { getTenant } from '../js/data/tenant.js';
+    import { getTenant, GENERIC_TENANT } from '../js/data/tenant.js';
     var params = new URLSearchParams(window.location.search);
-    var tenant = getTenant(params.get('tenant'));
+    var tenantSlug = params.get('tenant');
+    var isEmbed = params.get('embed') === '1';
+    var isKnownStatic = !tenantSlug || tenantSlug === 'friendly' || tenantSlug === 'generic';
+    var tenant = isKnownStatic ? getTenant(tenantSlug) : Object.assign({}, GENERIC_TENANT, {
+      id: tenantSlug, slug: tenantSlug, name: 'RentSketch', tagline: '', contactEmail: '', phone: '', showPackages: false,
+    });
     window.ACTIVE_TENANT = tenant;
-    window.RENTSKETCH_API_URL = window.RENTSKETCH_API_URL || (tenant.slug === 'friendly' ? 'https://rentsketch-api-production.up.railway.app' : null);
-    var isGeneric = tenant.slug === 'generic';
-    document.title = isGeneric ? 'RentSketch Designer' : (tenant.name + ' Event Designer | ' + tenant.name);
+    window.RENTSKETCH_TENANT_SLUG = tenantSlug || 'friendly';
+    window.RENTSKETCH_API_URL = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
+    window.RENTSKETCH_EMBED = isEmbed;
     var titleEl = document.getElementById('siteHeaderTitle');
     var taglineEl = document.getElementById('siteHeaderTagline');
     var logoEl = document.getElementById('siteHeaderLogo');
     var disclaimerEl = document.getElementById('quoteDisclaimer');
-    if (disclaimerEl) {
-      disclaimerEl.textContent = 'This creates a draft email only. ' + tenant.name + ' will confirm final pricing, availability, and details before anything is booked or charged.';
-    }
     var footerEl = document.getElementById('siteFooterText');
-    if (titleEl) titleEl.textContent = isGeneric ? 'RentSketch Designer' : (tenant.name + ' Event Designer');
-    if (taglineEl) taglineEl.textContent = tenant.tagline || '';
-    if (logoEl) logoEl.alt = tenant.name;
-    if (footerEl) {
-      var bits = [tenant.name];
-      if (tenant.phone) bits.push(tenant.phone);
-      if (tenant.contactEmail) bits.push(tenant.contactEmail);
-      footerEl.textContent = bits.join(' · ');
+    function applyBranding(t) {
+      var generic = t.slug === 'generic';
+      document.title = generic ? 'RentSketch Designer' : (t.name + ' Event Designer | ' + t.name);
+      if (disclaimerEl) {
+        disclaimerEl.textContent = 'This creates a draft request only. ' + (t.name || 'This company') + ' will confirm final pricing, availability, and details before anything is booked or charged.';
+      }
+      if (titleEl) titleEl.textContent = generic ? 'RentSketch Designer' : (t.name + ' Event Designer');
+      if (taglineEl) taglineEl.textContent = t.tagline || '';
+      if (logoEl && t.logo) logoEl.src = /^https?:/.test(t.logo) ? t.logo : ('../' + t.logo);
+      if (logoEl) logoEl.alt = t.name;
+      if (footerEl) {
+        var bits = [t.name];
+        if (t.phone) bits.push(t.phone);
+        if (t.contactEmail) bits.push(t.contactEmail);
+        footerEl.textContent = bits.join(' \u00b7 ');
+      }
+      var root = document.documentElement.style;
+      if (t.colors) {
+        if (t.colors.primary) root.setProperty('--brand-primary', t.colors.primary);
+        if (t.colors.primaryDark) root.setProperty('--brand-primary-dark', t.colors.primaryDark);
+        if (t.colors.primaryTint) root.setProperty('--brand-primary-tint', t.colors.primaryTint);
+        if (t.colors.secondary) root.setProperty('--brand-secondary', t.colors.secondary);
+      }
+      document.body.classList.toggle('embed-mode', !!window.RENTSKETCH_EMBED);
     }
+    applyBranding(tenant);
+    (function () {
+      var embedStyle = document.createElement('style');
+      embedStyle.textContent = 'body.embed-mode .site-header{display:none;}body.embed-mode .site-footer{display:none;}';
+      document.head.appendChild(embedStyle);
+    })();
+    
+    if (window.RENTSKETCH_API_URL && window.RENTSKETCH_TENANT_SLUG) {
+      fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RENTSKETCH_TENANT_SLUG))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (live) {
+        if (!live) return;
+        tenant.name = live.name || tenant.name;
+        tenant.tagline = live.tagline || tenant.tagline;
+        tenant.contactEmail = live.contactEmail || tenant.contactEmail;
+        tenant.phone = live.phone || tenant.phone;
+        if (live.logoUrl) tenant.logo = live.logoUrl;
+        tenant.colors = tenant.colors || {};
+        if (live.primaryColor) tenant.colors.primary = live.primaryColor;
+        if (live.secondaryColor) tenant.colors.secondary = live.secondaryColor;
+        tenant.poweredByEnabled = live.poweredByEnabled;
+        applyBranding(tenant);
+      })
+      .catch(function () {});
+      fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RENTSKETCH_TENANT_SLUG) + '/products')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !data.products) return;
+        var byExternalId = {};
+        data.products.forEach(function (p) { if (p.external_id) byExternalId[p.external_id] = p; });
+        [tenant.tents, tenant.tables, tenant.chairs].forEach(function (list) {
+          if (!Array.isArray(list)) return;
+          list.forEach(function (item) {
+            var p = byExternalId[item.id];
+            if (!p) return;
+            if (p.name) item.name = p.name;
+            if (p.price_per_day !== null && p.price_per_day !== undefined) item.pricePerDay = Number(p.price_per_day);
+          });
+        });
+      })
+      .catch(function () {});
+    }
+    if (window.RENTSKETCH_EMBED) {
+      var _fetch = window.fetch;
+      window.fetch = function (input, opts) {
+        return _fetch(input, opts).then(function (res) {
+          try {
+            var urlStr = String(input);
+            if (res.ok && opts && opts.method === 'POST') {
+              if (urlStr.indexOf('/quote-requests') !== -1) {
+                window.parent.postMessage({ type: 'rentsketch.quoteRequested' }, '*');
+              } else if (urlStr.indexOf('/designs') !== -1) {
+                window.parent.postMessage({ type: 'rentsketch.designSaved' }, '*');
+              }
+            }
+          } catch (e) {}
+          return res;
+        });
+      };
+      if (window.parent !== window) {
+        window.parent.postMessage({ type: 'rentsketch.ready', version: '1' }, '*');
+        try {
+          if ('ResizeObserver' in window) {
+            var lastHeight = 0;
+            var ro = new ResizeObserver(function () {
+              var h = Math.ceil(document.body.scrollHeight);
+              if (Math.abs(h - lastHeight) > 8) {
+                lastHeight = h;
+                window.parent.postMessage({ type: 'rentsketch.resize', height: h }, '*');
+              }
+            });
+            ro.observe(document.body);
+          }
+        } catch (e) {}
+      }
+    }
+    
   </script>
 
 <main id="app">
