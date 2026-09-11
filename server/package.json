@@ -1,0 +1,21 @@
+{
+  "name": "rentsketch-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal multi-tenant backend for RentSketch: tenants, products, designs, and quote requests.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "seed:friendly": "node seed/run-seed.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.11.5"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
