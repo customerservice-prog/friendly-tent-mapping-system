@@ -12,7 +12,10 @@ import { byId as lightingById } from '../data/lighting.js';
 import { linenVisual } from '../data/linens.js';
 
 const WALL_H = 9;
-const POLE_PEAK_H = 2.5;
+function polePeakRise(tent) {
+    if (tent.type !== 'pole') return 0;
+    return Math.max(4, Math.min(16, tent.widthFt * 0.3));
+}
 const CHAIR_COLOR_DEFAULT = 0xffffff;
 const CHAIR_COLOR_GOLD = 0xd4af37;
 const CHAIR_COLOR_MAHOGANY = 0x5a3320;
@@ -285,7 +288,7 @@ const group = new THREE.Group();
 const halfW = tent.widthFt / 2;
 const halfL = tent.lengthFt / 2;
 const isPole = tent.type === 'pole';
-const roofY = WALL_H + (isPole ? POLE_PEAK_H : 0);
+const roofY = WALL_H + polePeakRise(tent);
 
 const floorGeo = new THREE.PlaneGeometry(tent.widthFt, tent.lengthFt);
 const floorMat = new THREE.MeshStandardMaterial({ color: 0x93d494 });
@@ -339,6 +342,12 @@ const ridgeGeo = new THREE.BoxGeometry(0.18, 0.18, tent.lengthFt);
 const ridge = new THREE.Mesh(ridgeGeo, new THREE.MeshStandardMaterial({ color: 0xd8cfa0 }));
 ridge.position.set(0, roofY, 0);
 group.add(ridge);
+  const frontGable = quad([0, roofY, -halfL], [-halfW, WALL_H, -halfL], [halfW, WALL_H, -halfL], [halfW, WALL_H, -halfL]);
+  const backGable = quad([0, roofY, halfL], [halfW, WALL_H, halfL], [-halfW, WALL_H, halfL], [-halfW, WALL_H, halfL]);
+  [frontGable, backGable].forEach(function (g) {
+  group.add(new THREE.Mesh(g, roofMat));
+    group.add(new THREE.LineSegments(new THREE.EdgesGeometry(g), roofEdgeMat));
+  });
 } else {
 const flatGeo = new THREE.PlaneGeometry(tent.widthFt, tent.lengthFt);
 const flat = new THREE.Mesh(flatGeo, roofMat);
@@ -633,7 +642,7 @@ function addTentLightingGrid(tent) {
 const rigs = [];
 const halfW = tent.widthFt / 2;
 const halfL = tent.lengthFt / 2;
-const y = WALL_H + POLE_PEAK_H - 0.5;
+const y = WALL_H + polePeakRise(tent) - 0.5;
 const spacing = 5;
 const bulbGeo = new THREE.SphereGeometry(0.12, 8, 8);
 const cols = [];
@@ -744,7 +753,7 @@ return rigs;
 
 function addChandelier(tent) {
 const rigs = [];
-const y = WALL_H + POLE_PEAK_H - 0.5;
+const y = WALL_H + polePeakRise(tent) - 0.5;
 const group = new THREE.Group();
 const goldMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.6, roughness: 0.3 });
 const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.9, 6), goldMat);
@@ -881,7 +890,7 @@ applyLighting();
 function frameCameraForTent(tent) {
 const halfW = tent.widthFt / 2;
 const halfL = tent.lengthFt / 2;
-const roofY = WALL_H + POLE_PEAK_H;
+const roofY = WALL_H + polePeakRise(tent);
 const radius = Math.sqrt(halfW * halfW + halfL * halfL + roofY * roofY) * 1.08;
 const vFov = (camera.fov * Math.PI) / 180;
 const dist = radius / Math.tan(vFov / 2);
