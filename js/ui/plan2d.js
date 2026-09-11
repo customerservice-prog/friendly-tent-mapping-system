@@ -227,6 +227,33 @@ const selectedItem = (data.objects || []).find(function (o) { return o.id === da
 
                              wrap.addEventListener('pointerdown', function (e) { onPointerDown(e, item); });
 });
+
+    var danceItems = (data.objects || []).filter(function (o) { return o.kind === 'dance'; });
+  if (danceItems.length) {
+    var fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity;
+    danceItems.forEach(function (o) {
+      var c1 = toDispXY(o.x, o.y);
+      var c2 = toDispXY(o.x + o.widthFt, o.y + o.depthFt);
+      [c1, c2].forEach(function (c) {
+        if (c.x < fMinX) fMinX = c.x;
+        if (c.y < fMinY) fMinY = c.y;
+        if (c.x > fMaxX) fMaxX = c.x;
+        if (c.y > fMaxY) fMaxY = c.y;
+      });
+    });
+    var frame = document.createElement('div');
+    frame.className = 'plan2d-dance-frame' + (selectedDanceGroup ? ' selected' : '');
+    frame.style.left = (fMinX * pxPerFt) + 'px';
+    frame.style.top = (fMinY * pxPerFt) + 'px';
+    frame.style.width = ((fMaxX - fMinX) * pxPerFt) + 'px';
+    frame.style.height = ((fMaxY - fMinY) * pxPerFt) + 'px';
+    var frameLabel = document.createElement('span');
+    frameLabel.className = 'plan2d-dance-frame-label';
+    frameLabel.textContent = Math.round(fMaxX - fMinX) + '\u00d7' + Math.round(fMaxY - fMinY) + ' Dance Floor';
+    frame.appendChild(frameLabel);
+    stageEl.appendChild(frame);
+  }
+  
 }
 
 // Small top-down visual detail per real Friendly Party Rental table type so tables

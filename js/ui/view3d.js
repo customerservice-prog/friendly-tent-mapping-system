@@ -888,19 +888,39 @@ applyLighting();
 }
 
 function frameCameraForTent(tent) {
-const halfW = tent.widthFt / 2;
-const halfL = tent.lengthFt / 2;
-const roofY = WALL_H + polePeakRise(tent);
-const radius = Math.sqrt(halfW * halfW + halfL * halfL + roofY * roofY) * 1.08;
-const vFov = (camera.fov * Math.PI) / 180;
-const dist = radius / Math.tan(vFov / 2);
-const dirLen = Math.sqrt(0.9 * 0.9 + 0.7 * 0.7 + 0.9 * 0.9);
-const scale = dist / dirLen;
-camera.position.set(scale * 0.9, scale * 0.7, scale * 0.9);
-controls.target.set(0, 3, 0);
-controls.minDistance = 5;
-controls.maxDistance = dist * 3;
-controls.update();
+    const halfW = tent.widthFt / 2;
+    const halfL = tent.lengthFt / 2;
+    const roofY = WALL_H + polePeakRise(tent);
+    const dir = new THREE.Vector3(0.9, 0.7, 0.9).normalize();
+    const forward = dir.clone().negate();
+    const worldUp = new THREE.Vector3(0, 1, 0);
+    const right = new THREE.Vector3().crossVectors(worldUp, forward).normalize();
+    const up = new THREE.Vector3().crossVectors(forward, right).normalize();
+    const corners = [];
+    [-halfW, halfW].forEach(function (x) {
+        [0, roofY].forEach(function (y) {
+            [-halfL, halfL].forEach(function (z) {
+                corners.push(new THREE.Vector3(x, y, z));
+            });
+        });
+    });
+    let maxRight = 0.1, maxUp = 0.1;
+    corners.forEach(function (c) {
+        maxRight = Math.max(maxRight, Math.abs(c.dot(right)));
+        maxUp = Math.max(maxUp, Math.abs(c.dot(up)));
+    });
+    const margin = 1.08;
+    const vFov = (camera.fov * Math.PI) / 180;
+    const aspect = camera.aspect || 1;
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+    const distForUp = (maxUp * margin) / Math.tan(vFov / 2);
+    const distForRight = (maxRight * margin) / Math.tan(hFov / 2);
+    const dist = Math.max(distForUp, distForRight, 5);
+    camera.position.copy(dir.clone().multiplyScalar(dist));
+    controls.target.set(0, 3, 0);
+    controls.minDistance = 5;
+    controls.maxDistance = dist * 3;
+    controls.update();
 }
 
 function getPointerNDC(e) {

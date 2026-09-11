@@ -458,13 +458,15 @@ wiz.eventType = 'wedding';
 wiz.guestCount = 100;
 wiz.seatingStyle = SEATING_STYLE_OPTIONS.DINING;
 wiz.features = ['danceFloor', 'buffet', 'bar', 'cakeTable'];
-wiz.danceFloorSizeId = '18x18';
+wiz.danceFloorSizeId = '15x15';
 wiz.spaceType = 'backyard';
 wiz.surfaceType = 'grass';
 const result = recommendTentsForWiz();
 applyWizardStateToBridge();
 const entry = result.recommended || result.moreSpacious || result.tighter;
 if (entry) Bridge.state.tentId = entry.tent.id;
+  Bridge.state.chairId = 'chiavari-gold';
+  Bridge.state.lightingId = 'lighting-bistro';
 Bridge.useRecommendedLayout();
 return true;
 }
