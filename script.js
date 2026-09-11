@@ -201,6 +201,31 @@ function nextGridPosition(index, tent, cellFt, danceZone) {
   return { x: 3, y: 3 };
 }
 
+// Re-centers each row of a generated table grid so a shorter row (e.g. a
+// trailing partial row) is inset symmetrically within the widest row's
+// span, instead of being left-aligned against the grid's starting edge.
+// Only shifts x within the bounds the widest row already validated, so
+// this can never push a table outside the tent or into another table.
+function centerGridRows(positions, spacing) {
+  var rows = {};
+  var order = [];
+  positions.forEach(function (p) {
+    var key = Math.round(p.y * 100);
+    if (!rows[key]) { rows[key] = []; order.push(key); }
+    rows[key].push(p);
+  });
+  var minX = Math.min.apply(null, positions.map(function (p) { return p.x; }));
+  var maxRowCount = 0;
+  order.forEach(function (key) { if (rows[key].length > maxRowCount) maxRowCount = rows[key].length; });
+  var maxWidth = (maxRowCount - 1) * spacing;
+  order.forEach(function (key) {
+    var rowPositions = rows[key].slice().sort(function (a, b) { return a.x - b.x; });
+    var rowWidth = (rowPositions.length - 1) * spacing;
+    var offset = minX + (maxWidth - rowWidth) / 2 - rowPositions[0].x;
+    rowPositions.forEach(function (p) { p.x += offset; });
+  });
+}
+
 // Lays out `count` dining tables in a centered, balanced grid. Every table
 // placement produced here is verified (by simulating it) to stay inside the
 // tent's real boundary (0..widthFt / 0..lengthFt -- the same rectangle
@@ -319,7 +344,8 @@ function computeBalancedGridPositions(tent, count, cellFt, danceZone) {
           if (found) { result = found.positions; break; }
           toPlaceCount--;
     }
-    return result || [];
+    if (result) centerGridRows(result, idealSpacing);
+  return result || [];
 }
 
 function tableCellSize(tableDef, chairId) {
