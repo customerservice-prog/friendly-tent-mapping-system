@@ -630,6 +630,12 @@ function renderDrawerBody(kind) {
   attachPhotoFallback(body);
 }
 
+function tentIconSvg(type) {
+  if (type === 'pole') {
+    return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3Q7 8 3 14M12 3Q17 8 21 14M3 14q2.25 3 4.5 0q2.25 3 4.5 0q2.25 3 4.5 0q2.25 3 4.5 0M12 3V20M3 14V20M21 14V20"/></svg>';
+  }
+  return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 20h18L12 3Z"/><path d="M12 3v17"/><path d="M9 20l3-7 3 7"/></svg>';
+}
 function buildTentDrawerHtml() {
   var html = '';
   var groups = [['pole', 'Pole Tents'], ['frame', 'Frame Tents'], ['canopy', 'Pop-Up Canopies']];
@@ -642,7 +648,7 @@ function buildTentDrawerHtml() {
       var sel = t.id === state.tentId;
       html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="tent-card" data-id="' + t.id + '">';
       if (sel) html += '<span class="item-card-check">&#10003;</span>';
-      html += '<span class="item-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 20h18L12 3Z"/><path d="M12 3v17"/><path d="M9 20l3-7 3 7"/></svg></span>';
+      html += '<span class="item-card-icon">' + tentIconSvg(t.type) + '</span>';
       html += '<span class="item-card-name">' + t.name + '</span>';
       html += '<span class="tent-card-meta">' + t.widthFt + '&times;' + t.lengthFt + ' ft &middot; seats ' + t.maxGuests.dining + '</span>';
       html += '<span class="item-card-price">' + money(t.pricePerDay) + '/day</span>';
