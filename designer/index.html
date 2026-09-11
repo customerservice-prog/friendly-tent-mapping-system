@@ -27,6 +27,7 @@
     var params = new URLSearchParams(window.location.search);
     var tenant = getTenant(params.get('tenant'));
     window.ACTIVE_TENANT = tenant;
+    window.RENTSKETCH_API_URL = window.RENTSKETCH_API_URL || (tenant.slug === 'friendly' ? 'https://rentsketch-api-production.up.railway.app' : null);
     var isGeneric = tenant.slug === 'generic';
     document.title = isGeneric ? 'RentSketch Designer' : (tenant.name + ' Event Designer | ' + tenant.name);
     var titleEl = document.getElementById('siteHeaderTitle');
