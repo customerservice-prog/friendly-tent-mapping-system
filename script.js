@@ -1219,6 +1219,7 @@ $('btnEmailQuote').textContent = 'Request a Quote from ' + tenantName;
     var date = $('customerDate').value;
     var fullBody = encodeURIComponent('Name: ' + name + NL + 'Email: ' + email + NL + 'Requested Date: ' + date + NL + NL + body);
     this.href = 'mailto:' + tenantEmail + '?subject=' + subject + '&body=' + fullBody;
+    if (window.RENTSKETCH_API_URL && tenant && tenant.slug && tenant.slug !== 'generic') { fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + tenant.slug + '/quote-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName: name, customerEmail: email, eventDate: date || null, guestCount: state.guestCount, eventType: state.eventType, lineItems: lines, estimateTotal: total }) }).catch(function () {}); }
   };
 }
 
