@@ -63,13 +63,13 @@ function buildTent(id, name, type, widthFt, lengthFt, pricePerDay) {
           lengthFt: lengthFt,
           pricePerDay: pricePerDay,
           capacity: capacity,
-          capacityNote: 'Approximate planning capacity. Friendly Party Rental will confirm exact seating for your event.',
+          capacityNote: 'Approximate planning capacity. ' + ((typeof window !== 'undefined' && window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' will confirm exact seating for your event.',
           centerPoles: pole.centerPoles,
           poleLayoutEstimated: pole.estimated,
           installationClearanceFt: installClearanceFt(type),
           surfaceNotes: type === TENT_TYPES.FRAME
-                  ? 'Frame tents have no interior poles and can often be ballasted on hard surfaces (asphalt, concrete, decks) when staking is not possible. Friendly Party Rental will verify final installation method.'
-                  : 'This tent typically requires staking and guy lines around the perimeter. Ballast options may be available for hard surfaces — Friendly Party Rental will verify final installation requirements.',
+                  ? 'Frame tents have no interior poles and can often be ballasted on hard surfaces (asphalt, concrete, decks) when staking is not possible. ' + ((typeof window !== 'undefined' && window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' will verify final installation method.'
+                  : 'This tent typically requires staking and guy lines around the perimeter. Ballast options may be available for hard surfaces — ' + ((typeof window !== 'undefined' && window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' will verify final installation requirements.',
           active: true,
     };
 }
