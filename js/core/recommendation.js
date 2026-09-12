@@ -42,10 +42,10 @@ function featureAreaSqft(features, guestCount, danceFloorSizeId, customDanceFt) 
 function surfaceWarning(tent, surfaceType) {
   const hardSurfaces = ['asphalt', 'concrete', 'deck', 'indoor'];
   if (tent.type === 'pole' && hardSurfaces.indexOf(surfaceType) !== -1) {
-    return { level: 'warning', message: 'This tent type typically requires staking. On this surface, ballast or a frame tent may be required — Friendly Party Rental will verify final installation requirements.' };
+    return { level: 'warning', message: 'This tent type typically requires staking. On this surface, ballast or a frame tent may be required — ' + ((typeof window !== 'undefined' && window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' will verify final installation requirements.' };
   }
   if (surfaceType === 'notSure' || !surfaceType) {
-    return { level: 'info', message: 'Installation method will be confirmed by Friendly Party Rental based on your exact surface.' };
+    return { level: 'info', message: 'Installation method will be confirmed by ' + ((typeof window !== 'undefined' && window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' based on your exact surface.' };
   }
   return { level: 'info', message: tent.surfaceNotes };
 }
@@ -99,7 +99,7 @@ export function recommendTents(input) {
   const result = { requiredUnits: requiredUnits, capacityKey: capacityKey, guestCount: guestCount, extraGuestUnits: extraGuestUnits, recommended: null, tighter: null, moreSpacious: null, warnings: [] };
   if (recommendedIndex === -1) {
     const largest = eligible[eligible.length - 1];
-    result.warnings.push({ level: 'error', message: 'No single tent in current inventory comfortably fits this event. Friendly Party Rental staff will help plan a multi-tent or custom layout.' });
+    result.warnings.push({ level: 'error', message: 'No single tent in current inventory comfortably fits this event. ' + ((typeof window !== 'undefined' && window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' staff will help plan a multi-tent or custom layout.' });
     if (largest) result.moreSpacious = { tent: largest, note: surfaceWarning(largest, surfaceType) };
     return result;
   }
