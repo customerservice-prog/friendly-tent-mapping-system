@@ -50,6 +50,27 @@ function surfaceWarning(tent, surfaceType) {
   return { level: 'info', message: tent.surfaceNotes };
 }
 
+function eligibleTentsForActiveTenant() {
+  var tenant = (typeof window !== 'undefined') ? window.ACTIVE_TENANT : null;
+  var isRealTenant = tenant && tenant.slug && tenant.slug !== 'friendly' && tenant.slug !== 'generic';
+  if (isRealTenant && Array.isArray(tenant.tents)) {
+    // Tenant-exclusive catalog: recommend from what THIS tenant actually
+    // sells (already resolved against the master visual library by
+    // designer/index.html), not from RentSketch's generic 16-tent demo
+    // catalog, which could recommend a tent ID this tenant does not sell.
+    return tenant.tents.map(function (t) {
+      var dining = (t.maxGuests && t.maxGuests.dining) || 0;
+      var cocktail = (t.maxGuests && t.maxGuests.cocktail) || dining;
+      return Object.assign({}, t, {
+        active: true,
+        capacity: t.capacity || { diningRounds: dining, ceremonyRows: dining, cocktail: cocktail },
+        surfaceNotes: t.surfaceNotes || ('Installation surface requirements will be confirmed by ' + (tenant.name || 'your rental company') + '.'),
+      });
+    });
+  }
+  return TENTS.filter(function (t) { return t.active; });
+}
+
 export function recommendTents(input) {
   const guestCount = Math.max(1, Number(input.guestCount) || 1);
   const seatingStyle = input.seatingStyle || SEATING_STYLES.NOT_SURE;
@@ -60,7 +81,7 @@ export function recommendTents(input) {
   const extraSqft = featureAreaSqft(features, guestCount, input.danceFloorSizeId, input.customDanceFloorFt);
   const extraGuestUnits = Math.ceil(extraSqft / sqftPerGuest);
   const requiredUnits = guestCount + extraGuestUnits;
-  const eligible = TENTS.filter(function (t) { return t.active; }).slice().sort(function (a, b) { return a.capacity[capacityKey] - b.capacity[capacityKey]; });
+  const eligible = eligibleTentsForActiveTenant().slice().sort(function (a, b) { return a.capacity[capacityKey] - b.capacity[capacityKey]; });
 
   // Area-per-guest math alone can under-estimate space needs for narrow tents:
   // a 20ft-wide tent can only ever fit ONE column of round dining tables no
