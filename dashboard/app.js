@@ -260,22 +260,26 @@
      var visualsById = {};
      visuals.forEach(function (v) { visualsById[v.id] = v; });
      var rows = products.map(function (p) {
-       var unknownVisual = p.visual_model_id && !visualsById[p.visual_model_id];
-       return '<tr data-id="' + esc(p.id) + '">' +
-         '<td>' + esc(p.category) + '</td>' +
-         '<td>' + esc(p.name) + '</td>' +
-         '<td>' + esc(p.sku || '') + '</td>' +
-         '<td>' + money(p.price_per_day) + '</td>' +
-         '<td>' + (p.capacity || '\u2014') + '</td>' +
-         '<td><select class="visual-select" data-id="' + esc(p.id) + '">' + visualOptionsHtml(visuals, p.visual_model_id) + '</select>' + (unknownVisual ? '<br><span class="muted">Unknown visual id: ' + esc(p.visual_model_id) + '</span>' : '') + '</td>' +
-         '<td><button class="btn-link" data-action="toggle-active" data-id="' + esc(p.id) + '" data-active="' + (p.active ? '1' : '0') + '">' + (p.active ? 'Active' : 'Inactive') + '</button></td>' +
-         '<td><button class="btn-link btn-danger" data-action="delete" data-id="' + esc(p.id) + '">Remove</button></td>' +
-         '</tr>';
+               var needsVisual = ['tent', 'table', 'chair'].indexOf(p.category) !== -1;
+               var hasVisual = !!(p.visual_model_id && visualsById[p.visual_model_id]);
+               var unknownVisual = p.visual_model_id && !visualsById[p.visual_model_id];
+               var hiddenFromDesigner = needsVisual && !hasVisual;
+               return '<tr data-id="' + esc(p.id) + '">' +
+                           '<td>' + esc(p.category) + '</td>' +
+                           '<td>' + esc(p.name) + '</td>' +
+                           '<td>' + esc(p.sku || '') + '</td>' +
+                           '<td>' + money(p.price_per_day) + '</td>' +
+                           '<td>' + (p.capacity || '\u2014') + '</td>' +
+                           '<td><select class="visual-select" data-id="' + esc(p.id) + '">' + visualOptionsHtml(visuals, p.visual_model_id) + '</select>' + (unknownVisual ? '<br><span class="muted">Unknown visual id: ' + esc(p.visual_model_id) + '</span>' : '') + '</td>' +
+                           '<td>' + (needsVisual ? (hiddenFromDesigner ? '<span class="status-badge status-hidden" title="Customers will not see this item until a visual is picked. It is excluded from the designer rather than shown as a generic shape.">Hidden from designer</span>' : '<span class="status-badge status-visible">Visible to customers</span>') : '<span class="muted">Generic placeholder</span>') + '</td>' +
+                           '<td><button class="btn-link" data-action="toggle-active" data-id="' + esc(p.id) + '" data-active="' + (p.active ? '1' : '0') + '">' + (p.active ? 'Active' : 'Inactive') + '</button></td>' +
+                           '<td><button class="btn-link btn-danger" data-action="delete" data-id="' + esc(p.id) + '">Remove</button></td>' +
+                           '</tr>';
      }).join('');
-     var table = products.length ? ('<table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>') : '<div class="dash-empty">No products yet. Add your first one below.</div>';
+     var table = products.length ? ('<table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>In Designer</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>') : '<div class="dash-empty">No products yet. Add your first one below.</div>';
      document.getElementById('dashMain').innerHTML = '' +
        '<h1 class="dash-title">Products</h1>' +
-       '<p class="dash-subtitle">These are the real items customers see in your designer. Changes appear immediately. Pick a Visual so it renders correctly on the design canvas &mdash; if none is picked, customers will see a generic placeholder shape.</p>' +
+       '<p class="dash-subtitle">These are the real items customers see in your designer. Changes appear immediately. Pick a Visual for each tent, table, and chair so it renders correctly on the design canvas. Items without one are automatically hidden from the customer designer (not shown as a generic shape) until mapped &mdash; see the "In Designer" column below.</p>' +
        table +
        '<h2 class="dash-section-title">Add a Product</h2>' +
        '<form id="productForm" class="dash-form">' +
