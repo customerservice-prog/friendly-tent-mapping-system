@@ -89,38 +89,59 @@ var isEmbed = params.get('embed') === '1';
         applyBranding(tenant);
       })
       .catch(function () {});
-      fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RENTSKETCH_TENANT_SLUG) + '/products')
+fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RENTSKETCH_TENANT_SLUG) + '/products')
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data || !data.products) return;
-        var byExternalId = {};
-        data.products.forEach(function (p) { if (p.external_id) byExternalId[p.external_id] = p; });
-if (!isKnownStatic) {
-    var byCategory = { chair: CHAIRS, table: TABLES, tent: TENTS };
-    data.products.forEach(function (p) {
-          var templates = byCategory[p.category];
-          if (!templates || !p.visual_model_id) return;
-          var base = templates.filter(function (b) { return b.id === p.visual_model_id; })[0];
-          if (!base) return;
-          if (templates.some(function (b) { return b.id === p.id; })) return;
-          var clone = JSON.parse(JSON.stringify(base));
-          clone.id = p.id;
-          clone.name = p.name || base.name;
-          if (p.price_per_day !== null && p.price_per_day !== undefined) clone.pricePerDay = Number(p.price_per_day);
-      if (p.external_id && p.external_id === p.visual_model_id) return;
-          clone.isRealTenantProduct = true;
-          templates.push(clone);
-    });
-}
-        [tenant.tents, tenant.tables, tenant.chairs].forEach(function (list) {
-          if (!Array.isArray(list)) return;
-          list.forEach(function (item) {
-            var p = byExternalId[item.id];
-            if (!p) return;
-            if (p.name) item.name = p.name;
-            if (p.price_per_day !== null && p.price_per_day !== undefined) item.pricePerDay = Number(p.price_per_day);
+        if (!isKnownStatic) {
+          var masterByCategory = {
+            chair: CHAIRS.map(function (x) { return JSON.parse(JSON.stringify(x)); }),
+            table: TABLES.map(function (x) { return JSON.parse(JSON.stringify(x)); }),
+            tent: TENTS.map(function (x) { return JSON.parse(JSON.stringify(x)); })
+          };
+          var liveArrays = { chair: CHAIRS, table: TABLES, tent: TENTS };
+          var unmapped = [];
+          Object.keys(liveArrays).forEach(function (cat) {
+            var resolved = [];
+            data.products.forEach(function (p) {
+              if (p.category !== cat || p.active === false) return;
+              if (!p.visual_model_id) { unmapped.push(p); return; }
+              var base = masterByCategory[cat].filter(function (b) { return b.id === p.visual_model_id; })[0];
+              if (!base) { unmapped.push(p); return; }
+              var item = JSON.parse(JSON.stringify(base));
+              item.id = p.id;
+              item.tenantProductId = p.id;
+              item.externalId = p.external_id || null;
+              item.visualModelId = p.visual_model_id;
+              item.name = p.name || base.name;
+              if (p.price_per_day !== null && p.price_per_day !== undefined) item.pricePerDay = Number(p.price_per_day);
+              item.isRealTenantProduct = true;
+              resolved.push(item);
+            });
+            liveArrays[cat].length = 0;
+            resolved.forEach(function (item) { liveArrays[cat].push(item); });
           });
-        });
+          if (unmapped.length && window.console) {
+            console.warn('RentSketch: tenant "' + tenantSlug + '" has ' + unmapped.length + ' active product(s) with no resolvable visual; excluded from the designer catalog until mapped in the dashboard.', unmapped.map(function (p) { return p.name; }));
+          }
+          if (window.FriendlyBridge && window.FriendlyBridge.state) {
+            var fbState = window.FriendlyBridge.state;
+            if (TENTS.length && !TENTS.some(function (t) { return t.id === fbState.tentId; })) fbState.tentId = TENTS[0].id;
+            if (CHAIRS.length && !CHAIRS.some(function (c) { return c.id === fbState.chairId; })) fbState.chairId = CHAIRS[0].id;
+          }
+        } else {
+          var byExternalId = {};
+          data.products.forEach(function (p) { if (p.external_id) byExternalId[p.external_id] = p; });
+          [tenant.tents, tenant.tables, tenant.chairs].forEach(function (list) {
+            if (!Array.isArray(list)) return;
+            list.forEach(function (item) {
+              var p = byExternalId[item.id];
+              if (!p) return;
+              if (p.name) item.name = p.name;
+              if (p.price_per_day !== null && p.price_per_day !== undefined) item.pricePerDay = Number(p.price_per_day);
+            });
+          });
+        }
       })
       .catch(function () {});
     }
