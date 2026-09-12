@@ -88,28 +88,38 @@ function validateLighting() {
   if (opt && opt.dynamic && tentLightingPriceFor(tent) == null) state.lightingId = 'lighting-none';
 }
 
+function pickDefaultRoundTable() {
+  var exact = byId(TABLES, 'round-5ft');
+  if (exact) return exact;
+  var round = TABLES.filter(function (t) { return t.shape === 'round' && t.seatsDefault > 0; });
+  if (round.length) return round[0];
+  var anySeated = TABLES.filter(function (t) { return t.seatsDefault > 0; });
+  if (anySeated.length) return anySeated[0];
+  return TABLES.length ? TABLES[0] : null;
+}
 function useRecommendedLayout() {
   store.reset({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
   state.selectedId = null;
   state.lastTableConfig = null;
   var tent = byId(TENTS, state.tentId);
+  if (!tent) { enterDesigner(); return; }
   // Reserve the dance floor's footprint FIRST so tables are generated around
-// it, instead of dropping the dance floor into a grid that was already
-// filled with tables (which could leave tables sitting on top of it or
-// crowded right against its edge).
-if (state.needDance) {
-  setDanceFloorCount(sectionsForSize(danceFloorSizeFt()));
-}
+  // it, instead of dropping the dance floor into a grid that was already
+  // filled with tables (which could leave tables sitting on top of it or
+  // crowded right against its edge).
+  if (state.needDance) {
+    setDanceFloorCount(sectionsForSize(danceFloorSizeFt()));
+  }
   var tablesNeeded = Math.ceil(state.guestCount / 8);
-  if (tablesNeeded > 0) {
-    var tableDef = byId(TABLES, 'round-5ft');
+  var tableDef = pickDefaultRoundTable();
+  if (tablesNeeded > 0 && tableDef) {
     var cellFt = tableCellSize(tableDef, state.chairId);
     var danceZone = mergeDanceFloorZone(forCollision(store.getState().objects));
     var positions = computeBalancedGridPositions(tent, tablesNeeded, cellFt, danceZone);
     for (var i = 0; i < Math.min(tablesNeeded, positions.length); i++) {
-      addTableCustom('round-5ft', state.chairId, tableDef.seatsDefault, null, positions[i]);
+      addTableCustom(tableDef.id, state.chairId, tableDef.seatsDefault, null, positions[i]);
     }
-    state.lastTableConfig = { tableId: 'round-5ft', chairId: state.chairId, seatCount: tableDef.seatsDefault, linenId: null };
+    state.lastTableConfig = { tableId: tableDef.id, chairId: state.chairId, seatCount: tableDef.seatsDefault, linenId: null };
   }
   enterDesigner();
 }
@@ -122,6 +132,7 @@ function customizeFromScratch() {
 }
 
 function enterDesigner() {
+if (!TENTS.length) { alert('This designer needs at least one tent product with a visual configured before it can be used. Please contact ' + ((window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'the rental company') + ' or check the product setup in the dashboard.'); return; }
   document.body.classList.add('designer-active');
   state.viewMode = 'plan';
   state.selectedId = null;
@@ -1332,8 +1343,11 @@ $('emptyStateOverlay').addEventListener('click', function (e) {
   if (!el) return;
   if (el.dataset.role === 'empty-add-recommended') {
     var count = parseInt(el.dataset.count, 10) || 1;
-    for (var i = 0; i < count; i++) { addTable('round-5ft', state.chairId, null); }
-    state.lastTableConfig = { tableId: 'round-5ft', chairId: state.chairId, seatCount: 8, linenId: null };
+    var td = pickDefaultRoundTable();
+    if (td) {
+      for (var i = 0; i < count; i++) { addTable(td.id, state.chairId, null); }
+      state.lastTableConfig = { tableId: td.id, chairId: state.chairId, seatCount: td.seatsDefault, linenId: null };
+    }
     refreshAll();
   } else if (el.dataset.role === 'empty-choose-own') {
     openDrawer('tables');
