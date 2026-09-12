@@ -103,6 +103,7 @@ function useRecommendedLayout() {
   state.lastTableConfig = null;
   var tent = byId(TENTS, state.tentId);
   if (!tent) { enterDesigner(); return; }
+  if (CHAIRS.length && !byId(CHAIRS, state.chairId)) state.chairId = CHAIRS[0].id;
   // Reserve the dance floor's footprint FIRST so tables are generated around
   // it, instead of dropping the dance floor into a grid that was already
   // filled with tables (which could leave tables sitting on top of it or
@@ -128,6 +129,7 @@ function customizeFromScratch() {
   store.reset({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
   state.selectedId = null;
   state.lastTableConfig = null;
+  if (CHAIRS.length && !byId(CHAIRS, state.chairId)) state.chairId = CHAIRS[0].id;
   enterDesigner();
 }
 
