@@ -27,16 +27,16 @@ router.post('/:slug/products', requireTenantAccess, async (req, res) => {
     const {
           category, name, sku, pricePerDay, priceType, widthFt, lengthFt,
           capacity, photoUrl, externalId, sortOrder,
+        visualModelId,
     } = req.body || {};
     if (!category || !name) return res.status(400).json({ error: 'category and name are required' });
 
               const result = await db.query(
                     `INSERT INTO products
-                          (tenant_id, category, external_id, name, sku, price_per_day, price_type, width_ft, length_ft, capacity, photo_url, sort_order)
-                               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING *`,
-                    [req.tenant.id, category, externalId || null, name, sku || null, pricePerDay || null,
-                           priceType || 'per_day', widthFt || null, lengthFt || null, capacity || null, photoUrl || null, sortOrder || 0]
-                  );
+                          (tenant_id, category, external_id, name, sku, price_per_day, price_type, width_ft, length_ft, capacity, photo_url, sort_order, visual_model_id)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING *`,
+[req.tenant.id, category, externalId || null, name, sku || null, pricePerDay || null, priceType || 'per_day', widthFt || null, lengthFt || null, capacity || null, photoUrl || null, sortOrder || 0, visualModelId || null]
+              );
     res.status(201).json({ product: result.rows[0] });
 });
 
@@ -48,11 +48,11 @@ router.patch('/:slug/products/:id', requireTenantAccess, async (req, res) => {
     const fields = req.body || {};
     const allowed = [
           'category', 'name', 'sku', 'price_per_day', 'price_type', 'width_ft',
-          'length_ft', 'capacity', 'photo_url', 'external_id', 'sort_order', 'active',
+          'length_ft', 'capacity', 'photo_url', 'external_id', 'sort_order', 'active', 'visual_model_id',
         ];
     const map = {
           pricePerDay: 'price_per_day', priceType: 'price_type', widthFt: 'width_ft',
-          lengthFt: 'length_ft', photoUrl: 'photo_url', externalId: 'external_id', sortOrder: 'sort_order',
+          lengthFt: 'length_ft', photoUrl: 'photo_url', externalId: 'external_id', sortOrder: 'sort_order', visualModelId: 'visual_model_id',
     };
     const sets = [];
     const values = [];
