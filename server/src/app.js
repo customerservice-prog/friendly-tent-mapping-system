@@ -9,6 +9,7 @@ const tenantsRoutes = require('./routes/tenants');
 const productsRoutes = require('./routes/products');
 const designsRoutes = require('./routes/designs');
 const quoteRequestsRoutes = require('./routes/quoteRequests');
+const visualLibraryRoutes = require('./routes/visualLibrary');
 
 const app = express();
 
@@ -16,9 +17,9 @@ const app = express();
 // allowing all origins only if ALLOWED_ORIGINS was never configured, so
 // local development still works without extra setup.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+.split(',')
+.map((origin) => origin.trim())
+.filter(Boolean);
 
 app.use(cors({
   origin: allowedOrigins.length > 0 ? allowedOrigins : true,
@@ -34,12 +35,13 @@ app.use('/api/tenants', tenantsRoutes);
 app.use('/api/tenants', productsRoutes);
 app.use('/api/tenants', designsRoutes);
 app.use('/api/tenants', quoteRequestsRoutes);
+app.use('/api/visual-library', visualLibraryRoutes);
 
 // Basic fallback error handler so an unexpected error returns JSON instead
 // of leaking a stack trace to the client.
 app.use((err, req, res, next) => {
   // eslint-disable-next-line no-console
-  console.error(err);
+        console.error(err);
   res.status(500).json({ error: 'Internal server error' });
 });
 
