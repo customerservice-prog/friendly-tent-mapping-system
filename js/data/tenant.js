@@ -29,6 +29,10 @@ export const TENTS = [
 { id: 'canopy-10x20', type: 'canopy', name: "10x20 Pop-Up Canopy", widthFt: 10, lengthFt: 20, pricePerDay: 175, maxGuests: { dining: 16, cocktail: 33 } },
 ];
 
+function cloneCatalog(list) {
+  return list.map(function (item) { return JSON.parse(JSON.stringify(item)); });
+}
+
 export const FRIENDLY_TENANT = {
   id: 'friendly',
   slug: 'friendly',
@@ -41,9 +45,9 @@ export const FRIENDLY_TENANT = {
     primaryTint: '#eef7ee',
     secondary: '#f7f3ea',
   },
-  tents: TENTS,
-  tables: TABLES,
-  chairs: CHAIRS,
+  tents: cloneCatalog(TENTS),
+  tables: cloneCatalog(TABLES),
+  chairs: cloneCatalog(CHAIRS),
 };
 
 // --- Extended tenant branding fields (additive; does not change existing behavior) ---
@@ -77,9 +81,9 @@ export const GENERIC_TENANT = {
     primaryTint: '#eaf1ff',
     secondary: '#0b1b3a',
   },
-  tents: TENTS,
-  tables: TABLES,
-  chairs: CHAIRS,
+  tents: cloneCatalog(TENTS),
+  tables: cloneCatalog(TABLES),
+  chairs: cloneCatalog(CHAIRS),
 };
 
 export function getTenant(slug) {
