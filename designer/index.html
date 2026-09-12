@@ -107,6 +107,7 @@ if (!isKnownStatic) {
           clone.id = p.id;
           clone.name = p.name || base.name;
           if (p.price_per_day !== null && p.price_per_day !== undefined) clone.pricePerDay = Number(p.price_per_day);
+      if (p.external_id && p.external_id === p.visual_model_id) return;
           clone.isRealTenantProduct = true;
           templates.push(clone);
     });
