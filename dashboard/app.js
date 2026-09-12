@@ -20,6 +20,23 @@
   function fmtDate(s) { if (!s) return '\u2014'; try { return new Date(s).toLocaleDateString(); } catch (e) { return String(s); } }
   function fmtDateTime(s) { if (!s) return '\u2014'; try { return new Date(s).toLocaleString(); } catch (e) { return String(s); } }
 
+ function visualOptionsHtml(visuals, selectedId) {
+   var groups = {};
+   (visuals || []).forEach(function (v) {
+     if (!groups[v.category]) groups[v.category] = [];
+     groups[v.category].push(v);
+   });
+   var html = '<option value=""' + (!selectedId ? ' selected' : '') + '>No visual (generic placeholder)</option>';
+   Object.keys(groups).sort().forEach(function (cat) {
+     html += '<optgroup label="' + esc(cat) + '">';
+     groups[cat].forEach(function (v) {
+       html += '<option value="' + esc(v.id) + '"' + (v.id === selectedId ? ' selected' : '') + '>' + esc(v.name) + '</option>';
+     });
+     html += '</optgroup>';
+   });
+   return html;
+ }
+
  async function api(path, opts) {
    opts = opts || {};
    var headers = Object.assign({ Accept: 'application/json' }, opts.headers || {});
@@ -61,8 +78,8 @@
      switcher = '<select id="tenantSwitch" class="tenant-switch">' + tenants.map(function (t) {
        return '<option value="' + esc(t.slug) + '"' + (t.slug === state.tenant ? ' selected' : '') + '>' + esc(t.name) + '</option>';
      }).join('') + '</select>';
-    } else if (tenants.length === 1) {
-   switcher = '<span class="tenant-name">' + esc(tenants[0].name) + '</span>';
+   } else if (tenants.length === 1) {
+     switcher = '<span class="tenant-name">' + esc(tenants[0].name) + '</span>';
    }
    function navLink(r, label) {
      return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '">' + label + '</a>';
@@ -216,7 +233,7 @@
          sel.disabled = true;
          try {
            await api('/api/tenants/' + state.tenant + '/quote-requests/' + sel.getAttribute('data-id'), { method: 'PATCH', body: { status: sel.value } });
- } catch (err) {
+         } catch (err) {
            window.alert('Could not update status: ' + err.message);
          } finally {
            sel.disabled = false;
@@ -235,21 +252,30 @@
    try {
      var data = await api('/api/tenants/' + state.tenant + '/products');
      var products = data.products || [];
+     var visuals = [];
+     try {
+       var visLibData = await api('/api/visual-library');
+       visuals = visLibData.visuals || [];
+     } catch (vlErr) { visuals = []; }
+     var visualsById = {};
+     visuals.forEach(function (v) { visualsById[v.id] = v; });
      var rows = products.map(function (p) {
+       var unknownVisual = p.visual_model_id && !visualsById[p.visual_model_id];
        return '<tr data-id="' + esc(p.id) + '">' +
          '<td>' + esc(p.category) + '</td>' +
          '<td>' + esc(p.name) + '</td>' +
          '<td>' + esc(p.sku || '') + '</td>' +
          '<td>' + money(p.price_per_day) + '</td>' +
          '<td>' + (p.capacity || '\u2014') + '</td>' +
+         '<td><select class="visual-select" data-id="' + esc(p.id) + '">' + visualOptionsHtml(visuals, p.visual_model_id) + '</select>' + (unknownVisual ? '<br><span class="muted">Unknown visual id: ' + esc(p.visual_model_id) + '</span>' : '') + '</td>' +
          '<td><button class="btn-link" data-action="toggle-active" data-id="' + esc(p.id) + '" data-active="' + (p.active ? '1' : '0') + '">' + (p.active ? 'Active' : 'Inactive') + '</button></td>' +
          '<td><button class="btn-link btn-danger" data-action="delete" data-id="' + esc(p.id) + '">Remove</button></td>' +
          '</tr>';
      }).join('');
-     var table = products.length ? ('<table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>') : '<div class="dash-empty">No products yet. Add your first one below.</div>';
+     var table = products.length ? ('<table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>') : '<div class="dash-empty">No products yet. Add your first one below.</div>';
      document.getElementById('dashMain').innerHTML = '' +
        '<h1 class="dash-title">Products</h1>' +
-       '<p class="dash-subtitle">These are the real items customers see in your designer. Changes appear immediately.</p>' +
+       '<p class="dash-subtitle">These are the real items customers see in your designer. Changes appear immediately. Pick a Visual so it renders correctly on the design canvas &mdash; if none is picked, customers will see a generic placeholder shape.</p>' +
        table +
        '<h2 class="dash-section-title">Add a Product</h2>' +
        '<form id="productForm" class="dash-form">' +
@@ -261,6 +287,7 @@
        '<label>Length (ft)<input type="number" step="0.1" id="pLength"></label>' +
        '<label>Capacity<input type="number" id="pCapacity"></label>' +
        '<label>Photo URL<input type="text" id="pPhoto"></label>' +
+       '<label>Visual<select id="pVisual">' + visualOptionsHtml(visuals, null) + '</select></label>' +
        '<div id="productError" class="dash-error" hidden></div>' +
        '<button type="submit" class="btn-primary">Add Product</button>' +
        '</form>';
@@ -280,6 +307,7 @@
              lengthFt: document.getElementById('pLength').value || null,
              capacity: document.getElementById('pCapacity').value || null,
              photoUrl: document.getElementById('pPhoto').value.trim() || null,
+             visualModelId: document.getElementById('pVisual').value || null,
            },
          });
          viewProducts(route);
@@ -287,6 +315,18 @@
          errEl.textContent = err.message;
          errEl.hidden = false;
        }
+     });
+     Array.prototype.forEach.call(document.querySelectorAll('.visual-select'), function (sel) {
+       sel.addEventListener('change', async function () {
+         sel.disabled = true;
+         try {
+           await api('/api/tenants/' + state.tenant + '/products/' + sel.getAttribute('data-id'), { method: 'PATCH', body: { visualModelId: sel.value || null } });
+         } catch (err) {
+           window.alert('Could not update visual: ' + err.message);
+         } finally {
+           sel.disabled = false;
+         }
+       });
      });
      Array.prototype.forEach.call(document.querySelectorAll('[data-action="toggle-active"]'), function (btn) {
        btn.addEventListener('click', async function () {
