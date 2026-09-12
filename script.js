@@ -408,7 +408,7 @@ function addTable(tableId, chairId, linenId) {
 }
 
 function ensureTableDraft() {
-  if (!tableDraft) {
+  if (!tableDraft && TABLES.length) {
     var t = TABLES[0];
     tableDraft = { tableId: t.id, chairId: state.chairId, seatCount: t.seatsDefault, linenId: null };
   }
@@ -698,6 +698,7 @@ function buildTentDrawerHtml() {
 
 function buildTablesDrawerHtml() {
   ensureTableDraft();
+  if (!tableDraft) return '<p class="no-seat-note">No table products are configured for this catalog yet.</p>';
   var html = '';
   if (state.lastTableConfig) {
     var cfg = state.lastTableConfig;
