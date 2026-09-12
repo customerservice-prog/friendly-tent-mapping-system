@@ -220,23 +220,37 @@ function nextGridPosition(index, tent, cellFt, danceZone) {
 // Only shifts x within the bounds the widest row already validated, so
 // this can never push a table outside the tent or into another table.
 function centerGridRows(positions, spacing) {
-  var rows = {};
-  var order = [];
-  positions.forEach(function (p) {
-    var key = Math.round(p.y * 100);
-    if (!rows[key]) { rows[key] = []; order.push(key); }
-    rows[key].push(p);
-  });
-  var minX = Math.min.apply(null, positions.map(function (p) { return p.x; }));
-  var maxRowCount = 0;
-  order.forEach(function (key) { if (rows[key].length > maxRowCount) maxRowCount = rows[key].length; });
-  var maxWidth = (maxRowCount - 1) * spacing;
-  order.forEach(function (key) {
-    var rowPositions = rows[key].slice().sort(function (a, b) { return a.x - b.x; });
-    var rowWidth = (rowPositions.length - 1) * spacing;
-    var offset = minX + (maxWidth - rowWidth) / 2 - rowPositions[0].x;
-    rowPositions.forEach(function (p) { p.x += offset; });
-  });
+      var rows = {};
+      var order = [];
+      positions.forEach(function (p) {
+              var key = Math.round(p.y * 100);
+              if (!rows[key]) { rows[key] = []; order.push(key); }
+              rows[key].push(p);
+      });
+      var maxRowCount = 0;
+      var refXs = null;
+      order.forEach(function (key) {
+              rows[key].sort(function (a, b) { return a.x - b.x; });
+              if (rows[key].length > maxRowCount) {
+                        maxRowCount = rows[key].length;
+                        refXs = rows[key].map(function (p) { return p.x; });
+              }
+      });
+      if (!refXs) return;
+      // Align every shorter row to the SAME column x-positions already used
+      // by the fullest row, instead of recomputing a fresh "centered" x from
+      // scratch. Recomputing from scratch ignores each column's individual
+      // pole-avoidance shift (see poleShift above), and could drop a shorter
+      // row's table at an x no other row uses -- visually a stray, misaligned
+      // table floating off the grid, and potentially right back into a
+      // center pole that poleShift had specifically steered it away from.
+      order.forEach(function (key) {
+              var rowPositions = rows[key];
+              var n = rowPositions.length;
+              if (n === maxRowCount) return;
+              var startIdx = Math.floor((maxRowCount - n) / 2);
+              rowPositions.forEach(function (p, i) { p.x = refXs[startIdx + i]; });
+      });
 }
 
 // Lays out `count` dining tables in a centered, balanced grid. Every table
