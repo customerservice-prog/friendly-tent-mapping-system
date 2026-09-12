@@ -23,10 +23,10 @@
   </header>
 
   <script type="module">
-    import { getTenant, GENERIC_TENANT } from '../js/data/tenant.js';
-    var params = new URLSearchParams(window.location.search);
-    var tenantSlug = params.get('tenant');
-    var isEmbed = params.get('embed') === '1';
+import { getTenant, GENERIC_TENANT, TENTS, TABLES, CHAIRS } from '../js/data/tenant.js';
+var params = new URLSearchParams(window.location.search);
+var tenantSlug = params.get('tenant');
+var isEmbed = params.get('embed') === '1';
     var isKnownStatic = !tenantSlug || tenantSlug === 'friendly' || tenantSlug === 'generic';
     var tenant = isKnownStatic ? getTenant(tenantSlug) : Object.assign({}, GENERIC_TENANT, {
       id: tenantSlug, slug: tenantSlug, name: 'RentSketch', tagline: '', contactEmail: '', phone: '', showPackages: false,
@@ -95,6 +95,22 @@
         if (!data || !data.products) return;
         var byExternalId = {};
         data.products.forEach(function (p) { if (p.external_id) byExternalId[p.external_id] = p; });
+if (!isKnownStatic) {
+    var byCategory = { chair: CHAIRS, table: TABLES, tent: TENTS };
+    data.products.forEach(function (p) {
+          var templates = byCategory[p.category];
+          if (!templates || !p.visual_model_id) return;
+          var base = templates.filter(function (b) { return b.id === p.visual_model_id; })[0];
+          if (!base) return;
+          if (templates.some(function (b) { return b.id === p.id; })) return;
+          var clone = JSON.parse(JSON.stringify(base));
+          clone.id = p.id;
+          clone.name = p.name || base.name;
+          if (p.price_per_day !== null && p.price_per_day !== undefined) clone.pricePerDay = Number(p.price_per_day);
+          clone.isRealTenantProduct = true;
+          templates.push(clone);
+    });
+}
         [tenant.tents, tenant.tables, tenant.chairs].forEach(function (list) {
           if (!Array.isArray(list)) return;
           list.forEach(function (item) {
