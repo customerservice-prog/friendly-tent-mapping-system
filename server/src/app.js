@@ -9,7 +9,6 @@ const tenantsRoutes = require('./routes/tenants');
 const productsRoutes = require('./routes/products');
 const designsRoutes = require('./routes/designs');
 const quoteRequestsRoutes = require('./routes/quoteRequests');
-const visualLibraryRoutes = require('./routes/visualLibrary');
 
 const app = express();
 
@@ -35,7 +34,6 @@ app.use('/api/tenants', tenantsRoutes);
 app.use('/api/tenants', productsRoutes);
 app.use('/api/tenants', designsRoutes);
 app.use('/api/tenants', quoteRequestsRoutes);
-app.use('/api/visual-library', visualLibraryRoutes);
 
 // Basic fallback error handler so an unexpected error returns JSON instead
 // of leaking a stack trace to the client.
