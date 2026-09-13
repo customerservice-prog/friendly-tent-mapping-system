@@ -121,8 +121,8 @@ export function recommendTents(input) {
   let recommendedIndex = -1;
   const viableTents = [];
   for (let i = 0; i < eligible.length; i++) {
-    const areaFits = eligible[i].capacity[capacityKey] > requiredUnits;
-    const gridFits = capacityKey !== 'diningRounds' || diningRoundsGridCapacity(eligible[i], features, input.danceFloorSizeId, input.customDanceFloorFt) > roundTableSeatsNeeded;
+    const areaFits = eligible[i].capacity[capacityKey] >= requiredUnits;
+    const gridFits = capacityKey !== 'diningRounds' || diningRoundsGridCapacity(eligible[i], features, input.danceFloorSizeId, input.customDanceFloorFt) >= roundTableSeatsNeeded;
     if (areaFits && gridFits) { viableTents.push(eligible[i]); }
   }
   // Recommend the CHEAPEST tent that actually fits, instead of just the
@@ -150,7 +150,7 @@ const recommendedTent = eligible[recommendedIndex];
   result.recommended = { tent: recommendedTent, note: surfaceWarning(recommendedTent, surfaceType) };
   if (recommendedIndex > 0) {
     const smaller = eligible[recommendedIndex - 1];
-    if (smaller.capacity[capacityKey] > guestCount * 0.9) {
+    if (smaller.capacity[capacityKey] >= guestCount * 0.9) {
       const smallerIsViable = viableTents.indexOf(smaller) !== -1;
       result.tighter = {
         tent: smaller,
