@@ -1253,6 +1253,43 @@ $('btnEmailQuote').textContent = 'Request a Quote from ' + tenantName;
     this.href = 'mailto:' + tenantEmail + '?subject=' + subject + '&body=' + fullBody;
     if (window.RENTSKETCH_API_URL && tenant && tenant.slug && tenant.slug !== 'generic') { fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + tenant.slug + '/quote-requests', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ customerName: name, customerEmail: email, eventDate: date || null, guestCount: state.guestCount, eventType: state.eventType, lineItems: lines, estimateTotal: total }) }).catch(function () {}); }
   };
+
+  if ($('btnPayDeposit')) {
+    var canPay = !!(window.RENTSKETCH_API_URL && tenant && tenant.slug && tenant.slug !== 'generic');
+    $('btnPayDeposit').hidden = !canPay;
+    $('btnPayDeposit').onclick = function () {
+      var name = $('customerName').value;
+      var email = $('customerEmail').value;
+      var date = $('customerDate').value;
+      if (!name || !email) { alert('Please enter your name and email first.'); return; }
+      var btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Processing...';
+      fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + tenant.slug + '/quote-requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerName: name, customerEmail: email, eventDate: date || null, guestCount: state.guestCount, eventType: state.eventType, lineItems: lines, estimateTotal: total }),
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (created) {
+        return fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + tenant.slug + '/quote-requests/' + created.id + '/checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ origin: window.location.origin }),
+        });
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (session) {
+        if (session && session.url) { window.location.href = session.url; }
+        else { throw new Error('No checkout URL returned'); }
+      })
+      .catch(function () {
+        btn.disabled = false;
+        btn.textContent = 'Pay Deposit Now';
+        alert('We could not start the payment. Please try again or use Request a Quote instead.');
+      });
+    };
+  }
 }
 
 document.querySelectorAll('.rail-btn').forEach(function (btn) {

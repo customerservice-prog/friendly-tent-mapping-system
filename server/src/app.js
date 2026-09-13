@@ -10,6 +10,8 @@ const productsRoutes = require('./routes/products');
 const designsRoutes = require('./routes/designs');
 const quoteRequestsRoutes = require('./routes/quoteRequests');
 const visualLibraryRoutes = require('./routes/visualLibrary');
+const paymentsRoutes = require('./routes/payments');
+const stripeWebhookRoutes = require('./routes/stripeWebhook');
 
 const app = express();
 
@@ -24,6 +26,11 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
 app.use(cors({
   origin: allowedOrigins.length > 0 ? allowedOrigins : true,
 }));
+// Stripe webhook needs the exact raw request body for signature
+// verification, so it is mounted BEFORE express.json() below, with its
+// own raw body parser scoped to just this one path.
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookRoutes);
+
 app.use(express.json());
 
 app.get('/health', (req, res) => {
@@ -35,6 +42,7 @@ app.use('/api/tenants', tenantsRoutes);
 app.use('/api/tenants', productsRoutes);
 app.use('/api/tenants', designsRoutes);
 app.use('/api/tenants', quoteRequestsRoutes);
+app.use('/api/tenants', paymentsRoutes);
 app.use('/api/visual-library', visualLibraryRoutes);
 
 // Basic fallback error handler so an unexpected error returns JSON instead
