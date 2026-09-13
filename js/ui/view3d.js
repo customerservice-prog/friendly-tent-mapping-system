@@ -283,7 +283,7 @@ if (fabricTextureCache) return fabricTextureCache;
     return tex;
   }
 
-function addTentGroup(tent) {
+function addTentGroup(tent, anchoringMethod) {
 const group = new THREE.Group();
 const halfW = tent.widthFt / 2;
 const halfL = tent.lengthFt / 2;
@@ -416,24 +416,37 @@ group.add(pole);
   addValanceSide(halfW, halfL, -halfW, halfL);
   addValanceSide(-halfW, halfL, -halfW, -halfL);
 
-  // --- Guy-lines and ground stakes from the corner poles ---
-      const guyMat = new THREE.LineBasicMaterial({ color: 0xd9d2b8 });
-  const stakeMat = new THREE.MeshStandardMaterial({ color: 0x6b6b6b, metalness: 0.4, roughness: 0.6 });
-  const guyOutset = 2.2;
-  cornerXs.forEach(function (cx) {
-    cornerZs.forEach(function (cz) {
-      const outX = cx + (cx < 0 ? -guyOutset : guyOutset);
-      const outZ = cz + (cz < 0 ? -guyOutset : guyOutset);
-      const topPt = new THREE.Vector3(cx, WALL_H * 0.82, cz);
-      const stakePt = new THREE.Vector3(outX, 0, outZ);
-const guyGeo = new THREE.BufferGeometry().setFromPoints([topPt, stakePt]);
-      group.add(new THREE.Line(guyGeo, guyMat));
-      const stake = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.5, 6), stakeMat);
-      stake.position.set(outX, 0.25, outZ);
-      group.add(stake);
+  // --- Anchoring: guy-lines/stakes (soft ground) or ballast blocks (hard surface) ---
+    if (anchoringMethod === 'stake') {
+        const guyMat = new THREE.LineBasicMaterial({ color: 0xd9d2b8 });
+        const stakeMat = new THREE.MeshStandardMaterial({ color: 0x6b6b6b, metalness: 0.4, roughness: 0.6 });
+        const guyOutset = tent.installationClearanceFt || 2.2;
+        cornerXs.forEach(function (cx) {
+            cornerZs.forEach(function (cz) {
+                const outX = cx + (cx < 0 ? -guyOutset : guyOutset);
+                const outZ = cz + (cz < 0 ? -guyOutset : guyOutset);
+                const topPt = new THREE.Vector3(cx, WALL_H * 0.82, cz);
+                const stakePt = new THREE.Vector3(outX, 0, outZ);
+                const guyGeo = new THREE.BufferGeometry().setFromPoints([topPt, stakePt]);
+                group.add(new THREE.Line(guyGeo, guyMat));
+                const stake = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.5, 6), stakeMat);
+                stake.position.set(outX, 0.25, outZ);
+                group.add(stake);
+            });
         });
-  });
-  
+    } else if (anchoringMethod === 'ballast') {
+        const ballastMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.9 });
+        const ballastOutset = tent.installationClearanceFt || 2.2;
+        cornerXs.forEach(function (cx) {
+            cornerZs.forEach(function (cz) {
+                const outX = cx + (cx < 0 ? -ballastOutset : ballastOutset);
+                const outZ = cz + (cz < 0 ? -ballastOutset : ballastOutset);
+                const block = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.6, 1.2), ballastMat);
+                block.position.set(outX, 0.3, outZ);
+                group.add(block);
+            });
+        });
+    }
 return group;
 }
 
@@ -832,7 +845,7 @@ clearDynamicGroup();
 stringLightRigs = [];
 
 dynamicGroup.add(addGround(currentTent));
-dynamicGroup.add(addTentGroup(currentTent));
+dynamicGroup.add(addTentGroup(currentTent, data.anchoringMethod));
 
 const halfW = currentTent.widthFt / 2;
 const halfL = currentTent.lengthFt / 2;

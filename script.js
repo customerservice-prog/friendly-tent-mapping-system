@@ -13,27 +13,20 @@ import { PACKAGES } from './js/data/packages.js';
 import * as plan2dMod from './js/ui/plan2d.js';
 import { byId as chairVisualById } from './js/data/chairs.js';
 import { FRIENDLY_TENANT, TENTS, TABLES, CHAIRS } from './js/data/tenant.js';
+import { computeCenterPoles, installationClearanceFt, resolveAnchoringMethod } from './js/data/tentStructure.js';
 
 var NL = String.fromCharCode(10);
 
-function computeCenterPoles(type, widthFt, lengthFt) {
-  if (type !== 'pole') return [];
-  var bay = 10;
-  var count = Math.max(1, Math.round(lengthFt / bay) - 1);
-  var poles = [];
-  for (var i = 1; i <= count; i++) {
-    poles.push({ x: widthFt / 2, y: (lengthFt / (count + 1)) * i });
-  }
-  return poles;
-}
 TENTS.forEach(function (t) {
   t.centerPoles = computeCenterPoles(t.type, t.widthFt, t.lengthFt);
+  t.installationClearanceFt = installationClearanceFt(t.type);
 });
 
 var state = {
   eventType: 'wedding',
   guestCount: 50,
   spaceType: 'backyard',
+  surfaceType: 'notSure',
   needDance: false,
   danceFloorSizeId: '18x18',
   customDanceFloorFt: null,
@@ -291,12 +284,21 @@ function computeBalancedGridPositions(tent, count, cellFt, danceZone) {
 
     function poleShift(x) {
           if (!poles.length) return x;
-          var poleX = poles[0].x;
-          var poleClearance = 1.25;
-          if (x - poleClearance < poleX && poleX < x + footprint + poleClearance) {
-                  return poleX + poleClearance + 0.01;
-          }
-          return x;
+    var poleClearance = 1.25;
+    var guard = 0;
+    var shifted = true;
+    while (shifted && guard < 50) {
+      shifted = false;
+      for (var i = 0; i < poles.length; i++) {
+        var poleX = poles[i].x;
+        if (x - poleClearance < poleX && poleX < x + footprint + poleClearance) {
+          x = poleX + poleClearance + 0.01;
+          shifted = true;
+        }
+      }
+      guard++;
+    }
+      return x;
     }
 
     function rowHitsZone(y) {
@@ -526,7 +528,7 @@ function forCollision(objects) {
 function getConflicts() {
   var tent = byId(TENTS, state.tentId);
   var objects = store.getState().objects;
-  return runAllChecks({ objects: forCollision(objects), aisles: [] }, tent, state.guestCount);
+  return runAllChecks({ objects: forCollision(objects), aisles: [] }, tent, state.guestCount, state.surfaceType);
 }
 
 function conflictSeverityByItemId(conflicts) {
@@ -550,6 +552,8 @@ function buildSnapshot(conflicts) {
   var tent = byId(TENTS, state.tentId);
   return {
     tent: tent,
+    surfaceType: state.surfaceType,
+    anchoringMethod: resolveAnchoringMethod(tent.type, state.surfaceType),
     objects: store.getState().objects,
     lightingOn: !!(state.lightingId && state.lightingId !== 'lighting-none'),
     lightingId: state.lightingId,
@@ -1034,7 +1038,7 @@ function renderEventCheckFlyout(conflicts) {
       shown = true;
       html += '<div class="action-banner">';
       html += '<div class="action-banner-title">' + (c.severity === 'error' ? 'Needs Attention' : 'Heads Up') + '</div>';
-      html += '<p>' + c.message + '</p>'; var fixTargetId = pickFixTarget(c.objectIds); html += '<div class="action-banner-actions">'; html += '<button type="button" class="btn-secondary small" data-role="event-check-show" data-id="' + fixTargetId + '">Show Me</button>'; if (c.type !== 'serviceConflict') { html += '<button type="button" class="btn-primary small" data-role="event-check-fix" data-id="' + fixTargetId + '">Fix It</button>'; } html += '</div>';
+      html += '<p>' + c.message + '</p>'; var fixTargetId = pickFixTarget(c.objectIds); html += '<div class="action-banner-actions">'; html += '<button type="button" class="btn-secondary small" data-role="event-check-show" data-id="' + fixTargetId + '">Show Me</button>'; if (c.type !== 'serviceConflict' && c.type !== 'surfaceAnchorConflict') { html += '<button type="button" class="btn-primary small" data-role="event-check-fix" data-id="' + fixTargetId + '">Fix It</button>'; } html += '</div>';
       html += '</div>';
     });
     if (!shown) {
@@ -1197,7 +1201,7 @@ html += '<div class="review-section"><div class="review-section-title">Event Che
     if (seen[key]) return;
     seen[key] = true;
     var fixTargetId = pickFixTarget(c.objectIds);
-    issueHtml += '<li class="review-issue-row"><span class="review-issue-message">' + c.message + '</span><span class="review-issue-actions"><button type="button" class="btn-secondary small" data-role="review-check-show" data-id="' + fixTargetId + '">Show Me</button>' + (c.type !== 'serviceConflict' ? '<button type="button" class="btn-primary small" data-role="review-check-fix" data-id="' + fixTargetId + '">Fix It</button>' : '') + '</span></li>';
+    issueHtml += '<li class="review-issue-row"><span class="review-issue-message">' + c.message + '</span><span class="review-issue-actions"><button type="button" class="btn-secondary small" data-role="review-check-show" data-id="' + fixTargetId + '">Show Me</button>' + (c.type !== 'serviceConflict' && c.type !== 'surfaceAnchorConflict' ? '<button type="button" class="btn-primary small" data-role="review-check-fix" data-id="' + fixTargetId + '">Fix It</button>' : '') + '</span></li>';
   });
   if (issueHtml) html += '<ul class="review-issue-list">' + issueHtml + '</ul>';
   html += '</div>';
