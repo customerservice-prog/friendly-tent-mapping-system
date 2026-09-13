@@ -179,6 +179,41 @@ fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RE
         } catch (e) {}
       }
     }
+    // Temporary diagnostics for cross-site embed freeze investigation (safe to remove once root cause is confirmed).
+    (function () {
+      if (window.parent === window) return;
+      function rsDbg(evt, extra) {
+        try {
+          var payload = { type: 'rentsketch.debug', evt: evt, t: Date.now() };
+          if (extra) { for (var k in extra) { payload[k] = extra[k]; } }
+          window.parent.postMessage(payload, '*');
+        } catch (e) {}
+      }
+      function activeStepId() {
+        var el = document.querySelector('.step.active');
+        return el ? el.id : null;
+      }
+      rsDbg('boot');
+      document.addEventListener('DOMContentLoaded', function () { rsDbg('domcontentloaded'); });
+      window.addEventListener('load', function () { rsDbg('winload'); });
+      document.addEventListener('visibilitychange', function () { rsDbg('visibilitychange', { state: document.visibilityState }); });
+      ['pointerdown', 'pointerup', 'click'].forEach(function (type) {
+        document.addEventListener(type, function (e) {
+          rsDbg(type, { tag: e.target && e.target.tagName, step: activeStepId() });
+        }, true);
+      });
+      window.addEventListener('error', function (e) {
+        rsDbg('error', { msg: String((e && e.message) || e) });
+      });
+      window.addEventListener('unhandledrejection', function (e) {
+        rsDbg('unhandledrejection', { reason: String(e && e.reason) });
+      });
+      var rsHbCount = 0;
+      setInterval(function () {
+        rsHbCount++;
+        rsDbg('heartbeat', { n: rsHbCount, visible: document.visibilityState, step: activeStepId() });
+      }, 1500);
+    })();
     
   </script>
 
