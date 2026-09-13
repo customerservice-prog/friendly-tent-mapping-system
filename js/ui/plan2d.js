@@ -186,47 +186,47 @@ function render(data) {
   stageEl.appendChild(pole);
 });
 
-  if (data.anchoringMethod && tent.installationClearanceFt) {
-    var clearance = tent.installationClearanceFt;
+  if (data.anchoringMethod) {
     var corners = [
       { x: 0, y: 0 },
       { x: tent.widthFt, y: 0 },
       { x: 0, y: tent.lengthFt },
       { x: tent.widthFt, y: tent.lengthFt },
       ];
+    var dispWD = toDispWD(tent.widthFt, tent.lengthFt);
+    var pxOutset = 10;
     corners.forEach(function (c) {
-      var outX = c.x + (c.x <= tent.widthFt / 2 ? -clearance : clearance);
-      var outY = c.y + (c.y <= tent.lengthFt / 2 ? -clearance : clearance);
       var cornerDisp = toDispXY(c.x, c.y);
-      var outDisp = toDispXY(outX, outY);
+      var cx = cornerDisp.x * pxPerFt;
+      var cy = cornerDisp.y * pxPerFt;
+      var dirX = cornerDisp.x <= dispWD.w / 2 ? -1 : 1;
+      var dirY = cornerDisp.y <= dispWD.d / 2 ? -1 : 1;
+      var outPxX = cx + dirX * pxOutset;
+      var outPxY = cy + dirY * pxOutset;
       if (data.anchoringMethod === 'stake') {
         var line = document.createElement('div');
         line.className = 'plan2d-guyline';
-        var dx = (outDisp.x - cornerDisp.x) * pxPerFt;
-        var dy = (outDisp.y - cornerDisp.y) * pxPerFt;
-        var len = Math.sqrt(dx * dx + dy * dy);
-        var ang = Math.atan2(dy, dx) * 180 / Math.PI;
-        line.style.width = len + 'px';
-        line.style.left = (cornerDisp.x * pxPerFt) + 'px';
-        line.style.top = (cornerDisp.y * pxPerFt) + 'px';
+        var ang = Math.atan2(dirY, dirX) * 180 / Math.PI;
+        line.style.width = pxOutset + 'px';
+        line.style.left = cx + 'px';
+        line.style.top = cy + 'px';
         line.style.transform = 'rotate(' + ang + 'deg)';
         stageEl.appendChild(line);
         var stake = document.createElement('div');
         stake.className = 'plan2d-anchor-stake';
-        stake.style.left = (outDisp.x * pxPerFt) + 'px';
-        stake.style.top = (outDisp.y * pxPerFt) + 'px';
+        stake.style.left = outPxX + 'px';
+        stake.style.top = outPxY + 'px';
         stageEl.appendChild(stake);
       } else if (data.anchoringMethod === 'ballast') {
         var block = document.createElement('div');
         block.className = 'plan2d-anchor-ballast';
-        block.style.left = (outDisp.x * pxPerFt) + 'px';
-        block.style.top = (outDisp.y * pxPerFt) + 'px';
+        block.style.left = outPxX + 'px';
+        block.style.top = outPxY + 'px';
         stageEl.appendChild(block);
       }
     });
   }
-
-const selectedItem = (data.objects || []).find(function (o) { return o.id === data.selectedId; });
+  const selectedItem = (data.objects || []).find(function (o) { return o.id === data.selectedId; });
   const selectedDanceGroup = !!(selectedItem && selectedItem.kind === 'dance');
   
   (data.objects || []).forEach(function (item) {
