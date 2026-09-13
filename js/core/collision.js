@@ -4,6 +4,7 @@
 // are warnings or informational notes for staff/customer review.
 
 import { rectFromObject, rectsOverlap, rectContains, expandRect, circleIntersectsRect } from './geometry.js';
+import { resolveAnchoringMethod } from '../data/tentStructure.js';
 
 export const CONFLICT_TYPES = {
   HARD_CONFLICT: 'hardConflict',
@@ -13,6 +14,7 @@ export const CONFLICT_TYPES = {
   TENT_EDGE_CONFLICT: 'tentEdgeConflict',
   DANCE_FLOOR_CONFLICT: 'danceFloorConflict',
   SERVICE_CONFLICT: 'serviceConflict',
+  SURFACE_ANCHOR_CONFLICT: 'surfaceAnchorConflict',
 };
 
 export const SEVERITY = { ERROR: 'error', WARNING: 'warning', INFO: 'info' };
@@ -166,8 +168,17 @@ export function checkServiceConflicts(objects, guestCount) {
   }
   return results;
 }
+export function checkSurfaceAnchoringConflicts(tent, surfaceType) {
+  var results = [];
+  if (!tent || !surfaceType || surfaceType === 'notSure') return results;
+  var method = resolveAnchoringMethod(tent.type, surfaceType);
+  if (method === 'ballast' && tent.type === 'pole') {
+    results.push(conflict(CONFLICT_TYPES.SURFACE_ANCHOR_CONFLICT, SEVERITY.WARNING, [], 'This tent normally anchors with ground stakes, but a hard surface was selected. Confirm a ballasted (weighted) installation with the rental company before booking.'));
+  }
+  return results;
+}
 
-export function runAllChecks(layoutState, tent, guestCount) {
+export function runAllChecks(layoutState, tent, guestCount, surfaceType) {
   var objects = layoutState.objects || [];
   var aisles = layoutState.aisles || [];
   var danceFloorZone = mergeDanceFloorZone(objects);
@@ -179,5 +190,6 @@ export function runAllChecks(layoutState, tent, guestCount) {
   all = all.concat(checkAisleConflicts(objects, aisles));
   all = all.concat(checkDanceFloorConflicts(objects, danceFloorZone));
   all = all.concat(checkServiceConflicts(objects, guestCount));
+  all = all.concat(checkSurfaceAnchoringConflicts(tent, surfaceType));
   return all;
 }
