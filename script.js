@@ -1038,7 +1038,7 @@ function renderEventCheckFlyout(conflicts) {
       shown = true;
       html += '<div class="action-banner">';
       html += '<div class="action-banner-title">' + (c.severity === 'error' ? 'Needs Attention' : 'Heads Up') + '</div>';
-      html += '<p>' + c.message + '</p>'; var fixTargetId = pickFixTarget(c.objectIds); html += '<div class="action-banner-actions">'; html += '<button type="button" class="btn-secondary small" data-role="event-check-show" data-id="' + fixTargetId + '">Show Me</button>'; if (c.type !== 'serviceConflict') { html += '<button type="button" class="btn-primary small" data-role="event-check-fix" data-id="' + fixTargetId + '">Fix It</button>'; } html += '</div>';
+      html += '<p>' + c.message + '</p>'; var fixTargetId = pickFixTarget(c.objectIds); html += '<div class="action-banner-actions">'; html += '<button type="button" class="btn-secondary small" data-role="event-check-show" data-id="' + fixTargetId + '">Show Me</button>'; if (c.type !== 'serviceConflict' && c.type !== 'surfaceAnchorConflict') { html += '<button type="button" class="btn-primary small" data-role="event-check-fix" data-id="' + fixTargetId + '">Fix It</button>'; } html += '</div>';
       html += '</div>';
     });
     if (!shown) {
