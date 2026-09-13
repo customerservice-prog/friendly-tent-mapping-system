@@ -186,6 +186,46 @@ function render(data) {
   stageEl.appendChild(pole);
 });
 
+  if (data.anchoringMethod && tent.installationClearanceFt) {
+    var clearance = tent.installationClearanceFt;
+    var corners = [
+      { x: 0, y: 0 },
+      { x: tent.widthFt, y: 0 },
+      { x: 0, y: tent.lengthFt },
+      { x: tent.widthFt, y: tent.lengthFt },
+      ];
+    corners.forEach(function (c) {
+      var outX = c.x + (c.x <= tent.widthFt / 2 ? -clearance : clearance);
+      var outY = c.y + (c.y <= tent.lengthFt / 2 ? -clearance : clearance);
+      var cornerDisp = toDispXY(c.x, c.y);
+      var outDisp = toDispXY(outX, outY);
+      if (data.anchoringMethod === 'stake') {
+        var line = document.createElement('div');
+        line.className = 'plan2d-guyline';
+        var dx = (outDisp.x - cornerDisp.x) * pxPerFt;
+        var dy = (outDisp.y - cornerDisp.y) * pxPerFt;
+        var len = Math.sqrt(dx * dx + dy * dy);
+        var ang = Math.atan2(dy, dx) * 180 / Math.PI;
+        line.style.width = len + 'px';
+        line.style.left = (cornerDisp.x * pxPerFt) + 'px';
+        line.style.top = (cornerDisp.y * pxPerFt) + 'px';
+        line.style.transform = 'rotate(' + ang + 'deg)';
+        stageEl.appendChild(line);
+        var stake = document.createElement('div');
+        stake.className = 'plan2d-anchor-stake';
+        stake.style.left = (outDisp.x * pxPerFt) + 'px';
+        stake.style.top = (outDisp.y * pxPerFt) + 'px';
+        stageEl.appendChild(stake);
+      } else if (data.anchoringMethod === 'ballast') {
+        var block = document.createElement('div');
+        block.className = 'plan2d-anchor-ballast';
+        block.style.left = (outDisp.x * pxPerFt) + 'px';
+        block.style.top = (outDisp.y * pxPerFt) + 'px';
+        stageEl.appendChild(block);
+      }
+    });
+  }
+
 const selectedItem = (data.objects || []).find(function (o) { return o.id === data.selectedId; });
   const selectedDanceGroup = !!(selectedItem && selectedItem.kind === 'dance');
   
