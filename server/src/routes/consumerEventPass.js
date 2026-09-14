@@ -215,7 +215,7 @@ router.post('/designs/:designId/event-pass/renewal-checkout-session', async (req
 });
 
 
-// POST /api/consumer/designs/:designId/recovery-link
+// POST /api/consumer/designs/recovery-link
 // A consumer who paid for an Event Pass on one device/browser has no
 // account to log into elsewhere - this lets them get a link back to their
 // paid design on a NEW device, without ever creating a password. The link
@@ -223,19 +223,20 @@ router.post('/designs/:designId/event-pass/renewal-checkout-session', async (req
 // the API response - and the response is identical whether or not the
 // email actually matched a paid design, so this endpoint can never be used
 // to probe which emails own a paid design on this design id.
-router.post('/designs/:designId/recovery-link', async (req, res) => {
+router.post('/designs/recovery-link', async (req, res) => {
 const { email } = req.body || {};
 if (!email) return res.status(400).json({ error: 'email is required' });
 
 const normalizedEmail = String(email).toLowerCase();
-const ownerCheck = await query(
-`SELECT 1 FROM entitlements WHERE design_id = $1 AND lower(customer_email) = $2
+const match = await query(
+`SELECT design_id FROM entitlements WHERE lower(customer_email) = $1
  UNION
- SELECT 1 FROM consumer_payments WHERE design_id = $1 AND lower(customer_email) = $2
+ SELECT design_id FROM consumer_payments WHERE lower(customer_email) = $1
+ ORDER BY design_id DESC
  LIMIT 1`,
-[req.params.designId, normalizedEmail]
+[normalizedEmail]
 );
-if (ownerCheck.rows.length === 0) {
+if (match.rows.length === 0) {
 return res.json({ ok: true });
 }
 
@@ -244,8 +245,9 @@ if (!mailer) {
 return res.status(503).json({ error: 'Email delivery is not configured for this server yet.' });
 }
 
+const designId = match.rows[0].design_id;
 const token = signToken(
-{ kind: 'consumer_design_recovery', designId: req.params.designId, email: normalizedEmail },
+{ kind: 'consumer_design_recovery', designId, email: normalizedEmail },
 { expiresIn: '15m' }
 );
 const origin = req.headers.origin || (req.body && req.body.origin) || '';
