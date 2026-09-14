@@ -24,6 +24,9 @@
 
   <script type="module">
 import { getTenant, GENERIC_TENANT, TENTS, TABLES, CHAIRS } from '../js/data/tenant.js';
+import { LINENS } from '../js/data/linens.js';
+import { LIGHTING_OPTIONS, TENT_LIGHTING_PRICE_BY_SIZE } from '../js/data/lighting.js';
+import { DANCE_SECTION } from '../js/data/danceFloor.js';
 var params = new URLSearchParams(window.location.search);
 var tenantSlug = params.get('tenant');
 var isEmbed = params.get('embed') === '1';
@@ -43,6 +46,20 @@ var isEmbed = params.get('embed') === '1';
               list.forEach(function (item) { item.pricePerDay = null; });
             });
           }
+    // Dance floor / lighting / linens have no per-tenant catalog wiring yet
+    // (unlike tents/tables/chairs, which get overwritten by real per-tenant
+    // product data below). Until that exists, showing Friendly Party Rental's
+    // own numbers to any other tenant - including a brand new business with no
+    // catalog at all - would misrepresent someone else's pricing as that
+    // tenant's own. Only the real Friendly tenant keeps its real numbers here;
+    // every other tenant sees "Ask for pricing" for these categories until real
+    // per-tenant pricing for them is built.
+    if (effectiveSlug !== 'friendly') {
+      LINENS.forEach(function (item) { item.pricePerDay = null; });
+      LIGHTING_OPTIONS.forEach(function (item) { if (item.id !== 'lighting-none') item.pricePerDay = null; });
+      Object.keys(TENT_LIGHTING_PRICE_BY_SIZE).forEach(function (k) { TENT_LIGHTING_PRICE_BY_SIZE[k] = null; });
+      DANCE_SECTION.pricePerDay = null;
+    }
     window.RENTSKETCH_API_URL = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
     window.RENTSKETCH_EMBED = isEmbed;
     var titleEl = document.getElementById('siteHeaderTitle');
