@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Friendly Event Designer | Friendly Party Rental</title>
+<title>RentSketch Designer</title>
 <link rel="icon" type="image/png" href="../logo.png">
 <link rel="stylesheet" href="../style.css">
 <script type="importmap">
@@ -17,9 +17,9 @@
 </head>
 <body>
 <header class="site-header">
-<img src="../logo.png" alt="Friendly Event Designer - Friendly Party Rental" class="site-header-logo" id="siteHeaderLogo">
-  <h1 id="siteHeaderTitle">Friendly Event Designer</h1>
-  <p id="siteHeaderTagline">Plan your tent, tables, and chairs for your event with Friendly Party Rental</p>
+  <img src="../logo.png" alt="RentSketch Designer" class="site-header-logo" id="siteHeaderLogo">
+      <h1 id="siteHeaderTitle">RentSketch Designer</h1>
+    <p id="siteHeaderTagline">Plan tents, tables, chairs, dance floors and more in a real-scale event layout.</p>
   </header>
 
   <script type="module">
@@ -27,12 +27,13 @@ import { getTenant, GENERIC_TENANT, TENTS, TABLES, CHAIRS } from '../js/data/ten
 var params = new URLSearchParams(window.location.search);
 var tenantSlug = params.get('tenant');
 var isEmbed = params.get('embed') === '1';
-    var isKnownStatic = !tenantSlug || tenantSlug === 'friendly' || tenantSlug === 'generic';
-    var tenant = isKnownStatic ? getTenant(tenantSlug) : Object.assign({}, GENERIC_TENANT, {
+    var effectiveSlug = tenantSlug || 'generic';
+          var isKnownStatic = effectiveSlug === 'friendly' || effectiveSlug === 'generic';
+    var tenant = isKnownStatic ? getTenant(effectiveSlug) : Object.assign({}, GENERIC_TENANT, {
       id: tenantSlug, slug: tenantSlug, name: 'RentSketch', tagline: '', contactEmail: '', phone: '', showPackages: false,
     });
     window.ACTIVE_TENANT = tenant;
-    window.RENTSKETCH_TENANT_SLUG = tenantSlug || 'friendly';
+          window.RENTSKETCH_TENANT_SLUG = effectiveSlug;
     window.RENTSKETCH_API_URL = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
     window.RENTSKETCH_EMBED = isEmbed;
     var titleEl = document.getElementById('siteHeaderTitle');
