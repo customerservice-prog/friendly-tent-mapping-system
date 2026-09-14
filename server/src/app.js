@@ -15,6 +15,7 @@ const stripeWebhookRoutes = require('./routes/stripeWebhook');
 const consumerEventPassRoutes = require('./routes/consumerEventPass');
 const businessSignupRoutes = require('./routes/businessSignup');
 const connectRoutes = require('./routes/connect');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use('/api/tenants', connectRoutes);
 app.use('/api/business', businessSignupRoutes);
 app.use('/api/visual-library', visualLibraryRoutes);
 app.use('/api/consumer', consumerEventPassRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Basic fallback error handler so an unexpected error returns JSON instead
 // of leaking a stack trace to the client.
