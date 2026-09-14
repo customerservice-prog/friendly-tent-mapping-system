@@ -843,7 +843,7 @@ function buildDanceDrawerHtml() {
     if (sel) html += '<span class="item-card-check">&#10003;</span>';
     html += '<span class="item-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="1.5"/><path d="M12 3v18M3 12h18"/></svg></span>';
     html += '<span class="item-card-name">' + sz.ft + '&times;' + sz.ft + ' ft</span>';
-    html += '<span class="item-card-price">' + money(priceForSize(sz.ft)) + '/day</span>';
+    html += (priceForSize(sz.ft) != null ? ('<span class="item-card-price">' + money(priceForSize(sz.ft)) + '/day</span>') : '<span class="item-card-price item-card-price-ask">Ask for pricing</span>');
     html += '</button>';
   });
   html += '</div>';
@@ -863,7 +863,7 @@ function buildLightingDrawerHtml() {
     if (sel) html += '<span class="item-card-check">&#10003;</span>';
     html += '<span class="item-card-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3 11.2c.55.36.9 1 .9 1.7V16h4.2v-.1c0-.7.35-1.34.9-1.7A6 6 0 0 0 12 3Z"/></svg></span>';
     html += '<span class="item-card-name">' + l.name + '</span>';
-    if (price) html += '<span class="item-card-price">' + money(price) + '/day</span>';
+    if (l.id !== 'lighting-none') html += (price != null ? ('<span class="item-card-price">' + money(price) + '/day</span>') : '<span class="item-card-price item-card-price-ask">Ask for pricing</span>');
     html += '</button>';
   });
   html += '</div>';
@@ -1108,14 +1108,12 @@ Object.keys(tableCounts).forEach(function (tid) {
   if (danceCount > 0) {
     var dPerSide = Math.round(Math.sqrt(danceCount));
     var dFt = dPerSide * DANCE_SECTION.ft;
-    lines.push({ label: 'Dance Floor (' + dFt + 'x' + dFt + ' ft)', qty: 1, amount: DANCE_SECTION.pricePerDay * danceCount });
+    lines.push({ label: 'Dance Floor (' + dFt + 'x' + dFt + ' ft)', qty: 1, amount: (DANCE_SECTION.pricePerDay == null ? null : DANCE_SECTION.pricePerDay * danceCount) });
   }
   if (state.lightingId && state.lightingId !== 'lighting-none') {
     var lightOpt = byId(LIGHTING_OPTIONS, state.lightingId);
     var price = lightOpt.dynamic ? tentLightingPriceFor(tent) : lightOpt.pricePerDay;
-    if (price) {
-      lines.push({ label: lightOpt.name, qty: 1, amount: price });
-    }
+    lines.push({ label: lightOpt.name, qty: 1, amount: (price == null ? null : price) });
   }
   return lines;
 }
