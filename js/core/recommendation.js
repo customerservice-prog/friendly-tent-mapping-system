@@ -133,7 +133,12 @@ export function recommendTents(input) {
   // more than an equally- or better-fitting tent sitting right next to it.
   if (viableTents.length > 0) {
     const cheapestViable = viableTents.slice().sort(function (a, b) {
-      if (a.pricePerDay !== b.pricePerDay) return a.pricePerDay - b.pricePerDay;
+      // Tenants that haven't uploaded a price show pricePerDay: null - treat
+      // those as "unknown/most expensive" for ranking purposes rather than
+      // letting a null vs. number comparison behave unpredictably.
+      const aPrice = (a.pricePerDay === null || a.pricePerDay === undefined) ? Infinity : a.pricePerDay;
+      const bPrice = (b.pricePerDay === null || b.pricePerDay === undefined) ? Infinity : b.pricePerDay;
+      if (aPrice !== bPrice) return aPrice - bPrice;
       return a.capacity[capacityKey] - b.capacity[capacityKey];
     })[0];
     recommendedIndex = eligible.indexOf(cheapestViable);
