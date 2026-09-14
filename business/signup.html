@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Start Your Free Trial | RentSketch</title>
+<meta name="description" content="Create your RentSketch account and start a 14-day free trial. No credit card required.">
+<link rel="icon" type="image/png" href="/logo.png">
+<style>
+  body.biz { margin:0; font-family:'Segoe UI', system-ui, -apple-system, sans-serif; background:#0b1a2e; color:#f5f7fa; }
+  .biz-header { display:flex; align-items:center; gap:14px; padding:24px 32px; }
+  .biz-header img { height:42px; }
+  .biz-header span { font-size:22px; font-weight:700; letter-spacing:0.5px; }
+  .biz-header a.home-link { margin-left:auto; color:#9fd3ff; text-decoration:none; font-size:15px; }
+  .signup-wrap { max-width:480px; margin:0 auto; padding:20px 24px 60px; }
+  .signup-wrap h1 { font-size:28px; margin-bottom:8px; }
+  .signup-wrap p.sub { color:#cbd5e1; font-size:15px; margin-bottom:28px; }
+  .field { margin-bottom:18px; }
+  .field label { display:block; font-size:14px; color:#cbd5e1; margin-bottom:6px; }
+  .field input, .field select { width:100%; box-sizing:border-box; padding:11px 13px; border-radius:8px; border:1px solid #294265; background:#132745; color:#f5f7fa; font-size:15px; }
+  .field input:focus, .field select:focus { outline:2px solid #2f6fed; }
+  .plan-options { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .plan-card { border:1px solid #294265; border-radius:8px; padding:10px 12px; cursor:pointer; }
+  .plan-card.selected { border-color:#2f6fed; background:#132745; }
+  .plan-card strong { display:block; font-size:14px; }
+  .plan-card span { font-size:12px; color:#9fb0c9; }
+  .signup-submit { width:100%; padding:13px; border-radius:8px; border:none; background:#2f6fed; color:#fff; font-size:16px; font-weight:600; cursor:pointer; margin-top:8px; }
+  .signup-submit:disabled { opacity:0.6; cursor:default; }
+  .signup-note { font-size:13px; color:#8fa2bd; margin-top:14px; text-align:center; }
+  .signup-error { background:#3a1c22; color:#ffb4b4; border-radius:8px; padding:10px 13px; font-size:14px; margin-bottom:16px; display:none; }
+  .signup-success { text-align:center; padding:40px 0; }
+  .signup-success h2 { font-size:24px; margin-bottom:10px; }
+  .signup-success a { display:inline-block; margin-top:18px; background:#2f6fed; color:#fff; text-decoration:none; padding:12px 22px; border-radius:8px; font-weight:600; }
+</style>
+</head>
+<body class="biz">
+<header class="biz-header">
+<img src="/logo.png" alt="RentSketch">
+<span>RentSketch</span>
+<a class="home-link" href="/business/">&larr; Back</a>
+</header>
+<main class="signup-wrap">
+<div id="signupForm">
+  <h1>Start your free trial</h1>
+  <p class="sub">14 days free, no credit card required. Set up your rental business on RentSketch in under a minute.</p>
+  <div class="signup-error" id="signupError"></div>
+  <div class="field">
+    <label for="businessName">Business name</label>
+    <input id="businessName" type="text" autocomplete="organization" placeholder="e.g. Sunrise Party Rentals">
+  </div>
+  <div class="field">
+    <label for="contactEmail">Work email</label>
+    <input id="contactEmail" type="email" autocomplete="email" placeholder="you@yourbusiness.com">
+  </div>
+  <div class="field">
+    <label for="password">Password</label>
+    <input id="password" type="password" autocomplete="new-password" placeholder="At least 8 characters">
+  </div>
+  <div class="field">
+    <label>Plan (you can change this anytime)</label>
+    <div class="plan-options" id="planOptions">
+      <div class="plan-card selected" data-plan="starter"><strong>Starter</strong><span>Small rental businesses</span></div>
+      <div class="plan-card" data-plan="pro"><strong>Pro</strong><span>Growing catalogs</span></div>
+      <div class="plan-card" data-plan="commerce"><strong>Commerce</strong><span>Multi-location teams</span></div>
+      <div class="plan-card" data-plan="enterprise"><strong>Enterprise</strong><span>Custom needs</span></div>
+    </div>
+  </div>
+  <button class="signup-submit" id="signupSubmit" type="button">Start Free Trial</button>
+  <p class="signup-note">By continuing you agree this trial account is for evaluating RentSketch. Final plan pricing is confirmed with our team before any paid subscription begins.</p>
+</div>
+<div id="signupSuccess" class="signup-success" style="display:none;">
+  <h2>You're all set.</h2>
+  <p class="sub">Your 14-day trial has started. Head to your dashboard to add your first products.</p>
+  <a id="dashboardLink" href="/dashboard/">Go to your dashboard &rarr;</a>
+</div>
+</main>
+<script>
+(function () {
+  var API_BASE = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
+  var selectedPlan = 'starter';
+  var planOptions = document.getElementById('planOptions');
+  planOptions.addEventListener('click', function (e) {
+    var card = e.target.closest('.plan-card');
+    if (!card) return;
+    Array.prototype.forEach.call(planOptions.children, function (c) { c.classList.remove('selected'); });
+    card.classList.add('selected');
+    selectedPlan = card.dataset.plan;
+  });
+
+  function showError(msg) {
+    var el = document.getElementById('signupError');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  document.getElementById('signupSubmit').addEventListener('click', function () {
+    var btn = this;
+    var businessName = document.getElementById('businessName').value.trim();
+    var contactEmail = document.getElementById('contactEmail').value.trim();
+    var password = document.getElementById('password').value;
+    document.getElementById('signupError').style.display = 'none';
+
+    if (!businessName || !contactEmail || !password) {
+      showError('Please fill in your business name, email, and password.');
+      return;
+    }
+    if (password.length < 8) {
+      showError('Password must be at least 8 characters.');
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Creating your account...';
+
+    fetch(API_BASE + '/api/business/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ businessName: businessName, contactEmail: contactEmail, password: password, plan: selectedPlan }),
+    })
+      .then(function (r) { return r.json().then(function (body) { return { status: r.status, body: body }; }); })
+      .then(function (result) {
+        if (result.status !== 201) {
+          showError((result.body && result.body.error) || 'Something went wrong. Please try again.');
+          btn.disabled = false;
+          btn.textContent = 'Start Free Trial';
+          return;
+        }
+        try {
+          localStorage.setItem('rentsketch_dashboard_token', result.body.token);
+          localStorage.setItem('rentsketch_dashboard_tenant', result.body.tenant.slug);
+        } catch (e) {}
+        document.getElementById('signupForm').style.display = 'none';
+        document.getElementById('signupSuccess').style.display = 'block';
+      })
+      .catch(function () {
+        showError('Could not reach the server. Please check your connection and try again.');
+        btn.disabled = false;
+        btn.textContent = 'Start Free Trial';
+      });
+  });
+})();
+</script>
+</body>
+</html>
