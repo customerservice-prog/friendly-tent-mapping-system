@@ -1255,7 +1255,7 @@ $('btnEmailQuote').textContent = 'Request a Quote from ' + tenantName;
   };
 
   if ($('btnPayDeposit')) {
-    var canPay = !!(window.RENTSKETCH_API_URL && tenant && tenant.slug && tenant.slug !== 'generic');
+    var canPay = !!(window.RENTSKETCH_API_URL && tenant && tenant.slug && tenant.slug !== 'generic' && total > 0);
     $('btnPayDeposit').hidden = !canPay;
     $('btnPayDeposit').onclick = function () {
       var name = $('customerName').value;
