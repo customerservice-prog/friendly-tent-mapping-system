@@ -19,6 +19,24 @@ function getStripe() {
     return new Stripe(process.env.STRIPE_SECRET_KEY);
 }
 
+// POST /api/consumer/designs
+// Saves a snapshot of a direct consumer's layout with no tenant
+// attached (tenant_id is NULL). Anonymous by default - no login
+// required. This is what the Event Pass checkout below is gated on;
+// tenant-attached designs use POST /api/tenants/:slug/designs instead.
+router.post('/designs', async (req, res) => {
+    const { scene, eventType, guestCount, estimateTotal, anonymousSessionId, schemaVersion } = req.body || {};
+    if (!scene) {
+        return res.status(400).json({ error: 'scene is required' });
+    }
+    const result = await query(
+        `INSERT INTO designs (tenant_id, anonymous_session_id, schema_version, event_type, guest_count, scene, estimate_total)
+         VALUES (NULL, $1, $2, $3, $4, $5, $6) RETURNING id`,
+        [anonymousSessionId || null, schemaVersion || 1, eventType || null, guestCount || null, scene, estimateTotal || null]
+        );
+    res.status(201).json(result.rows[0]);
+});
+
 // POST /api/consumer/designs/:designId/event-pass/checkout-session
 // Creates a Stripe Checkout Session for the $9.99 / 30-day Event Pass on a
 // generic (non-tenant) consumer design. Returns the hosted checkout URL.
