@@ -183,6 +183,7 @@ function esc(s) {
      var requests = await api('/api/tenants/' + state.tenant + '/quote-requests');
      var reqs = requests.quoteRequests || [];
      var newCount = reqs.filter(function (r) { return r.status === 'new'; }).length;
+     var bookedCount = reqs.filter(function (r) { return r.status === 'booked'; }).length;
      if (gen !== renderGeneration) return;
      var html = '' +
        '<h1 class="dash-title">' + esc(admin.name) + '</h1>' +
@@ -190,6 +191,7 @@ function esc(s) {
        '<div class="stat-row">' +
        '<div class="stat-card"><div class="stat-num">' + reqs.length + '</div><div class="stat-label">Quote Requests</div></div>' +
        '<div class="stat-card"><div class="stat-num">' + newCount + '</div><div class="stat-label">New / Unread</div></div>' +
+       '<div class="stat-card"><div class="stat-num">' + bookedCount + '</div><div class="stat-label">Booked / Active Orders</div></div>' +
        '<div class="stat-card"><div class="stat-num">' + (designs.designs || []).length + '</div><div class="stat-label">Saved Designs (last 50)</div></div>' +
        '</div>' +
        '<h2 class="dash-section-title">Recent Quote Requests</h2>' +
@@ -209,11 +211,12 @@ function esc(s) {
        '<td>' + fmtDate(r.event_date) + '</td>' +
        '<td>' + (r.guest_count || '\u2014') + '</td>' +
        '<td>' + money(r.estimate_total) + '</td>' +
+      '<td>' + (r.payment_status === 'paid' ? ('Paid ' + money((r.amount_paid_cents || 0) / 100)) : '\u2014') + '</td>' +
        '<td>' + fmtDateTime(r.created_at) + '</td>' +
        '<td>' + (withActions ? statusSelect(r) : '<span class="status-badge status-' + esc(r.status) + '">' + esc(r.status) + '</span>') + '</td>' +
        '</tr>';
    }).join('');
-   return '<table class="dash-table"><thead><tr><th>Customer</th><th>Event Date</th><th>Guests</th><th>Estimate</th><th>Submitted</th><th>Status</th></tr></thead><tbody>' + body + '</tbody></table>';
+   return '<table class="dash-table"><thead><tr><th>Customer</th><th>Event Date</th><th>Guests</th><th>Estimate</th><th>Deposit</th><th>Submitted</th><th>Status</th></tr></thead><tbody>' + body + '</tbody></table>';
  }
 
  function statusSelect(r) {
