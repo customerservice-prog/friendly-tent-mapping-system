@@ -115,7 +115,9 @@ fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RE
               item.externalId = p.external_id || null;
               item.visualModelId = p.visual_model_id;
               item.name = p.name || base.name;
-              if (p.price_per_day !== null && p.price_per_day !== undefined) item.pricePerDay = Number(p.price_per_day);
+              // Do not inherit the master catalog's baked-in price for a real
+              // tenant - only show a price this tenant actually uploaded.
+              item.pricePerDay = (p.price_per_day !== null && p.price_per_day !== undefined) ? Number(p.price_per_day) : null;
               item.isRealTenantProduct = true;
               resolved.push(item);
             });
