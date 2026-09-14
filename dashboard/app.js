@@ -4,7 +4,7 @@
  var API_BASE = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
   var TOKEN_KEY = 'rentsketch_dashboard_token';
   var TENANT_KEY = 'rentsketch_dashboard_tenant';
-  var ROUTES = ['login', 'overview', 'products', 'branding', 'requests', 'install'];
+  var ROUTES = ['login', 'overview', 'products', 'branding', 'requests', 'install', 'superadmin'];
 
  function getToken() { return localStorage.getItem(TOKEN_KEY); }
   function setToken(t) { if (t) { localStorage.setItem(TOKEN_KEY, t); } else { localStorage.removeItem(TOKEN_KEY); } }
@@ -93,6 +93,7 @@ function esc(s) {
      '<nav class="dash-nav">' +
      navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
      navLink('branding', 'Branding') + navLink('install', 'Install') +
+     (state.user && state.user.isPlatformAdmin ? navLink('superadmin', 'Super Admin') : '') +
      '</nav>' +
      '<div class="dash-account">' + switcher + '<button id="btnLogout" class="btn-logout" type="button">Log out</button></div>' +
      '</header>' +
@@ -518,6 +519,59 @@ function esc(s) {
    }
  }
 
+ // Platform-admin only cross-tenant panel. Only ever shown/reachable when
+ // state.user.isPlatformAdmin is true (see shellHtml's nav link and the
+ // route guard below) - a regular tenant owner can never navigate here
+ // because the server-side /api/admin/* routes independently enforce
+ // requirePlatformAdmin regardless of what the client does.
+ async function viewSuperAdmin(route, gen) {
+   appEl().innerHTML = shellHtml(route, loadingHtml('Loading platform overview...'));
+   bindShellEvents();
+   if (!state.user || !state.user.isPlatformAdmin) {
+     document.getElementById('dashMain').innerHTML = '<div class="dash-empty">Platform admin access required.</div>';
+     return;
+   }
+   try {
+     var overview = await api('/api/admin/overview');
+     var tenantsResp = await api('/api/admin/tenants');
+     if (gen !== renderGeneration) return;
+     var rows = tenantsResp.tenants || [];
+     var statusCounts = {};
+     (overview.byStatus || []).forEach(function (s) { statusCounts[s.subscription_status] = s.count; });
+     var tableBody = rows.length ? rows.map(function (t) {
+       var trialInfo = t.trial_ends_at ? fmtDate(t.trial_ends_at) : '—';
+       return '<tr>' +
+         '<td>' + esc(t.name) + '<br><span class="muted">' + esc(t.slug) + '</span></td>' +
+         '<td>' + esc(t.subscription_plan || '—') + '</td>' +
+         '<td><span class="status-badge status-' + esc(t.subscription_status || '') + '">' + esc(t.subscription_status || '—') + '</span></td>' +
+         '<td>' + trialInfo + '</td>' +
+         '<td>' + esc(t.stripe_connect_status || 'not_connected') + '</td>' +
+         '<td>' + t.product_count + '</td>' +
+         '<td>' + t.quote_request_count + '</td>' +
+         '<td>' + t.member_count + '</td>' +
+         '<td>' + fmtDate(t.created_at) + '</td>' +
+         '</tr>';
+     }).join('') : '<tr><td colspan="9">No tenants yet.</td></tr>';
+     var html = '' +
+       '<h1 class="dash-title">Super Admin</h1>' +
+       '<p class="dash-subtitle">Platform-wide view across every tenant on RentSketch.</p>' +
+       '<div class="stat-row">' +
+       '<div class="stat-card"><div class="stat-num">' + overview.totalTenants + '</div><div class="stat-label">Total Tenants</div></div>' +
+       '<div class="stat-card"><div class="stat-num">' + overview.totalUsers + '</div><div class="stat-label">Total Users</div></div>' +
+       '<div class="stat-card"><div class="stat-num">' + (statusCounts.trialing || 0) + '</div><div class="stat-label">Trialing</div></div>' +
+       '<div class="stat-card"><div class="stat-num">' + (statusCounts.active || 0) + '</div><div class="stat-label">Active (Paid)</div></div>' +
+       '</div>' +
+       '<h2 class="dash-section-title">All Tenants</h2>' +
+       '<table class="dash-table"><thead><tr>' +
+       '<th>Business</th><th>Plan</th><th>Status</th><th>Trial Ends</th><th>Connect</th>' +
+       '<th>Products</th><th>Quote Reqs</th><th>Members</th><th>Created</th>' +
+       '</tr></thead><tbody>' + tableBody + '</tbody></table>';
+     document.getElementById('dashMain').innerHTML = html;
+   } catch (err) {
+     document.getElementById('dashMain').innerHTML = errorHtml(err);
+   }
+ }
+
  function render() {
    var route = currentRoute();
    var authed = !!getToken() && !!state.user;
@@ -537,6 +591,7 @@ function esc(s) {
    else if (route === 'products') viewProducts(route, __gen);
    else if (route === 'branding') viewBranding(route, __gen);
    else if (route === 'install') viewInstall(route, __gen);
+   else if (route === 'superadmin') viewSuperAdmin(route, __gen);
  }
 
  async function boot() {
