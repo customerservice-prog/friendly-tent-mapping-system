@@ -14,6 +14,7 @@ const paymentsRoutes = require('./routes/payments');
 const stripeWebhookRoutes = require('./routes/stripeWebhook');
 const consumerEventPassRoutes = require('./routes/consumerEventPass');
 const businessSignupRoutes = require('./routes/businessSignup');
+const connectRoutes = require('./routes/connect');
 
 const app = express();
 
@@ -43,6 +44,7 @@ app.use('/api/tenants', productsRoutes);
 app.use('/api/tenants', designsRoutes);
 app.use('/api/tenants', quoteRequestsRoutes);
 app.use('/api/tenants', paymentsRoutes);
+app.use('/api/tenants', connectRoutes);
 app.use('/api/business', businessSignupRoutes);
 app.use('/api/visual-library', visualLibraryRoutes);
 app.use('/api/consumer', consumerEventPassRoutes);
