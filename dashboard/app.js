@@ -400,7 +400,8 @@ function esc(s) {
        '<div id="brandingError" class="dash-error" hidden></div>' +
        '<div id="brandingSaved" class="dash-saved" hidden>Saved.</div>' +
        '<button type="submit" class="btn-primary">Save Branding</button>' +
-       '</form>';
+       '</form>' +
+        '<div id="payoutsSection" class="dash-section"><h2 class="dash-section-title">Payouts</h2><p id="payoutsStatus" class="dash-subtitle">Loading payouts status...</p><button id="connectStripeBtn" class="btn-primary" hidden>Connect Stripe to receive payouts</button></div>';
      document.getElementById('brandingForm').addEventListener('submit', async function (e) {
        e.preventDefault();
        var errEl = document.getElementById('brandingError');
@@ -428,6 +429,38 @@ function esc(s) {
          errEl.hidden = false;
        }
      });
+     (async function () {
+       try {
+         var connectStatus = await api('/api/tenants/' + state.tenant + '/connect/status');
+         var statusEl = document.getElementById('payoutsStatus');
+         var btnEl = document.getElementById('connectStripeBtn');
+         if (!statusEl || !btnEl) return;
+         if (connectStatus.status === 'active') {
+           statusEl.textContent = 'Connected. Deposits are being split with your connected Stripe account.';
+         } else if (connectStatus.hasAccount) {
+           statusEl.textContent = 'Stripe onboarding started but not finished yet.';
+           btnEl.hidden = false;
+           btnEl.textContent = 'Finish connecting Stripe';
+         } else {
+           statusEl.textContent = 'Not connected yet. Connect your own Stripe account to receive deposit payouts directly.';
+           btnEl.hidden = false;
+         }
+         btnEl.addEventListener('click', async function () {
+           btnEl.disabled = true;
+           try {
+             var onboardRes = await api('/api/tenants/' + state.tenant + '/connect/onboard', { method: 'POST' });
+             if (onboardRes.url) { window.location.href = onboardRes.url; }
+           } catch (err) {
+             statusEl.textContent = 'Could not start Stripe onboarding: ' + err.message;
+             btnEl.disabled = false;
+           }
+         });
+       } catch (err) {
+         var statusElErr = document.getElementById('payoutsStatus');
+         if (statusElErr) statusElErr.textContent = 'Payouts status unavailable.';
+       }
+     })();
+
    } catch (err) {
      document.getElementById('dashMain').innerHTML = errorHtml(err);
    }
