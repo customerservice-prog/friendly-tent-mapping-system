@@ -10,6 +10,10 @@
 (function () {
   var ANON_SESSION_KEY = 'rentsketch_anon_session';
     var DESIGN_ID_KEY = 'rentsketch_design_id';
+var EVER_PAID_KEY = 'rentsketch_ever_paid';
+var AUTOSAVE_INTERVAL_MS = 20000;
+var _autosaveTimer = null;
+var _lastSavedSceneJSON = null;
 
       function getAnonymousSessionId() {
           var id = window.localStorage.getItem(ANON_SESSION_KEY);
@@ -64,7 +68,109 @@
                                                                                                                                                                                                                                                             });
                                                                                                                                                                                                                                                               }
                                                                                                                                                                                                                                                               
-                                                                                                                                                                                                                                                                function injectStyles() {
+                                                                                                                                                                                                                                                                function apiPatchDesign(designId, payload) {
+  return fetch(apiUrl('/api/consumer/designs/' + designId), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  }).then(function (r) {
+    return r.json().then(function (body) { return { ok: r.ok, status: r.status, body: body }; });
+  });
+}
+
+function stopAutosave() {
+  if (_autosaveTimer) {
+    clearInterval(_autosaveTimer);
+    _autosaveTimer = null;
+  }
+}
+
+function saveDesignNow(designId) {
+  if (!window.FriendlyBridge || !window.FriendlyBridge.state) return;
+  var scene = window.FriendlyBridge.state;
+  var sceneJSON = JSON.stringify(scene);
+  if (sceneJSON === _lastSavedSceneJSON) return;
+  apiPatchDesign(designId, {
+    scene: scene,
+    eventType: scene.eventType || null,
+    guestCount: scene.guestCount || null,
+    estimateTotal: scene.estimateTotal || null,
+  }).then(function (result) {
+    if (result.ok) {
+      _lastSavedSceneJSON = sceneJSON;
+    } else if (result.status === 402) {
+      stopAutosave();
+      showRenewalModal(designId, function () {});
+    }
+  }).catch(function () {});
+}
+
+function startAutosave(designId) {
+  stopAutosave();
+  saveDesignNow(designId);
+  _autosaveTimer = setInterval(function () { saveDesignNow(designId); }, AUTOSAVE_INTERVAL_MS);
+  window.addEventListener('beforeunload', function () { saveDesignNow(designId); });
+}
+
+function startRenewalCheckout(designId, email) {
+  return fetch(apiUrl('/api/consumer/designs/' + designId + '/event-pass/renewal-checkout-session'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ customerEmail: email, origin: window.location.origin }),
+  })
+    .then(function (r) {
+      return r.json().then(function (body) { return { ok: r.ok, body: body }; });
+    })
+    .then(function (result) {
+      if (!result.ok || !result.body.url) {
+        throw new Error(result.body.error || 'Could not start checkout');
+      }
+      window.location.href = result.body.url;
+    });
+}
+
+function showRenewalModal(designId, onUnlock) {
+  var overlay = document.createElement('div');
+  overlay.className = 'paywall-overlay';
+  overlay.innerHTML =
+    '<div class="paywall-modal">' +
+    '<h2>Your Event Pass Expired</h2>' +
+    '<p>Renew for 30 more days of full editing access to your event design.</p>' +
+    '<div class="paywall-price">$4.99</div>' +
+    '<label class="paywall-label">Email (for your receipt)</label>' +
+    '<input type="email" class="paywall-email" placeholder="you@example.com" />' +
+    '<div class="paywall-error"></div>' +
+    '<button type="button" class="btn-primary paywall-submit">Renew My Event Pass</button>' +
+    '<button type="button" class="btn-link paywall-cancel">Not yet</button>' +
+    '</div>';
+  document.body.appendChild(overlay);
+
+  var emailInput = overlay.querySelector('.paywall-email');
+  var errorBox = overlay.querySelector('.paywall-error');
+  var submitBtn = overlay.querySelector('.paywall-submit');
+
+  overlay.querySelector('.paywall-cancel').addEventListener('click', function () {
+    overlay.remove();
+  });
+
+  submitBtn.addEventListener('click', function () {
+    var email = emailInput.value.trim();
+    if (!email || email.indexOf('@') === -1) {
+      errorBox.textContent = 'Please enter a valid email address.';
+      return;
+    }
+    errorBox.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Redirecting to secure checkout...';
+    startRenewalCheckout(designId, email).catch(function (err) {
+      errorBox.textContent = err.message || 'Something went wrong. Please try again.';
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Renew My Event Pass';
+    });
+  });
+}
+
+function injectStyles() {
                                                                                                                                                                                                                                                                     var style = document.createElement('style');
                                                                                                                                                                                                                                                                         style.textContent =
                                                                                                                                                                                                                                                                               '.paywall-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9999;}' +
@@ -140,10 +246,13 @@
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 if (existingDesignId) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         checkEntitlement(existingDesignId).then(function (entitlement) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   if (entitlement.active) {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              proceed();
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        } else {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    showPaywallModal(proceed);
-                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              }
+  startAutosave(existingDesignId);
+  proceed();
+} else if (window.localStorage.getItem(EVER_PAID_KEY) === '1') {
+  showRenewalModal(existingDesignId, proceed);
+} else {
+  showPaywallModal(proceed);
+}
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       });
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             } else {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     showPaywallModal(proceed);
@@ -173,6 +282,8 @@
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           checkEntitlement(designId).then(function (entitlement) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 if (!entitlement.active) return;
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       window.localStorage.setItem(DESIGN_ID_KEY, designId);
+window.localStorage.setItem(EVER_PAID_KEY, '1');
+startAutosave(designId);
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             var banner = document.createElement('div');
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   banner.className = 'paywall-unlocked-banner';
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         banner.textContent = 'Your Event Pass is active - enjoy 30 days of full editing access.';
