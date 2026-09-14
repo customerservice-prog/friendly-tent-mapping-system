@@ -8,7 +8,7 @@
 
 const express = require('express');
 const { query } = require('../db');
-const { EVENT_PASS_CENTS } = require('../pricing');
+const { EVENT_PASS_CENTS, EVENT_PASS_RENEWAL_CENTS, EVENT_PASS_RENEWAL_DURATION_DAYS } = require('../pricing');
 
 const router = express.Router();
 
@@ -121,6 +121,95 @@ router.get('/designs/:designId/entitlement', async (req, res) => {
           expiresAt: entitlement.expires_at,
           capabilities: entitlement.capabilities,
     });
+});
+
+
+// PATCH /api/consumer/designs/:designId
+// Persists in-progress edits. A design that has never gone through the
+// Event Pass flow is still in free "guided studio" drafting and saves
+// without restriction. Once any entitlement has ever existed for it, an
+// ACTIVE one is required to keep saving - expired/revoked means read-only
+// until renewed. Server-authoritative; the client cannot bypass this.
+router.patch('/designs/:designId', async (req, res) => {
+  const { scene, eventType, guestCount, estimateTotal } = req.body || {};
+  if (!scene) return res.status(400).json({ error: 'scene is required' });
+
+  const everHad = await query('SELECT id FROM entitlements WHERE design_id = $1 LIMIT 1', [req.params.designId]);
+  if (everHad.rows.length > 0) {
+    const active = await query(
+      `SELECT id FROM entitlements
+       WHERE design_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
+       LIMIT 1`,
+      [req.params.designId]
+    );
+    if (active.rows.length === 0) {
+      return res.status(402).json({ error: 'Your Event Pass has expired. Renew to keep editing.', code: 'event_pass_expired' });
+    }
+  }
+
+  const result = await query(
+    `UPDATE designs SET scene = $1, event_type = COALESCE($2, event_type),
+       guest_count = COALESCE($3, guest_count), estimate_total = COALESCE($4, estimate_total),
+       updated_at = now()
+     WHERE id = $5 AND tenant_id IS NULL
+     RETURNING id`,
+    [scene, eventType || null, guestCount || null, estimateTotal || null, req.params.designId]
+  );
+  if (!result.rows[0]) return res.status(404).json({ error: 'Design not found' });
+  res.json({ ok: true });
+});
+
+// POST /api/consumer/designs/:designId/event-pass/renewal-checkout-session
+// $4.99 / +30 days on an EXISTING design - never creates a new design or a
+// new payment ledger row of the initial-purchase kind. metadata.kind is
+// deliberately distinct from 'consumer_event_pass' so the webhook can never
+// confuse a renewal with a first purchase.
+router.post('/designs/:designId/event-pass/renewal-checkout-session', async (req, res) => {
+  const stripe = getStripe();
+  if (!stripe) return res.status(503).json({ error: 'Payments are not configured for this server yet.' });
+
+  const { customerEmail } = req.body || {};
+  if (!customerEmail) return res.status(400).json({ error: 'customerEmail is required' });
+
+  const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
+  const design = designResult.rows[0];
+  if (!design) return res.status(404).json({ error: 'Design not found' });
+  if (design.tenant_id) {
+    return res.status(400).json({ error: 'This design belongs to a rental company and uses a different pass type.' });
+  }
+
+  const origin = req.headers.origin || (req.body && req.body.origin);
+  const session = await stripe.checkout.sessions.create({
+    mode: 'payment',
+    payment_method_types: ['card'],
+    customer_email: customerEmail,
+    line_items: [{
+      price_data: {
+        currency: 'usd',
+        unit_amount: EVENT_PASS_RENEWAL_CENTS,
+        product_data: {
+          name: 'RentSketch Event Pass Renewal',
+          description: '+30 more days of full editing access to your event design',
+        },
+      },
+      quantity: 1,
+    }],
+    metadata: {
+      kind: 'consumer_event_pass_renewal',
+      designId: design.id,
+      customerEmail,
+    },
+    success_url: `${origin}/designer/?design=${design.id}&payment=success`,
+    cancel_url: `${origin}/designer/?design=${design.id}&payment=cancelled`,
+  });
+
+  await query(
+    `INSERT INTO consumer_payments (design_id, customer_email, payment_type, amount_cents, status, stripe_checkout_session_id)
+     VALUES ($1, $2, 'event_pass_extension', $3, 'pending', $4)`,
+    [design.id, customerEmail, EVENT_PASS_RENEWAL_CENTS, session.id]
+  );
+
+  res.json({ url: session.url });
 });
 
 module.exports = router;
