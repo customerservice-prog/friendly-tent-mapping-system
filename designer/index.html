@@ -34,6 +34,15 @@ var isEmbed = params.get('embed') === '1';
     });
     window.ACTIVE_TENANT = tenant;
           window.RENTSKETCH_TENANT_SLUG = effectiveSlug;
+          // The generic/no-tenant RentSketch experience has no real business
+          // behind it, so it must never show pricing - do this unconditionally
+          // (not inside the products fetch below) so it still holds even if
+          // that request 404s, is slow, or fails outright.
+          if (effectiveSlug === 'generic') {
+            [TENTS, TABLES, CHAIRS].forEach(function (list) {
+              list.forEach(function (item) { item.pricePerDay = null; });
+            });
+          }
     window.RENTSKETCH_API_URL = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
     window.RENTSKETCH_EMBED = isEmbed;
     var titleEl = document.getElementById('siteHeaderTitle');
