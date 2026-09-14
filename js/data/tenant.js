@@ -33,6 +33,15 @@ function cloneCatalog(list) {
   return list.map(function (item) { return JSON.parse(JSON.stringify(item)); });
 }
 
+// Strips per-day pricing from a cloned catalog. Used for tenants (like the
+// generic/no-tenant RentSketch experience) that have not uploaded their own
+// real prices - showing Friendly's numbers to an unrelated visitor or an
+// unpriced business would be misleading, so these items render with no
+// price until that tenant supplies its own via the dashboard/API.
+function stripPricing(list) {
+  return list.map(function (item) { item.pricePerDay = null; return item; });
+}
+
 export const FRIENDLY_TENANT = {
   id: 'friendly',
   slug: 'friendly',
@@ -62,9 +71,11 @@ Object.assign(FRIENDLY_TENANT, {
 // accessed without a specific rental-company tenant context (e.g. the public
 // RentSketch demo and marketing site), so Friendly Party Rental's brand name
 // and package suggestions never leak into a generic visitor's experience.
-// NOTE: this still uses the same underlying product/pricing data as Friendly
-// today since there is not yet a separate master/generic catalog - only the
-// branding, contact info and package-suggestion behavior are neutral.
+// Item shapes/dimensions are still borrowed from the master catalog for
+// layout purposes, but pricing is intentionally stripped (see stripPricing)
+// since a generic visitor is not tied to any business that has uploaded
+// real prices - items render with no price until a real tenant catalog
+// exists.
 export const GENERIC_TENANT = {
   id: 'generic',
   slug: 'generic',
@@ -81,9 +92,9 @@ export const GENERIC_TENANT = {
     primaryTint: '#eaf1ff',
     secondary: '#0b1b3a',
   },
-  tents: cloneCatalog(TENTS),
-  tables: cloneCatalog(TABLES),
-  chairs: cloneCatalog(CHAIRS),
+  tents: stripPricing(cloneCatalog(TENTS)),
+  tables: stripPricing(cloneCatalog(TABLES)),
+  chairs: stripPricing(cloneCatalog(CHAIRS)),
 };
 
 export function getTenant(slug) {
