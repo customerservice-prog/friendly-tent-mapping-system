@@ -4,7 +4,7 @@
 // requires the exact raw request body bytes, not a JSON-parsed object.
 const express = require('express');
 const { query } = require('../db');
-const { EVENT_PASS_DURATION_DAYS } = require('../pricing');
+const { EVENT_PASS_DURATION_DAYS, EVENT_PASS_RENEWAL_DURATION_DAYS } = require('../pricing');
 
 const router = express.Router();
 
@@ -62,7 +62,34 @@ router.post('/', async (req, res) => {
                                                       WHERE stripe_checkout_session_id = $3`,
                                     [session.payment_intent, entitlementResult.rows[0].id, session.id]
                                   );
-        } else if (session.metadata && session.metadata.quoteRequestId) {
+        } else if (session.metadata && session.metadata.kind === 'consumer_event_pass_renewal') {
+      const { designId, customerEmail } = session.metadata;
+      const currentResult = await query(
+        `SELECT expires_at FROM entitlements
+         WHERE design_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
+         ORDER BY expires_at DESC NULLS LAST LIMIT 1`,
+        [designId]
+      );
+      const currentExpiry = currentResult.rows[0] && currentResult.rows[0].expires_at
+        ? new Date(currentResult.rows[0].expires_at).getTime()
+        : 0;
+      const base = Math.max(Date.now(), currentExpiry);
+      const expiresAt = new Date(base + EVENT_PASS_RENEWAL_DURATION_DAYS * 24 * 60 * 60 * 1000);
+
+      const entitlementResult = await query(
+        `INSERT INTO entitlements (design_id, customer_email, source, status, starts_at, expires_at, payment_reference)
+         VALUES ($1, $2, 'consumer_renewal', 'active', now(), $3, $4)
+         RETURNING id`,
+        [designId, customerEmail, expiresAt, session.payment_intent]
+      );
+
+      await query(
+        `UPDATE consumer_payments
+         SET status = 'paid', stripe_payment_intent_id = $1, entitlement_id = $2
+         WHERE stripe_checkout_session_id = $3`,
+        [session.payment_intent, entitlementResult.rows[0].id, session.id]
+      );
+    } else if (session.metadata && session.metadata.quoteRequestId) {
                   const { quoteRequestId } = session.metadata;
                   await query(
                               `UPDATE quote_requests
