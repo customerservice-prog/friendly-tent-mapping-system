@@ -188,6 +188,19 @@ function esc(s) {
      var html = '' +
        '<h1 class="dash-title">' + esc(admin.name) + '</h1>' +
        '<p class="dash-subtitle">Plan: ' + esc(admin.subscriptionPlan || 'trial') + ' &middot; Status: ' + esc(admin.subscriptionStatus || 'trialing') + '</p>' +
+        (function() {
+          if (!admin.trialEndsAt) return '';
+          var end = new Date(admin.trialEndsAt);
+          var now = new Date();
+          var daysLeft = Math.ceil((end - now) / (24*60*60*1000));
+          if (admin.subscriptionStatus === 'trialing' && daysLeft <= 0) {
+            return '<div class="trial-banner trial-expired">Your free trial has ended. Please upgrade to keep using RentSketch.</div>';
+          }
+          if (admin.subscriptionStatus === 'trialing' && daysLeft > 0) {
+            return '<div class="trial-banner">Trial ends in ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + '.</div>';
+          }
+          return '';
+        })() +
        '<div class="stat-row">' +
        '<div class="stat-card"><div class="stat-num">' + reqs.length + '</div><div class="stat-label">Quote Requests</div></div>' +
        '<div class="stat-card"><div class="stat-num">' + newCount + '</div><div class="stat-label">New / Unread</div></div>' +
