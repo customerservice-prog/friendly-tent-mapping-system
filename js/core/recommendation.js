@@ -68,7 +68,16 @@ function eligibleTentsForActiveTenant() {
       });
     });
   }
-  return TENTS.filter(function (t) { return t.active; });
+  if (tenant && tenant.slug === 'generic') {
+// The generic/no-tenant RentSketch experience has no real business behind
+// it, so recommendations must never surface Friendly Party Rental's real
+// per-day prices - mirrors the same invariant designer/index.html enforces
+// for the designer step itself (see stripPricing()/GENERIC_TENANT there).
+return TENTS.filter(function (t) { return t.active; }).map(function (t) {
+return Object.assign({}, t, { pricePerDay: null });
+});
+}
+return TENTS.filter(function (t) { return t.active; });
 }
 
 export function recommendTents(input) {
