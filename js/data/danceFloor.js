@@ -19,7 +19,7 @@ export function sectionsForSize(sizeFt) {
 }
 
 export function priceForSize(sizeFt) {
-    return sectionsForSize(sizeFt) * DANCE_SECTION.pricePerDay;
+    return DANCE_SECTION.pricePerDay == null ? null : sectionsForSize(sizeFt) * DANCE_SECTION.pricePerDay;
 }
 
 export const STAGE_SECTION = { id: 'stage-section', name: 'Stage Section', pricePerDay: 125.00 };
