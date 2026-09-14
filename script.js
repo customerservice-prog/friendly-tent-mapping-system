@@ -60,6 +60,8 @@ function showStep(id) {
 
 function money(n) { return '$' + n.toFixed(2); }
 
+function moneyOrAsk(n) { return (n === null || n === undefined) ? 'Ask for pricing' : money(n); }
+
 function danceFloorSizeFt() {
   if (state.danceFloorSizeId === 'custom') return state.customDanceFloorFt || 18;
   var sz = byId(DANCE_FLOOR_SIZES, state.danceFloorSizeId);
@@ -708,7 +710,7 @@ function buildTentDrawerHtml() {
       html += '<span class="item-card-icon">' + tentIconSvg(t.type) + '</span>';
       html += '<span class="item-card-name">' + t.name + '</span>';
       html += '<span class="tent-card-meta">' + t.widthFt + '&times;' + t.lengthFt + ' ft &middot; seats ' + t.maxGuests.dining + '</span>';
-      html += '<span class="item-card-price">' + money(t.pricePerDay) + '/day</span>';
+      html += (t.pricePerDay != null ? '<span class="item-card-price">' + money(t.pricePerDay) + '/day</span>' : '<span class="item-card-price item-card-price-ask">Ask for pricing</span>');
       html += '</button>';
     });
     html += '</div>';
@@ -747,7 +749,7 @@ function buildTablesDrawerHtml() {
     html += itemIconHtml(t.id, tableIcon(t));
     html += '<span class="item-card-name">' + t.name + '</span>';
     html += '<span class="item-card-desc">' + (t.seatsDefault > 0 ? ('Seats ' + t.seatsDefault) : 'No seating') + '</span>';
-    html += '<span class="item-card-price">' + money(t.pricePerDay) + '/day</span>';
+    html += (t.pricePerDay != null ? '<span class="item-card-price">' + money(t.pricePerDay) + '/day</span>' : '<span class="item-card-price item-card-price-ask">Ask for pricing</span>');
     html += '</button>';
   });
   html += '</div>';
@@ -762,7 +764,7 @@ var tableDef = byId(TABLES, tableDraft.tableId);
       if (sel) html += '<span class="item-card-check">&#10003;</span>';
       html += itemIconHtml(c.id, '&#128186;');
       html += '<span class="item-card-name">' + c.name + '</span>';
-      html += '<span class="item-card-price">' + money(c.pricePerDay) + '/day</span>';
+      html += (c.pricePerDay != null ? '<span class="item-card-price">' + money(c.pricePerDay) + '/day</span>' : '<span class="item-card-price item-card-price-ask">Ask for pricing</span>');
       html += '</button>';
     });
     html += '</div>';
@@ -791,7 +793,7 @@ var linenOptions = optionsForTable(tableDraft.tableId);
       html += '<button type="button" class="item-card' + (sel ? ' selected' : '') + '" data-role="linen-card" data-id="' + l.id + '">';
       if (sel) html += '<span class="item-card-check">&#10003;</span>';
       html += '<span class="item-card-name">' + l.name + '</span>';
-      html += '<span class="item-card-price">' + money(l.pricePerDay) + '/day</span>';
+      html += (l.pricePerDay != null ? '<span class="item-card-price">' + money(l.pricePerDay) + '/day</span>' : '<span class="item-card-price item-card-price-ask">Ask for pricing</span>');
       html += '</button>';
     });
     html += '</div>';
@@ -812,7 +814,7 @@ function buildChairsDrawerHtml() {
     if (sel) html += '<span class="item-card-check">&#10003;</span>';
     html += itemIconHtml(c.id, '&#128186;');
     html += '<span class="item-card-name">' + c.name + '</span>';
-    html += '<span class="item-card-price">' + money(c.pricePerDay) + '/day</span>';
+    html += (c.pricePerDay != null ? '<span class="item-card-price">' + money(c.pricePerDay) + '/day</span>' : '<span class="item-card-price item-card-price-ask">Ask for pricing</span>');
     html += '</button>';
   });
   html += '</div>';
@@ -868,7 +870,7 @@ function buildLightingDrawerHtml() {
   return html;
 }
 
-function renderOverviewHtml(conflicts) { conflicts = dedupeConflicts(conflicts); var tent = byId(TENTS, state.tentId); var objects = store.getState().objects; var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0); var lines = computeLineItems(); var total = lines.reduce(function (s, l) { return s + l.amount; }, 0); var errorCount = 0, warnCount = 0; (conflicts || []).forEach(function (c) { if (c.severity === 'error') errorCount++; else if (c.severity === 'warning') warnCount++; }); var checkText, checkClass; if (errorCount > 0) { checkClass = 'warn'; checkText = errorCount + (errorCount === 1 ? ' issue' : ' issues') + ' need attention'; } else if (totalSeats < state.guestCount) { checkClass = 'warn'; checkText = 'Add ' + (state.guestCount - totalSeats) + ' more seats'; } else if (warnCount > 0) { checkClass = 'warn'; checkText = warnCount + ' item' + (warnCount === 1 ? '' : 's') + ' to review'; } else { checkClass = 'ok'; checkText = 'Layout looks good'; } var isDemo = new URLSearchParams(window.location.search).get('demo') === '1'; var html = '<div class="inspector-collapse-bar" data-role="inspector-toggle"><span>' + checkText + ' &middot; ' + money(total) + '/day</span><span class="inspector-collapse-chevron">' + (state.inspectorCollapsed ? '&#9650;' : '&#9660;') + '</span></div><h3 class="inspector-title">Event Overview</h3>'; html += '<div class="inspector-row"><span>Guests</span><span>' + state.guestCount + '</span></div>'; html += '<div class="inspector-row"><span>Seats</span><span>' + totalSeats + '</span></div>'; html += '<div class="inspector-row"><span>Tent</span><span>' + tent.name + '</span></div>'; html += '<div class="inspector-row"><span>Estimated</span><span>' + money(total) + '/day</span></div>'; html += '<div class="inspector-row"><span>Event Check</span><span class="status-flag ' + checkClass + '">' + checkText + '</span></div>'; html += '<div class="inspector-actions"><button type="button" class="btn-primary" data-role="overview-review">Review Event</button>' + (isDemo ? '<button type="button" class="btn-tertiary" data-role="reset-demo">Reset Demo</button>' : '') + '</div>'; return html; }
+function renderOverviewHtml(conflicts) { conflicts = dedupeConflicts(conflicts); var tent = byId(TENTS, state.tentId); var objects = store.getState().objects; var totalSeats = objects.reduce(function (s, i) { return s + (i.seatCount || 0); }, 0); var lines = computeLineItems(); var total = lines.reduce(function (s, l) { return s + (l.amount || 0); }, 0); var errorCount = 0, warnCount = 0; (conflicts || []).forEach(function (c) { if (c.severity === 'error') errorCount++; else if (c.severity === 'warning') warnCount++; }); var checkText, checkClass; if (errorCount > 0) { checkClass = 'warn'; checkText = errorCount + (errorCount === 1 ? ' issue' : ' issues') + ' need attention'; } else if (totalSeats < state.guestCount) { checkClass = 'warn'; checkText = 'Add ' + (state.guestCount - totalSeats) + ' more seats'; } else if (warnCount > 0) { checkClass = 'warn'; checkText = warnCount + ' item' + (warnCount === 1 ? '' : 's') + ' to review'; } else { checkClass = 'ok'; checkText = 'Layout looks good'; } var isDemo = new URLSearchParams(window.location.search).get('demo') === '1'; var html = '<div class="inspector-collapse-bar" data-role="inspector-toggle"><span>' + checkText + ' &middot; ' + money(total) + '/day</span><span class="inspector-collapse-chevron">' + (state.inspectorCollapsed ? '&#9650;' : '&#9660;') + '</span></div><h3 class="inspector-title">Event Overview</h3>'; html += '<div class="inspector-row"><span>Guests</span><span>' + state.guestCount + '</span></div>'; html += '<div class="inspector-row"><span>Seats</span><span>' + totalSeats + '</span></div>'; html += '<div class="inspector-row"><span>Tent</span><span>' + tent.name + '</span></div>'; html += '<div class="inspector-row"><span>Estimated</span><span>' + money(total) + '/day</span></div>'; html += '<div class="inspector-row"><span>Event Check</span><span class="status-flag ' + checkClass + '">' + checkText + '</span></div>'; html += '<div class="inspector-actions"><button type="button" class="btn-primary" data-role="overview-review">Review Event</button>' + (isDemo ? '<button type="button" class="btn-tertiary" data-role="reset-demo">Reset Demo</button>' : '') + '</div>'; return html; }
 function renderInspector(conflicts) {
   var panel = $('inspectorPanel');
   var item = store.getState().objects.find(function (i) { return i.id === state.selectedId; });
@@ -964,7 +966,7 @@ function renderStatusBar(conflicts) {
   }
 
 var lines = computeLineItems();
-  var total = lines.reduce(function (s, l) { return s + l.amount; }, 0);
+  var total = lines.reduce(function (s, l) { return s + (l.amount || 0); }, 0);
 
 var html = '';
   html += '<div class="status-pill-group" data-role="open-event-check">';
@@ -1056,11 +1058,11 @@ function renderEstimateFlyout() {
   }
   flyout.hidden = false;
   var lines = computeLineItems();
-  var total = lines.reduce(function (s, l) { return s + l.amount; }, 0);
+  var total = lines.reduce(function (s, l) { return s + (l.amount || 0); }, 0);
   var html = '<button type="button" class="flyout-close" data-role="close-estimate">&#10005;</button>';
   html += '<h3>Estimate</h3>';
   lines.forEach(function (l) {
-    html += '<div class="inspector-row"><span>' + l.label + ' &times;' + l.qty + '</span><span>' + money(l.amount) + '</span></div>';
+    html += '<div class="inspector-row"><span>' + l.label + ' &times;' + l.qty + '</span><span>' + moneyOrAsk(l.amount) + '</span></div>';
   });
   html += '<div class="inspector-row"><span><strong>Total / day</strong></span><span><strong>' + money(total) + '</strong></span></div>';
   html += '<button type="button" class="btn-primary drawer-add-btn" data-role="cta-review">Review Event</button>';
@@ -1070,7 +1072,7 @@ function renderEstimateFlyout() {
 function computeLineItems() {
   var tent = byId(TENTS, state.tentId);
   var objects = store.getState().objects;
-  var lines = [{ label: tent.name + ' (tent)', qty: 1, amount: tent.pricePerDay }];
+  var lines = [{ label: tent.name + ' (tent)', qty: 1, amount: (tent.pricePerDay == null ? null : tent.pricePerDay) }];
 
 var tableCounts = {};
   var chairCounts = {};
@@ -1093,15 +1095,15 @@ objects.forEach(function (item) {
 
 Object.keys(tableCounts).forEach(function (tid) {
   var t = byId(TABLES, tid);
-  lines.push({ label: t.name, qty: tableCounts[tid], amount: t.pricePerDay * tableCounts[tid] });
+  lines.push({ label: t.name, qty: tableCounts[tid], amount: (t.pricePerDay == null ? null : t.pricePerDay * tableCounts[tid]) });
 });
   Object.keys(chairCounts).forEach(function (cid) {
     var c = byId(CHAIRS, cid);
-    lines.push({ label: c.name, qty: chairCounts[cid], amount: c.pricePerDay * chairCounts[cid] });
+    lines.push({ label: c.name, qty: chairCounts[cid], amount: (c.pricePerDay == null ? null : c.pricePerDay * chairCounts[cid]) });
   });
   Object.keys(linenCounts).forEach(function (lid) {
     var l = byId(LINENS, lid);
-    lines.push({ label: l.name, qty: linenCounts[lid], amount: l.pricePerDay * linenCounts[lid] });
+    lines.push({ label: l.name, qty: linenCounts[lid], amount: (l.pricePerDay == null ? null : l.pricePerDay * linenCounts[lid]) });
   });
   if (danceCount > 0) {
     var dPerSide = Math.round(Math.sqrt(danceCount));
@@ -1161,7 +1163,7 @@ function refreshAll() {
 function goToReview() {
   var tent = byId(TENTS, state.tentId);
   var lines = computeLineItems();
-  var total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
+  var total = lines.reduce(function (sum, l) { return sum + (l.amount || 0); }, 0);
   var pkg = state.matchedPackageId ? byId(PACKAGES, state.matchedPackageId) : null;
   var conflicts = getConflicts();
   conflicts = dedupeConflicts(conflicts);
@@ -1208,7 +1210,7 @@ html += '<div class="review-section"><div class="review-section-title">Event Che
 
 html += '<div class="review-section"><div class="review-section-title">Estimate</div><ul>';
   lines.forEach(function (l) {
-    html += '<li>' + l.label + ' x' + l.qty + ' &mdash; ' + money(l.amount) + '</li>';
+    html += '<li>' + l.label + ' x' + l.qty + ' &mdash; ' + moneyOrAsk(l.amount) + '</li>';
   });
   html += '</ul><p><strong>Estimated Total: ' + money(total) + ' / day</strong></p></div>';
 
@@ -1241,7 +1243,7 @@ var subject = encodeURIComponent('Quote Request: ' + state.eventType + ' for ' +
     body += 'Possible package match: ' + pkg.name + ' (' + money(pkg.price) + '/day, up to ' + pkg.maxGuests + ' guests)' + NL;
   }
   body += NL + 'Items:' + NL;
-  lines.forEach(function (l) { body += '- ' + l.label + ' x' + l.qty + ' (' + money(l.amount) + ')' + NL; });
+  lines.forEach(function (l) { body += '- ' + l.label + ' x' + l.qty + ' (' + moneyOrAsk(l.amount) + ')' + NL; });
   body += NL + 'Estimated Total: ' + money(total) + ' / day' + NL;
 
 $('btnEmailQuote').textContent = 'Request a Quote from ' + tenantName;
@@ -1455,7 +1457,7 @@ $('btnBackToDesigner').addEventListener('click', function () {
 function buildPlanText() {
   var tent = byId(TENTS, state.tentId);
   var lines = computeLineItems();
-  var total = lines.reduce(function (sum, l) { return sum + l.amount; }, 0);
+  var total = lines.reduce(function (sum, l) { return sum + (l.amount || 0); }, 0);
   var text = 'Friendly Event Designer - My Event Plan' + NL;
   text += '========================================' + NL + NL;
   text += 'Event type: ' + state.eventType + NL;
@@ -1464,7 +1466,7 @@ function buildPlanText() {
   text += 'Tent: ' + (tent ? tent.name : 'N/A') + NL + NL;
   text += 'Items:' + NL;
   lines.forEach(function (l) {
-    text += '- ' + l.label + ' x' + l.qty + ' - ' + money(l.amount) + NL;
+    text += '- ' + l.label + ' x' + l.qty + ' - ' + moneyOrAsk(l.amount) + NL;
   });
   text += NL + 'Estimated Total: ' + money(total) + ' / day' + NL;
   return text;
