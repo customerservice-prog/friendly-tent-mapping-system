@@ -28,6 +28,15 @@ async function requireTenantAccess(req, res, next) {
       if (!membership.rows[0]) return res.status(403).json({ error: 'You do not have access to this tenant' });
     }
 
+    // Block access once a trial has expired. We ONLY enforce this when
+    // trial_ends_at is explicitly set and in the past, and never for
+    // platform admins - tenants with no trial_ends_at (e.g. pre-existing
+    // tenants onboarded before trials existed, like Friendly) are never
+    // blocked by this check, so this can never lock out an existing customer.
+    if (!payload.isPlatformAdmin && tenant.subscription_status === 'trialing' && tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date()) {
+      return res.status(402).json({ error: 'Your free trial has ended. Please upgrade your plan to continue.', trialEndsAt: tenant.trial_ends_at });
+    }
+
     req.tenant = tenant;
     req.user = payload;
     next();
