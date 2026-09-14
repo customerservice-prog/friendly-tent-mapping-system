@@ -63,6 +63,7 @@
  }
 
  var state = { user: null, tenants: [], tenant: null };
+  var renderGeneration = 0; // bumped on every render() call so stale async tenant fetches can detect they are outdated and refuse to paint the DOM (prevents one tenant's data flashing into another tenant's view when switching tenants in the dashboard)
 
  function currentRoute() {
    var h = (window.location.hash || '').replace(/^#\/?/, '').split('?')[0];
@@ -168,7 +169,7 @@
    state.tenant = active;
  }
 
- async function viewOverview(route) {
+ async function viewOverview(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading overview...'));
    bindShellEvents();
    if (!state.tenant) {
@@ -181,6 +182,7 @@
      var requests = await api('/api/tenants/' + state.tenant + '/quote-requests');
      var reqs = requests.quoteRequests || [];
      var newCount = reqs.filter(function (r) { return r.status === 'new'; }).length;
+     if (gen !== renderGeneration) return;
      var html = '' +
        '<h1 class="dash-title">' + esc(admin.name) + '</h1>' +
        '<p class="dash-subtitle">Plan: ' + esc(admin.subscriptionPlan || 'trial') + ' &middot; Status: ' + esc(admin.subscriptionStatus || 'trialing') + '</p>' +
@@ -220,13 +222,14 @@
    }).join('') + '</select>';
  }
 
- async function viewRequests(route) {
+ async function viewRequests(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading requests...'));
    bindShellEvents();
    if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    try {
      var requests = await api('/api/tenants/' + state.tenant + '/quote-requests');
      var reqs = requests.quoteRequests || [];
+     if (gen !== renderGeneration) return;
      document.getElementById('dashMain').innerHTML = '<h1 class="dash-title">Quote Requests</h1>' + renderRequestsTable(reqs, true);
      Array.prototype.forEach.call(document.querySelectorAll('.status-select'), function (sel) {
        sel.addEventListener('change', async function () {
@@ -245,7 +248,7 @@
    }
  }
 
- async function viewProducts(route) {
+ async function viewProducts(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading products...'));
    bindShellEvents();
    if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
@@ -259,6 +262,7 @@
      } catch (vlErr) { visuals = []; }
      var visualsById = {};
      visuals.forEach(function (v) { visualsById[v.id] = v; });
+     if (gen !== renderGeneration) return;
      var rows = products.map(function (p) {
                var needsVisual = ['tent', 'table', 'chair'].indexOf(p.category) !== -1;
                var hasVisual = !!(p.visual_model_id && visualsById[p.visual_model_id]);
@@ -355,12 +359,13 @@
    }
  }
 
- async function viewBranding(route) {
+ async function viewBranding(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading branding...'));
    bindShellEvents();
    if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    try {
      var t = await api('/api/tenants/' + state.tenant + '/admin');
+     if (gen !== renderGeneration) return;
      document.getElementById('dashMain').innerHTML = '' +
        '<h1 class="dash-title">Branding &amp; Settings</h1>' +
        '<p class="dash-subtitle">This controls how your hosted designer looks to your customers.</p>' +
@@ -411,12 +416,13 @@
    }
  }
 
- async function viewInstall(route) {
+ async function viewInstall(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading install info...'));
    bindShellEvents();
    if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    try {
      var t = await api('/api/tenants/' + state.tenant + '/admin');
+     if (gen !== renderGeneration) return;
      var designerUrl = 'https://rentsketch.com/designer/?tenant=' + encodeURIComponent(state.tenant);
      var iframeCode = '<iframe src="' + designerUrl + '&embed=1" style="width:100%;height:820px;border:0" title="' + esc(t.name) + ' Event Designer"></iframe>';
      var loaderCode = '<div id="rentsketch-embed"></div>\n<script src="https://rentsketch.com/embed/v1.js" data-tenant="' + esc(state.tenant) + '" data-embed-key="' + esc(t.embedKey || '') + '" defer></script>';
@@ -474,11 +480,13 @@
      window.location.hash = '#/overview';
      return;
    }
-   if (route === 'overview') viewOverview(route);
-   else if (route === 'requests') viewRequests(route);
-   else if (route === 'products') viewProducts(route);
-   else if (route === 'branding') viewBranding(route);
-   else if (route === 'install') viewInstall(route);
+   renderGeneration++;
+  var __gen = renderGeneration;
+  if (route === 'overview') viewOverview(route, __gen);
+   else if (route === 'requests') viewRequests(route, __gen);
+   else if (route === 'products') viewProducts(route, __gen);
+   else if (route === 'branding') viewBranding(route, __gen);
+   else if (route === 'install') viewInstall(route, __gen);
  }
 
  async function boot() {
