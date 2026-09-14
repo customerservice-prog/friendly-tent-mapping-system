@@ -44,6 +44,7 @@ router.get('/:slug/admin', requireTenantAccess, async (req, res) => {
           hasWebhookSecret: Boolean(t.webhook_secret),
           subscriptionPlan: t.subscription_plan,
           subscriptionStatus: t.subscription_status,
+          trialEndsAt: t.trial_ends_at,
     }));
 });
 
