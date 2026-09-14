@@ -45,4 +45,28 @@ async function requireTenantAccess(req, res, next) {
   }
 }
 
-module.exports = { requireTenantAccess };
+// Verifies the bearer token AND that the authenticated user is flagged as a
+// platform admin (users.is_platform_admin in the DB, carried in the JWT as
+// isPlatformAdmin). Used to gate the cross-tenant super-admin panel/routes -
+// a regular tenant owner's token, no matter how many tenants they belong to,
+// will never pass this check. There is no self-service way to become a
+// platform admin; it can only be set directly in the database.
+async function requirePlatformAdmin(req, res, next) {
+  try {
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    if (!token) return res.status(401).json({ error: 'Missing bearer token' });
+
+    const payload = verifyToken(token);
+    if (!payload.isPlatformAdmin) {
+      return res.status(403).json({ error: 'Platform admin access required' });
+    }
+
+    req.user = payload;
+    next();
+  } catch (err) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
+module.exports = { requireTenantAccess, requirePlatformAdmin };
