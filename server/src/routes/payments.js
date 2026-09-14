@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('../db');
+const { PLATFORM_FEE_PERCENT } = require('../pricing');
 
 const router = express.Router();
 
@@ -40,6 +41,19 @@ router.post('/:slug/quote-requests/:id/checkout-session', async (req, res) => {
   const depositCents = Math.max(100, Math.round(estimateTotal * (depositPercent / 100) * 100));
   const origin = (req.body && req.body.origin) || req.headers.origin || '';
 
+            // If this tenant has connected a Stripe Express account (routes/connect.js)
+            // and it is active, split the deposit: the tenant's own connected account
+            // receives the funds directly, and the platform keeps PLATFORM_FEE_PERCENT
+            // as its fee. PLATFORM_FEE_PERCENT defaults to 0 (see pricing.js) until a
+            // real business decision is made, so this is safe even though it has not
+            // been exercised against a real connected account yet.
+            const connectFeeParams = (tenant.stripe_connect_account_id && tenant.stripe_connect_status === 'active' && PLATFORM_FEE_PERCENT > 0)
+              ? {
+                  application_fee_amount: Math.round(depositCents * (PLATFORM_FEE_PERCENT / 100)),
+                  transfer_data: { destination: tenant.stripe_connect_account_id },
+                }
+              : undefined;
+
             const session = await stripe.checkout.sessions.create({
               mode: 'payment',
               payment_method_types: ['card'],
@@ -56,6 +70,7 @@ router.post('/:slug/quote-requests/:id/checkout-session', async (req, res) => {
                   quantity: 1,
                 }],
               metadata: { quoteRequestId: quoteRequest.id, tenantId: tenant.id, tenantSlug: tenant.slug },
+              payment_intent_data: connectFeeParams,
               success_url: origin + '/designer/?tenant=' + tenant.slug + '&payment=success',
               cancel_url: origin + '/designer/?tenant=' + tenant.slug + '&payment=cancelled',
             });
