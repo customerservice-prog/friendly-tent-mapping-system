@@ -135,6 +135,12 @@ fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RE
         } else {
           var byExternalId = {};
           data.products.forEach(function (p) { if (p.external_id) byExternalId[p.external_id] = p; });
+          // IMPORTANT: mutate the shared TENTS/TABLES/CHAIRS catalog arrays (the
+          // ones script.js actually renders from) - not tenant.tents/tables/chairs,
+          // which are disconnected clones that nothing displays. Previously this
+          // only updated the disconnected clones, so a tenant's uploaded prices
+          // never actually reached the designer UI.
+          var liveArraysStatic = { tent: TENTS, table: TABLES, chair: CHAIRS };
           [tenant.tents, tenant.tables, tenant.chairs].forEach(function (list) {
             if (!Array.isArray(list)) return;
             list.forEach(function (item) {
@@ -142,6 +148,19 @@ fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RE
               if (!p) return;
               if (p.name) item.name = p.name;
               if (p.price_per_day !== null && p.price_per_day !== undefined) item.pricePerDay = Number(p.price_per_day);
+            });
+          });
+          Object.keys(liveArraysStatic).forEach(function (cat) {
+            liveArraysStatic[cat].forEach(function (item) {
+              var p = byExternalId[item.id];
+              if (p) {
+                if (p.name) item.name = p.name;
+                item.pricePerDay = (p.price_per_day !== null && p.price_per_day !== undefined) ? Number(p.price_per_day) : null;
+              } else {
+                // No active tenant-uploaded price for this catalog item - do not
+                // fall back to the master catalog's baked-in number.
+                item.pricePerDay = null;
+              }
             });
           });
         }
