@@ -24,7 +24,7 @@
 
   <script type="module">
 import { getTenant, GENERIC_TENANT, TENTS, TABLES, CHAIRS } from '../js/data/tenant.js';
-import { LINENS } from '../js/data/linens.js';
+import { LINENS, linenVisual } from '../js/data/linens.js';
 import { LIGHTING_OPTIONS, TENT_LIGHTING_PRICE_BY_SIZE } from '../js/data/lighting.js';
 import { DANCE_SECTION } from '../js/data/danceFloor.js';
 var params = new URLSearchParams(window.location.search);
@@ -120,6 +120,63 @@ fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RE
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data || !data.products) return;
+      // Dance floor / lighting / linen per-tenant pricing.
+      // Unlike tent/table/chair (which are rebuilt as per-tenant arrays of
+      // distinct products), these are shared singleton/fixed-list catalog
+      // objects - there is exactly one DANCE_SECTION and a fixed set of
+      // LIGHTING_OPTIONS / LINENS "shapes" that every tenant reuses. So
+      // instead of rebuilding arrays, we mutate the existing shared objects
+      // in place, using the same Visual picker (visual_model_id) tenants
+      // already use for tent/table/chair. A tenant with no matching product
+      // leaves these at whatever the earlier "strip pricing for non-Friendly
+      // tenants" step above already set (i.e. no price shown).
+      (function applyCategoryPricing() {
+        function norm(s) { return String(s || '').toLowerCase().replace(/[^a-z]/g, ''); }
+        var byVisual = {};
+        data.products.forEach(function (p) {
+          if (p.active === false || !p.visual_model_id) return;
+          if (!byVisual[p.visual_model_id]) byVisual[p.visual_model_id] = p;
+        });
+
+        // Dance floor: one shared master item, one visual ('dance-floor').
+        var danceProduct = byVisual['dance-floor'];
+        if (danceProduct && norm(danceProduct.category) === 'dancefloor') {
+          DANCE_SECTION.pricePerDay = (danceProduct.price_per_day !== null && danceProduct.price_per_day !== undefined) ? Number(danceProduct.price_per_day) : null;
+        }
+
+        // Lighting: LIGHTING_OPTIONS ids already match the visual-library lighting ids 1:1.
+        LIGHTING_OPTIONS.forEach(function (opt) {
+          if (opt.id === 'lighting-none') return; // always free, not a real rentable item
+          var p = byVisual[opt.id];
+          if (p && norm(p.category) === 'lighting') {
+            opt.pricePerDay = (p.price_per_day !== null && p.price_per_day !== undefined) ? Number(p.price_per_day) : null;
+            if (opt.id === 'lighting-tent') {
+              // The master catalog prices tent lighting per tent size; a
+              // tenant product today only carries one flat per-day price,
+              // so apply it uniformly across every tent size rather than
+              // mixing a real tenant price with stale Friendly numbers.
+              Object.keys(TENT_LIGHTING_PRICE_BY_SIZE).forEach(function (k) { TENT_LIGHTING_PRICE_BY_SIZE[k] = opt.pricePerDay; });
+            }
+          }
+        });
+
+        // Linens: the visual library groups linens into 3 shared rendering
+        // shapes (round skirt / rectangular skirt / runner), each exposed as
+        // visual id "linen-" + shape key (e.g. 'linen-skirt-round'), rather
+        // than one visual per exact product. A tenant prices per shape and
+        // that price applies to every catalog linen using that shape. Items
+        // with no shape mapping (napkins, chair covers) are not priced
+        // per-tenant yet.
+        LINENS.forEach(function (item) {
+          var shapeKey = linenVisual(item.id);
+          var visualId = shapeKey ? ('linen-' + shapeKey) : null;
+          var p = visualId ? byVisual[visualId] : null;
+          if (p && norm(p.category) === 'linen') {
+            item.pricePerDay = (p.price_per_day !== null && p.price_per_day !== undefined) ? Number(p.price_per_day) : null;
+          }
+        });
+      })();
+
         if (!isKnownStatic) {
           var masterByCategory = {
             chair: CHAIRS.map(function (x) { return JSON.parse(JSON.stringify(x)); }),
