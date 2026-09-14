@@ -87,5 +87,5 @@ export const GENERIC_TENANT = {
 };
 
 export function getTenant(slug) {
-  return slug === 'generic' ? GENERIC_TENANT : FRIENDLY_TENANT;
+    return slug === 'friendly' ? FRIENDLY_TENANT : GENERIC_TENANT;
 }
