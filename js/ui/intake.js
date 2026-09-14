@@ -86,6 +86,8 @@ const stepHistory = [];
 
 function money(n) { return '$' + n.toFixed(2); }
 
+function moneyOrAsk(n) { return (n === null || n === undefined) ? 'Ask for pricing' : money(n); }
+
 function el(tag, className, text) {
 const node = document.createElement(tag);
 if (className) node.className = className;
@@ -382,7 +384,7 @@ function tentCard(title, entry, capacityKey, badgeClass) {
 const card = el('div', 'recommend-card ' + badgeClass);
 card.appendChild(el('div', 'recommend-card-badge', title));
 card.appendChild(el('h3', null, entry.tent.name));
-card.appendChild(el('div', 'recommend-card-meta', entry.tent.widthFt + ' x ' + entry.tent.lengthFt + ' ft - ' + money(entry.tent.pricePerDay) + '/day'));
+card.appendChild(el('div', 'recommend-card-meta', entry.tent.widthFt + ' x ' + entry.tent.lengthFt + ' ft - ' + (entry.tent.pricePerDay != null ? (money(entry.tent.pricePerDay) + '/day') : 'Ask for pricing')));
 card.appendChild(el('div', 'recommend-card-capacity', 'Fits up to ' + entry.tent.capacity[capacityKey] + ' ' + capacityLabel(capacityKey)));
 if (entry.note && entry.note.message) {
 card.appendChild(el('div', 'recommend-card-note note-' + entry.note.level, entry.note.message));
