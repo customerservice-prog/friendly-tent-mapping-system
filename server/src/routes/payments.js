@@ -54,6 +54,8 @@ router.post('/:slug/quote-requests/:id/checkout-session', async (req, res) => {
                 }
               : undefined;
 
+            const feeCents = connectFeeParams ? connectFeeParams.application_fee_amount : null;
+
             const session = await stripe.checkout.sessions.create({
               mode: 'payment',
               payment_method_types: ['card'],
@@ -76,8 +78,8 @@ router.post('/:slug/quote-requests/:id/checkout-session', async (req, res) => {
             });
 
             await db.query(
-              'UPDATE quote_requests SET stripe_checkout_session_id = $1, deposit_amount_cents = $2 WHERE id = $3',
-              [session.id, depositCents, quoteRequest.id]
+              'UPDATE quote_requests SET stripe_checkout_session_id = $1, deposit_amount_cents = $2, platform_fee_cents = $3 WHERE id = $4',
+              [session.id, depositCents, feeCents, quoteRequest.id]
               );
 
             res.json({ url: session.url });
