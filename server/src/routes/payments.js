@@ -32,6 +32,10 @@ router.post('/:slug/quote-requests/:id/checkout-session', async (req, res) => {
   if (!quoteRequest) return res.status(404).json({ error: 'Quote request not found' });
 
             const estimateTotal = Number(quoteRequest.estimate_total || 0);
+  if (!(estimateTotal > 0)) {
+    return res.status(400).json({ error: 'This tenant has not set up pricing yet, so a deposit amount cannot be calculated.' });
+  }
+
   const depositPercent = Number(tenant.deposit_percent || 20);
   const depositCents = Math.max(100, Math.round(estimateTotal * (depositPercent / 100) * 100));
   const origin = (req.body && req.body.origin) || req.headers.origin || '';
