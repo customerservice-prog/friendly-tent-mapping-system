@@ -11,7 +11,8 @@
   function getActiveTenant() { return localStorage.getItem(TENANT_KEY); }
   function setActiveTenant(slug) { if (slug) { localStorage.setItem(TENANT_KEY, slug); } else { localStorage.removeItem(TENANT_KEY); } }
 
- function esc(s) {
+ function normCategory(c) { return String(c || '').trim().toLowerCase().replace(/[\s-]+/g, '_'); }
+function esc(s) {
    return String(s === null || s === undefined ? '' : s).replace(/[&<>"']/g, function (c) {
      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
    });
@@ -264,7 +265,7 @@
      visuals.forEach(function (v) { visualsById[v.id] = v; });
      if (gen !== renderGeneration) return;
      var rows = products.map(function (p) {
-               var needsVisual = ['tent', 'table', 'chair'].indexOf(p.category) !== -1;
+               var needsVisual = ['tent', 'table', 'chair', 'dance_floor', 'lighting', 'linen'].indexOf(normCategory(p.category)) !== -1;
                var hasVisual = !!(p.visual_model_id && visualsById[p.visual_model_id]);
                var unknownVisual = p.visual_model_id && !visualsById[p.visual_model_id];
                var hiddenFromDesigner = needsVisual && !hasVisual;
@@ -287,7 +288,7 @@
        table +
        '<h2 class="dash-section-title">Add a Product</h2>' +
        '<form id="productForm" class="dash-form">' +
-       '<label>Category<input type="text" id="pCategory" placeholder="tent, table, chair" required></label>' +
+       '<label>Category<select id="pCategory" required><option value="">Select a category</option><option value="tent">Tent</option><option value="table">Table</option><option value="chair">Chair</option><option value="dance_floor">Dance Floor</option><option value="lighting">Lighting</option><option value="linen">Linen</option></select></label>' +
        '<label>Name<input type="text" id="pName" placeholder="20x20 Pole Tent" required></label>' +
        '<label>SKU<input type="text" id="pSku"></label>' +
        '<label>Price per day<input type="number" step="0.01" id="pPrice"></label>' +
