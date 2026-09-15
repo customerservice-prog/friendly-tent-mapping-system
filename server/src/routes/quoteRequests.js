@@ -48,6 +48,20 @@ router.post('/:slug/quote-requests', async (req, res) => {
                     return res.status(400).json({ error: 'customerName and customerEmail are required' });
               }
 
+                    // A customer could otherwise pass a designId belonging to a
+      // DIFFERENT tenant (or a tenant-less direct-consumer design). If that
+      // were allowed through, a later status change on this quote request
+      // would call syncOrderEntitlement against someone else's design,
+      // which is exactly the kind of cross-tenant leak that must never
+      // happen. Reject up front instead.
+      if (designId) {
+        const designCheck = await db.query('SELECT tenant_id FROM designs WHERE id = $1', [designId]);
+        const design = designCheck.rows[0];
+        if (!design || design.tenant_id !== tenant.id) {
+          return res.status(400).json({ error: 'designId does not belong to this tenant' });
+        }
+      }
+
               const result = await db.query(
                     `INSERT INTO quote_requests
                           (tenant_id, design_id, customer_name, customer_email, customer_phone, event_date, guest_count, event_type, line_items, estimate_total, notes)
