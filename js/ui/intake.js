@@ -286,6 +286,13 @@ stage.appendChild(body);
   container.appendChild(stage);
 }
 
+      function refreshStagePanel() {
+        var stageHost = document.querySelector('#intakeWizard .studio-stage');
+        if (!stageHost) return;
+        stageHost.innerHTML = '';
+        renderStageVisual(stageHost);
+      }
+
 // ---------- Render ----------
 
 function render() {
@@ -392,9 +399,12 @@ const quickWrap = el('div', 'studio-guest-quickpicks');
 function setCount(n) {
   wiz.guestCount = Math.max(1, Math.min(1000, n));
   numberEl.textContent = String(wiz.guestCount);
+  input.value = String(wiz.guestCount);
   renderQuickpicks();
+  refreshStagePanel();
 }
   minusBtn.addEventListener('click', function () { setCount(wiz.guestCount - 5); });
+
   plusBtn.addEventListener('click', function () { setCount(wiz.guestCount + 5); });
 
 display.appendChild(minusBtn);
@@ -419,6 +429,7 @@ const field = el('div', 'field');
     wiz.guestCount = n;
     numberEl.textContent = String(n);
     renderQuickpicks();
+    refreshStagePanel();
   });
   field.appendChild(input);
   stageWrap.appendChild(field);
