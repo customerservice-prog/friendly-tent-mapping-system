@@ -86,9 +86,9 @@ function stopAutosave() {
 }
 
 function saveDesignNow(designId) {
-  if (!window.FriendlyBridge || !window.FriendlyBridge.state) return;
-  var scene = window.FriendlyBridge.state;
-  var sceneJSON = JSON.stringify(scene);
+ if (!window.FriendlyBridge || typeof window.FriendlyBridge.getScene !== 'function') return;
+ var scene = window.FriendlyBridge.getScene();
+ 
   if (sceneJSON === _lastSavedSceneJSON) return;
   apiPatchDesign(designId, {
     scene: scene,
@@ -272,8 +272,7 @@ if (recoverBtn) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 if (existingDesignId) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         checkEntitlement(existingDesignId).then(function (entitlement) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   if (entitlement.active) {
-  startAutosave(existingDesignId);
-  proceed();
+ loadAndEnterDesign(existingDesignId);
 } else if (window.localStorage.getItem(EVER_PAID_KEY) === '1') {
   showRenewalModal(existingDesignId, proceed);
 } else {
@@ -313,6 +312,30 @@ if (recoverBtn) {
   });
 }
 
+// Fetches a design's full saved scene by id and restores it into the
+// designer via FriendlyBridge.loadScene(), instead of silently dropping the
+// customer's paid work and starting over on every reload/new device. Falls
+// back to a fresh entrance (enterDesigner) if there is no scene yet (a
+// brand-new design) or the bridge/endpoint is unavailable for any reason.
+function loadAndEnterDesign(designId) {
+ startAutosave(designId);
+ return fetch(apiUrl('/api/consumer/designs/' + designId))
+ .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+ .then(function (result) {
+ var restored = result.ok && result.body && window.FriendlyBridge && typeof window.FriendlyBridge.loadScene === 'function' && window.FriendlyBridge.loadScene(result.body.scene);
+ if (!restored && window.FriendlyBridge && typeof window.FriendlyBridge.enterDesigner === 'function') {
+ window.FriendlyBridge.enterDesigner();
+ }
+ return restored;
+ })
+ .catch(function () {
+ if (window.FriendlyBridge && typeof window.FriendlyBridge.enterDesigner === 'function') {
+ window.FriendlyBridge.enterDesigner();
+ }
+ return false;
+ });
+}
+
 function checkRecoveryToken() {
   var params = new URLSearchParams(window.location.search);
   var token = params.get('recoveryToken');
@@ -328,10 +351,8 @@ function checkRecoveryToken() {
         banner.textContent = 'Your design is ready - continue editing.';
         document.body.appendChild(banner);
         setTimeout(function () { banner.remove(); }, 6000);
-        if (window.FriendlyBridge && typeof window.FriendlyBridge.enterDesigner === 'function') {
-          window.FriendlyBridge.enterDesigner();
-        }
-      } else {
+        loadAndEnterDesign(result.body.designId);
+ } else {
         banner.className = 'paywall-unlocked-banner';
         banner.style.background = '#c0392b';
         banner.textContent = (result.body && result.body.error) || 'This recovery link is invalid or has expired.';
