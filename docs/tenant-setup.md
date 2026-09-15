@@ -2,9 +2,17 @@
 
 A "tenant" is one rental company. Every tenant is a real row in the tenants table, created the same way regardless of who the company is. Friendly Party Rental is tenant #1, but nothing in the application code special-cases it.
 
-## Creating a tenant today (platform-admin path)
+## Creating a tenant
 
-Self-service signup (a company creating its own account) is not built yet - see docs/friendly-production.md for what is deferred. Today a platform admin creates a tenant directly in the database: an INSERT into tenants with a unique slug and name, an INSERT into users for the owner's login (email plus a bcrypt password hash), and an INSERT into tenant_memberships linking that user to that tenant with role owner. After migration 002, embed_key is backfilled automatically for any tenant missing one.
+There are two ways a tenant row gets created today.
+
+### Self-service signup (public, no platform admin needed)
+
+A company can create its own account at https://rentsketch.com/business/signup.html, which posts to the public POST /api/business/signup endpoint. This inserts a new tenants row (auto-generated unique slug, subscription_status "trialing", a 14-day trial via trial_ends_at), a users row for the owner, and a tenant_memberships row linking them with role owner, then returns a JWT so the new owner lands directly in the dashboard already logged in. Reserved slugs (generic, friendly, admin, api, www, app) cannot be claimed. No payment step is required to start the trial - see docs/friendly-production.md for what billing still does not do.
+
+### Platform-admin path (for internal/comped tenants)
+
+A platform admin can still create a tenant directly in the database: an INSERT into tenants with a unique slug and name, an INSERT into users for the owner's login (email plus a bcrypt password hash), and an INSERT into tenant_memberships linking that user to that tenant with role owner. Friendly Party Rental was created this way, as an internal/comped tenant. After migration 002, embed_key is backfilled automatically for any tenant missing one.
 
 ## What a new tenant gets immediately
 
