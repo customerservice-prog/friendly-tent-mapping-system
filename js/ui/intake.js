@@ -293,6 +293,13 @@ stage.appendChild(body);
         renderStageVisual(stageHost);
       }
 
+function refreshBriefPanel() {
+  var briefHost = document.querySelector('#intakeWizard .studio-brief');
+  if (!briefHost) return;
+  briefHost.innerHTML = '';
+  renderBrief(briefHost);
+}
+
 // ---------- Render ----------
 
 function render() {
@@ -402,6 +409,7 @@ function setCount(n) {
   input.value = String(wiz.guestCount);
   renderQuickpicks();
   refreshStagePanel();
+  refreshBriefPanel();
 }
   minusBtn.addEventListener('click', function () { setCount(wiz.guestCount - 5); });
 
@@ -430,6 +438,7 @@ const field = el('div', 'field');
     numberEl.textContent = String(n);
     renderQuickpicks();
     refreshStagePanel();
+    refreshBriefPanel();
   });
   field.appendChild(input);
   stageWrap.appendChild(field);
