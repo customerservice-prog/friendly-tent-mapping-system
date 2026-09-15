@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const express = require('express');
 const db = require('../db');
 const { requireTenantAccess } = require('../middleware/requireAuth');
+const { syncOrderEntitlement } = require('../orderProviders/friendlyOrderProvider');
 
 const router = express.Router();
 
@@ -86,6 +87,9 @@ router.patch('/:slug/quote-requests/:id', requireTenantAccess, async (req, res) 
           [status || null, notes || null, req.params.id, req.tenant.id]
         );
     if (!result.rows[0]) return res.status(404).json({ error: 'Quote request not found' });
+    if (status) {
+      await syncOrderEntitlement(result.rows[0], req.tenant);
+    }
     res.json({ quoteRequest: result.rows[0] });
 });
 
