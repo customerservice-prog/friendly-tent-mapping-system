@@ -187,6 +187,11 @@ function injectStyles() {
                                                                                                                                                                                                                                                                                                                         '.paywall-modal .btn-primary{width:100%;margin-top:14px;padding:12px;border-radius:8px;border:none;background:#5b3df0;color:#fff;font-size:15px;cursor:pointer;}' +
                                                                                                                                                                                                                                                                                                                               '.paywall-modal .btn-link{display:block;width:100%;margin-top:10px;background:none;border:none;color:#777;text-decoration:underline;cursor:pointer;font-size:13px;}' +
                                                                                                                                                                                                                                                                                                                                     '.paywall-unlocked-banner{position:fixed;top:16px;left:50%;transform:translateX(-50%);background:#1e8e3e;color:#fff;padding:10px 20px;border-radius:8px;z-index:9999;font-size:14px;}';
+style.textContent +=
+'.rs-event-pass-badge{position:fixed;top:16px;right:16px;background:#1e293b;color:#fff;padding:8px 14px;border-radius:20px;font-size:13px;z-index:9998;box-shadow:0 2px 8px rgba(0,0,0,0.25);}' +
+'.rs-event-pass-badge-warn{background:#b45309;}' +
+'.rs-recover-link{position:fixed;top:16px;left:16px;background:rgba(255,255,255,0.9);color:#333;padding:6px 12px;border-radius:16px;font-size:12px;z-index:9998;text-decoration:underline;cursor:pointer;border:none;}';
+
                                                                                                                                                                                                                                                                                                                                         document.head.appendChild(style);
                                                                                                                                                                                                                                                                                                                                           }
                                                                                                                                                                                                                                                                                                                                           
@@ -355,9 +360,26 @@ function installPaywallGate() {
 // customer's paid work and starting over on every reload/new device. Falls
 // back to a fresh entrance (enterDesigner) if there is no scene yet (a
 // brand-new design) or the bridge/endpoint is unavailable for any reason.
+function renderEventPassBadge(expiresAt) {
+var existing = document.getElementById('__rsEventPassBadge');
+if (existing) existing.remove();
+if (!expiresAt) return;
+var msLeft = new Date(expiresAt).getTime() - Date.now();
+var daysLeft = Math.ceil(msLeft / 86400000);
+if (daysLeft < 0) return;
+var badge = document.createElement('div');
+badge.id = '__rsEventPassBadge';
+badge.className = 'rs-event-pass-badge' + (daysLeft <= 7 ? ' rs-event-pass-badge-warn' : '');
+badge.textContent = 'Event Pass \u00b7 ' + daysLeft + (daysLeft === 1 ? ' day left' : ' days left');
+document.body.appendChild(badge);
+}
+
 function loadAndEnterDesign(designId) {
- startAutosave(designId);
- return fetch(apiUrl('/api/consumer/designs/' + designId))
+startAutosave(designId);
+checkEntitlement(designId).then(function (entitlement) {
+if (entitlement.active) renderEventPassBadge(entitlement.expiresAt);
+});
+return fetch(apiUrl('/api/consumer/designs/' + designId))
  .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
  .then(function (result) {
  var restored = result.ok && result.body && window.FriendlyBridge && typeof window.FriendlyBridge.loadScene === 'function' && window.FriendlyBridge.loadScene(result.body.scene);
@@ -419,12 +441,59 @@ loadAndEnterDesign(designId);
 });
 }
 
+function showRecoverPrompt() {
+var overlay = document.createElement('div');
+overlay.className = 'paywall-overlay';
+overlay.innerHTML =
+'<div class="paywall-modal">' +
+'<h2>Continue My Event</h2>' +
+'<p>Enter the email you used before and we will send you a link back to your design.</p>' +
+'<label class="paywall-label">Email</label>' +
+'<input type="email" class="paywall-email" placeholder="you@example.com" />' +
+'<div class="paywall-error"></div>' +
+'<button type="button" class="btn-primary paywall-submit">Send Me My Link</button>' +
+'<button type="button" class="btn-link paywall-cancel">Close</button>' +
+'</div>';
+document.body.appendChild(overlay);
+var emailInput = overlay.querySelector('.paywall-email');
+var errorBox = overlay.querySelector('.paywall-error');
+var submitBtn = overlay.querySelector('.paywall-submit');
+overlay.querySelector('.paywall-cancel').addEventListener('click', function () { overlay.remove(); });
+submitBtn.addEventListener('click', function () {
+var email = emailInput.value.trim();
+if (!email || email.indexOf('@') === -1) {
+errorBox.textContent = 'Please enter a valid email address.';
+return;
+}
+errorBox.textContent = '';
+submitBtn.disabled = true;
+submitBtn.textContent = 'Sending...';
+requestRecoveryLink(email).then(function () {
+errorBox.style.color = '#1e8e3e';
+errorBox.textContent = 'If that email has a paid design, we just emailed a link to continue editing it.';
+submitBtn.textContent = 'Send Me My Link';
+submitBtn.disabled = false;
+}).catch(function (err) {
+errorBox.style.color = '';
+errorBox.textContent = err.message || 'Something went wrong. Please try again.';
+submitBtn.textContent = 'Send Me My Link';
+submitBtn.disabled = false;
+});
+});
+}
+
+function checkRecoverParam() {
+var params = new URLSearchParams(window.location.search);
+if (params.get('recover') === '1') showRecoverPrompt();
+}
+
 function tryInstall(attempts) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     if (window.FriendlyBridge) {
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           installPaywallGate();
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 injectStyles();
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       checkReturnFromCheckout();
 checkRecoveryToken();
+checkRecoverParam();
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             return;
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 }
                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     if (attempts > 200) return;
