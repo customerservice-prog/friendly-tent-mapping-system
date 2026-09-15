@@ -231,6 +231,33 @@ function renderProgress(container) {
   container.appendChild(nav);
 }
 
+// Final, all-done variant of the progress rail used on the "Your Plan"
+// recommendation screen: every stage reads as complete (with its chosen
+// value) and clicking one jumps back into the wizard at that stage so the
+// customer can revise a decision without losing anything else.
+function renderFinalProgress(container) {
+  const nav = el('nav', 'studio-progress');
+  nav.setAttribute('aria-label', 'Event planning progress');
+  STAGE_DEFS.forEach(function (stage) {
+    const value = briefValueForStage(stage.key);
+    const item = el('button', 'studio-progress-item is-done is-clickable');
+    item.type = 'button';
+    item.appendChild(el('span', 'check', '✓'));
+    item.appendChild(el('span', 'label', stage.label));
+    if (value) item.appendChild(el('span', 'value', value));
+    item.addEventListener('click', function () {
+      Bridge.showStep('step-intake');
+      goToStep(stageFirstStepIndex(stage));
+    });
+    nav.appendChild(item);
+  });
+  const planItem = el('div', 'studio-progress-item is-active');
+  planItem.appendChild(el('span', 'dot', null));
+  planItem.appendChild(el('span', 'label', 'Your Plan'));
+  nav.appendChild(planItem);
+  container.appendChild(nav);
+}
+
 function renderBrief(container) {
   const brief = el('div', 'studio-brief');
   STAGE_DEFS.forEach(function (stage) {
@@ -286,12 +313,12 @@ stage.appendChild(body);
   container.appendChild(stage);
 }
 
-      function refreshStagePanel() {
-        var stageHost = document.querySelector('#intakeWizard .studio-stage');
-        if (!stageHost) return;
-        stageHost.innerHTML = '';
-        renderStageVisual(stageHost);
-      }
+function refreshStagePanel() {
+  var stageHost = document.querySelector('#intakeWizard .studio-stage');
+  if (!stageHost) return;
+  stageHost.innerHTML = '';
+  renderStageVisual(stageHost);
+}
 
 function refreshBriefPanel() {
   var briefHost = document.querySelector('#intakeWizard .studio-brief');
@@ -413,7 +440,7 @@ function setCount(n) {
 }
   minusBtn.addEventListener('click', function () { setCount(wiz.guestCount - 5); });
 
-  plusBtn.addEventListener('click', function () { setCount(wiz.guestCount + 5); });
+plusBtn.addEventListener('click', function () { setCount(wiz.guestCount + 5); });
 
 display.appendChild(minusBtn);
   display.appendChild(numberEl);
@@ -453,12 +480,17 @@ wrap.appendChild(stageWrap);
 function renderSeatingStyleStep() {
   const wrap = el('div', 'wizard-step');
   wrap.appendChild(el('h2', null, 'How would you like your guests seated?'));
-  const grid = el('div', 'option-grid');
+  const grid = el('div', 'studio-option-grid');
   SEATING_STYLE_CARDS.forEach(function (opt) {
-    const card = el('button', 'option-card' + (wiz.seatingStyle === opt.id ? ' selected' : ''));
+    const parts = opt.label.split(/\s(.+)/);
+    const emoji = parts[0];
+    const text = parts[1] || opt.label;
+    const card = el('button', 'studio-option-card' + (wiz.seatingStyle === opt.id ? ' selected' : ''));
     card.type = 'button';
-    card.appendChild(el('div', 'option-card-title', opt.label));
-    card.appendChild(el('div', 'option-card-hint', opt.hint));
+    card.appendChild(el('span', 'emoji', emoji));
+    card.appendChild(el('span', 'text', text));
+    card.appendChild(el('span', 'hint', opt.hint));
+    card.appendChild(el('span', 'check', '✓'));
     card.addEventListener('click', function () {
       wiz.seatingStyle = opt.id;
       nextStep();
@@ -488,9 +520,9 @@ function renderFeaturesStep() {
   const wrap = el('div', 'wizard-step');
   wrap.appendChild(el('h2', null, 'Make it yours'));
   wrap.appendChild(el('p', 'studio-subtext', 'Choose anything you would like RentSketch to plan around. Select all that apply.'));
-  const grid = el('div', 'feature-grid');
+  const grid = el('div', 'studio-feature-grid');
   FEATURES.forEach(function (opt) {
-    const chip = el('button', 'feature-chip' + (wiz.features.indexOf(opt.id) !== -1 ? ' selected' : ''), opt.label);
+    const chip = el('button', 'studio-feature-chip' + (wiz.features.indexOf(opt.id) !== -1 ? ' selected' : ''), opt.label);
     chip.type = 'button';
     chip.addEventListener('click', function () {
       toggleFeature(opt.id);
@@ -498,11 +530,11 @@ function renderFeaturesStep() {
     });
     grid.appendChild(chip);
   });
-  const noneChip = el('button', 'feature-chip' + (wiz.features.indexOf(FEATURE_NONE) !== -1 ? ' selected' : ''), '🚫 None of These');
+  const noneChip = el('button', 'studio-feature-chip muted' + (wiz.features.indexOf(FEATURE_NONE) !== -1 ? ' selected' : ''), '🚫 None of These');
   noneChip.type = 'button';
   noneChip.addEventListener('click', function () { toggleFeature(FEATURE_NONE); render(); });
   grid.appendChild(noneChip);
-  const notSureChip = el('button', 'feature-chip' + (wiz.features.indexOf(FEATURE_NOT_SURE) !== -1 ? ' selected' : ''), '🤷 Not Sure Yet');
+  const notSureChip = el('button', 'studio-feature-chip muted' + (wiz.features.indexOf(FEATURE_NOT_SURE) !== -1 ? ' selected' : ''), '🤷 Not Sure Yet');
   notSureChip.type = 'button';
   notSureChip.addEventListener('click', function () { toggleFeature(FEATURE_NOT_SURE); render(); });
   grid.appendChild(notSureChip);
@@ -514,10 +546,12 @@ function renderFeaturesStep() {
 function renderDanceFloorSizeStep() {
   const wrap = el('div', 'wizard-step');
   wrap.appendChild(el('h2', null, 'What size dance floor would you like?'));
-  const grid = el('div', 'option-grid');
+  const grid = el('div', 'studio-option-grid small');
   DANCE_FLOOR_SIZES.forEach(function (size) {
-    const card = el('button', 'option-card' + (wiz.danceFloorSizeId === size.id ? ' selected' : ''), size.ft + ' x ' + size.ft + ' ft');
+    const card = el('button', 'studio-option-card small' + (wiz.danceFloorSizeId === size.id ? ' selected' : ''));
     card.type = 'button';
+    card.appendChild(el('span', 'text', size.ft + ' x ' + size.ft + ' ft'));
+    card.appendChild(el('span', 'check', '✓'));
     card.addEventListener('click', function () {
       wiz.danceFloorSizeId = size.id;
       wiz.customDanceFloorFt = null;
@@ -525,8 +559,10 @@ function renderDanceFloorSizeStep() {
     });
     grid.appendChild(card);
   });
-  const customCard = el('button', 'option-card' + (wiz.danceFloorSizeId === 'custom' ? ' selected' : ''), 'Custom Size');
+  const customCard = el('button', 'studio-option-card small' + (wiz.danceFloorSizeId === 'custom' ? ' selected' : ''));
   customCard.type = 'button';
+  customCard.appendChild(el('span', 'text', 'Custom Size'));
+  customCard.appendChild(el('span', 'check', '✓'));
   customCard.addEventListener('click', function () {
     wiz.danceFloorSizeId = 'custom';
     render();
@@ -551,37 +587,49 @@ function renderDanceFloorSizeStep() {
   return wrap;
 }
 
-  function renderLocationStep() {
-    const wrap = el('div', 'wizard-step');
-    wrap.appendChild(el('h2', null, 'Where will everything be set up?'));
-    const grid = el('div', 'option-grid');
-    LOCATION_TYPES.forEach(function (opt) {
-      const card = el('button', 'option-card' + (wiz.spaceType === opt.id ? ' selected' : ''), opt.label);
-      card.type = 'button';
-      card.addEventListener('click', function () {
-        wiz.spaceType = opt.id;
-        render();
-      });
-      grid.appendChild(card);
+function renderLocationStep() {
+  const wrap = el('div', 'wizard-step');
+  wrap.appendChild(el('h2', null, 'Where will everything be set up?'));
+  const grid = el('div', 'studio-option-grid');
+  LOCATION_TYPES.forEach(function (opt) {
+    const parts = opt.label.split(/\s(.+)/);
+    const emoji = parts[0];
+    const text = parts[1] || opt.label;
+    const card = el('button', 'studio-option-card' + (wiz.spaceType === opt.id ? ' selected' : ''));
+    card.type = 'button';
+    card.appendChild(el('span', 'emoji', emoji));
+    card.appendChild(el('span', 'text', text));
+    card.appendChild(el('span', 'check', '✓'));
+    card.addEventListener('click', function () {
+      wiz.spaceType = opt.id;
+      render();
     });
-    wrap.appendChild(grid);
+    grid.appendChild(card);
+  });
+  wrap.appendChild(grid);
 
 wrap.appendChild(el('h3', null, 'What surface will the tent sit on?'));
-    const surfaceGrid = el('div', 'option-grid');
-    SURFACE_TYPES.forEach(function (opt) {
-      const card = el('button', 'option-card small' + (wiz.surfaceType === opt.id ? ' selected' : ''), opt.label);
-      card.type = 'button';
-      card.addEventListener('click', function () {
-        wiz.surfaceType = opt.id;
-        render();
-      });
-      surfaceGrid.appendChild(card);
+  const surfaceGrid = el('div', 'studio-option-grid small');
+  SURFACE_TYPES.forEach(function (opt) {
+    const parts = opt.label.split(/\s(.+)/);
+    const emoji = parts[0];
+    const text = parts[1] || opt.label;
+    const card = el('button', 'studio-option-card small' + (wiz.surfaceType === opt.id ? ' selected' : ''));
+    card.type = 'button';
+    card.appendChild(el('span', 'emoji', emoji));
+    card.appendChild(el('span', 'text', text));
+    card.appendChild(el('span', 'check', '✓'));
+    card.addEventListener('click', function () {
+      wiz.surfaceType = opt.id;
+      render();
     });
-    wrap.appendChild(surfaceGrid);
+    surfaceGrid.appendChild(card);
+  });
+  wrap.appendChild(surfaceGrid);
 
 renderNav(wrap);
-    return wrap;
-  }
+  return wrap;
+}
 
 function applyWizardStateToBridge() {
   Bridge.state.eventType = wiz.eventType || 'other';
@@ -621,36 +669,41 @@ function capacityLabel(key) {
   return 'dining guests';
 }
 
-
-    function tentCard(title, entry, capacityKey, badgeClass) {
-      const card = el('div', 'recommend-card ' + badgeClass);
-      card.appendChild(el('div', 'recommend-card-badge', title));
-      card.appendChild(el('h3', null, entry.tent.name));
-      card.appendChild(el('div', 'recommend-card-meta', entry.tent.widthFt + ' x ' + entry.tent.lengthFt + ' ft - ' + (entry.tent.pricePerDay != null ? (money(entry.tent.pricePerDay) + '/day') : 'Ask for pricing')));
-      card.appendChild(el('div', 'recommend-card-capacity', 'Fits up to ' + entry.tent.capacity[capacityKey] + ' ' + capacityLabel(capacityKey)));
-      if (entry.note && entry.note.message) {
-        card.appendChild(el('div', 'recommend-card-note note-' + entry.note.level, entry.note.message));
-      }
-      if (entry.caution) {
-        card.appendChild(el('div', 'recommend-card-note note-warning', entry.caution));
-      }
-      if (entry.benefit) {
-        card.appendChild(el('div', 'recommend-card-note note-info', entry.benefit));
-      }
-      const useBtn = el('button', 'btn-primary', 'Use This Layout');
-      useBtn.type = 'button';
-      useBtn.addEventListener('click', function () {
-        Bridge.state.tentId = entry.tent.id;
-        Bridge.useRecommendedLayout();
-      });
-      card.appendChild(useBtn);
-      return card;
-    }
+function tentCard(title, entry, capacityKey, badgeClass) {
+  const card = el('div', 'recommend-card ' + badgeClass);
+  card.appendChild(el('div', 'recommend-card-badge', title));
+  card.appendChild(el('h3', null, entry.tent.name));
+  card.appendChild(el('div', 'recommend-card-meta', entry.tent.widthFt + ' x ' + entry.tent.lengthFt + ' ft - ' + (entry.tent.pricePerDay != null ? (money(entry.tent.pricePerDay) + '/day') : 'Ask for pricing')));
+  card.appendChild(el('div', 'recommend-card-capacity', 'Fits up to ' + entry.tent.capacity[capacityKey] + ' ' + capacityLabel(capacityKey)));
+  if (entry.note && entry.note.message) {
+    card.appendChild(el('div', 'recommend-card-note note-' + entry.note.level, entry.note.message));
+  }
+  if (entry.caution) {
+    card.appendChild(el('div', 'recommend-card-note note-warning', entry.caution));
+  }
+  if (entry.benefit) {
+    card.appendChild(el('div', 'recommend-card-note note-info', entry.benefit));
+  }
+  const useBtn = el('button', 'btn-primary', 'Use This Layout');
+  useBtn.type = 'button';
+  useBtn.addEventListener('click', function () {
+    Bridge.state.tentId = entry.tent.id;
+    Bridge.useRecommendedLayout();
+  });
+  card.appendChild(useBtn);
+  return card;
+}
 
 function renderRecommendations(result, matchedPackage) {
   const root = document.getElementById('recommendWizard');
   root.innerHTML = '';
-  root.appendChild(el('h2', null, 'Recommended Starting Setup'));
+
+const header = el('div', 'studio-plan-header');
+  renderFinalProgress(header);
+  renderBrief(header);
+  root.appendChild(header);
+
+root.appendChild(el('h2', 'studio-plan-title', 'Recommended Starting Setup'));
 
 if (matchedPackage && (!window.ACTIVE_TENANT || window.ACTIVE_TENANT.showPackages !== false)) {
   const box = el('div', 'package-match');
