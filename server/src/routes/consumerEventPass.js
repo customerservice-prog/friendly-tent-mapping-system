@@ -11,6 +11,7 @@ const { query } = require('../db');
 const { getMailer } = require('../mailer');
 const { signToken, verifyToken } = require('../auth');
 const { EVENT_PASS_CENTS, EVENT_PASS_RENEWAL_CENTS, EVENT_PASS_RENEWAL_DURATION_DAYS } = require('../pricing');
+const { resolveAccess } = require('../access');
 
 const router = express.Router();
 
@@ -125,6 +126,46 @@ router.get('/designs/:designId/entitlement', async (req, res) => {
     });
 });
 
+
+// GET /api/consumer/designs/:designId/access
+// THE authoritative access-resolution endpoint (see server/src/access.js).
+// The frontend renders exactly what this returns and never decides access
+// itself. Works for a generic consumer design (tenant_id NULL) and for a
+// tenant-scoped design (created via /api/tenants/:slug/designs) alike.
+router.get('/designs/:designId/access', async (req, res) => {
+  const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
+  const design = designResult.rows[0];
+  if (!design) return res.status(404).json({ error: 'Design not found' });
+
+  let tenant = null;
+  if (design.tenant_id) {
+    const tenantResult = await query('SELECT * FROM tenants WHERE id = $1', [design.tenant_id]);
+    tenant = tenantResult.rows[0] || null;
+  }
+
+  let isStaff = false;
+  const header = req.headers.authorization || '';
+  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (token && tenant) {
+    try {
+      const payload = verifyToken(token);
+      if (payload.isPlatformAdmin) {
+        isStaff = true;
+      } else {
+        const membership = await query(
+          'SELECT * FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
+          [tenant.id, payload.userId]
+        );
+        isStaff = !!membership.rows[0];
+      }
+    } catch (err) {
+      isStaff = false; // invalid/expired token - fall through as a normal customer
+    }
+  }
+
+  const access = await resolveAccess({ design, tenant, isStaff });
+  res.json(access);
+});
 
 // PATCH /api/consumer/designs/:designId
 // Persists in-progress edits. A design that has never gone through the
