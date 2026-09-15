@@ -6,6 +6,8 @@
 import { recommendTents, SEATING_STYLE_OPTIONS } from '../core/recommendation.js';
 import { DANCE_FLOOR_SIZES } from '../data/danceFloor.js';
 import { suggestPackage } from '../data/packages.js';
+import * as plan2dMod from './plan2d.js';
+import { resolveAnchoringMethod } from '../data/tentStructure.js';
 
 let Bridge = window.FriendlyBridge;
 
@@ -268,56 +270,112 @@ function renderBrief(container, final) {
   container.appendChild(brief);
 }
 
-// ---------- Event Stage (right panel) — honest, state-driven, no fake AI ----------
+// ---------- Event Stage (right panel) — REAL renderer, honest, state-driven ----------
+// Uses the actual RentSketch 2D scene renderer (js/ui/plan2d.js) so the guided
+// flow shows the same tent geometry, pole layout, and anchoring visuals as the
+// real designer instead of a fake CSS placeholder. Before the customer reaches
+// the Guests step, the neutral internal guest-count baseline (50, matching the
+// rest of the app's default) only sizes the ambient tent shape and is never
+// displayed as if the customer chose it -- see currentStageGuestCount().
+
+function currentStageGuestCount() {
+    const guestsStepIndex = STEP_ORDER.indexOf('guestCount');
+    if (briefFinalMode || stepIndex > guestsStepIndex) return wiz.guestCount;
+    if (stepIndex === guestsStepIndex) return wiz.guestCount;
+    return null;
+}
+
+function previewTentEntry() {
+    if (!wiz.eventType) return null;
+    const gc = currentStageGuestCount() || 50;
+    const result = recommendTents({
+          guestCount: gc,
+          seatingStyle: wiz.seatingStyle || SEATING_STYLE_OPTIONS.NOT_SURE,
+          features: wiz.features,
+          surfaceType: wiz.surfaceType || 'notSure',
+          danceFloorSizeId: wiz.danceFloorSizeId,
+          customDanceFloorFt: wiz.customDanceFloorFt,
+    });
+    return result.recommended || result.moreSpacious || result.tighter || null;
+}
+
+function buildPreviewSnapshot(entry) {
+    const tent = entry.tent;
+    return {
+          tent: tent,
+          anchoringMethod: resolveAnchoringMethod(tent.type, wiz.surfaceType || 'notSure'),
+          objects: [],
+          lightingOn: false,
+          lightingId: 'lighting-none',
+          selectedId: null,
+          severityMap: {},
+    };
+}
+
+function buildStageOverlayNodes() {
+    const nodes = [];
+    const occLabel = eventTypeLabel(wiz.eventType);
+    nodes.push(el('div', 'studio-stage-occasion-label', occLabel));
+    const gc = currentStageGuestCount();
+    if (gc) {
+          nodes.push(el('div', 'studio-stage-caption', 'Planning for ' + gc + ' guests'));
+    } else {
+          const occWords = occLabel.replace(/^\S+\s/, '').toLowerCase();
+          nodes.push(el('div', 'studio-stage-caption', "Let's build your starting " + occWords + ' layout.'));
+    }
+    const chipsWrap = el('div', 'studio-stage-chips');
+    STAGE_DEFS.forEach(function (s) {
+          if (s.key === 'occasion') return;
+          const value = briefValueForStage(s.key);
+          if (!value) return;
+          chipsWrap.appendChild(el('span', 'studio-stage-chip', value));
+    });
+    if (chipsWrap.childNodes.length) nodes.push(chipsWrap);
+    return nodes;
+}
 
 function renderStageVisual(container) {
-  const stage = el('div', 'studio-stage-inner');
-  const hasOccasion = !!wiz.eventType;
-  if (!hasOccasion) {
-    const empty = el('div', 'studio-stage-empty');
-    empty.appendChild(el('h3', null, 'Your event starts here'));
-    empty.appendChild(el('p', null, "Answer a few quick questions and we'll build your starting plan."));
-    stage.appendChild(empty);
+    const stage = el('div', 'studio-stage-inner');
+    const hasOccasion = !!wiz.eventType;
+    if (!hasOccasion) {
+          const empty = el('div', 'studio-stage-empty');
+          empty.appendChild(el('h3', null, 'Your event starts here'));
+          empty.appendChild(el('p', null, "Answer a few quick questions and we'll build your starting plan."));
+          stage.appendChild(empty);
+          container.appendChild(stage);
+          return;
+    }
+
+    stage.classList.add('has-visual');
+
+    const visual = el('div', 'studio-stage-visual');
+    stage.appendChild(visual);
+
+    const overlay = el('div', 'studio-stage-overlay');
+    buildStageOverlayNodes().forEach(function (n) { overlay.appendChild(n); });
+    stage.appendChild(overlay);
+
     container.appendChild(stage);
-    return;
-  }
 
-const occLabel = eventTypeLabel(wiz.eventType);
-  const summary = el('div', 'studio-stage-summary');
-  const strong = el('strong', null, occLabel);
-  summary.appendChild(strong);
-  stage.appendChild(summary);
-
-const body = el('div', 'studio-stage-body');
-  if (wiz.guestCount) {
-    const dotsWrap = el('div', 'studio-stage-guestviz');
-    const dotCount = Math.max(1, Math.min(160, Math.round(wiz.guestCount / 2)));
-    for (let i = 0; i < dotCount; i++) dotsWrap.appendChild(el('span', 'g', null));
-    body.appendChild(dotsWrap);
-    body.appendChild(el('div', 'studio-stage-caption', 'Planning for ' + wiz.guestCount + ' guests'));
-  } else {
-    const occWords = occLabel.replace(/^\S+\s/, '').toLowerCase();
-    body.appendChild(el('div', 'studio-stage-caption', "Let's build your starting " + occWords + ' layout.'));
-  }
-
-const chipsWrap = el('div', 'studio-stage-chips');
-  STAGE_DEFS.forEach(function (s) {
-    if (s.key === 'occasion') return;
-    const value = briefValueForStage(s.key);
-    if (!value) return;
-    chipsWrap.appendChild(el('span', 'studio-stage-chip', value));
-  });
-  if (chipsWrap.childNodes.length) body.appendChild(chipsWrap);
-
-stage.appendChild(body);
-  container.appendChild(stage);
+    const entry = previewTentEntry();
+    if (entry) {
+          plan2dMod.mount(visual, buildPreviewSnapshot(entry), {});
+    }
 }
 
 function refreshStagePanel() {
-  var stageHost = document.querySelector('#intakeWizard .studio-stage');
-  if (!stageHost) return;
-  stageHost.innerHTML = '';
-  renderStageVisual(stageHost);
+    var stageHost = document.querySelector('#intakeWizard .studio-stage');
+    if (!stageHost) return;
+    var visual = stageHost.querySelector('.studio-stage-visual');
+    var entry = previewTentEntry();
+    if (visual && entry) {
+          plan2dMod.update(buildPreviewSnapshot(entry));
+    }
+    var overlay = stageHost.querySelector('.studio-stage-overlay');
+    if (overlay) {
+          overlay.innerHTML = '';
+          buildStageOverlayNodes().forEach(function (n) { overlay.appendChild(n); });
+    }
 }
 
 function refreshBriefPanel() {
