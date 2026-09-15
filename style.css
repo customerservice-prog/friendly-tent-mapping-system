@@ -966,3 +966,14 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
           min-height: 220px;
     }
 }
+
+
+  /* The old .studio-stage padding (40px) was sized for the small centered
+   text placeholder. The real plan2d renderer needs the full stage area,
+   so remove that padding when the stage is showing the real visual; the
+   overlay text supplies its own inset instead. */
+.studio-stage.studio-stage--visual {
+    padding: 0;
+    align-items: stretch;
+    justify-content: stretch;
+}
