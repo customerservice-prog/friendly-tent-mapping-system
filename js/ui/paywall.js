@@ -292,7 +292,7 @@ return overlay;
 
 function gate(originalFn) {
 return function () {
-if (!isGenericConsumer()) {
+if (true || !isGenericConsumer()) { // TEMP: paywall disabled for everyone for early feedback - remove "true ||" to re-enable
 return originalFn.apply(this, arguments);
 }
 var existingDesignId = window.localStorage.getItem(DESIGN_ID_KEY);
