@@ -144,6 +144,43 @@ if (!TENTS.length) { alert('This designer needs at least one tent product with a
   refreshAll();
 }
 
+// Returns the full persistable scene: the high-level preferences in
+// `state` PLUS the actual placed objects/zones/aisles from the layout
+// store. Saving `state` alone (as earlier code did) silently dropped
+// every manually placed/moved/added item on autosave.
+function getScene() {
+  var layout = store.getState();
+  return Object.assign({}, state, {
+    objects: layout.objects,
+    zones: layout.zones,
+    aisles: layout.aisles,
+  });
+}
+
+// Restores a previously saved scene (from getScene()) into both the
+// preference state and the layout store, then enters the designer on
+// it. Used for cross-device recovery and for resuming an existing paid
+// design instead of silently discarding it. Returns false (does nothing)
+// if there is no real saved layout to resume, so callers can fall back
+// to starting a fresh design.
+function loadScene(scene) {
+  if (!scene || typeof scene !== 'object') return false;
+  var hasLayout = Array.isArray(scene.objects) && scene.objects.length > 0;
+  ['eventType', 'guestCount', 'spaceType', 'surfaceType', 'needDance', 'danceFloorSizeId', 'customDanceFloorFt', 'matchedPackageId', 'tentId', 'chairId', 'lightingId', 'lastTableConfig'].forEach(function (k) {
+    if (scene[k] !== undefined && scene[k] !== null) state[k] = scene[k];
+  });
+  if (CHAIRS.length && !byId(CHAIRS, state.chairId)) state.chairId = CHAIRS[0].id;
+  if (!hasLayout) return false;
+  store.reset({
+    tentId: state.tentId,
+    objects: scene.objects,
+    zones: Array.isArray(scene.zones) ? scene.zones : [],
+    aisles: Array.isArray(scene.aisles) ? scene.aisles : [],
+  });
+  enterDesigner();
+  return true;
+}
+
 function selectTent(tentId) {
   state.tentId = tentId;
   validateLighting();
@@ -1510,6 +1547,8 @@ window.FriendlyBridge = {
   byId: byId,
   showStep: showStep,
   enterDesigner: enterDesigner,
+getScene: getScene,
+loadScene: loadScene,
   useRecommendedLayout: useRecommendedLayout,
   customizeFromScratch: customizeFromScratch,
 };
