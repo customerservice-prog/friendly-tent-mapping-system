@@ -45,4 +45,61 @@ router.get('/overview', requirePlatformAdmin, async (req, res) => {
   });
 });
 
+// GET /api/admin/revenue
+// Platform-admin only: payment taxonomy rollup. RentSketch has distinct
+// money flows that must never be confused with each other:
+//   1. consumerDeposits - money end-customers pay a Friendly tenant
+//      business toward their own rental order (quote_requests). This is
+//      the TENANT's revenue, not the platform's, unless a Connect fee
+//      applies (#2).
+//   2. platformFees - the platform's own cut of #1, taken via Stripe
+//      Connect's application_fee_amount only when a tenant has an active
+//      connected account and a real (non-zero) PLATFORM_FEE_PERCENT has
+//      been set (see server/src/pricing.js - currently 0, a placeholder
+//      pending a real business decision). Persisted per-transaction on
+//      quote_requests.platform_fee_cents (migrations/006) so it can be
+//      reported here instead of only living inside Stripe's own dashboard.
+//   3. consumerPayments - RentSketch's own direct-to-consumer product (the
+//      Event Pass + renewals), tracked in consumer_payments. Platform
+//      revenue, unrelated to any tenant.
+//   4. tenantSubscriptions - recurring SaaS billing tenants would pay
+//      RentSketch for their plan (Starter/Pro/Commerce/Enterprise). NOT
+//      YET IMPLEMENTED: no Stripe Billing integration, no
+//      stripe_customer_id/stripe_subscription_id on tenants, and no real
+//      Stripe Price IDs configured. subscription_plan/subscription_status
+//      are descriptive fields only, not evidence of an actual charge.
+router.get('/revenue', requirePlatformAdmin, async (req, res) => {
+  const deposits = await db.query(
+    `SELECT COUNT(*)::int AS count, COALESCE(SUM(amount_paid_cents), 0)::int AS total_cents
+     FROM quote_requests WHERE payment_status = 'paid'`
+  );
+
+  let fees;
+  try {
+    fees = await db.query(
+      `SELECT COUNT(*)::int AS count, COALESCE(SUM(platform_fee_cents), 0)::int AS total_cents
+       FROM quote_requests
+       WHERE payment_status = 'paid' AND platform_fee_cents IS NOT NULL AND platform_fee_cents > 0`
+    );
+  } catch (err) {
+    // undefined_column (42703): migrations/006_platform_fee_ledger.sql has not been run yet.
+    fees = { rows: [{ count: 0, total_cents: 0 }] };
+  }
+
+  const consumerPayments = await db.query(
+    `SELECT payment_type, COUNT(*)::int AS count, COALESCE(SUM(amount_cents), 0)::int AS total_cents
+     FROM consumer_payments WHERE status = 'paid' GROUP BY payment_type`
+  );
+
+  res.json({
+    consumerDeposits: deposits.rows[0],
+    platformFees: fees.rows[0],
+    consumerPayments: consumerPayments.rows,
+    tenantSubscriptions: {
+      implemented: false,
+      note: 'Stripe Billing for tenant subscription plans has not been built yet (no Stripe Price IDs configured - pending a real business pricing decision). subscription_plan/subscription_status are descriptive fields only, not evidence of an actual charge.',
+    },
+  });
+});
+
 module.exports = router;
