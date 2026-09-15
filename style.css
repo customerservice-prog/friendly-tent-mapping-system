@@ -755,3 +755,148 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
         font-size: 38px;
   }
 }
+
+
+  /* Guided Event Studio Phase 2: Seating / Space / Extras + Your Plan recap */
+.studio-option-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.studio-option-grid.small {
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.studio-option-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 14px;
+  border: 1.5px solid var(--studio-border);
+  border-radius: 12px;
+  background: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--studio-text);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  text-align: left;
+  font-family: inherit;
+  flex-wrap: wrap;
+}
+
+.studio-option-card:hover {
+  border-color: var(--brand-primary, #2f6f4f);
+}
+
+.studio-option-card.selected {
+  border-color: var(--brand-primary, #2f6f4f);
+  background: var(--brand-primary-tint, rgba(47,111,79,0.08));
+}
+
+.studio-option-card .emoji {
+  font-size: 19px;
+  line-height: 1;
+}
+
+.studio-option-card .text {
+  flex: 1;
+  min-width: 0;
+}
+
+.studio-option-card .hint {
+  flex: 1 0 100%;
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--studio-text-muted);
+}
+
+.studio-option-card .check {
+  color: var(--brand-primary, #2f6f4f);
+  font-weight: 700;
+  visibility: hidden;
+}
+
+.studio-option-card.selected .check {
+  visibility: visible;
+}
+
+.studio-option-card.small {
+  padding: 10px 12px;
+  font-size: 13px;
+}
+
+.studio-feature-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.studio-feature-chip {
+  background: #fff;
+  border: 1.5px solid var(--studio-border);
+  border-radius: 999px;
+  padding: 9px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--studio-text);
+  font-family: inherit;
+}
+
+.studio-feature-chip:hover {
+  border-color: var(--brand-primary, #2f6f4f);
+}
+
+.studio-feature-chip.selected {
+  border-color: var(--brand-primary, #2f6f4f);
+  background: var(--brand-primary, #2f6f4f);
+  color: #fff;
+}
+
+.studio-feature-chip.muted {
+  color: var(--studio-text-muted);
+}
+
+.studio-feature-chip.muted.selected {
+  color: #fff;
+}
+
+.studio-plan-header {
+  background: var(--studio-panel-bg);
+  border: 1px solid var(--studio-border);
+  border-radius: 16px;
+  padding: 24px 24px 6px;
+  margin-bottom: 20px;
+}
+
+.studio-plan-header .studio-progress {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.studio-plan-header .studio-progress-item {
+  padding: 0;
+}
+
+.studio-plan-title {
+  font-size: 22px;
+  color: var(--brand-primary-dark);
+  margin: 0 0 14px;
+}
+
+@media (max-width: 880px) {
+  .studio-option-grid {
+    grid-template-columns: 1fr;
+  }
+  .studio-plan-header .studio-progress {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
