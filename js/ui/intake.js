@@ -419,6 +419,8 @@ const display = el('div', 'studio-guest-count-display');
   const plusBtn = el('button', 'count-btn', '+');
   plusBtn.type = 'button';
 
+  minusBtn.setAttribute('aria-label', 'Decrease guest count');
+  plusBtn.setAttribute('aria-label', 'Increase guest count');
 const quickWrap = el('div', 'studio-guest-quickpicks');
   function renderQuickpicks() {
     quickWrap.innerHTML = '';
