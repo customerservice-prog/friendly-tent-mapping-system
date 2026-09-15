@@ -45,6 +45,11 @@ router.get('/:slug/admin', requireTenantAccess, async (req, res) => {
           subscriptionPlan: t.subscription_plan,
           subscriptionStatus: t.subscription_status,
           trialEndsAt: t.trial_ends_at,
+        customerAccess: t.customer_access,
+        passPriceCents: t.pass_price_cents,
+        passDurationDays: t.pass_duration_days,
+        activeOrderGraceDays: t.active_order_grace_days,
+        creditPassToOrder: t.credit_pass_to_order,
     }));
 });
 
@@ -60,6 +65,9 @@ router.patch('/:slug', requireTenantAccess, async (req, res) => {
           secondaryColor: 'secondary_color', showPrices: 'show_prices',
           poweredByEnabled: 'powered_by_enabled', allowedOrigins: 'allowed_origins',
           webhookUrl: 'webhook_url', webhookSecret: 'webhook_secret',
+      customerAccess: 'customer_access', passPriceCents: 'pass_price_cents',
+      passDurationDays: 'pass_duration_days', activeOrderGraceDays: 'active_order_grace_days',
+      creditPassToOrder: 'credit_pass_to_order',
     };
     const sets = [];
     const values = [];
