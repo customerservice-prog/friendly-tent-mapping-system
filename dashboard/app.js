@@ -534,6 +534,7 @@ function esc(s) {
    try {
      var overview = await api('/api/admin/overview');
      var tenantsResp = await api('/api/admin/tenants');
+     var revenue = await api('/api/admin/revenue');
      if (gen !== renderGeneration) return;
      var rows = tenantsResp.tenants || [];
      var statusCounts = {};
@@ -561,6 +562,14 @@ function esc(s) {
        '<div class="stat-card"><div class="stat-num">' + (statusCounts.trialing || 0) + '</div><div class="stat-label">Trialing</div></div>' +
        '<div class="stat-card"><div class="stat-num">' + (statusCounts.active || 0) + '</div><div class="stat-label">Active (Paid)</div></div>' +
        '</div>' +
+       '<h2 class="dash-section-title">Revenue (Payment Taxonomy)</h2>' +
+       '<div class="stat-row">' +
+       '<div class="stat-card"><div class="stat-num">' + money(revenue.consumerDeposits.total_cents / 100) + '</div><div class="stat-label">Consumer Deposits Paid (' + revenue.consumerDeposits.count + ')</div></div>' +
+       '<div class="stat-card"><div class="stat-num">' + money(revenue.platformFees.total_cents / 100) + '</div><div class="stat-label">Platform Fees Collected (' + revenue.platformFees.count + ')</div></div>' +
+       '<div class="stat-card"><div class="stat-num">' + money((revenue.consumerPayments || []).reduce(function (sum, p) { return sum + p.total_cents; }, 0) / 100) + '</div><div class="stat-label">Event Pass Revenue</div></div>' +
+       '<div class="stat-card"><div class="stat-num">\u2014</div><div class="stat-label">Tenant Subscriptions (not yet built)</div></div>' +
+       '</div>' +
+       '<p class="muted">Consumer deposits are tenant revenue (RentSketch never touches these funds unless a Connect fee applies). Platform fees are RentSketch\'s own cut of a Connect deposit. Event Pass revenue is RentSketch\'s direct-to-consumer product, unrelated to any tenant. Tenant subscription billing (Starter/Pro/Commerce/Enterprise) has no Stripe Billing integration yet - pending real Price IDs and a business pricing decision.</p>' +
        '<h2 class="dash-section-title">All Tenants</h2>' +
        '<table class="dash-table"><thead><tr>' +
        '<th>Business</th><th>Plan</th><th>Status</th><th>Trial Ends</th><th>Connect</th>' +
