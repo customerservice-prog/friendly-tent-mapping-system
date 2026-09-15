@@ -77,10 +77,21 @@ router.post('/:slug/quote-requests/:id/checkout-session', async (req, res) => {
               cancel_url: origin + '/designer/?tenant=' + tenant.slug + '&payment=cancelled',
             });
 
-            await db.query(
-              'UPDATE quote_requests SET stripe_checkout_session_id = $1, deposit_amount_cents = $2, platform_fee_cents = $3 WHERE id = $4',
-              [session.id, depositCents, feeCents, quoteRequest.id]
+            try {
+              await db.query(
+                'UPDATE quote_requests SET stripe_checkout_session_id = $1, deposit_amount_cents = $2, platform_fee_cents = $3 WHERE id = $4',
+                [session.id, depositCents, feeCents, quoteRequest.id]
               );
+            } catch (err) {
+              if (err.code === '42703') {
+                await db.query(
+                  'UPDATE quote_requests SET stripe_checkout_session_id = $1, deposit_amount_cents = $2 WHERE id = $3',
+                  [session.id, depositCents, quoteRequest.id]
+                );
+              } else {
+                throw err;
+              }
+            }
 
             res.json({ url: session.url });
 });
