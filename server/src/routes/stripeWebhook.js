@@ -5,6 +5,7 @@
 const express = require('express');
 const { query } = require('../db');
 const { EVENT_PASS_DURATION_DAYS, EVENT_PASS_RENEWAL_DURATION_DAYS } = require('../pricing');
+const { syncOrderEntitlement } = require('../orderProviders/friendlyOrderProvider');
 
 const router = express.Router();
 
@@ -90,15 +91,26 @@ router.post('/', async (req, res) => {
         [session.payment_intent, entitlementResult.rows[0].id, session.id]
       );
     } else if (session.metadata && session.metadata.quoteRequestId) {
-                  const { quoteRequestId } = session.metadata;
-                  await query(
-                              `UPDATE quote_requests
-                                       SET payment_status = 'paid', status = 'booked',
-                                                    amount_paid_cents = $1, stripe_payment_intent_id = $2
-                                                             WHERE id = $3`,
-                              [session.amount_total, session.payment_intent, quoteRequestId]
-                            );
-        }
+      const { quoteRequestId } = session.metadata;
+      const updateResult = await query(
+        `UPDATE quote_requests
+         SET payment_status = 'paid', status = 'booked',
+             amount_paid_cents = $1, stripe_payment_intent_id = $2
+         WHERE id = $3
+         RETURNING *`,
+        [session.amount_total, session.payment_intent, quoteRequestId]
+      );
+      const updatedQuoteRequest = updateResult.rows[0];
+      if (updatedQuoteRequest) {
+        // Booking-via-deposit-checkout must grant the same active_order
+        // entitlement that a staff PATCH to status=booked would grant -
+        // otherwise a customer who pays a deposit through Stripe checkout
+        // would still be asked to buy a separate Event Pass to view their
+        // own design, which is exactly the inconsistency this exists to avoid.
+        const tenantResult = await query('SELECT * FROM tenants WHERE id = $1', [updatedQuoteRequest.tenant_id]);
+        await syncOrderEntitlement(updatedQuoteRequest, tenantResult.rows[0]);
+      }
+    }
               }
 
               res.json({ received: true });
