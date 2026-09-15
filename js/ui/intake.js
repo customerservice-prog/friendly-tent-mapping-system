@@ -454,6 +454,7 @@ renderQuickpicks();
 
 const field = el('div', 'field');
   const label = el('label', null, 'Or enter an exact number');
+  label.setAttribute('for', 'guestCountExactInput');
   field.appendChild(label);
   const input = document.createElement('input');
   input.type = 'number';
@@ -461,6 +462,7 @@ const field = el('div', 'field');
   input.max = '1000';
   input.value = String(wiz.guestCount);
   input.className = 'guest-count-input';
+  input.id = 'guestCountExactInput';
   input.addEventListener('input', function () {
     const n = Math.max(1, parseInt(input.value, 10) || 1);
     wiz.guestCount = n;
@@ -573,10 +575,10 @@ function renderDanceFloorSizeStep() {
   wrap.appendChild(grid);
   if (wiz.danceFloorSizeId === 'custom') {
     const field = el('div', 'field');
-    field.appendChild(el('label', null, 'Custom size (feet per side)'));
+    var dfLabel = el('label', null, 'Custom size (feet per side)'); dfLabel.setAttribute('for', 'customDanceFloorInput'); field.appendChild(dfLabel);
     const input = document.createElement('input');
     input.type = 'number';
-    input.min = '6';
+    input.min = '6'; input.id = 'customDanceFloorInput';
     input.max = '60';
     input.value = wiz.customDanceFloorFt ? String(wiz.customDanceFloorFt) : '';
     input.addEventListener('input', function () {
