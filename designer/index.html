@@ -215,7 +215,10 @@ fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RE
             if (TENTS.length && !TENTS.some(function (t) { return t.id === fbState.tentId; })) fbState.tentId = TENTS[0].id;
             if (CHAIRS.length && !CHAIRS.some(function (c) { return c.id === fbState.chairId; })) fbState.chairId = CHAIRS[0].id;
           }
-        } else {
+        tenant.tents = TENTS;
+tenant.tables = TABLES;
+tenant.chairs = CHAIRS;
+} else {
           var byExternalId = {};
           data.products.forEach(function (p) { if (p.external_id) byExternalId[p.external_id] = p; });
           // IMPORTANT: mutate the shared TENTS/TABLES/CHAIRS catalog arrays (the
