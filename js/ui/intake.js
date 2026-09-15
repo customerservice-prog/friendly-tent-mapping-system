@@ -703,7 +703,7 @@ function renderRecommendations(result, matchedPackage) {
   root.innerHTML = '';
 
 const header = el('div', 'studio-plan-header');
-  renderFinalProgress(header);
+  briefFinalMode = true; renderFinalProgress(header);
   briefFinalMode = true; renderBrief(header); briefFinalMode = false;
   root.appendChild(header);
 
