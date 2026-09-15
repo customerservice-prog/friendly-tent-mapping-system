@@ -18,7 +18,7 @@ const router = express.Router();
 function getStripe() {
     if (!process.env.STRIPE_SECRET_KEY) return null;
     // eslint-disable-next-line global-require
-  const Stripe = require('stripe');
+    const Stripe = require('stripe');
     return new Stripe(process.env.STRIPE_SECRET_KEY);
 }
 
@@ -36,7 +36,7 @@ router.post('/designs', async (req, res) => {
         `INSERT INTO designs (tenant_id, anonymous_session_id, schema_version, event_type, guest_count, scene, estimate_total)
          VALUES (NULL, $1, $2, $3, $4, $5, $6) RETURNING id`,
         [anonymousSessionId || null, schemaVersion || 1, eventType || null, guestCount || null, scene, estimateTotal || null]
-        );
+    );
     res.status(201).json(result.rows[0]);
 });
 
@@ -46,60 +46,84 @@ router.post('/designs', async (req, res) => {
 router.post('/designs/:designId/event-pass/checkout-session', async (req, res) => {
     const stripe = getStripe();
     if (!stripe) {
-          return res.status(503).json({ error: 'Payments are not configured for this server yet.' });
+        return res.status(503).json({ error: 'Payments are not configured for this server yet.' });
     }
 
-              const { customerEmail } = req.body || {};
+    const { customerEmail } = req.body || {};
     if (!customerEmail) {
-          return res.status(400).json({ error: 'customerEmail is required' });
+        return res.status(400).json({ error: 'customerEmail is required' });
     }
 
-              const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
+    const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
     const design = designResult.rows[0];
     if (!design) {
-          return res.status(404).json({ error: 'Design not found' });
+        return res.status(404).json({ error: 'Design not found' });
     }
     if (design.tenant_id) {
-          // Tenant-attached designs use a different pass type (tenant_paid_pass),
-      // built separately - see ROADMAP.md.
-      return res.status(400).json({ error: 'This design belongs to a rental company and uses a different pass type.' });
+        // Tenant-attached designs use a different pass type (tenant_paid_pass),
+        // built separately - see ROADMAP.md.
+        return res.status(400).json({ error: 'This design belongs to a rental company and uses a different pass type.' });
     }
 
-              const origin = req.headers.origin || (req.body && req.body.origin);
+    const origin = req.headers.origin || (req.body && req.body.origin);
 
-              const session = await stripe.checkout.sessions.create({
-                    mode: 'payment',
-                    payment_method_types: ['card'],
-                    customer_email: customerEmail,
-                    line_items: [
-                      {
-                                price_data: {
-                                            currency: 'usd',
-                                            unit_amount: EVENT_PASS_CENTS,
-                                            product_data: {
-                                                          name: 'RentSketch Event Pass',
-                                                          description: '30 days of full editing access to your event design',
-                                            },
-                                },
-                                quantity: 1,
-                      },
-                          ],
-                    metadata: {
-                            kind: 'consumer_event_pass',
-                            designId: design.id,
-                            customerEmail,
+    const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        payment_method_types: ['card'],
+        customer_email: customerEmail,
+        line_items: [
+            {
+                price_data: {
+                    currency: 'usd',
+                    unit_amount: EVENT_PASS_CENTS,
+                    product_data: {
+                        name: 'RentSketch Event Pass',
+                        description: '30 days of full editing access to your event design',
                     },
-                    success_url: `${origin}/designer/?design=${design.id}&payment=success`,
-                    cancel_url: `${origin}/designer/?design=${design.id}&payment=cancelled`,
-              });
+                },
+                quantity: 1,
+            },
+        ],
+        metadata: {
+            kind: 'consumer_event_pass',
+            designId: design.id,
+            customerEmail,
+        },
+        success_url: `${origin}/designer/?design=${design.id}&payment=success`,
+        cancel_url: `${origin}/designer/?design=${design.id}&payment=cancelled`,
+    });
 
-              await query(
-                    `INSERT INTO consumer_payments (design_id, customer_email, payment_type, amount_cents, status, stripe_checkout_session_id)
-                         VALUES ($1, $2, 'consumer_event_pass', $3, 'pending', $4)`,
-                    [design.id, customerEmail, EVENT_PASS_CENTS, session.id]
-                  );
+    await query(
+        `INSERT INTO consumer_payments (design_id, customer_email, payment_type, amount_cents, status, stripe_checkout_session_id)
+         VALUES ($1, $2, 'consumer_event_pass', $3, 'pending', $4)`,
+        [design.id, customerEmail, EVENT_PASS_CENTS, session.id]
+    );
 
-              res.json({ url: session.url });
+    res.json({ url: session.url });
+});
+
+// GET /api/consumer/designs/:designId
+// Fetches a generic (non-tenant) consumer design's saved data. This is
+// what lets the /designs/recovery-link + /designs/recover flow below
+// actually resume editing on a NEW device - those two only ever hand back
+// a designId, never the scene itself. Scoped to tenant_id IS NULL, the
+// same rule PATCH below uses, so this can never be used to read a rental
+// company's tenant-attached design data.
+router.get('/designs/:designId', async (req, res) => {
+    const result = await query(
+        'SELECT id, event_type, guest_count, scene, estimate_total, schema_version FROM designs WHERE id = $1 AND tenant_id IS NULL',
+        [req.params.designId]
+    );
+    const design = result.rows[0];
+    if (!design) return res.status(404).json({ error: 'Design not found' });
+    res.json({
+        id: design.id,
+        eventType: design.event_type,
+        guestCount: design.guest_count,
+        scene: design.scene,
+        estimateTotal: design.estimate_total,
+        schemaVersion: design.schema_version,
+    });
 });
 
 // GET /api/consumer/designs/:designId/entitlement
@@ -108,24 +132,23 @@ router.post('/designs/:designId/event-pass/checkout-session', async (req, res) =
 // decide whether to unlock editing.
 router.get('/designs/:designId/entitlement', async (req, res) => {
     const result = await query(
-          `SELECT * FROM entitlements
-               WHERE design_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
-                    ORDER BY expires_at DESC NULLS LAST
-                         LIMIT 1`,
-          [req.params.designId]
-        );
+        `SELECT * FROM entitlements
+         WHERE design_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
+         ORDER BY expires_at DESC NULLS LAST
+         LIMIT 1`,
+        [req.params.designId]
+    );
     const entitlement = result.rows[0];
     if (!entitlement) {
-          return res.json({ active: false });
+        return res.json({ active: false });
     }
     res.json({
-          active: true,
-          source: entitlement.source,
-          expiresAt: entitlement.expires_at,
-          capabilities: entitlement.capabilities,
+        active: true,
+        source: entitlement.source,
+        expiresAt: entitlement.expires_at,
+        capabilities: entitlement.capabilities,
     });
 });
-
 
 // GET /api/consumer/designs/:designId/access
 // THE authoritative access-resolution endpoint (see server/src/access.js).
@@ -133,38 +156,38 @@ router.get('/designs/:designId/entitlement', async (req, res) => {
 // itself. Works for a generic consumer design (tenant_id NULL) and for a
 // tenant-scoped design (created via /api/tenants/:slug/designs) alike.
 router.get('/designs/:designId/access', async (req, res) => {
-  const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
-  const design = designResult.rows[0];
-  if (!design) return res.status(404).json({ error: 'Design not found' });
+    const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
+    const design = designResult.rows[0];
+    if (!design) return res.status(404).json({ error: 'Design not found' });
 
-  let tenant = null;
-  if (design.tenant_id) {
-    const tenantResult = await query('SELECT * FROM tenants WHERE id = $1', [design.tenant_id]);
-    tenant = tenantResult.rows[0] || null;
-  }
-
-  let isStaff = false;
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (token && tenant) {
-    try {
-      const payload = verifyToken(token);
-      if (payload.isPlatformAdmin) {
-        isStaff = true;
-      } else {
-        const membership = await query(
-          'SELECT * FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
-          [tenant.id, payload.userId]
-        );
-        isStaff = !!membership.rows[0];
-      }
-    } catch (err) {
-      isStaff = false; // invalid/expired token - fall through as a normal customer
+    let tenant = null;
+    if (design.tenant_id) {
+        const tenantResult = await query('SELECT * FROM tenants WHERE id = $1', [design.tenant_id]);
+        tenant = tenantResult.rows[0] || null;
     }
-  }
 
-  const access = await resolveAccess({ design, tenant, isStaff });
-  res.json(access);
+    let isStaff = false;
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    if (token && tenant) {
+        try {
+            const payload = verifyToken(token);
+            if (payload.isPlatformAdmin) {
+                isStaff = true;
+            } else {
+                const membership = await query(
+                    'SELECT * FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
+                    [tenant.id, payload.userId]
+                );
+                isStaff = !!membership.rows[0];
+            }
+        } catch (err) {
+            isStaff = false; // invalid/expired token - fall through as a normal customer
+        }
+    }
+
+    const access = await resolveAccess({ design, tenant, isStaff });
+    res.json(access);
 });
 
 // PATCH /api/consumer/designs/:designId
@@ -174,32 +197,32 @@ router.get('/designs/:designId/access', async (req, res) => {
 // ACTIVE one is required to keep saving - expired/revoked means read-only
 // until renewed. Server-authoritative; the client cannot bypass this.
 router.patch('/designs/:designId', async (req, res) => {
-  const { scene, eventType, guestCount, estimateTotal } = req.body || {};
-  if (!scene) return res.status(400).json({ error: 'scene is required' });
+    const { scene, eventType, guestCount, estimateTotal } = req.body || {};
+    if (!scene) return res.status(400).json({ error: 'scene is required' });
 
-  const everHad = await query('SELECT id FROM entitlements WHERE design_id = $1 LIMIT 1', [req.params.designId]);
-  if (everHad.rows.length > 0) {
-    const active = await query(
-      `SELECT id FROM entitlements
-       WHERE design_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
-       LIMIT 1`,
-      [req.params.designId]
-    );
-    if (active.rows.length === 0) {
-      return res.status(402).json({ error: 'Your Event Pass has expired. Renew to keep editing.', code: 'event_pass_expired' });
+    const everHad = await query('SELECT id FROM entitlements WHERE design_id = $1 LIMIT 1', [req.params.designId]);
+    if (everHad.rows.length > 0) {
+        const active = await query(
+            `SELECT id FROM entitlements
+             WHERE design_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
+             LIMIT 1`,
+            [req.params.designId]
+        );
+        if (active.rows.length === 0) {
+            return res.status(402).json({ error: 'Your Event Pass has expired. Renew to keep editing.', code: 'event_pass_expired' });
+        }
     }
-  }
 
-  const result = await query(
-    `UPDATE designs SET scene = $1, event_type = COALESCE($2, event_type),
-       guest_count = COALESCE($3, guest_count), estimate_total = COALESCE($4, estimate_total),
-       updated_at = now()
-     WHERE id = $5 AND tenant_id IS NULL
-     RETURNING id`,
-    [scene, eventType || null, guestCount || null, estimateTotal || null, req.params.designId]
-  );
-  if (!result.rows[0]) return res.status(404).json({ error: 'Design not found' });
-  res.json({ ok: true });
+    const result = await query(
+        `UPDATE designs SET scene = $1, event_type = COALESCE($2, event_type),
+         guest_count = COALESCE($3, guest_count), estimate_total = COALESCE($4, estimate_total),
+         updated_at = now()
+         WHERE id = $5 AND tenant_id IS NULL
+         RETURNING id`,
+        [scene, eventType || null, guestCount || null, estimateTotal || null, req.params.designId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'Design not found' });
+    res.json({ ok: true });
 });
 
 // POST /api/consumer/designs/:designId/event-pass/renewal-checkout-session
@@ -208,53 +231,52 @@ router.patch('/designs/:designId', async (req, res) => {
 // deliberately distinct from 'consumer_event_pass' so the webhook can never
 // confuse a renewal with a first purchase.
 router.post('/designs/:designId/event-pass/renewal-checkout-session', async (req, res) => {
-  const stripe = getStripe();
-  if (!stripe) return res.status(503).json({ error: 'Payments are not configured for this server yet.' });
+    const stripe = getStripe();
+    if (!stripe) return res.status(503).json({ error: 'Payments are not configured for this server yet.' });
 
-  const { customerEmail } = req.body || {};
-  if (!customerEmail) return res.status(400).json({ error: 'customerEmail is required' });
+    const { customerEmail } = req.body || {};
+    if (!customerEmail) return res.status(400).json({ error: 'customerEmail is required' });
 
-  const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
-  const design = designResult.rows[0];
-  if (!design) return res.status(404).json({ error: 'Design not found' });
-  if (design.tenant_id) {
-    return res.status(400).json({ error: 'This design belongs to a rental company and uses a different pass type.' });
-  }
+    const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
+    const design = designResult.rows[0];
+    if (!design) return res.status(404).json({ error: 'Design not found' });
+    if (design.tenant_id) {
+        return res.status(400).json({ error: 'This design belongs to a rental company and uses a different pass type.' });
+    }
 
-  const origin = req.headers.origin || (req.body && req.body.origin);
-  const session = await stripe.checkout.sessions.create({
-    mode: 'payment',
-    payment_method_types: ['card'],
-    customer_email: customerEmail,
-    line_items: [{
-      price_data: {
-        currency: 'usd',
-        unit_amount: EVENT_PASS_RENEWAL_CENTS,
-        product_data: {
-          name: 'RentSketch Event Pass Renewal',
-          description: '+30 more days of full editing access to your event design',
+    const origin = req.headers.origin || (req.body && req.body.origin);
+    const session = await stripe.checkout.sessions.create({
+        mode: 'payment',
+        payment_method_types: ['card'],
+        customer_email: customerEmail,
+        line_items: [{
+            price_data: {
+                currency: 'usd',
+                unit_amount: EVENT_PASS_RENEWAL_CENTS,
+                product_data: {
+                    name: 'RentSketch Event Pass Renewal',
+                    description: '+30 more days of full editing access to your event design',
+                },
+            },
+            quantity: 1,
+        }],
+        metadata: {
+            kind: 'consumer_event_pass_renewal',
+            designId: design.id,
+            customerEmail,
         },
-      },
-      quantity: 1,
-    }],
-    metadata: {
-      kind: 'consumer_event_pass_renewal',
-      designId: design.id,
-      customerEmail,
-    },
-    success_url: `${origin}/designer/?design=${design.id}&payment=success`,
-    cancel_url: `${origin}/designer/?design=${design.id}&payment=cancelled`,
-  });
+        success_url: `${origin}/designer/?design=${design.id}&payment=success`,
+        cancel_url: `${origin}/designer/?design=${design.id}&payment=cancelled`,
+    });
 
-  await query(
-    `INSERT INTO consumer_payments (design_id, customer_email, payment_type, amount_cents, status, stripe_checkout_session_id)
-     VALUES ($1, $2, 'event_pass_extension', $3, 'pending', $4)`,
-    [design.id, customerEmail, EVENT_PASS_RENEWAL_CENTS, session.id]
-  );
+    await query(
+        `INSERT INTO consumer_payments (design_id, customer_email, payment_type, amount_cents, status, stripe_checkout_session_id)
+         VALUES ($1, $2, 'event_pass_extension', $3, 'pending', $4)`,
+        [design.id, customerEmail, EVENT_PASS_RENEWAL_CENTS, session.id]
+    );
 
-  res.json({ url: session.url });
+    res.json({ url: session.url });
 });
-
 
 // POST /api/consumer/designs/recovery-link
 // A consumer who paid for an Event Pass on one device/browser has no
@@ -265,59 +287,59 @@ router.post('/designs/:designId/event-pass/renewal-checkout-session', async (req
 // email actually matched a paid design, so this endpoint can never be used
 // to probe which emails own a paid design on this design id.
 router.post('/designs/recovery-link', async (req, res) => {
-const { email } = req.body || {};
-if (!email) return res.status(400).json({ error: 'email is required' });
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'email is required' });
 
-const normalizedEmail = String(email).toLowerCase();
-const match = await query(
-`SELECT design_id FROM entitlements WHERE lower(customer_email) = $1
- UNION
- SELECT design_id FROM consumer_payments WHERE lower(customer_email) = $1
- ORDER BY design_id DESC
- LIMIT 1`,
-[normalizedEmail]
-);
-if (match.rows.length === 0) {
-return res.json({ ok: true });
-}
+    const normalizedEmail = String(email).toLowerCase();
+    const match = await query(
+        `SELECT design_id FROM entitlements WHERE lower(customer_email) = $1
+         UNION
+         SELECT design_id FROM consumer_payments WHERE lower(customer_email) = $1
+         ORDER BY design_id DESC
+         LIMIT 1`,
+        [normalizedEmail]
+    );
+    if (match.rows.length === 0) {
+        return res.json({ ok: true });
+    }
 
-const mailer = getMailer();
-if (!mailer) {
-return res.status(503).json({ error: 'Email delivery is not configured for this server yet.' });
-}
+    const mailer = getMailer();
+    if (!mailer) {
+        return res.status(503).json({ error: 'Email delivery is not configured for this server yet.' });
+    }
 
-const designId = match.rows[0].design_id;
-const token = signToken(
-{ kind: 'consumer_design_recovery', designId, email: normalizedEmail },
-{ expiresIn: '15m' }
-);
-const origin = req.headers.origin || (req.body && req.body.origin) || '';
-const link = origin + '/designer/?recoveryToken=' + encodeURIComponent(token);
+    const designId = match.rows[0].design_id;
+    const token = signToken(
+        { kind: 'consumer_design_recovery', designId, email: normalizedEmail },
+        { expiresIn: '15m' }
+    );
+    const origin = req.headers.origin || (req.body && req.body.origin) || '';
+    const link = origin + '/designer/?recoveryToken=' + encodeURIComponent(token);
 
-await mailer.send(
-normalizedEmail,
-'Your RentSketch event design link',
-'Continue editing your event design: ' + link + '\n\nThis link expires in 15 minutes.'
-);
+    await mailer.send(
+        normalizedEmail,
+        'Your RentSketch event design link',
+        'Continue editing your event design: ' + link + '\n\nThis link expires in 15 minutes.'
+    );
 
-res.json({ ok: true });
+    res.json({ ok: true });
 });
 
 // GET /api/consumer/designs/recover?token=...
 // Redeems the token from the emailed recovery link and hands back the
 // design id so the frontend can resume editing on this new device.
 router.get('/designs/recover', async (req, res) => {
-const { token } = req.query || {};
-if (!token) return res.status(400).json({ error: 'token is required' });
-try {
-const payload = verifyToken(token);
-if (payload.kind !== 'consumer_design_recovery') {
-return res.status(400).json({ error: 'Invalid recovery token' });
-}
-res.json({ designId: payload.designId });
-} catch (err) {
-res.status(400).json({ error: 'This recovery link is invalid or has expired.' });
-}
+    const { token } = req.query || {};
+    if (!token) return res.status(400).json({ error: 'token is required' });
+    try {
+        const payload = verifyToken(token);
+        if (payload.kind !== 'consumer_design_recovery') {
+            return res.status(400).json({ error: 'Invalid recovery token' });
+        }
+        res.json({ designId: payload.designId });
+    } catch (err) {
+        res.status(400).json({ error: 'This recovery link is invalid or has expired.' });
+    }
 });
 
 module.exports = router;
