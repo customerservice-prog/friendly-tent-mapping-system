@@ -207,7 +207,7 @@ function renderProgress(container) {
     const isActive = currentStage && currentStage.key === stage.key;
     const isDone = !isActive && firstIndex < stepIndex;
     const value = briefValueForStage(stage.key);
-    const item = el('button', 'studio-progress-item' + (isDone ? ' is-done' : '') + (isActive ? ' is-active' : ''));
+    const item = el('button', 'studio-progress-item' + (isDone ? ' is-done' : '') + (isActive ? ' is-active' : '')); item.setAttribute('aria-current', isActive ? 'step' : 'false');
     item.type = 'button';
     if (isDone) {
       item.classList.add('is-clickable');
@@ -391,7 +391,7 @@ function renderEventTypeStep() {
     const parts = opt.label.split(/\s(.+)/);
     const emoji = parts[0];
     const text = parts[1] || opt.label;
-    const card = el('button', 'studio-occasion-card' + (wiz.eventType === opt.id ? ' selected' : ''));
+    const card = el('button', 'studio-occasion-card' + (wiz.eventType === opt.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.eventType === opt.id ? 'true' : 'false');
     card.type = 'button';
     card.appendChild(el('span', 'emoji', emoji));
     card.appendChild(el('span', 'text', text));
@@ -423,7 +423,7 @@ const quickWrap = el('div', 'studio-guest-quickpicks');
   function renderQuickpicks() {
     quickWrap.innerHTML = '';
     [25, 50, 75, 100, 150, 200].forEach(function (n) {
-      const pick = el('button', 'studio-guest-quickpick' + (wiz.guestCount === n ? ' selected' : ''), String(n));
+      const pick = el('button', 'studio-guest-quickpick' + (wiz.guestCount === n ? ' selected' : ''), String(n)); pick.setAttribute('aria-pressed', wiz.guestCount === n ? 'true' : 'false');
       pick.type = 'button';
       pick.addEventListener('click', function () { setCount(n); });
       quickWrap.appendChild(pick);
@@ -485,7 +485,7 @@ function renderSeatingStyleStep() {
     const parts = opt.label.split(/\s(.+)/);
     const emoji = parts[0];
     const text = parts[1] || opt.label;
-    const card = el('button', 'studio-option-card' + (wiz.seatingStyle === opt.id ? ' selected' : ''));
+    const card = el('button', 'studio-option-card' + (wiz.seatingStyle === opt.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.seatingStyle === opt.id ? 'true' : 'false');
     card.type = 'button';
     card.appendChild(el('span', 'emoji', emoji));
     card.appendChild(el('span', 'text', text));
@@ -522,7 +522,7 @@ function renderFeaturesStep() {
   wrap.appendChild(el('p', 'studio-subtext', 'Choose anything you would like RentSketch to plan around. Select all that apply.'));
   const grid = el('div', 'studio-feature-grid');
   FEATURES.forEach(function (opt) {
-    const chip = el('button', 'studio-feature-chip' + (wiz.features.indexOf(opt.id) !== -1 ? ' selected' : ''), opt.label);
+    const chip = el('button', 'studio-feature-chip' + (wiz.features.indexOf(opt.id) !== -1 ? ' selected' : ''), opt.label); chip.setAttribute('aria-pressed', wiz.features.indexOf(opt.id) !== -1 ? 'true' : 'false');
     chip.type = 'button';
     chip.addEventListener('click', function () {
       toggleFeature(opt.id);
@@ -530,11 +530,11 @@ function renderFeaturesStep() {
     });
     grid.appendChild(chip);
   });
-  const noneChip = el('button', 'studio-feature-chip muted' + (wiz.features.indexOf(FEATURE_NONE) !== -1 ? ' selected' : ''), '🚫 None of These');
+  const noneChip = el('button', 'studio-feature-chip muted' + (wiz.features.indexOf(FEATURE_NONE) !== -1 ? ' selected' : ''), '🚫 None of These'); noneChip.setAttribute('aria-pressed', wiz.features.indexOf(FEATURE_NONE) !== -1 ? 'true' : 'false');
   noneChip.type = 'button';
   noneChip.addEventListener('click', function () { toggleFeature(FEATURE_NONE); render(); });
   grid.appendChild(noneChip);
-  const notSureChip = el('button', 'studio-feature-chip muted' + (wiz.features.indexOf(FEATURE_NOT_SURE) !== -1 ? ' selected' : ''), '🤷 Not Sure Yet');
+  const notSureChip = el('button', 'studio-feature-chip muted' + (wiz.features.indexOf(FEATURE_NOT_SURE) !== -1 ? ' selected' : ''), '🤷 Not Sure Yet'); notSureChip.setAttribute('aria-pressed', wiz.features.indexOf(FEATURE_NOT_SURE) !== -1 ? 'true' : 'false');
   notSureChip.type = 'button';
   notSureChip.addEventListener('click', function () { toggleFeature(FEATURE_NOT_SURE); render(); });
   grid.appendChild(notSureChip);
@@ -548,7 +548,7 @@ function renderDanceFloorSizeStep() {
   wrap.appendChild(el('h2', null, 'What size dance floor would you like?'));
   const grid = el('div', 'studio-option-grid small');
   DANCE_FLOOR_SIZES.forEach(function (size) {
-    const card = el('button', 'studio-option-card small' + (wiz.danceFloorSizeId === size.id ? ' selected' : ''));
+    const card = el('button', 'studio-option-card small' + (wiz.danceFloorSizeId === size.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.danceFloorSizeId === size.id ? 'true' : 'false');
     card.type = 'button';
     card.appendChild(el('span', 'text', size.ft + ' x ' + size.ft + ' ft'));
     card.appendChild(el('span', 'check', '✓'));
@@ -559,7 +559,7 @@ function renderDanceFloorSizeStep() {
     });
     grid.appendChild(card);
   });
-  const customCard = el('button', 'studio-option-card small' + (wiz.danceFloorSizeId === 'custom' ? ' selected' : ''));
+  const customCard = el('button', 'studio-option-card small' + (wiz.danceFloorSizeId === 'custom' ? ' selected' : '')); customCard.setAttribute('aria-pressed', wiz.danceFloorSizeId === 'custom' ? 'true' : 'false');
   customCard.type = 'button';
   customCard.appendChild(el('span', 'text', 'Custom Size'));
   customCard.appendChild(el('span', 'check', '✓'));
@@ -595,7 +595,7 @@ function renderLocationStep() {
     const parts = opt.label.split(/\s(.+)/);
     const emoji = parts[0];
     const text = parts[1] || opt.label;
-    const card = el('button', 'studio-option-card' + (wiz.spaceType === opt.id ? ' selected' : ''));
+    const card = el('button', 'studio-option-card' + (wiz.spaceType === opt.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.spaceType === opt.id ? 'true' : 'false');
     card.type = 'button';
     card.appendChild(el('span', 'emoji', emoji));
     card.appendChild(el('span', 'text', text));
@@ -614,7 +614,7 @@ wrap.appendChild(el('h3', null, 'What surface will the tent sit on?'));
     const parts = opt.label.split(/\s(.+)/);
     const emoji = parts[0];
     const text = parts[1] || opt.label;
-    const card = el('button', 'studio-option-card small' + (wiz.surfaceType === opt.id ? ' selected' : ''));
+    const card = el('button', 'studio-option-card small' + (wiz.surfaceType === opt.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.surfaceType === opt.id ? 'true' : 'false');
     card.type = 'button';
     card.appendChild(el('span', 'emoji', emoji));
     card.appendChild(el('span', 'text', text));
