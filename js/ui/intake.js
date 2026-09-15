@@ -347,6 +347,7 @@ function renderStageVisual(container) {
     }
 
     stage.classList.add('has-visual');
+  container.classList.add('studio-stage--visual');
 
     const visual = el('div', 'studio-stage-visual');
     stage.appendChild(visual);
