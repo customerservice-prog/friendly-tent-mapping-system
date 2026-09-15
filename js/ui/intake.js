@@ -97,7 +97,7 @@ const wiz = {
 };
 
 let stepIndex = 0;
-const stepHistory = [];
+const stepHistory = []; let briefFinalMode = false;
 
 function money(n) { return '$' + n.toFixed(2); }
 
@@ -174,7 +174,7 @@ function surfaceLabel(id) {
   return found ? found.label : null;
 }
 
-function briefValueForStage(stageKey) {
+function isStageDone(stage) { const lastStepName = stage.steps[stage.steps.length - 1]; const lastIndex = STEP_ORDER.indexOf(lastStepName); return stepIndex > lastIndex; } function briefValueForStage(stageKey, final) { const stageDef = STAGE_DEFS.filter(function (s) { return s.key === stageKey; })[0]; if (stageDef && !briefFinalMode && !isStageDone(stageDef)) return null;
   if (stageKey === 'occasion') return wiz.eventType ? eventTypeLabel(wiz.eventType) : null;
   if (stageKey === 'guests') return wiz.guestCount ? (wiz.guestCount + ' guests') : null;
   if (stageKey === 'seating') return wiz.seatingStyle ? seatingStyleLabel(wiz.seatingStyle) : null;
@@ -258,7 +258,7 @@ function renderFinalProgress(container) {
   container.appendChild(nav);
 }
 
-function renderBrief(container) {
+function renderBrief(container, final) {
   const brief = el('div', 'studio-brief');
   STAGE_DEFS.forEach(function (stage) {
     const value = briefValueForStage(stage.key);
@@ -704,7 +704,7 @@ function renderRecommendations(result, matchedPackage) {
 
 const header = el('div', 'studio-plan-header');
   renderFinalProgress(header);
-  renderBrief(header);
+  briefFinalMode = true; renderBrief(header); briefFinalMode = false;
   root.appendChild(header);
 
 root.appendChild(el('h2', 'studio-plan-title', 'Recommended Starting Setup'));
