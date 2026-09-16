@@ -1,4 +1,6 @@
 // Single source of truth for RentSketch pricing. All amounts are USD cents.
+// BUSINESS_PLANS uses 'commerce' as the key for backward compatibility with
+// existing tenant data, but the UI and API refer to it as 'Business'.
 const BUSINESS_PLANS = Object.freeze({
   starter: { id: 'starter', name: 'Starter', monthlyCents: 4900, annualCents: 49000 },
   pro: { id: 'pro', name: 'Pro', monthlyCents: 9900, annualCents: 99000 },
@@ -15,3 +17,4 @@ module.exports = {
   BUSINESS_PLANS,
   PLATFORM_FEE_PERCENT: 0,
 };
+
