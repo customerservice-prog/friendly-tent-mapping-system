@@ -123,6 +123,12 @@ function needsDanceFloorStep() {
      wrapper.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
      return wrapper;
    }
+function seatVisualSvg(inner) {
+  const wrapper = document.createElement('span');
+  wrapper.className = 'seat-visual';
+  wrapper.innerHTML = '<svg viewBox="0 0 64 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+  return wrapper;
+}
 function packageCategoryForEventType(eventType) {
   if (eventType === 'wedding' || eventType === 'ceremony' || eventType === 'bridalShower') return 'wedding';
   if (eventType === 'graduation') return 'graduation';
