@@ -130,7 +130,7 @@ function customizeFromScratch() {
 
 function enterDesigner() {
 if (!TENTS.length) { alert('This designer needs at least one tent product with a visual configured before it can be used. Please contact ' + ((window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'the rental company') + ' or check the product setup in the dashboard.'); return; }
-  document.body.classList.add('designer-active');
+  document.body.classList.add('designer-active'); document.body.classList.remove('guided-active');;
   state.viewMode = 'plan';
   state.selectedId = null;
   state.activeDrawer = null;
@@ -1474,7 +1474,7 @@ document.addEventListener('keydown', function (e) {
 
 $('btnBackToRecommend').addEventListener('click', function () {
   document.body.classList.remove('designer-active');
-  showStep('step-recommend');
+  showStep('step-recommend'); document.body.classList.add('guided-active');
 });
 
 $('btnToReview').addEventListener('click', function () {
