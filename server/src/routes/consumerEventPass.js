@@ -22,6 +22,14 @@ function getStripe() {
     return new Stripe(process.env.STRIPE_SECRET_KEY);
 }
 
+// safeOrigin: strict allowlisting for rentsketch.com subdomains with APP_URL fallback.
+// Never concatenates arbitrary/undefined origins into Stripe return URLs.
+function safeOrigin(req) {
+    const configured = (process.env.APP_URL || 'https://rentsketch.com').replace(/\/$/, '');
+    const candidate = req.headers.origin;
+    return candidate && /^https:\/\/([a-z0-9-]+\.)?rentsketch\.com$/i.test(candidate) ? candidate : configured;
+}
+
 // POST /api/consumer/designs
 // Saves a snapshot of a direct consumer's layout with no tenant
 // attached (tenant_id is NULL). Anonymous by default - no login
@@ -65,7 +73,7 @@ router.post('/designs/:designId/event-pass/checkout-session', async (req, res) =
         return res.status(400).json({ error: 'This design belongs to a rental company and uses a different pass type.' });
     }
 
-    const origin = req.headers.origin || (req.body && req.body.origin);
+    const origin = safeOrigin(req);
 
     const session = await stripe.checkout.sessions.create({
         mode: 'payment',
@@ -244,7 +252,7 @@ router.post('/designs/:designId/event-pass/renewal-checkout-session', async (req
         return res.status(400).json({ error: 'This design belongs to a rental company and uses a different pass type.' });
     }
 
-    const origin = req.headers.origin || (req.body && req.body.origin);
+    const origin = safeOrigin(req);
     const session = await stripe.checkout.sessions.create({
         mode: 'payment',
         payment_method_types: ['card'],
@@ -313,7 +321,7 @@ router.post('/designs/recovery-link', async (req, res) => {
         { kind: 'consumer_design_recovery', designId, email: normalizedEmail },
         { expiresIn: '15m' }
     );
-    const origin = req.headers.origin || (req.body && req.body.origin) || '';
+    const origin = safeOrigin(req);
     const link = origin + '/designer/?recoveryToken=' + encodeURIComponent(token);
 
     await mailer.send(
@@ -343,3 +351,4 @@ router.get('/designs/recover', async (req, res) => {
 });
 
 module.exports = router;
+
