@@ -1,6 +1,17 @@
 // Friendly Party Rental — Package inventory data
 // Real package names, prices, and guest counts pulled from friendlypartyrental.com (Aug 2026). Confirm exact contents with staff.
 
+// The guided studio is rendered by js/ui/intake.js, which imports this module.
+// Load its visual layer here so the production Guided Event Studio actually
+// receives the redesign without changing renderer/recommendation behavior.
+if (typeof document !== 'undefined' && !document.getElementById('rentsketch-guided-redesign')) {
+  const guidedStyle = document.createElement('link');
+  guidedStyle.id = 'rentsketch-guided-redesign';
+  guidedStyle.rel = 'stylesheet';
+  guidedStyle.href = new URL('../../guided-studio-redesign.css', import.meta.url).href;
+  document.head.appendChild(guidedStyle);
+}
+
 export const PACKAGE_CATEGORIES = { WEDDING: 'wedding', GRADUATION: 'graduation', CORPORATE: 'corporate', BACKYARD: 'backyard' };
 
 function buildPackage(id, name, price, maxGuests, category, includes) {
