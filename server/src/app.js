@@ -1,53 +1,37 @@
-// Express app wiring: middleware + route mounting.
-// Split from index.js so the server can be started (src/index.js) or
-// imported in tests without binding a port.
 const express = require('express');
 const cors = require('cors');
-
-const authRoutes = require('./routes/auth');
-const tenantsRoutes = require('./routes/tenants');
-const productsRoutes = require('./routes/products');
-const designsRoutes = require('./routes/designs');
-const quoteRequestsRoutes = require('./routes/quoteRequests');
-const visualLibraryRoutes = require('./routes/visualLibrary');
-const paymentsRoutes = require('./routes/payments');
-const stripeWebhookRoutes = require('./routes/stripeWebhook');
-const consumerEventPassRoutes = require('./routes/consumerEventPass');
-const businessSignupRoutes = require('./routes/businessSignup');
-const connectRoutes = require('./routes/connect');
-const adminRoutes = require('./routes/admin');
-const embedRoutes = require('./routes/embed');
-
-const app = express();
-
-const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
-
-app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookRoutes);
+const authRoutes=require('./routes/auth');
+const tenantsRoutes=require('./routes/tenants');
+const productsRoutes=require('./routes/products');
+const designsRoutes=require('./routes/designs');
+const quoteRequestsRoutes=require('./routes/quoteRequests');
+const visualLibraryRoutes=require('./routes/visualLibrary');
+const paymentsRoutes=require('./routes/payments');
+const stripeWebhookRoutes=require('./routes/stripeWebhook');
+const consumerEventPassRoutes=require('./routes/consumerEventPass');
+const businessSignupRoutes=require('./routes/businessSignup');
+const businessBillingRoutes=require('./routes/businessBilling');
+const connectRoutes=require('./routes/connect');
+const adminRoutes=require('./routes/admin');
+const embedRoutes=require('./routes/embed');
+const app=express();
+const allowedOrigins=(process.env.ALLOWED_ORIGINS||'').split(',').map(x=>x.trim()).filter(Boolean);
+app.use(cors({origin:allowedOrigins.length?allowedOrigins:true}));
+app.use('/api/stripe/webhook',express.raw({type:'application/json'}),stripeWebhookRoutes);
 app.use(express.json());
-
-app.get('/health', (req, res) => { res.json({ ok: true }); });
-
-app.use('/api/auth', authRoutes);
-app.use('/api/embed', embedRoutes);
-app.use('/api/tenants', tenantsRoutes);
-app.use('/api/tenants', productsRoutes);
-app.use('/api/tenants', designsRoutes);
-app.use('/api/tenants', quoteRequestsRoutes);
-app.use('/api/tenants', paymentsRoutes);
-app.use('/api/tenants', connectRoutes);
-app.use('/api/business', businessSignupRoutes);
-app.use('/api/visual-library', visualLibraryRoutes);
-app.use('/api/consumer', consumerEventPassRoutes);
-app.use('/api/admin', adminRoutes);
-
-app.use((err, req, res, next) => {
-  // eslint-disable-next-line no-console
-  console.error(err);
-  res.status(500).json({ error: 'Internal server error' });
-});
-
-module.exports = app;
+app.get('/health',(req,res)=>res.json({ok:true}));
+app.use('/api/auth',authRoutes);
+app.use('/api/embed',embedRoutes);
+app.use('/api/tenants',tenantsRoutes);
+app.use('/api/tenants',productsRoutes);
+app.use('/api/tenants',designsRoutes);
+app.use('/api/tenants',quoteRequestsRoutes);
+app.use('/api/tenants',paymentsRoutes);
+app.use('/api/tenants',connectRoutes);
+app.use('/api/business',businessSignupRoutes);
+app.use('/api/business',businessBillingRoutes);
+app.use('/api/visual-library',visualLibraryRoutes);
+app.use('/api/consumer',consumerEventPassRoutes);
+app.use('/api/admin',adminRoutes);
+app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:'Internal server error'});});
+module.exports=app;
