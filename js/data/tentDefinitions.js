@@ -26,7 +26,7 @@ function centerNodes(type,widthFt,lengthFt,peakHeightFt) {
   return out;
 }
 
-function peakHeight(type,widthFt){ if(type!=='pole') return 7+Math.max(4,widthFt*.24); if(widthFt<=20)return 10; if(widthFt<30)return 14.5; return widthFt>=40?22:16.85; }
+function peakHeight(type,widthFt){ if(type!=='pole') return 7+Math.max(4,widthFt*.24); if(widthFt<=20)return 10; if(widthFt<30)return 14.5; return 16.85; }
 
 export function createTentDefinition(catalogTent) {
   const type=catalogTent.type==='canopy'?'pop_up':catalogTent.type;
