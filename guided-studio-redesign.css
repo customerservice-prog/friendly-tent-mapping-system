@@ -1,47 +1,129 @@
-/* RentSketch guided studio redesign — layered over the existing functional renderer. */
-body.guided-active{background:#f7f8f5}
-body.guided-active .site-header{box-shadow:0 1px 0 rgba(25,50,35,.08)}
-.studio-shell{grid-template-columns:minmax(460px,40%) 1fr;background:#fff}
-.studio-left{background:linear-gradient(180deg,#fff 0%,#fbfcfa 100%)}
-.studio-left-inner{max-width:620px;margin:0 auto;padding:36px 38px 44px}
-.studio-progress{flex-direction:row;gap:0;margin:0 0 30px;align-items:flex-start}
-.studio-progress-item{position:relative;flex:1;min-width:0;display:grid;grid-template-columns:18px 1fr;gap:4px 6px;padding:0 5px;font-size:11px}
-.studio-progress-item:not(:last-child)::after{content:'';position:absolute;top:6px;left:23px;right:-4px;height:1px;background:#dfe5dc}
-.studio-progress-item .dot,.studio-progress-item .check{position:relative;z-index:2;background:#fff}
-.studio-progress-item .label{grid-column:1/3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.studio-progress-item .value{display:none}
-.studio-brief{margin:-12px 0 24px}
-.studio-question h2{font-size:clamp(28px,2.4vw,38px);letter-spacing:-.025em;line-height:1.08;margin-bottom:10px;color:#1d2920}
-.studio-subtext{font-size:16px;line-height:1.55;max-width:520px}
-.studio-occasion-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.studio-occasion-card{min-height:72px;padding:16px;border-radius:16px;border-color:#dde4da;box-shadow:0 1px 2px rgba(20,40,25,.03);font-weight:650}
-.studio-occasion-card:hover,.studio-option-card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(30,60,38,.08)}
-.studio-occasion-card .icon{width:25px;height:25px}
-.studio-option-grid{gap:12px}
-.studio-option-card{border-radius:16px;padding:16px;min-height:74px;box-shadow:0 1px 2px rgba(20,40,25,.03)}
-.studio-option-card.seat-card{min-height:170px}
-.seat-visual{height:72px}
-.studio-feature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.studio-feature-chip{border-radius:14px;min-height:52px;padding:12px 14px;justify-content:flex-start;font-weight:600}
-.studio-feature-chip .icon{width:20px;height:20px}
-.studio-guest-count-display{justify-content:flex-start;margin:24px 0 20px}
-.studio-guest-count-number{font-size:64px;min-width:130px;color:#1d2920}
-.studio-guest-count-display .count-btn{width:48px;height:48px;font-size:24px}
-.studio-guest-quickpicks{justify-content:flex-start}
-.studio-guest-quickpick{padding:9px 16px;font-weight:600}
-.studio-guest-hint{text-align:left}
-.studio-nav{padding-top:8px;border-top:1px solid #edf0eb;margin-top:28px;justify-content:space-between}
-.studio-nav .btn-primary{margin-left:auto;min-width:140px;border-radius:12px}
-.studio-stage{background:radial-gradient(circle at 50% 45%,#f8faf6 0,#eef2eb 65%,#e8ede5 100%)}
-.studio-stage-visual{border-radius:0;background:transparent}
-.studio-stage-overlay{left:24px;top:24px;right:24px}
-.studio-stage-overlay .studio-stage-occasion-label{font-size:22px;border:1px solid rgba(40,70,45,.08);box-shadow:0 4px 18px rgba(25,50,30,.06)}
-.studio-stage-overlay .studio-stage-caption,.studio-stage-overlay .studio-stage-chip{box-shadow:0 3px 12px rgba(25,50,30,.05)}
-.studio-plan-header{border-radius:18px;box-shadow:0 4px 20px rgba(25,50,30,.05)}
-.studio-plan-layout{grid-template-columns:minmax(0,1fr) 330px;gap:24px}
-.studio-plan-stage{min-height:520px;border:1px solid #dfe5dc;box-shadow:0 8px 28px rgba(25,50,30,.08)}
-.studio-plan-option{border-radius:14px;padding:14px}
-.studio-plan-use{min-height:50px;border-radius:12px}
-@media(max-width:1100px) and (min-width:881px){.studio-shell{grid-template-columns:440px 1fr}.studio-left-inner{padding:28px 24px}.studio-progress-item .label{font-size:10px}}
-@media(max-width:880px){body.guided-active{background:#fff}.studio-shell{display:flex;flex-direction:column}.studio-stage{order:0;min-height:260px}.studio-left{order:1;border-right:0}.studio-left-inner{padding:20px 16px 32px}.studio-progress{overflow-x:auto;padding-bottom:4px;margin-bottom:20px}.studio-progress-item{min-width:72px}.studio-question h2{font-size:28px}.studio-occasion-grid{grid-template-columns:1fr 1fr}.studio-occasion-card{min-height:64px;padding:12px;font-size:14px}.studio-option-grid{grid-template-columns:1fr}.studio-option-card.seat-card{min-height:140px}.studio-feature-grid{grid-template-columns:1fr 1fr}.studio-guest-count-number{font-size:50px}.studio-plan-layout{grid-template-columns:1fr}.studio-plan-stage{min-height:330px}}
-@media(max-width:480px){.studio-occasion-grid,.studio-feature-grid{grid-template-columns:1fr}.studio-stage{min-height:220px}.studio-progress-item{min-width:64px}.studio-progress-item .label{font-size:9px}}
+/* RentSketch Guided Event Studio — premium visual layer.
+   This file intentionally overrides the legacy designer CSS without replacing
+   renderer/recommendation logic. */
+
+body.guided-active{background:#eef2ed!important;overflow:hidden}
+body.guided-active .site-header{height:64px!important;min-height:64px!important;padding:0 22px!important;display:flex!important;align-items:center!important;gap:14px!important;background:rgba(255,255,255,.97)!important;border-bottom:1px solid #dfe6df!important;box-shadow:0 1px 10px rgba(20,40,28,.05)!important;position:relative;z-index:20}
+body.guided-active .site-header-logo{width:42px!important;height:42px!important;object-fit:contain!important;margin:0!important}
+body.guided-active .site-header h1{font-size:17px!important;line-height:1.15!important;margin:0!important;letter-spacing:-.01em!important}
+body.guided-active .site-header p{font-size:12px!important;margin:2px 0 0!important;max-width:560px!important;white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;color:#6d776f!important}
+body.guided-active #app{height:calc(100dvh - 64px)!important;max-width:none!important;margin:0!important;padding:0!important}
+body.guided-active #step-intake{height:100%!important;margin:0!important;padding:0!important}
+body.guided-active #intakeWizard{height:100%!important}
+
+.studio-shell{height:100%!important;min-height:0!important;display:grid!important;grid-template-columns:minmax(410px,31vw) minmax(0,1fr)!important;background:#fff!important;border:0!important;border-radius:0!important;box-shadow:none!important;overflow:hidden!important}
+.studio-left{min-width:0!important;background:linear-gradient(180deg,#fff 0%,#fbfcfb 100%)!important;border-right:1px solid #dfe6df!important;overflow:auto!important;position:relative;z-index:4}
+.studio-left-inner{max-width:520px!important;margin:0 auto!important;padding:30px 34px 40px!important}
+
+/* Quiet six-stage journey */
+.studio-progress{display:flex!important;flex-direction:row!important;align-items:flex-start!important;gap:0!important;margin:0 0 28px!important;padding:0 0 22px!important;border-bottom:1px solid #edf0ed!important}
+.studio-progress-item{position:relative!important;flex:1!important;min-width:0!important;display:flex!important;flex-direction:column!important;align-items:center!important;gap:6px!important;padding:0 2px!important;color:#9aa39c!important;font-size:10px!important;font-weight:700!important;text-align:center!important}
+.studio-progress-item:not(:last-child)::after{content:'';position:absolute;z-index:0;top:7px;left:58%;right:-42%;height:1px;background:#dce3dd}
+.studio-progress-item .dot,.studio-progress-item .check{position:relative!important;z-index:2!important;width:15px!important;height:15px!important;display:grid!important;place-items:center!important;border-radius:50%!important;background:#fff!important;border:2px solid #cdd6cf!important;font-size:8px!important;color:#fff!important}
+.studio-progress-item.active{color:#1d3b29!important}.studio-progress-item.active .dot{border-color:var(--brand-primary,#2f7a3c)!important;box-shadow:0 0 0 4px color-mix(in srgb,var(--brand-primary,#2f7a3c) 12%,transparent)!important}
+.studio-progress-item.complete{color:#5e6e63!important}.studio-progress-item.complete .check{background:var(--brand-primary,#2f7a3c)!important;border-color:var(--brand-primary,#2f7a3c)!important}
+.studio-progress-item .label{white-space:nowrap!important;overflow:hidden!important;text-overflow:ellipsis!important;width:100%!important;letter-spacing:.01em!important}
+.studio-progress-item .value{display:none!important}
+
+.studio-brief{margin:0 0 22px!important;padding:13px 15px!important;border:1px solid #e3e9e4!important;border-radius:14px!important;background:#f8faf8!important;color:#667269!important;font-size:12px!important;line-height:1.45!important}
+.studio-question{animation:studioIn .24s ease both}
+@keyframes studioIn{from{opacity:.25;transform:translateY(6px)}to{opacity:1;transform:none}}
+.studio-question h2,.wizard-step h2{margin:0 0 10px!important;font-size:clamp(28px,2.15vw,36px)!important;line-height:1.06!important;letter-spacing:-.035em!important;color:#17251b!important;font-weight:780!important}
+.studio-subtext,.wizard-subtext{margin:0 0 22px!important;color:#69756c!important;font-size:15px!important;line-height:1.55!important;max-width:460px!important}
+
+/* Occasion = inspiration. Cards become mini visual scenes, not buttons. */
+.studio-occasion-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important}
+.studio-occasion-card{position:relative!important;min-height:132px!important;padding:78px 14px 14px!important;overflow:hidden!important;border:1px solid #dce4dd!important;border-radius:18px!important;background:#fff!important;color:#26362b!important;text-align:left!important;font-size:14px!important;font-weight:750!important;box-shadow:0 2px 10px rgba(22,45,29,.04)!important;transition:.18s ease!important}
+.studio-occasion-card::before{content:'';position:absolute;inset:0 0 auto;height:68px;background:linear-gradient(145deg,#dcebdc,#f5eee2);border-bottom:1px solid rgba(40,65,45,.06)}
+.studio-occasion-card:nth-child(2n)::before{background:linear-gradient(145deg,#e8e0f0,#f4eadf)}
+.studio-occasion-card:nth-child(3n)::before{background:linear-gradient(145deg,#f2e2d4,#f8f2df)}
+.studio-occasion-card:nth-child(4n)::before{background:linear-gradient(145deg,#dce8ee,#eef2f5)}
+.studio-occasion-card .icon{position:absolute!important;top:15px!important;left:16px!important;width:38px!important;height:38px!important;padding:7px!important;border-radius:12px!important;background:rgba(255,255,255,.84)!important;backdrop-filter:blur(6px)!important;color:#315b3b!important;filter:drop-shadow(0 3px 7px rgba(20,45,25,.08))!important}
+.studio-occasion-card:hover{transform:translateY(-3px)!important;border-color:#a8bbaa!important;box-shadow:0 12px 26px rgba(25,55,34,.10)!important}
+.studio-occasion-card.selected{border:2px solid var(--brand-primary,#2f7a3c)!important;padding:77px 13px 13px!important;box-shadow:0 0 0 4px color-mix(in srgb,var(--brand-primary,#2f7a3c) 10%,transparent),0 12px 28px rgba(25,55,34,.10)!important}
+
+/* Guests = scale. */
+.studio-guest-count-display{display:flex!important;justify-content:center!important;align-items:center!important;gap:18px!important;margin:26px 0 18px!important;padding:26px 18px!important;border-radius:22px!important;background:linear-gradient(145deg,#f4f8f3,#fff)!important;border:1px solid #e0e7e1!important}
+.studio-guest-count-number{font-size:72px!important;line-height:1!important;letter-spacing:-.06em!important;min-width:150px!important;text-align:center!important;color:#173a25!important;font-weight:800!important}
+.studio-guest-count-display .count-btn{width:52px!important;height:52px!important;border-radius:50%!important;border:1px solid #ccd7ce!important;background:#fff!important;font-size:26px!important;box-shadow:0 4px 12px rgba(20,45,28,.06)!important}
+.studio-guest-quickpicks{display:flex!important;flex-wrap:wrap!important;justify-content:center!important;gap:8px!important}
+.studio-guest-quickpick{min-width:58px!important;padding:9px 13px!important;border-radius:999px!important;border:1px solid #d9e1da!important;background:#fff!important;font-weight:700!important}
+.studio-guest-hint{text-align:center!important;color:#7a847d!important;font-size:12px!important;margin-top:12px!important}
+
+/* Seating / Space = visual planning cards. */
+.studio-option-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px!important}
+.studio-option-card{position:relative!important;min-height:96px!important;padding:16px!important;border:1px solid #dce4dd!important;border-radius:18px!important;background:#fff!important;text-align:left!important;box-shadow:0 2px 10px rgba(22,45,29,.035)!important;transition:.18s ease!important}
+.studio-option-card:hover{transform:translateY(-2px)!important;box-shadow:0 10px 24px rgba(25,55,34,.09)!important}
+.studio-option-card.selected{border:2px solid var(--brand-primary,#2f7a3c)!important;box-shadow:0 0 0 4px color-mix(in srgb,var(--brand-primary,#2f7a3c) 9%,transparent)!important}
+.studio-option-card.seat-card{min-height:180px!important;padding-top:14px!important}
+.seat-visual{height:88px!important;margin:0 0 10px!important;border-radius:13px!important;background:linear-gradient(180deg,#f5f8f5,#eef3ee)!important;display:grid!important;place-items:center!important;color:#315a3b!important}
+.seat-visual svg{width:86%!important;height:72px!important}
+
+/* Extras = visual commerce cards. */
+.studio-feature-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px!important}
+.studio-feature-chip{min-height:76px!important;padding:12px 14px!important;border-radius:16px!important;border:1px solid #dce4dd!important;background:linear-gradient(145deg,#fff,#f7faf7)!important;justify-content:flex-start!important;text-align:left!important;font-weight:700!important;box-shadow:0 2px 8px rgba(22,45,29,.035)!important}
+.studio-feature-chip .icon{width:30px!important;height:30px!important;padding:5px!important;border-radius:9px!important;background:#edf4ee!important;color:#315b3b!important}
+.studio-feature-chip.selected{border:2px solid var(--brand-primary,#2f7a3c)!important;background:color-mix(in srgb,var(--brand-primary,#2f7a3c) 7%,#fff)!important}
+
+/* Navigation is quiet and task-specific. */
+.studio-nav{display:flex!important;align-items:center!important;gap:10px!important;margin-top:26px!important;padding-top:18px!important;border-top:1px solid #edf0ed!important}
+.studio-nav .btn-primary{margin-left:auto!important;min-height:48px!important;min-width:150px!important;border-radius:13px!important;padding:0 20px!important;font-weight:750!important;box-shadow:0 7px 18px color-mix(in srgb,var(--brand-primary,#2f7a3c) 20%,transparent)!important}
+.studio-nav .btn-secondary{min-height:46px!important;border-radius:12px!important}
+
+/* Event Stage = hero. */
+.studio-stage{position:relative!important;min-width:0!important;min-height:0!important;background:radial-gradient(circle at 50% 43%,#fbfcf9 0,#edf2eb 58%,#e3eae1 100%)!important;overflow:hidden!important}
+.studio-stage::before{content:'';position:absolute;inset:0;pointer-events:none;background-image:linear-gradient(rgba(52,79,59,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(52,79,59,.035) 1px,transparent 1px);background-size:36px 36px;mask-image:linear-gradient(to bottom,transparent 0,#000 22%,#000 100%)}
+.studio-stage-visual{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:100%!important;border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important}
+.studio-stage-visual #plan2d,.studio-stage-visual .plan2d{width:100%!important;height:100%!important;min-height:100%!important}
+.studio-stage-overlay{position:absolute!important;z-index:5!important;left:24px!important;top:24px!important;right:24px!important;pointer-events:none!important;display:flex!important;align-items:flex-start!important;gap:8px!important;flex-wrap:wrap!important}
+.studio-stage-overlay>*{background:rgba(255,255,255,.88)!important;backdrop-filter:blur(10px)!important;border:1px solid rgba(45,70,50,.10)!important;box-shadow:0 6px 22px rgba(25,50,30,.07)!important;border-radius:999px!important;padding:8px 12px!important;color:#314438!important}
+.studio-stage-overlay .studio-stage-occasion-label{font-size:16px!important;font-weight:800!important;padding:10px 15px!important}
+.studio-stage-caption{font-size:12px!important}
+
+/* Starting plan = reveal. */
+.studio-plan-header{border-radius:20px!important;background:linear-gradient(145deg,#173a25,#28593a)!important;color:#fff!important;padding:24px!important;box-shadow:0 10px 30px rgba(20,50,30,.16)!important}
+.studio-plan-header h2{color:#fff!important;font-size:34px!important;letter-spacing:-.03em!important;margin:0 0 6px!important}
+.studio-plan-layout{display:grid!important;grid-template-columns:minmax(0,1fr) 320px!important;gap:20px!important}
+.studio-plan-stage{min-height:540px!important;border-radius:20px!important;border:1px solid #dce4dd!important;overflow:hidden!important;background:#edf2eb!important;box-shadow:0 10px 30px rgba(25,50,30,.10)!important}
+.studio-plan-option{border-radius:15px!important;padding:14px!important;border:1px solid #dce4dd!important;background:#fff!important}
+.studio-plan-use{min-height:50px!important;border-radius:13px!important}
+
+@media(max-width:1180px) and (min-width:881px){
+ .studio-shell{grid-template-columns:390px minmax(0,1fr)!important}
+ .studio-left-inner{padding:24px 22px 34px!important}
+ .studio-question h2,.wizard-step h2{font-size:29px!important}
+ .studio-occasion-card{min-height:112px!important;padding-top:68px!important}
+}
+@media(max-width:880px){
+ body.guided-active{overflow:auto!important;background:#fff!important}
+ body.guided-active .site-header{height:56px!important;min-height:56px!important;padding:0 14px!important}
+ body.guided-active .site-header-logo{width:34px!important;height:34px!important}
+ body.guided-active .site-header p{display:none!important}
+ body.guided-active #app{height:auto!important;min-height:calc(100dvh - 56px)!important}
+ .studio-shell{height:auto!important;min-height:calc(100dvh - 56px)!important;display:flex!important;flex-direction:column!important;overflow:visible!important}
+ .studio-stage{order:0!important;height:38dvh!important;min-height:245px!important;max-height:360px!important;border-bottom:1px solid #dfe6df!important}
+ .studio-left{order:1!important;border-right:0!important;overflow:visible!important}
+ .studio-left-inner{max-width:none!important;padding:18px 16px 30px!important}
+ .studio-progress{margin-bottom:18px!important;padding-bottom:15px!important}
+ .studio-progress-item .label{font-size:9px!important}
+ .studio-question h2,.wizard-step h2{font-size:29px!important}
+ .studio-occasion-grid{grid-template-columns:1fr 1fr!important}
+ .studio-occasion-card{min-height:108px!important;padding:65px 11px 11px!important;font-size:13px!important}
+ .studio-option-grid{grid-template-columns:1fr 1fr!important}
+ .studio-option-card.seat-card{min-height:150px!important}
+ .studio-guest-count-number{font-size:58px!important}
+ .studio-plan-layout{grid-template-columns:1fr!important}.studio-plan-stage{min-height:360px!important}
+}
+@media(max-width:520px){
+ .studio-progress-item:nth-child(2) .label,.studio-progress-item:nth-child(4) .label,.studio-progress-item:nth-child(5) .label{font-size:0!important}
+ .studio-progress-item:nth-child(2) .label::after{content:'Guests';font-size:9px}
+ .studio-progress-item:nth-child(4) .label::after{content:'Space';font-size:9px}
+ .studio-progress-item:nth-child(5) .label::after{content:'Extras';font-size:9px}
+ .studio-stage{height:34dvh!important;min-height:220px!important}
+ .studio-occasion-grid,.studio-feature-grid{grid-template-columns:1fr 1fr!important}
+ .studio-option-grid{grid-template-columns:1fr!important}
+ .studio-occasion-card{min-height:100px!important}
+ .studio-guest-count-display{gap:10px!important;padding:20px 10px!important}
+ .studio-guest-count-number{font-size:52px!important;min-width:112px!important}
+ .studio-guest-count-display .count-btn{width:46px!important;height:46px!important}
+}
