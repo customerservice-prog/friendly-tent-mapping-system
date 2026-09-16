@@ -73,61 +73,69 @@ router.get('/:slug/billing/status', requireBillingAccess, async (req, res) => {
 // Uses permanent Stripe Price IDs from environment variables to enable
 // safe test→live migration without code changes.
 router.post('/:slug/billing/checkout-session', requireBillingAccess, async (req, res) => {
-  const stripe = stripeClient();
-  if (!stripe) return res.status(503).json({ error: 'Payments are not configured.' });
-  const tenant = req.tenant;
-
-  // Friendly is intentionally free during the current rollout and must never
-  // accidentally enter the paid SaaS checkout flow.
-  if (tenant.slug === 'friendly') {
-    return res.status(400).json({ error: 'Friendly Party Rental currently has free RentSketch access.' });
-  }
-
-  const planId = String(req.body?.plan || '').toLowerCase();
-  const interval = req.body?.interval === 'annual' ? 'annual' : 'monthly';
-  const plan = BUSINESS_PLANS[planId];
-
-  if (!plan || planId === 'enterprise') {
-    return res.status(400).json({ error: 'Choose Starter, Pro, or Business.' });
-  }
-
-  // Map plan ID to Stripe permanent Price ID from environment.
-  // Environment variable naming: STRIPE_PRICE_<PLANID>_<INTERVAL>
-  // Examples: STRIPE_PRICE_STARTER_MONTHLY, STRIPE_PRICE_COMMERCE_ANNUAL
-  const priceEnvKey = `STRIPE_PRICE_${planId.toUpperCase()}_${interval.toUpperCase()}`;
-  const stripePriceId = process.env[priceEnvKey];
-
-  if (!stripePriceId) {
-    console.error(
-      `[billing] missing permanent Stripe price ID in environment: ${priceEnvKey}. ` +
-      `Ensure STRIPE_PRICE_STARTER_MONTHLY/ANNUAL, STRIPE_PRICE_PRO_MONTHLY/ANNUAL, ` +
-      `STRIPE_PRICE_COMMERCE_MONTHLY/ANNUAL are set.`
-    );
-    return res.status(503).json({ error: 'Payments are not fully configured.' });
-  }
-
-  let customerId = tenant.stripe_billing_customer_id || null;
-  if (!customerId) {
-    const customer = await stripe.customers.create({
-      email: tenant.contact_email || undefined,
-      name: tenant.name,
-      metadata: { tenantId: tenant.id, tenantSlug: tenant.slug },
-    });
-    customerId = customer.id;
-    await db.query('UPDATE tenants SET stripe_billing_customer_id=$1, updated_at=now() WHERE id=$2', [
-      customerId,
-      tenant.id,
-    ]);
-  }
-
-  const origin = safeOrigin(req);
-
-  // Idempotency: use tenant_id + plan + interval as idempotency key to prevent
-  // duplicate sessions if the request is retried. Stripe will return the same
-  // session URL on retry.
-  const idempotencyKey = `${tenant.id}-${planId}-${interval}`;
-
   try {
+    const stripe = stripeClient();
+    if (!stripe) return res.status(503).json({ error: 'Payments are not configured.' });
+    const tenant = req.tenant;
+
+    // Friendly is intentionally free during the current rollout and must never
+    // accidentally enter the paid SaaS checkout flow.
+    if (tenant.slug === 'friendly') {
+      return res.status(400).json({ error: 'Friendly Party Rental currently has free RentSketch access.' });
+    }
+
+    const planId = String(req.body?.plan || '').toLowerCase();
+    const interval = req.body?.interval === 'annual' ? 'annual' : 'monthly';
+    const plan = BUSINESS_PLANS[planId];
+
+    if (!plan || planId === 'enterprise') {
+      return res.status(400).json({ error: 'Choose Starter, Pro, or Business.' });
+    }
+
+    // Map plan ID to Stripe permanent Price ID from environment.
+    // Environment variable naming: STRIPE_PRICE_<PLANID>_<INTERVAL>
+    // Examples: STRIPE_PRICE_STARTER_MONTHLY, STRIPE_PRICE_COMMERCE_ANNUAL
+    const priceEnvKey = `STRIPE_PRICE_${planId.toUpperCase()}_${interval.toUpperCase()}`;
+    const stripePriceId = process.env[priceEnvKey];
+
+    if (!stripePriceId) {
+      console.error(
+        `[billing] missing permanent Stripe price ID in environment: ${priceEnvKey}. ` +
+        `Ensure STRIPE_PRICE_STARTER_MONTHLY/ANNUAL, STRIPE_PRICE_PRO_MONTHLY/ANNUAL, ` +
+        `STRIPE_PRICE_COMMERCE_MONTHLY/ANNUAL are set.`
+      );
+      return res.status(503).json({ error: 'Payments are not fully configured.' });
+    }
+
+    let customerId = tenant.stripe_billing_customer_id || null;
+    if (!customerId) {
+      try {
+        const customer = await stripe.customers.create({
+          email: tenant.contact_email || undefined,
+          name: tenant.name,
+          metadata: { tenantId: tenant.id, tenantSlug: tenant.slug },
+        });
+        customerId = customer.id;
+        await db.query('UPDATE tenants SET stripe_billing_customer_id=$1, updated_at=now() WHERE id=$2', [
+          customerId,
+          tenant.id,
+        ]);
+      } catch (customerErr) {
+        const errCode = customerErr.code || 'unknown_code';
+        const errType = customerErr.type || 'unknown_type';
+        const errReqId = customerErr.requestId || 'no_request_id';
+        console.error(`[billing customer] Stripe API error: type=${errType}, code=${errCode}, request_id=${errReqId}, message=${customerErr.message}`);
+        return res.status(503).json({ error: 'Failed to create billing customer. Please contact support.' });
+      }
+    }
+
+    const origin = safeOrigin(req);
+
+    // Idempotency: use tenant_id + plan + interval as idempotency key to prevent
+    // duplicate sessions if the request is retried. Stripe will return the same
+    // session URL on retry.
+    const idempotencyKey = `${tenant.id}-${planId}-${interval}`;
+
     const session = await stripe.checkout.sessions.create(
       {
         mode: 'subscription',
@@ -156,9 +164,12 @@ router.post('/:slug/billing/checkout-session', requireBillingAccess, async (req,
       },
       { idempotencyKey }
     );
-    res.json({ url: session.url });
+    res.json(session);
   } catch (err) {
-    console.error('[billing checkout] error creating session:', err.message);
+    const errCode = err.code || 'unknown_code';
+    const errType = err.type || 'unknown_type';
+    const errReqId = err.requestId || 'no_request_id';
+    console.error(`[billing checkout] Stripe API error: type=${errType}, code=${errCode}, request_id=${errReqId}, message=${err.message}`);
     res.status(500).json({ error: 'Failed to create checkout session' });
   }
 });
@@ -184,7 +195,10 @@ router.post('/:slug/billing/portal-session', requireBillingAccess, async (req, r
     });
     res.json({ url: session.url });
   } catch (err) {
-    console.error('[billing portal] error creating session:', err.message);
+    const errCode = err.code || 'unknown_code';
+    const errType = err.type || 'unknown_type';
+    const errReqId = err.requestId || 'no_request_id';
+    console.error(`[billing portal] Stripe API error: type=${errType}, code=${errCode}, request_id=${errReqId}, message=${err.message}`);
     res.status(500).json({ error: 'Failed to create billing portal session' });
   }
 });
