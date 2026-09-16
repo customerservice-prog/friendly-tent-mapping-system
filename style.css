@@ -382,7 +382,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .plan2d-object.severity-error .plan2d-table-top { border-color: var(--danger); box-shadow: 0 0 0 3px rgba(185,28,28,0.28); }
 .plan2d-chair { position: absolute; pointer-events: none; }
 .plan2d-chair svg { width: 100%; height: 100%; display: block; overflow: visible; }
-.plan2d-object.dance .plan2d-table-top { background: repeating-linear-gradient(90deg, #c9a06a 0%, #c9a06a 50%, #c39a63 50%, #c39a63 100%); background-size: 200% 100%; border: 1px solid rgba(120,90,50,0.22); border-radius: 0; box-shadow: none; font-size: 10px; color: var(--muted); }
+.plan2d-object.dance .plan2d-table-top { position: relative; background-color: #c9a06a; background-image: linear-gradient(90deg, rgba(0,0,0,0.16) 0, rgba(0,0,0,0.16) 2px, transparent 2px, transparent 40px), linear-gradient(0deg, rgba(0,0,0,0.16) 0, rgba(0,0,0,0.16) 2px, transparent 2px, transparent 40px), repeating-linear-gradient(90deg, #cdac78 0, #cdac78 20px, #c39a63 20px, #c39a63 40px); background-size: 40px 40px, 40px 40px, 40px 100%; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18); border: 1px solid rgba(120,90,50,0.35); border-radius: 0; font-size: 10px; color: var(--muted); }
 .plan2d-dance-frame { position: absolute; pointer-events: none; border: 3px solid #6b4a25; border-radius: 6px; box-shadow: 0 0 0 2px rgba(255,255,255,0.6); z-index: 3; }
 .plan2d-dance-frame.selected { border-color: var(--brand-primary); }
 .plan2d-dance-frame-label { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.9); color: #4a3520; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 4px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
