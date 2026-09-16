@@ -24,6 +24,9 @@ router.get('/diag/account-check', async (req, res) => {
     const expectedAccountId = 'acct_1UFIa32FmTqqyVfh';
     const accountMatch = accountId === expectedAccountId;
 
+    // Safe key fingerprint: first 20 chars + ellipsis (never exposes secret)
+    const keyPrefix = process.env.STRIPE_SECRET_KEY ? process.env.STRIPE_SECRET_KEY.substring(0, 20) + '...' : 'NOT_SET';
+
     // Define all 6 prices to test
     const priceIds = [
       { id: 'price_1UGNPv2FmTqqyVfhZlTMiH1D', plan: 'STARTER', interval: 'MONTHLY', expected: 4900 },
@@ -58,6 +61,7 @@ router.get('/diag/account-check', async (req, res) => {
     }
 
     res.json({
+      configuredKeyPrefix: keyPrefix,
       accountId,
       expectedAccountId,
       accountMatch,
