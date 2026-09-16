@@ -36,39 +36,39 @@ const SEATING_STYLE_CARDS = [
   ];
 
 const FEATURES = [
-  { id: 'danceFloor', label: '💃 Dance Floor' },
-  { id: 'dj', label: '🎧 DJ' },
-  { id: 'band', label: '🎸 Live Band' },
-  { id: 'buffet', label: '🍲 Buffet' },
-  { id: 'bar', label: '🍸 Bar' },
-  { id: 'cocktailTables', label: '🍹 Cocktail Tables' },
-  { id: 'cakeTable', label: '🎂 Cake Table' },
-  { id: 'giftTable', label: '🎁 Gift Table' },
-  { id: 'photoBooth', label: '📸 Photo Booth' },
-  { id: 'stage', label: '🎤 Stage' },
-  { id: 'lounge', label: '🛋️ Lounge Area' },
-  { id: 'catering', label: '👨‍🍳 Catering / Service Area' },
+  { id: 'danceFloor', label: 'Dance Floor', icon: '<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M3 12h18M12 3v18"/>' },
+  { id: 'dj', label: 'DJ', icon: '<path d="M4 15v-3a8 8 0 1 1 16 0v3"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/>' },
+  { id: 'band', label: 'Live Band', icon: '<circle cx="8" cy="17" r="3"/><path d="M11 17V4l7-2v13"/><circle cx="18" cy="15" r="3"/>' },
+  { id: 'buffet', label: 'Buffet', icon: '<path d="M4 15a8 8 0 0 1 16 0"/><path d="M2 15h20"/><path d="M12 4v3"/>' },
+  { id: 'bar', label: 'Bar', icon: '<path d="M5 4h14l-7 8v7"/><path d="M9 19h6"/>' },
+  { id: 'cocktailTables', label: 'Cocktail Tables', icon: '<ellipse cx="12" cy="6" rx="6" ry="2.4"/><path d="M12 8.4V19"/><path d="M8 19h8"/>' },
+  { id: 'cakeTable', label: 'Cake Table', icon: '<path d="M4 20h16v-5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v5Z"/><path d="M12 9V6"/><path d="M12 13v4"/>' },
+  { id: 'giftTable', label: 'Gift Table', icon: '<rect x="4" y="9" width="16" height="11" rx="1"/><path d="M4 9h16M12 9v11"/><path d="M8 9c0-2 1-4 4-4s4 2 4 4"/>' },
+  { id: 'photoBooth', label: 'Photo Booth', icon: '<rect x="3" y="7" width="18" height="12" rx="2"/><circle cx="12" cy="13" r="3.5"/><path d="M8 7l1.5-2h5L16 7"/>' },
+  { id: 'stage', label: 'Stage', icon: '<path d="M4 19V9a8 8 0 0 1 16 0v10"/><path d="M4 19h16"/>' },
+  { id: 'lounge', label: 'Lounge Area', icon: '<path d="M4 18v-4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4"/><path d="M4 18h16"/><path d="M6 12V9a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/>' },
+  { id: 'catering', label: 'Catering / Service Area', icon: '<path d="M6 21h12"/><path d="M8 21v-6"/><path d="M16 21v-6"/><path d="M6 9a4 4 0 0 1 4-4 3 3 0 0 1 4 0 4 4 0 0 1 4 4c0 2-1.5 3-2 6H8c-.5-3-2-4-2-6Z"/>' },
   ];
 const FEATURE_NONE = 'none';
 const FEATURE_NOT_SURE = 'notSure';
 
 const LOCATION_TYPES = [
-  { id: 'backyard', label: '🏡 Backyard' },
-  { id: 'venue', label: '🏛️ Venue' },
-  { id: 'park', label: '🌳 Park' },
-  { id: 'lot', label: '🅿️ Parking Lot' },
-  { id: 'indoor', label: '🏢 Indoor Space' },
-  { id: 'other', label: '📍 Other' },
+  { id: 'backyard', label: 'Backyard', icon: '<path d="M4 11 12 4l8 7"/><path d="M6 10v9h4v-5h4v5h4v-9"/>' },
+  { id: 'venue', label: 'Venue', icon: '<path d="M4 9h16"/><path d="M6 9V6l6-3 6 3v3"/><rect x="6" y="9" width="3" height="9"/><rect x="10.5" y="9" width="3" height="9"/><rect x="15" y="9" width="3" height="9"/><path d="M4 18h16"/>' },
+  { id: 'park', label: 'Park', icon: '<path d="M12 3 7 11h3l-4 6h4v4h4v-4h4l-4-6h3L12 3Z"/>' },
+  { id: 'lot', label: 'Parking Lot', icon: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M9 16V8h3.5a2.5 2.5 0 0 1 0 5H9"/>' },
+  { id: 'indoor', label: 'Indoor Space', icon: '<rect x="4" y="9" width="16" height="11"/><path d="M4 9 12 3l8 6"/>' },
+  { id: 'other', label: 'Other', icon: '<path d="M12 21s7-6.5 7-12a7 7 0 1 0-14 0c0 5.5 7 12 7 12Z"/><circle cx="12" cy="9" r="2.4"/>' },
   ];
 
 const SURFACE_TYPES = [
-  { id: 'grass', label: '🌱 Grass' },
-  { id: 'dirt', label: '🚧 Dirt / Gravel' },
-  { id: 'asphalt', label: '🛣️ Asphalt' },
-  { id: 'concrete', label: '🧱 Concrete' },
-  { id: 'deck', label: '⛱️ Deck / Patio' },
-  { id: 'indoor', label: '🏠 Indoor Floor' },
-  { id: 'notSure', label: '❓ Not Sure' },
+  { id: 'grass', label: 'Grass', icon: '<path d="M4 20v-6c0-2 1-3 2-3s2 1 2 3v6"/><path d="M10 20v-8c0-2 1-3 2-3s2 1 2 3v8"/><path d="M16 20v-6c0-2 1-3 2-3s2 1 2 3v6"/>' },
+  { id: 'dirt', label: 'Dirt / Gravel', icon: '<circle cx="7" cy="14" r="1.5"/><circle cx="12" cy="10" r="1.5"/><circle cx="17" cy="15" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="19" r="1.5"/><circle cx="12" cy="16" r="1.5"/>' },
+  { id: 'asphalt', label: 'Asphalt', icon: '<rect x="3" y="8" width="18" height="8" rx="1"/><path d="M7 12h2M12 12h2M17 12h2"/>' },
+  { id: 'concrete', label: 'Concrete', icon: '<rect x="4" y="4" width="16" height="16" rx="1"/><path d="M4 12h16M12 4v16"/>' },
+  { id: 'deck', label: 'Deck / Patio', icon: '<rect x="4" y="5" width="16" height="14" rx="1"/><path d="M4 9h16M4 13h16M4 17h16"/>' },
+  { id: 'indoor', label: 'Indoor Floor', icon: '<rect x="4" y="4" width="16" height="16"/><path d="M4 10h16M4 16h16M10 4v16M16 4v16"/>' },
+  { id: 'notSure', label: 'Not Sure', icon: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.8.5-1 1-1 2.2"/><path d="M12 17.5h.01"/>' },
   ];
 
 // Functional order: Space now comes before Extras so it matches the Guided
