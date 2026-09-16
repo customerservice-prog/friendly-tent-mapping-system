@@ -7,6 +7,7 @@
 import { byId as chairById } from '../data/chairs.js';
 import { byId as tableById } from '../data/tables.js';
 import { linenVisual } from '../data/linens.js';
+import { byId as lightingById } from '../data/lighting.js';
 
 let container = null;
 let stageEl = null;
@@ -166,6 +167,104 @@ function severityClass(data, itemId) {
   return '';
 }
 
+// ===================== Lighting (2D) =====================
+// Tent Lighting / Bistro String Lights / Uplighting / Chandelier / Custom
+// Lighting are real rentable line items (js/data/lighting.js) that already
+// affected 3D (js/ui/view3d.js applyLighting) and pricing, but had NO
+// representation at all in the 2D plan -- a customer who added lighting
+// saw zero visual change on the default editing surface. These helpers add
+// a real, honest top-down visual per lighting type so the 2D plan matches
+// what was actually selected, without inventing extra fake "decor" beyond
+// what is really in the catalog.
+function addLightBulb(layer, fx, fy, variant) {
+  const disp = toDispXY(fx, fy);
+  const el = document.createElement('div');
+  el.className = 'plan2d-light-bulb plan2d-light-bulb--' + variant;
+  el.style.left = (disp.x * pxPerFt) + 'px';
+  el.style.top = (disp.y * pxPerFt) + 'px';
+  layer.appendChild(el);
+}
+
+function addUplight(layer, fx, fy) {
+  const disp = toDispXY(fx, fy);
+  const el = document.createElement('div');
+  el.className = 'plan2d-light-uplight';
+  el.style.left = (disp.x * pxPerFt) + 'px';
+  el.style.top = (disp.y * pxPerFt) + 'px';
+  layer.appendChild(el);
+}
+
+function buildCanopyLights(layer, tent) {
+  const margin = 3;
+  const spacing = 8;
+  const w = tent.widthFt, l = tent.lengthFt;
+  const cols = Math.max(1, Math.round((w - margin * 2) / spacing));
+  const rows = Math.max(1, Math.round((l - margin * 2) / spacing));
+  for (let r = 0; r <= rows; r++) {
+    for (let c = 0; c <= cols; c++) {
+      const fx = margin + (c * (w - margin * 2)) / cols;
+      const fy = margin + (r * (l - margin * 2)) / rows;
+      addLightBulb(layer, fx, fy, 'grid');
+    }
+  }
+}
+
+function buildPerimeterLights(layer, tent, spacingFt) {
+  const w = tent.widthFt, l = tent.lengthFt, inset = 1.5;
+  for (let x = inset; x <= w - inset + 0.01; x += spacingFt) addLightBulb(layer, Math.min(x, w - inset), inset, 'perimeter');
+  for (let x2 = inset; x2 <= w - inset + 0.01; x2 += spacingFt) addLightBulb(layer, Math.min(x2, w - inset), l - inset, 'perimeter');
+  for (let y = inset; y <= l - inset + 0.01; y += spacingFt) addLightBulb(layer, inset, Math.min(y, l - inset), 'perimeter');
+  for (let y2 = inset; y2 <= l - inset + 0.01; y2 += spacingFt) addLightBulb(layer, w - inset, Math.min(y2, l - inset), 'perimeter');
+}
+
+function pointAtPerimeterDistance(d, w, l, inset) {
+  const topLen = w - 2 * inset;
+  const rightLen = l - 2 * inset;
+  if (d < topLen) return { x: inset + d, y: inset };
+  d -= topLen;
+  if (d < rightLen) return { x: w - inset, y: inset + d };
+  d -= rightLen;
+  if (d < topLen) return { x: w - inset - d, y: l - inset };
+  d -= topLen;
+  return { x: inset, y: l - inset - d };
+}
+
+function buildUplights(layer, tent, count) {
+  const w = tent.widthFt, l = tent.lengthFt, inset = 1;
+  if (count <= 1) { addUplight(layer, w / 2, inset); return; }
+  const perim = 2 * ((w - 2 * inset) + (l - 2 * inset));
+  for (let i = 0; i < count; i++) {
+    const d = (perim * i) / count;
+    const pt = pointAtPerimeterDistance(d, w, l, inset);
+    addUplight(layer, pt.x, pt.y);
+  }
+}
+
+function buildChandelier(layer, tent) {
+  const disp = toDispXY(tent.widthFt / 2, tent.lengthFt / 2);
+  const el = document.createElement('div');
+  el.className = 'plan2d-light-chandelier';
+  el.style.left = (disp.x * pxPerFt) + 'px';
+  el.style.top = (disp.y * pxPerFt) + 'px';
+  layer.appendChild(el);
+}
+
+function renderLighting(data, tent) {
+  if (!data.lightingOn) return;
+  const opt = lightingById(data.lightingId);
+  const visual = opt && opt.visual;
+  if (!visual || visual === 'none') return;
+  const layer = document.createElement('div');
+  layer.className = 'plan2d-lighting-layer';
+  stageEl.appendChild(layer);
+  if (visual === 'grid-canopy') buildCanopyLights(layer, tent);
+  else if (visual === 'perimeter-swag') buildPerimeterLights(layer, tent, 4);
+  else if (visual === 'perimeter-strand') buildPerimeterLights(layer, tent, 2.5);
+  else if (visual === 'uplight-ring') buildUplights(layer, tent, 12);
+  else if (visual === 'uplight-single') buildUplights(layer, tent, 1);
+  else if (visual === 'chandelier') buildChandelier(layer, tent);
+}
+
 function render(data) {
   currentData = data;
   const tent = data.tent;
@@ -186,6 +285,8 @@ function render(data) {
   stageEl.appendChild(pole);
 });
 
+renderLighting(data, tent);
+  
   if (data.anchoringMethod) {
     var corners = [
       { x: 0, y: 0 },
