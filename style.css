@@ -893,8 +893,45 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 }
 
 .studio-option-card .emoji {
-  font-size: 19px;
-  line-height: 1;
+    font-size: 19px;
+    line-height: 1;
+}
+
+.studio-option-card .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    color: var(--brand-primary, #2f6f4f);
+    flex-shrink: 0;
+}
+
+.studio-option-card .icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.studio-option-card.small .icon {
+    width: 18px;
+    height: 18px;
+}
+
+.studio-option-card.seat-card {
+    align-items: flex-start;
+}
+
+.seat-visual {
+    flex: 1 0 100%;
+    display: block;
+    height: 60px;
+    color: var(--brand-primary, #2f6f4f);
+    margin-bottom: 4px;
+}
+
+.seat-visual svg {
+    width: 100%;
+    height: 100%;
 }
 
 .studio-option-card .text {
@@ -959,6 +996,25 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 
 .studio-feature-chip.muted.selected {
   color: #fff;
+}
+.studio-feature-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.studio-feature-chip .icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
+}
+
+.studio-feature-chip .icon svg {
+    width: 100%;
+    height: 100%;
 }
 
 .studio-plan-header {
