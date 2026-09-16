@@ -387,6 +387,17 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
 .plan2d-dance-frame.selected { border-color: var(--brand-primary); }
 .plan2d-dance-frame-label { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(255,255,255,0.9); color: #4a3520; font-size: 12px; font-weight: 700; padding: 4px 12px; border-radius: 4px; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
 .plan2d-aisle-hint { position: absolute; font-size: 11px; color: var(--muted); }
+/* Lighting visuals (2D). Real rentable lighting line items (js/data/lighting.js)
+already affected pricing and 3D but had no representation on the 2D plan --
+these give each real lighting type an honest top-down visual. */
+.plan2d-lighting-layer { position: absolute; inset: 0; pointer-events: none; }
+.plan2d-light-bulb { position: absolute; width: 7px; height: 7px; border-radius: 50%; background: #ffd889; box-shadow: 0 0 6px 2px rgba(255, 200, 110, 0.85); transform: translate(-50%, -50%); }
+.plan2d-light-bulb--perimeter { width: 6px; height: 6px; }
+.plan2d-light-uplight { position: absolute; width: 9px; height: 9px; border-radius: 3px; background: radial-gradient(circle, #fff3c4 0%, #f6b93b 70%, transparent 100%); box-shadow: 0 0 10px 3px rgba(246, 185, 59, 0.55); transform: translate(-50%, -50%); }
+.plan2d-light-chandelier { position: absolute; width: 26px; height: 26px; border-radius: 50%; background: radial-gradient(circle, rgba(255,244,214,0.95) 0%, rgba(255,214,120,0.55) 55%, transparent 100%); box-shadow: 0 0 18px 6px rgba(255, 214, 120, 0.5); transform: translate(-50%, -50%); }
+.plan2d-light-chandelier::after { content: ''; position: absolute; left: 50%; top: 50%; width: 8px; height: 8px; border-radius: 50%; background: #d8a441; transform: translate(-50%, -50%); box-shadow: 0 0 4px rgba(0,0,0,0.25); }
+
+
 
 /* ===================== Responsive breakpoints ===================== */
 @media (max-width: 1280px) {
