@@ -396,6 +396,7 @@ function refreshBriefPanel() {
 // ---------- Render ----------
 
 function render() {
+  document.body.classList.add('guided-active');
   const root = document.getElementById('intakeWizard');
   root.innerHTML = '';
   if (stepIndex >= STEP_ORDER.length) {
@@ -762,6 +763,7 @@ function tentCard(title, entry, capacityKey, badgeClass) {
 }
 
 function renderRecommendations(result, matchedPackage) {
+  document.body.classList.add('guided-active');
   const root = document.getElementById('recommendWizard');
   root.innerHTML = '';
 
