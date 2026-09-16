@@ -12,19 +12,19 @@ import { resolveAnchoringMethod } from '../data/tentStructure.js';
 let Bridge = window.FriendlyBridge;
 
 const EVENT_TYPES = [
-  { id: 'wedding', label: '💍 Wedding' },
-  { id: 'graduation', label: '🎓 Graduation Party' },
-  { id: 'birthday', label: '🎂 Birthday Party' },
-  { id: 'corporate', label: '💼 Corporate Event' },
-  { id: 'school', label: '🏫 School Event' },
-  { id: 'festival', label: '🎪 Festival' },
-  { id: 'community', label: '🤝 Community Event' },
-  { id: 'backyard', label: '🏡 Backyard Party' },
-  { id: 'anniversary', label: '💞 Anniversary' },
-  { id: 'babyShower', label: '🍼 Baby Shower' },
-  { id: 'bridalShower', label: '💐 Bridal Shower' },
-  { id: 'ceremony', label: '⛪ Ceremony' },
-  { id: 'other', label: '✨ Other' },
+  { id: 'wedding', label: 'Wedding', icon: '<circle cx="9" cy="14" r="5"/><circle cx="15" cy="14" r="5"/>' },
+  { id: 'graduation', label: 'Graduation Party', icon: '<path d="M12 4 2 9l10 5 10-5-10-5Z"/><path d="M6 11.5V17c0 1.5 2.7 3 6 3s6-1.5 6-3v-5.5"/>' },
+  { id: 'birthday', label: 'Birthday Party', icon: '<path d="M4 20h16v-5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v5Z"/><path d="M12 9V6"/>' },
+  { id: 'corporate', label: 'Corporate Event', icon: '<rect x="3" y="8" width="18" height="11" rx="2"/><path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>' },
+  { id: 'school', label: 'School Event', icon: '<path d="M4 10 12 5l8 5"/><rect x="5" y="10" width="14" height="9"/>' },
+  { id: 'festival', label: 'Festival', icon: '<path d="M6 3v18"/><path d="M6 4h11l-4 4 4 4H6"/>' },
+  { id: 'community', label: 'Community Event', icon: '<circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3"/>' },
+  { id: 'backyard', label: 'Backyard Party', icon: '<path d="M12 3 7 11h3l-4 6h4v4h4v-4h4l-4-6h3L12 3Z"/>' },
+  { id: 'anniversary', label: 'Anniversary', icon: '<path d="M12 20s-7-4.4-9.3-8.8C1.4 8 5.7 5 9 8c2 2 3 4 3 4"/>' },
+  { id: 'babyShower', label: 'Baby Shower', icon: '<rect x="9" y="8" width="6" height="12" rx="2"/><rect x="10" y="4" width="4" height="4"/>' },
+  { id: 'bridalShower', label: 'Bridal Shower', icon: '<circle cx="12" cy="12" r="2.4"/><circle cx="12" cy="6" r="2"/><circle cx="12" cy="18" r="2"/>' },
+  { id: 'ceremony', label: 'Ceremony', icon: '<path d="M5 20V11a7 7 0 0 1 14 0v9"/><path d="M5 20h14"/>' },
+  { id: 'other', label: 'Other', icon: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>' },
   ];
 
 const SEATING_STYLE_CARDS = [
@@ -116,6 +116,13 @@ function needsDanceFloorStep() {
   return wiz.features.indexOf('danceFloor') !== -1;
 }
 
+
+   function iconSvg(inner) {
+     const wrapper = document.createElement('span');
+     wrapper.className = 'icon';
+     wrapper.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">' + inner + '</svg>';
+     return wrapper;
+   }
 function packageCategoryForEventType(eventType) {
   if (eventType === 'wedding' || eventType === 'ceremony' || eventType === 'bridalShower') return 'wedding';
   if (eventType === 'graduation') return 'graduation';
