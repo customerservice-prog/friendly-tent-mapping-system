@@ -21,6 +21,17 @@ function publicShape(t) {
     };
 }
 
+// GET /api/tenants/generic
+// Public endpoint for the RentSketch public demo designer. Returns the generic
+// tenant with its catalog, used when no specific tenant slug is loaded.
+// This is called directly by the frontend without a path parameter.
+router.get('/generic', async (req, res) => {
+    const result = await db.query('SELECT * FROM tenants WHERE slug = $1', ['generic']);
+    const tenant = result.rows[0];
+    if (!tenant) return res.status(404).json({ error: 'Generic tenant not found' });
+    res.json(publicShape(tenant));
+});
+
 // GET /api/tenants/:slug
 // Public tenant lookup used by the designer frontend to load branding and
 // contact info before it renders. Intentionally returns ONLY public-safe
@@ -91,3 +102,4 @@ router.patch('/:slug', requireTenantAccess, async (req, res) => {
 });
 
 module.exports = router;
+

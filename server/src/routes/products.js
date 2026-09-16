@@ -4,6 +4,20 @@ const { requireTenantAccess } = require('../middleware/requireAuth');
 
 const router = express.Router();
 
+// GET /api/tenants/generic/products
+// Public catalog for the RentSketch public demo designer, using the generic tenant.
+router.get('/generic/products', async (req, res) => {
+    const tenantResult = await db.query('SELECT id FROM tenants WHERE slug = $1', ['generic']);
+    const tenant = tenantResult.rows[0];
+    if (!tenant) return res.status(404).json({ error: 'Generic tenant not found' });
+
+    const products = await db.query(
+          'SELECT * FROM products WHERE tenant_id = $1 AND active = true ORDER BY category, sort_order',
+          [tenant.id]
+        );
+    res.json({ products: products.rows });
+});
+
 // GET /api/tenants/:slug/products
 // Public catalog for the designer frontend, scoped to this tenant only -
 // this is what replaces the hardcoded TENTS/TABLES/CHAIRS arrays in
@@ -89,3 +103,4 @@ router.delete('/:slug/products/:id', requireTenantAccess, async (req, res) => {
 });
 
 module.exports = router;
+
