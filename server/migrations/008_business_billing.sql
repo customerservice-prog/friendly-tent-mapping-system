@@ -1,6 +1,7 @@
 -- RentSketch business subscription billing.
 ALTER TABLE tenants ADD COLUMN IF NOT EXISTS stripe_billing_customer_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS tenants_stripe_billing_customer_idx ON tenants(stripe_billing_customer_id) WHERE stripe_billing_customer_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS subscriptions_provider_subscription_idx ON subscriptions(provider_subscription_id) WHERE provider_subscription_id IS NOT NULL;
 
 INSERT INTO plans(id,name,monthly_price,annual_price,features) VALUES
  ('starter','Starter',49.00,490.00,'{"designer":true,"quotes":true,"branding":"basic"}'::jsonb),
@@ -11,4 +12,4 @@ ON CONFLICT(id) DO UPDATE SET name=EXCLUDED.name,monthly_price=EXCLUDED.monthly_
 
 -- Friendly's embedded designer remains free for every customer. This does not
 -- alter friendlypartyrental.com; it only protects the RentSketch tenant policy.
-UPDATE tenants SET customer_access='free', pass_price_cents=NULL WHERE slug='friendly';
+UPDATE tenants SET customer_access='free',pass_price_cents=NULL WHERE slug='friendly';
