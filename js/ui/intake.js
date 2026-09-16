@@ -102,6 +102,7 @@ const wiz = {
 
 let stepIndex = 0;
 const stepHistory = []; let briefFinalMode = false;
+let planOptions = {}; let planCapacityKey = null; let selectedPlanKey = null; let currentPlanStageHost = null; let currentPlanSideHost = null;
 
 function money(n) { return '$' + n.toFixed(2); }
 
@@ -778,81 +779,142 @@ function capacityLabel(key) {
   return 'dining guests';
 }
 
-function tentCard(title, entry, capacityKey, badgeClass) {
-  const card = el('div', 'recommend-card ' + badgeClass);
-  card.appendChild(el('div', 'recommend-card-badge', title));
-  card.appendChild(el('h3', null, entry.tent.name));
-  card.appendChild(el('div', 'recommend-card-meta', entry.tent.widthFt + ' x ' + entry.tent.lengthFt + ' ft - ' + (entry.tent.pricePerDay != null ? (money(entry.tent.pricePerDay) + '/day') : 'Ask for pricing')));
-  card.appendChild(el('div', 'recommend-card-capacity', 'Fits up to ' + entry.tent.capacity[capacityKey] + ' ' + capacityLabel(capacityKey)));
-  if (entry.note && entry.note.message) {
-    card.appendChild(el('div', 'recommend-card-note note-' + entry.note.level, entry.note.message));
-  }
-  if (entry.caution) {
-    card.appendChild(el('div', 'recommend-card-note note-warning', entry.caution));
-  }
-  if (entry.benefit) {
-    card.appendChild(el('div', 'recommend-card-note note-info', entry.benefit));
-  }
-  const useBtn = el('button', 'btn-primary', 'Use This Layout');
-  useBtn.type = 'button';
-  useBtn.addEventListener('click', function () {
-    Bridge.state.tentId = entry.tent.id;
-    Bridge.useRecommendedLayout();
-  });
-  card.appendChild(useBtn);
-  return card;
+function planLabelForKey(key) {
+    if (key === 'tighter') return 'TIGHTER FIT';
+    if (key === 'moreSpacious') return 'MORE SPACIOUS';
+    return 'RECOMMENDED';
+}
+
+function buildPlanSnapshot(entry) {
+    return {
+          tent: entry.tent,
+          anchoringMethod: resolveAnchoringMethod(entry.tent.type, wiz.surfaceType || 'notSure'),
+          objects: [],
+          lightingOn: false,
+          lightingId: 'lighting-none',
+          selectedId: null,
+          severityMap: {},
+    };
+}
+
+function renderPlanStage(container, entry) {
+    container.innerHTML = '';
+    const stage = el('div', 'studio-plan-stage');
+    const visual = el('div', 'studio-plan-visual');
+    stage.appendChild(visual);
+    const overlay = el('div', 'studio-plan-overlay');
+    overlay.appendChild(el('div', 'studio-plan-overlay-badge', planLabelForKey(selectedPlanKey)));
+    overlay.appendChild(el('div', 'studio-plan-overlay-title', entry.tent.name));
+    overlay.appendChild(el('div', 'studio-plan-overlay-meta', entry.tent.widthFt + ' x ' + entry.tent.lengthFt + ' ft \u00b7 ' + (entry.tent.pricePerDay != null ? (money(entry.tent.pricePerDay) + '/day') : 'Ask for pricing')));
+    overlay.appendChild(el('div', 'studio-plan-overlay-meta', 'Fits up to ' + entry.tent.capacity[planCapacityKey] + ' ' + capacityLabel(planCapacityKey)));
+    if (entry.note && entry.note.message) overlay.appendChild(el('div', 'studio-plan-overlay-note note-' + entry.note.level, entry.note.message));
+    if (entry.caution) overlay.appendChild(el('div', 'studio-plan-overlay-note note-warning', entry.caution));
+    if (entry.benefit) overlay.appendChild(el('div', 'studio-plan-overlay-note note-info', entry.benefit));
+    stage.appendChild(overlay);
+    container.appendChild(stage);
+    plan2dMod.mount(visual, buildPlanSnapshot(entry), {});
+}
+
+function planOptionTile(key) {
+    const entry = planOptions[key];
+    const tile = el('button', 'studio-plan-option' + (key === selectedPlanKey ? ' selected' : ''));
+    tile.type = 'button';
+    tile.setAttribute('aria-pressed', key === selectedPlanKey ? 'true' : 'false');
+    tile.appendChild(el('span', 'studio-plan-option-badge', planLabelForKey(key)));
+    tile.appendChild(el('span', 'studio-plan-option-name', entry.tent.name));
+    tile.appendChild(el('span', 'studio-plan-option-meta', entry.tent.widthFt + ' x ' + entry.tent.lengthFt + ' ft'));
+    tile.addEventListener('click', function () {
+          selectedPlanKey = key;
+          renderPlanSelection();
+    });
+    return tile;
+}
+
+function renderPlanSelection() {
+    if (!currentPlanStageHost || !currentPlanSideHost) return;
+    const entry = planOptions[selectedPlanKey];
+    if (!entry) return;
+    renderPlanStage(currentPlanStageHost, entry);
+
+    currentPlanSideHost.innerHTML = '';
+    currentPlanSideHost.appendChild(el('div', 'studio-plan-side-title', Object.keys(planOptions).length > 1 ? 'Other sizes to consider' : 'Your starting tent'));
+    const optWrap = el('div', 'studio-plan-options');
+    ['tighter', 'recommended', 'moreSpacious'].forEach(function (key) {
+          if (planOptions[key]) optWrap.appendChild(planOptionTile(key));
+    });
+    currentPlanSideHost.appendChild(optWrap);
+
+    const useBtn = el('button', 'btn-primary studio-plan-use', 'Use This Layout');
+    useBtn.type = 'button';
+    useBtn.addEventListener('click', function () {
+          Bridge.state.tentId = entry.tent.id;
+          Bridge.useRecommendedLayout();
+    });
+    currentPlanSideHost.appendChild(useBtn);
 }
 
 function renderRecommendations(result, matchedPackage) {
-  document.body.classList.add('guided-active');
-  const root = document.getElementById('recommendWizard');
-  root.innerHTML = '';
+    document.body.classList.add('guided-active');
+    const root = document.getElementById('recommendWizard');
+    root.innerHTML = '';
 
-const header = el('div', 'studio-plan-header');
-  briefFinalMode = true; renderFinalProgress(header);
-  briefFinalMode = true; renderBrief(header); briefFinalMode = false;
-  root.appendChild(header);
+    const header = el('div', 'studio-plan-header');
+    briefFinalMode = true; renderFinalProgress(header);
+    briefFinalMode = true; renderBrief(header); briefFinalMode = false;
+    root.appendChild(header);
 
-root.appendChild(el('h2', 'studio-plan-title', 'Recommended Starting Setup'));
+    root.appendChild(el('h2', 'studio-plan-title', 'Your Starting Plan'));
 
-if (matchedPackage && (!window.ACTIVE_TENANT || window.ACTIVE_TENANT.showPackages !== false)) {
-  const box = el('div', 'package-match');
-  box.appendChild(el('div', 'package-match-title', 'This matches our "' + matchedPackage.name + '" package'));
-  box.appendChild(el('div', 'package-match-meta', money(matchedPackage.price) + '/day flat — up to ' + matchedPackage.maxGuests + ' guests'));
-  box.appendChild(el('div', 'package-match-hint', 'Ask ' + ((window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' about bundling into this package for potential savings.'));
-  root.appendChild(box);
-}
+    if (matchedPackage && (!window.ACTIVE_TENANT || window.ACTIVE_TENANT.showPackages !== false)) {
+          const box = el('div', 'package-match');
+          box.appendChild(el('div', 'package-match-title', 'This matches our "' + matchedPackage.name + '" package'));
+          box.appendChild(el('div', 'package-match-meta', money(matchedPackage.price) + '/day flat \u2014 up to ' + matchedPackage.maxGuests + ' guests'));
+          box.appendChild(el('div', 'package-match-hint', 'Ask ' + ((window.ACTIVE_TENANT && window.ACTIVE_TENANT.name) || 'Friendly Party Rental') + ' about bundling into this package for potential savings.'));
+          root.appendChild(box);
+    }
 
-if (result.warnings && result.warnings.length) {
-  result.warnings.forEach(function (w) {
-    root.appendChild(el('div', 'recommend-warning', w.message));
-  });
-}
+    if (result.warnings && result.warnings.length) {
+          result.warnings.forEach(function (w) {
+                  root.appendChild(el('div', 'recommend-warning', w.message));
+          });
+    }
 
-const grid = el('div', 'recommend-grid');
-  if (result.tighter) grid.appendChild(tentCard('TIGHTER FIT', result.tighter, result.capacityKey, 'tighter'));
-  if (result.recommended) grid.appendChild(tentCard('RECOMMENDED', result.recommended, result.capacityKey, 'recommended'));
-  if (result.moreSpacious) grid.appendChild(tentCard('MORE SPACIOUS', result.moreSpacious, result.capacityKey, 'spacious'));
-  root.appendChild(grid);
+    planOptions = {};
+    if (result.tighter) planOptions.tighter = result.tighter;
+    if (result.recommended) planOptions.recommended = result.recommended;
+    if (result.moreSpacious) planOptions.moreSpacious = result.moreSpacious;
+    planCapacityKey = result.capacityKey;
+    selectedPlanKey = result.recommended ? 'recommended' : (result.moreSpacious ? 'moreSpacious' : 'tighter');
 
-const row = el('div', 'button-row');
-  const customizeBtn = el('button', 'btn-secondary', 'Customize From Scratch');
-  customizeBtn.type = 'button';
-  customizeBtn.addEventListener('click', function () {
-    const fallback = result.recommended || result.moreSpacious || result.tighter;
-    if (fallback) Bridge.state.tentId = fallback.tent.id;
-    Bridge.customizeFromScratch();
-  });
-  row.appendChild(customizeBtn);
+    const planLayout = el('div', 'studio-plan-layout');
+    const stageHost = el('div', 'studio-plan-stage-host');
+    const sideHost = el('div', 'studio-plan-side');
+    planLayout.appendChild(stageHost);
+    planLayout.appendChild(sideHost);
+    root.appendChild(planLayout);
 
-const backBtn = el('button', 'btn-link', 'Back to Questions');
-  backBtn.type = 'button';
-  backBtn.addEventListener('click', function () {
-    Bridge.showStep('step-intake');
-  });
-  row.appendChild(backBtn);
+    currentPlanStageHost = stageHost;
+    currentPlanSideHost = sideHost;
+    renderPlanSelection();
 
-root.appendChild(row);
+    const row = el('div', 'button-row');
+    const customizeBtn = el('button', 'btn-secondary', 'Customize From Scratch');
+    customizeBtn.type = 'button';
+    customizeBtn.addEventListener('click', function () {
+          const fallback = result.recommended || result.moreSpacious || result.tighter;
+          if (fallback) Bridge.state.tentId = fallback.tent.id;
+          Bridge.customizeFromScratch();
+    });
+    row.appendChild(customizeBtn);
+
+    const backBtn = el('button', 'btn-link', 'Back to Questions');
+    backBtn.type = 'button';
+    backBtn.addEventListener('click', function () {
+          Bridge.showStep('step-intake');
+    });
+    row.appendChild(backBtn);
+
+    root.appendChild(row);
 }
 
 // Demo mode: ?demo=1 skips the wizard and jumps straight into a curated,
