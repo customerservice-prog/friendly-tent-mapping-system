@@ -1,5 +1,15 @@
 const db = require('./db');
-const { hashPassword } = require('./auth');
+const { hashPassword, verifyPassword } = require('./auth');
+
+async function verifyWrittenPassword(email, password) {
+  const check = await db.query('SELECT id, password_hash, is_platform_admin FROM users WHERE email = $1', [email]);
+  const user = check.rows[0];
+  if (!user) throw new Error(`[bootstrap] Verification failed: admin row missing for ${email}.`);
+  const matches = await verifyPassword(password, user.password_hash);
+  if (!matches) throw new Error(`[bootstrap] Verification failed: written password hash does not match bootstrap password for ${email}.`);
+  if (!user.is_platform_admin) throw new Error(`[bootstrap] Verification failed: ${email} is not marked as platform admin.`);
+  console.log(`[bootstrap] Verified admin credentials in database for ${email}.`);
+}
 
 async function bootstrapPlatformAdmin() {
   const email = String(process.env.PLATFORM_ADMIN_EMAIL || '').trim().toLowerCase();
@@ -20,6 +30,7 @@ async function bootstrapPlatformAdmin() {
       'INSERT INTO users (email, password_hash, display_name, is_platform_admin) VALUES ($1, $2, $3, true)',
       [email, passwordHash, displayName]
     );
+    await verifyWrittenPassword(email, password);
     console.log(`[bootstrap] Platform admin created for ${email}.`);
     return;
   }
@@ -30,6 +41,7 @@ async function bootstrapPlatformAdmin() {
       'UPDATE users SET password_hash = $1, display_name = COALESCE(NULLIF($2, \'\'), display_name), is_platform_admin = true WHERE email = $3',
       [passwordHash, displayName, email]
     );
+    await verifyWrittenPassword(email, password);
     console.log(`[bootstrap] Platform admin password reset for ${email}.`);
   } else {
     await db.query('UPDATE users SET is_platform_admin = true WHERE email = $1', [email]);
