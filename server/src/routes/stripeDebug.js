@@ -1,4 +1,4 @@
-// Temporary diagnostic route to safely verify Stripe account configuration
+// Temporary diagnostic route to safely verify Stripe configuration
 // This endpoint is INTERNAL ONLY and reveals NO SECRETS
 const express = require('express');
 const router = express.Router();
@@ -10,8 +10,7 @@ function stripeClient() {
 }
 
 // GET /api/stripe/diag/account-check
-// INTERNAL DIAGNOSTIC ONLY - safe to log, no secrets exposed
-// Returns: { accountId, livemode, priceExists, priceAmount }
+// Verify account ID matches expected and test all 6 prices
 router.get('/diag/account-check', async (req, res) => {
   try {
     const stripe = stripeClient();
@@ -19,33 +18,51 @@ router.get('/diag/account-check', async (req, res) => {
       return res.status(503).json({ error: 'Stripe not configured' });
     }
 
-    // Retrieve account info - safe call that reveals no secrets
+    // Retrieve account info
     const account = await stripe.accounts.retrieve();
     const accountId = account.id;
-    const livemode = account.settings ? true : false; // accounts.retrieve returns account object, not livemode bool
-    
-    // Try to retrieve the known LIVE price
-    const priceId = 'price_1UGNPv2FmTqqyVfhZlTMiH1D';
-    let priceExists = false;
-    let priceAmount = null;
-    let priceError = null;
-    
-    try {
-      const price = await stripe.prices.retrieve(priceId);
-      priceExists = true;
-      priceAmount = price.unit_amount;
-    } catch (priceErr) {
-      priceError = priceErr.message;
+    const expectedAccountId = 'acct_1UFIa32FmTqqyVfh';
+    const accountMatch = accountId === expectedAccountId;
+
+    // Define all 6 prices to test
+    const priceIds = [
+      { id: 'price_1UGNPv2FmTqqyVfhZlTMiH1D', plan: 'STARTER', interval: 'MONTHLY', expected: 4900 },
+      { id: process.env.STRIPE_PRICE_STARTER_ANNUAL, plan: 'STARTER', interval: 'ANNUAL', expected: 49000 },
+      { id: process.env.STRIPE_PRICE_PRO_MONTHLY, plan: 'PRO', interval: 'MONTHLY', expected: 9900 },
+      { id: process.env.STRIPE_PRICE_PRO_ANNUAL, plan: 'PRO', interval: 'ANNUAL', expected: 99000 },
+      { id: process.env.STRIPE_PRICE_COMMERCE_MONTHLY, plan: 'COMMERCE', interval: 'MONTHLY', expected: 19900 },
+      { id: process.env.STRIPE_PRICE_COMMERCE_ANNUAL, plan: 'COMMERCE', interval: 'ANNUAL', expected: 199000 },
+    ];
+
+    const prices = {};
+    for (const { id, plan, interval, expected } of priceIds) {
+      const key = `${plan}_${interval}`;
+      try {
+        const price = await stripe.prices.retrieve(id);
+        prices[key] = {
+          id,
+          exists: true,
+          amount: price.unit_amount,
+          livemode: price.livemode,
+          currency: price.currency,
+          match: price.unit_amount === expected && price.livemode === true,
+        };
+      } catch (err) {
+        prices[key] = {
+          id,
+          exists: false,
+          error: err.message,
+          match: false,
+        };
+      }
     }
 
     res.json({
       accountId,
-      expectedAccountId: 'acct_1UFIa32FmTqqyVfh',
-      accountMatch: accountId === 'acct_1UFIa32FmTqqyVfh',
-      priceId,
-      priceExists,
-      priceAmount,
-      priceError: priceError || null,
+      expectedAccountId,
+      accountMatch,
+      allPricesMatch: Object.values(prices).every(p => p.match === true),
+      prices,
     });
   } catch (err) {
     res.status(500).json({
