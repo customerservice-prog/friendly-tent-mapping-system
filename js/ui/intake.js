@@ -327,7 +327,7 @@ function buildStageOverlayNodes() {
     if (gc) {
           nodes.push(el('div', 'studio-stage-caption', 'Planning for ' + gc + ' guests'));
     } else {
-          const occWords = occLabel.replace(/^\S+\s/, '').toLowerCase();
+          const occWords = occLabel.toLowerCase();
           nodes.push(el('div', 'studio-stage-caption', "Let's build your starting " + occWords + ' layout.'));
     }
     const chipsWrap = el('div', 'studio-stage-chips');
@@ -454,13 +454,10 @@ function renderEventTypeStep() {
   wrap.appendChild(el('h2', null, 'What are you planning?'));
   const grid = el('div', 'studio-occasion-grid');
   EVENT_TYPES.forEach(function (opt) {
-    const parts = opt.label.split(/\s(.+)/);
-    const emoji = parts[0];
-    const text = parts[1] || opt.label;
     const card = el('button', 'studio-occasion-card' + (wiz.eventType === opt.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.eventType === opt.id ? 'true' : 'false');
     card.type = 'button';
-    card.appendChild(el('span', 'emoji', emoji));
-    card.appendChild(el('span', 'text', text));
+    card.appendChild(iconSvg(opt.icon));
+    card.appendChild(el('span', 'text', opt.label));
     card.appendChild(el('span', 'check', '✓'));
     card.addEventListener('click', function () {
       wiz.eventType = opt.id;
