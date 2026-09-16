@@ -1,0 +1,47 @@
+/* RentSketch guided studio redesign — layered over the existing functional renderer. */
+body.guided-active{background:#f7f8f5}
+body.guided-active .site-header{box-shadow:0 1px 0 rgba(25,50,35,.08)}
+.studio-shell{grid-template-columns:minmax(460px,40%) 1fr;background:#fff}
+.studio-left{background:linear-gradient(180deg,#fff 0%,#fbfcfa 100%)}
+.studio-left-inner{max-width:620px;margin:0 auto;padding:36px 38px 44px}
+.studio-progress{flex-direction:row;gap:0;margin:0 0 30px;align-items:flex-start}
+.studio-progress-item{position:relative;flex:1;min-width:0;display:grid;grid-template-columns:18px 1fr;gap:4px 6px;padding:0 5px;font-size:11px}
+.studio-progress-item:not(:last-child)::after{content:'';position:absolute;top:6px;left:23px;right:-4px;height:1px;background:#dfe5dc}
+.studio-progress-item .dot,.studio-progress-item .check{position:relative;z-index:2;background:#fff}
+.studio-progress-item .label{grid-column:1/3;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.studio-progress-item .value{display:none}
+.studio-brief{margin:-12px 0 24px}
+.studio-question h2{font-size:clamp(28px,2.4vw,38px);letter-spacing:-.025em;line-height:1.08;margin-bottom:10px;color:#1d2920}
+.studio-subtext{font-size:16px;line-height:1.55;max-width:520px}
+.studio-occasion-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.studio-occasion-card{min-height:72px;padding:16px;border-radius:16px;border-color:#dde4da;box-shadow:0 1px 2px rgba(20,40,25,.03);font-weight:650}
+.studio-occasion-card:hover,.studio-option-card:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(30,60,38,.08)}
+.studio-occasion-card .icon{width:25px;height:25px}
+.studio-option-grid{gap:12px}
+.studio-option-card{border-radius:16px;padding:16px;min-height:74px;box-shadow:0 1px 2px rgba(20,40,25,.03)}
+.studio-option-card.seat-card{min-height:170px}
+.seat-visual{height:72px}
+.studio-feature-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.studio-feature-chip{border-radius:14px;min-height:52px;padding:12px 14px;justify-content:flex-start;font-weight:600}
+.studio-feature-chip .icon{width:20px;height:20px}
+.studio-guest-count-display{justify-content:flex-start;margin:24px 0 20px}
+.studio-guest-count-number{font-size:64px;min-width:130px;color:#1d2920}
+.studio-guest-count-display .count-btn{width:48px;height:48px;font-size:24px}
+.studio-guest-quickpicks{justify-content:flex-start}
+.studio-guest-quickpick{padding:9px 16px;font-weight:600}
+.studio-guest-hint{text-align:left}
+.studio-nav{padding-top:8px;border-top:1px solid #edf0eb;margin-top:28px;justify-content:space-between}
+.studio-nav .btn-primary{margin-left:auto;min-width:140px;border-radius:12px}
+.studio-stage{background:radial-gradient(circle at 50% 45%,#f8faf6 0,#eef2eb 65%,#e8ede5 100%)}
+.studio-stage-visual{border-radius:0;background:transparent}
+.studio-stage-overlay{left:24px;top:24px;right:24px}
+.studio-stage-overlay .studio-stage-occasion-label{font-size:22px;border:1px solid rgba(40,70,45,.08);box-shadow:0 4px 18px rgba(25,50,30,.06)}
+.studio-stage-overlay .studio-stage-caption,.studio-stage-overlay .studio-stage-chip{box-shadow:0 3px 12px rgba(25,50,30,.05)}
+.studio-plan-header{border-radius:18px;box-shadow:0 4px 20px rgba(25,50,30,.05)}
+.studio-plan-layout{grid-template-columns:minmax(0,1fr) 330px;gap:24px}
+.studio-plan-stage{min-height:520px;border:1px solid #dfe5dc;box-shadow:0 8px 28px rgba(25,50,30,.08)}
+.studio-plan-option{border-radius:14px;padding:14px}
+.studio-plan-use{min-height:50px;border-radius:12px}
+@media(max-width:1100px) and (min-width:881px){.studio-shell{grid-template-columns:440px 1fr}.studio-left-inner{padding:28px 24px}.studio-progress-item .label{font-size:10px}}
+@media(max-width:880px){body.guided-active{background:#fff}.studio-shell{display:flex;flex-direction:column}.studio-stage{order:0;min-height:260px}.studio-left{order:1;border-right:0}.studio-left-inner{padding:20px 16px 32px}.studio-progress{overflow-x:auto;padding-bottom:4px;margin-bottom:20px}.studio-progress-item{min-width:72px}.studio-question h2{font-size:28px}.studio-occasion-grid{grid-template-columns:1fr 1fr}.studio-occasion-card{min-height:64px;padding:12px;font-size:14px}.studio-option-grid{grid-template-columns:1fr}.studio-option-card.seat-card{min-height:140px}.studio-feature-grid{grid-template-columns:1fr 1fr}.studio-guest-count-number{font-size:50px}.studio-plan-layout{grid-template-columns:1fr}.studio-plan-stage{min-height:330px}}
+@media(max-width:480px){.studio-occasion-grid,.studio-feature-grid{grid-template-columns:1fr}.studio-stage{min-height:220px}.studio-progress-item{min-width:64px}.studio-progress-item .label{font-size:9px}}
