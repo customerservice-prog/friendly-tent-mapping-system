@@ -16,30 +16,23 @@ const consumerEventPassRoutes = require('./routes/consumerEventPass');
 const businessSignupRoutes = require('./routes/businessSignup');
 const connectRoutes = require('./routes/connect');
 const adminRoutes = require('./routes/admin');
+const embedRoutes = require('./routes/embed');
 
 const app = express();
 
-// Restrict cross-origin requests to known frontend origins. Falls back to
-// allowing all origins only if ALLOWED_ORIGINS was never configured, so
-// local development still works without extra setup.
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
 app.use(cors({ origin: allowedOrigins.length ? allowedOrigins : true }));
 
-// Stripe webhook needs the exact raw request body for signature
-// verification, so it is mounted BEFORE express.json() below, with its
-// own raw body parser scoped to just this one path.
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), stripeWebhookRoutes);
-
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-    res.json({ ok: true });
-});
+app.get('/health', (req, res) => { res.json({ ok: true }); });
 
 app.use('/api/auth', authRoutes);
+app.use('/api/embed', embedRoutes);
 app.use('/api/tenants', tenantsRoutes);
 app.use('/api/tenants', productsRoutes);
 app.use('/api/tenants', designsRoutes);
@@ -51,12 +44,10 @@ app.use('/api/visual-library', visualLibraryRoutes);
 app.use('/api/consumer', consumerEventPassRoutes);
 app.use('/api/admin', adminRoutes);
 
-// Basic fallback error handler so an unexpected error returns JSON instead
-// of leaking a stack trace to the client.
 app.use((err, req, res, next) => {
-    // eslint-disable-next-line no-console
-          console.error(err);
-    res.status(500).json({ error: 'Internal server error' });
+  // eslint-disable-next-line no-console
+  console.error(err);
+  res.status(500).json({ error: 'Internal server error' });
 });
 
 module.exports = app;
