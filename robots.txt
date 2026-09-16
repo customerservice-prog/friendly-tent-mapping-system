@@ -1,5 +1,9 @@
 User-agent: *
 Allow: /
 Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /api/
+Disallow: /business/login
+Disallow: /business/signup
 
 Sitemap: https://rentsketch.com/sitemap.xml
