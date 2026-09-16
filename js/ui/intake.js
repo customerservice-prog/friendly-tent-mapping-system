@@ -550,13 +550,10 @@ function renderSeatingStyleStep() {
   wrap.appendChild(el('h2', null, 'How would you like your guests seated?'));
   const grid = el('div', 'studio-option-grid');
   SEATING_STYLE_CARDS.forEach(function (opt) {
-    const parts = opt.label.split(/\s(.+)/);
-    const emoji = parts[0];
-    const text = parts[1] || opt.label;
-    const card = el('button', 'studio-option-card' + (wiz.seatingStyle === opt.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.seatingStyle === opt.id ? 'true' : 'false');
+    const card = el('button', 'studio-option-card seat-card' + (wiz.seatingStyle === opt.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.seatingStyle === opt.id ? 'true' : 'false');
     card.type = 'button';
-    card.appendChild(el('span', 'emoji', emoji));
-    card.appendChild(el('span', 'text', text));
+    card.appendChild(seatVisualSvg(opt.visual));
+    card.appendChild(el('span', 'text', opt.label));
     card.appendChild(el('span', 'hint', opt.hint));
     card.appendChild(el('span', 'check', '✓'));
     card.addEventListener('click', function () {
