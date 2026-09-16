@@ -590,8 +590,10 @@ function renderFeaturesStep() {
   wrap.appendChild(el('p', 'studio-subtext', 'Choose anything you would like RentSketch to plan around. Select all that apply.'));
   const grid = el('div', 'studio-feature-grid');
   FEATURES.forEach(function (opt) {
-    const chip = el('button', 'studio-feature-chip' + (wiz.features.indexOf(opt.id) !== -1 ? ' selected' : ''), opt.label); chip.setAttribute('aria-pressed', wiz.features.indexOf(opt.id) !== -1 ? 'true' : 'false');
+    const chip = el('button', 'studio-feature-chip' + (wiz.features.indexOf(opt.id) !== -1 ? ' selected' : '')); chip.setAttribute('aria-pressed', wiz.features.indexOf(opt.id) !== -1 ? 'true' : 'false');
     chip.type = 'button';
+    chip.appendChild(iconSvg(opt.icon));
+    chip.appendChild(el('span', null, opt.label));
     chip.addEventListener('click', function () {
       toggleFeature(opt.id);
       render();
