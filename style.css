@@ -1016,7 +1016,35 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
     width: 100%;
     height: 100%;
 }
+.studio-space-dims {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 12px;
+}
 
+.field.small {
+    max-width: 140px;
+    margin-bottom: 0;
+}
+
+.studio-space-footprint {
+    margin-top: 4px;
+}
+
+.studio-space-footprint-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--studio-text);
+    margin-bottom: 8px;
+}
+
+.studio-space-footprint-box {
+    width: 160px;
+    max-width: 100%;
+    border: 1.5px dashed var(--brand-primary, #2f6f4f);
+    border-radius: 6px;
+    background: var(--brand-primary-tint, rgba(47,111,79,0.08));
+}
 .studio-plan-header {
   background: var(--studio-panel-bg);
   border: 1px solid var(--studio-border);
