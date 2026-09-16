@@ -660,13 +660,10 @@ function renderLocationStep() {
   wrap.appendChild(el('h2', null, 'Where will everything be set up?'));
   const grid = el('div', 'studio-option-grid');
   LOCATION_TYPES.forEach(function (opt) {
-    const parts = opt.label.split(/\s(.+)/);
-    const emoji = parts[0];
-    const text = parts[1] || opt.label;
     const card = el('button', 'studio-option-card' + (wiz.spaceType === opt.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.spaceType === opt.id ? 'true' : 'false');
     card.type = 'button';
-    card.appendChild(el('span', 'emoji', emoji));
-    card.appendChild(el('span', 'text', text));
+    card.appendChild(iconSvg(opt.icon));
+    card.appendChild(el('span', 'text', opt.label));
     card.appendChild(el('span', 'check', '✓'));
     card.addEventListener('click', function () {
       wiz.spaceType = opt.id;
@@ -676,16 +673,13 @@ function renderLocationStep() {
   });
   wrap.appendChild(grid);
 
-wrap.appendChild(el('h3', null, 'What surface will the tent sit on?'));
+  wrap.appendChild(el('h3', null, 'What surface will the tent sit on?'));
   const surfaceGrid = el('div', 'studio-option-grid small');
   SURFACE_TYPES.forEach(function (opt) {
-    const parts = opt.label.split(/\s(.+)/);
-    const emoji = parts[0];
-    const text = parts[1] || opt.label;
     const card = el('button', 'studio-option-card small' + (wiz.surfaceType === opt.id ? ' selected' : '')); card.setAttribute('aria-pressed', wiz.surfaceType === opt.id ? 'true' : 'false');
     card.type = 'button';
-    card.appendChild(el('span', 'emoji', emoji));
-    card.appendChild(el('span', 'text', text));
+    card.appendChild(iconSvg(opt.icon));
+    card.appendChild(el('span', 'text', opt.label));
     card.appendChild(el('span', 'check', '✓'));
     card.addEventListener('click', function () {
       wiz.surfaceType = opt.id;
@@ -695,7 +689,47 @@ wrap.appendChild(el('h3', null, 'What surface will the tent sit on?'));
   });
   wrap.appendChild(surfaceGrid);
 
-renderNav(wrap);
+  wrap.appendChild(el('h3', null, 'Do you know your usable space? (optional)'));
+  const dimsWrap = el('div', 'studio-space-dims');
+  const widthField = el('div', 'field small');
+  const widthLabel = el('label', null, 'Width (ft)'); widthLabel.setAttribute('for', 'spaceWidthInput');
+  widthField.appendChild(widthLabel);
+  const widthInput = document.createElement('input');
+  widthInput.type = 'number'; widthInput.min = '1'; widthInput.id = 'spaceWidthInput';
+  widthInput.value = wiz.spaceWidthFt ? String(wiz.spaceWidthFt) : '';
+  widthField.appendChild(widthInput);
+  dimsWrap.appendChild(widthField);
+  const lengthField = el('div', 'field small');
+  const lengthLabel = el('label', null, 'Length (ft)'); lengthLabel.setAttribute('for', 'spaceLengthInput');
+  lengthField.appendChild(lengthLabel);
+  const lengthInput = document.createElement('input');
+  lengthInput.type = 'number'; lengthInput.min = '1'; lengthInput.id = 'spaceLengthInput';
+  lengthInput.value = wiz.spaceLengthFt ? String(wiz.spaceLengthFt) : '';
+  lengthField.appendChild(lengthInput);
+  dimsWrap.appendChild(lengthField);
+  wrap.appendChild(dimsWrap);
+  const footprintNote = el('div', 'studio-space-footprint');
+  function renderFootprint() {
+    footprintNote.innerHTML = '';
+    if (wiz.spaceWidthFt && wiz.spaceLengthFt) {
+      footprintNote.appendChild(el('div', 'studio-space-footprint-label', 'Usable space: ' + wiz.spaceWidthFt + ' x ' + wiz.spaceLengthFt + ' ft'));
+      const box = el('div', 'studio-space-footprint-box');
+      box.style.aspectRatio = wiz.spaceWidthFt + ' / ' + wiz.spaceLengthFt;
+      footprintNote.appendChild(box);
+    }
+  }
+  widthInput.addEventListener('input', function () {
+    wiz.spaceWidthFt = parseInt(widthInput.value, 10) || null;
+    renderFootprint();
+  });
+  lengthInput.addEventListener('input', function () {
+    wiz.spaceLengthFt = parseInt(lengthInput.value, 10) || null;
+    renderFootprint();
+  });
+  renderFootprint();
+  wrap.appendChild(footprintNote);
+
+  renderNav(wrap);
   return wrap;
 }
 
