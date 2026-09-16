@@ -28,11 +28,11 @@ const EVENT_TYPES = [
   ];
 
 const SEATING_STYLE_CARDS = [
-  { id: SEATING_STYLE_OPTIONS.DINING, label: '🍽️ Dinner at Tables', hint: 'Guests seated at round or banquet tables for a meal.' },
-  { id: SEATING_STYLE_OPTIONS.CEREMONY, label: '💒 Ceremony Rows', hint: 'Rows of chairs facing forward, like a wedding ceremony.' },
-  { id: SEATING_STYLE_OPTIONS.COCKTAIL, label: '🥂 Cocktail / Mostly Standing', hint: 'Standing room with a few cocktail tables.' },
-  { id: SEATING_STYLE_OPTIONS.MIXED, label: '🔀 Mixed Seating', hint: 'A mix of seated and standing areas.' },
-  { id: SEATING_STYLE_OPTIONS.NOT_SURE, label: '🤔 Not Sure', hint: "We will plan around a flexible layout." },
+  { id: SEATING_STYLE_OPTIONS.DINING, label: 'Dinner at Tables', hint: 'Guests seated at round or banquet tables for a meal.', visual: '<circle cx="32" cy="22" r="10"/><circle cx="32" cy="6" r="2.2"/><circle cx="45" cy="12" r="2.2"/><circle cx="49" cy="24" r="2.2"/><circle cx="45" cy="34" r="2.2"/><circle cx="32" cy="40" r="2.2"/><circle cx="19" cy="34" r="2.2"/><circle cx="15" cy="24" r="2.2"/><circle cx="19" cy="12" r="2.2"/>' },
+  { id: SEATING_STYLE_OPTIONS.CEREMONY, label: 'Ceremony Rows', hint: 'Rows of chairs facing forward, like a wedding ceremony.', visual: '<rect x="27" y="3" width="10" height="6" rx="1"/><rect x="8" y="16" width="6" height="4" rx="1"/><rect x="17" y="16" width="6" height="4" rx="1"/><rect x="41" y="16" width="6" height="4" rx="1"/><rect x="50" y="16" width="6" height="4" rx="1"/><rect x="8" y="26" width="6" height="4" rx="1"/><rect x="17" y="26" width="6" height="4" rx="1"/><rect x="41" y="26" width="6" height="4" rx="1"/><rect x="50" y="26" width="6" height="4" rx="1"/><rect x="8" y="36" width="6" height="4" rx="1"/><rect x="17" y="36" width="6" height="4" rx="1"/><rect x="41" y="36" width="6" height="4" rx="1"/><rect x="50" y="36" width="6" height="4" rx="1"/>' },
+  { id: SEATING_STYLE_OPTIONS.COCKTAIL, label: 'Cocktail / Mostly Standing', hint: 'Standing room with a few cocktail tables.', visual: '<circle cx="18" cy="16" r="5"/><circle cx="44" cy="14" r="5"/><circle cx="30" cy="34" r="5"/>' },
+  { id: SEATING_STYLE_OPTIONS.MIXED, label: 'Mixed Seating', hint: 'A mix of seated and standing areas.', visual: '<circle cx="16" cy="24" r="8"/><circle cx="16" cy="10" r="2"/><circle cx="27" cy="17" r="2"/><circle cx="27" cy="31" r="2"/><circle cx="16" cy="38" r="2"/><circle cx="5" cy="31" r="2"/><circle cx="5" cy="17" r="2"/><circle cx="46" cy="16" r="4.5"/><circle cx="46" cy="34" r="4.5"/>' },
+  { id: SEATING_STYLE_OPTIONS.NOT_SURE, label: 'Not Sure', hint: 'We will plan around a flexible layout.', visual: '<rect x="6" y="8" width="52" height="32" rx="6" stroke-dasharray="4 4"/><circle cx="26" cy="24" r="1.8" fill="currentColor" stroke="none"/><circle cx="32" cy="24" r="1.8" fill="currentColor" stroke="none"/><circle cx="38" cy="24" r="1.8" fill="currentColor" stroke="none"/>' },
   ];
 
 const FEATURES = [
