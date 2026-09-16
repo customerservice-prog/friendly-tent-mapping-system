@@ -1156,3 +1156,161 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
     align-items: stretch;
     justify-content: stretch;
 }
+
+
+/* Guided Event Studio: "Your Plan" dominant visualization. Replaces the
+old flat 3-card recommendation grid with one large real plan2d render of
+the currently selected tent size plus a compact alternate-size picker,
+so the plan screen reads as one real starting layout instead of a
+catalog comparison. */
+.studio-plan-layout {
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 20px;
+    align-items: start;
+}
+
+.studio-plan-stage-host {
+    min-height: 0;
+}
+
+.studio-plan-stage {
+    position: relative;
+    min-height: 420px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #eef1ec;
+}
+
+.studio-plan-visual {
+    position: absolute;
+    inset: 0;
+}
+
+.studio-plan-overlay {
+    position: absolute;
+    left: 16px;
+    top: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    pointer-events: none;
+    z-index: 5;
+}
+
+.studio-plan-overlay-badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--brand-primary-dark);
+    background: rgba(255,255,255,0.95);
+    padding: 4px 10px;
+    border-radius: 999px;
+}
+
+.studio-plan-overlay-title {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--studio-text);
+    background: rgba(255,255,255,0.92);
+    padding: 4px 10px;
+    border-radius: 8px;
+}
+
+.studio-plan-overlay-meta {
+    font-size: 13px;
+    color: var(--studio-text-muted);
+    background: rgba(255,255,255,0.92);
+    padding: 3px 9px;
+    border-radius: 6px;
+}
+
+.studio-plan-overlay-note {
+    font-size: 13px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.95);
+}
+
+.studio-plan-overlay-note.note-warning { color: var(--warn); }
+.studio-plan-overlay-note.note-info { color: #24507a; }
+
+.studio-plan-side {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.studio-plan-side-title {
+    font-size: 13px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--studio-text-muted);
+}
+
+.studio-plan-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.studio-plan-option {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    text-align: left;
+    background: #fff;
+    border: 1.5px solid var(--studio-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.studio-plan-option:hover {
+    border-color: var(--brand-primary, #2f6f4f);
+}
+
+.studio-plan-option.selected {
+    border-color: var(--brand-primary, #2f6f4f);
+    background: var(--brand-primary-tint, rgba(47,111,79,0.08));
+}
+
+.studio-plan-option-badge {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--studio-text-muted);
+}
+
+.studio-plan-option.selected .studio-plan-option-badge {
+    color: var(--brand-primary-dark);
+}
+
+.studio-plan-option-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--studio-text);
+}
+
+.studio-plan-option-meta {
+    font-size: 13px;
+    color: var(--studio-text-muted);
+}
+
+.studio-plan-use {
+    width: 100%;
+    margin-top: 4px;
+}
+
+@media (max-width: 880px) {
+    .studio-plan-layout {
+          grid-template-columns: 1fr;
+    }
+    .studio-plan-stage {
+          min-height: 300px;
+    }
+}
