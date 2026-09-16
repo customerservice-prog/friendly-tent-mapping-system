@@ -565,9 +565,19 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
     background: var(--brand-primary-tint, rgba(47,111,79,0.08));
 }
 
-.studio-occasion-card .emoji {
-    font-size: 19px;
-    line-height: 1;
+.studio-occasion-card .icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: var(--brand-primary, #2f6f4f);
+  flex-shrink: 0;
+}
+
+.studio-occasion-card .icon svg {
+  width: 100%;
+  height: 100%;
 }
 
 .studio-occasion-card .text {
