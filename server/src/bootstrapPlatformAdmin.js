@@ -8,20 +8,22 @@ async function verifyWrittenPassword(email, password) {
   const matches = await verifyPassword(password, user.password_hash);
   if (!matches) throw new Error(`[bootstrap] Verification failed: written password hash does not match bootstrap password for ${email}.`);
   if (!user.is_platform_admin) throw new Error(`[bootstrap] Verification failed: ${email} is not marked as platform admin.`);
-  console.log(`[bootstrap] Verified admin credentials in database for ${email}.`);
+  console.log(`[bootstrap] Verified admin credentials in database for ${email}; passwordLength=${password.length}.`);
 }
 
 async function bootstrapPlatformAdmin() {
   const email = String(process.env.PLATFORM_ADMIN_EMAIL || '').trim().toLowerCase();
-  const password = String(process.env.PLATFORM_ADMIN_PASSWORD || '');
+  // Railway variables are sometimes pasted with accidental leading/trailing whitespace.
+  // The login form sends the visible password, so normalize the bootstrap secret too.
+  const password = String(process.env.PLATFORM_ADMIN_PASSWORD || '').trim();
   const displayName = String(process.env.PLATFORM_ADMIN_NAME || 'Platform Administrator').trim();
-  const forceReset = String(process.env.PLATFORM_ADMIN_BOOTSTRAP_RESET || '').toLowerCase() === 'true';
+  const forceReset = String(process.env.PLATFORM_ADMIN_BOOTSTRAP_RESET || '').trim().toLowerCase() === 'true';
 
   if (!email || !password) {
     console.warn('[bootstrap] PLATFORM_ADMIN_EMAIL/PASSWORD not set; skipping platform admin bootstrap.');
     return;
   }
-  if (password.length < 12) throw new Error('[bootstrap] PLATFORM_ADMIN_PASSWORD must be at least 12 characters.');
+  if (password.length < 12) throw new Error('[bootstrap] PLATFORM_ADMIN_PASSWORD must be at least 12 characters after trimming whitespace.');
 
   const existing = await db.query('SELECT id FROM users WHERE email = $1', [email]);
   if (!existing.rows[0]) {
