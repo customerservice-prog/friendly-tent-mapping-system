@@ -48,6 +48,70 @@ router.post('/designs', async (req, res) => {
     res.status(201).json(result.rows[0]);
 });
 
+// POST /api/consumer/designs/recovery-link
+// A consumer who paid for an Event Pass on one device/browser has no
+// account to log into elsewhere - this lets them get a link back to their
+// paid design on a NEW device, without ever creating a password. The link
+// is only ever delivered by emailing it - it is NEVER returned directly in
+// the API response - and the response is identical whether or not the
+// email actually matched a paid design, so this endpoint can never be used
+// to probe which emails own a paid design on this design id.
+router.post('/designs/recovery-link', async (req, res) => {
+    const { email } = req.body || {};
+    if (!email) return res.status(400).json({ error: 'email is required' });
+
+    const normalizedEmail = String(email).toLowerCase();
+    const match = await query(
+        `SELECT design_id FROM entitlements WHERE lower(customer_email) = $1
+         UNION
+         SELECT design_id FROM consumer_payments WHERE lower(customer_email) = $1
+         ORDER BY design_id DESC
+         LIMIT 1`,
+        [normalizedEmail]
+    );
+    if (match.rows.length === 0) {
+        return res.json({ ok: true });
+    }
+
+    const mailer = getMailer();
+    if (!mailer) {
+        return res.status(503).json({ error: 'Email delivery is not configured for this server yet.' });
+    }
+
+    const designId = match.rows[0].design_id;
+    const token = signToken(
+        { kind: 'consumer_design_recovery', designId, email: normalizedEmail },
+        { expiresIn: '15m' }
+    );
+    const origin = safeOrigin(req);
+    const link = origin + '/designer/?recoveryToken=' + encodeURIComponent(token);
+
+    await mailer.send(
+        normalizedEmail,
+        'Your RentSketch event design link',
+        'Continue editing your event design: ' + link + '\n\nThis link expires in 15 minutes.'
+    );
+
+    res.json({ ok: true });
+});
+
+// GET /api/consumer/designs/recover?token=...
+// Redeems the token from the emailed recovery link and hands back the
+// design id so the frontend can resume editing on this new device.
+router.get('/designs/recover', async (req, res) => {
+    const { token } = req.query || {};
+    if (!token) return res.status(400).json({ error: 'token is required' });
+    try {
+        const payload = verifyToken(token);
+        if (payload.kind !== 'consumer_design_recovery') {
+            return res.status(400).json({ error: 'Invalid recovery token' });
+        }
+        res.json({ designId: payload.designId });
+    } catch (err) {
+        res.status(400).json({ error: 'This recovery link is invalid or has expired.' });
+    }
+});
+
 // POST /api/consumer/designs/:designId/event-pass/checkout-session
 // Creates a Stripe Checkout Session for the $9.99 / 30-day Event Pass on a
 // generic (non-tenant) consumer design. Returns the hosted checkout URL.
@@ -284,70 +348,6 @@ router.post('/designs/:designId/event-pass/renewal-checkout-session', async (req
     );
 
     res.json({ url: session.url });
-});
-
-// POST /api/consumer/designs/recovery-link
-// A consumer who paid for an Event Pass on one device/browser has no
-// account to log into elsewhere - this lets them get a link back to their
-// paid design on a NEW device, without ever creating a password. The link
-// is only ever delivered by emailing it - it is NEVER returned directly in
-// the API response - and the response is identical whether or not the
-// email actually matched a paid design, so this endpoint can never be used
-// to probe which emails own a paid design on this design id.
-router.post('/designs/recovery-link', async (req, res) => {
-    const { email } = req.body || {};
-    if (!email) return res.status(400).json({ error: 'email is required' });
-
-    const normalizedEmail = String(email).toLowerCase();
-    const match = await query(
-        `SELECT design_id FROM entitlements WHERE lower(customer_email) = $1
-         UNION
-         SELECT design_id FROM consumer_payments WHERE lower(customer_email) = $1
-         ORDER BY design_id DESC
-         LIMIT 1`,
-        [normalizedEmail]
-    );
-    if (match.rows.length === 0) {
-        return res.json({ ok: true });
-    }
-
-    const mailer = getMailer();
-    if (!mailer) {
-        return res.status(503).json({ error: 'Email delivery is not configured for this server yet.' });
-    }
-
-    const designId = match.rows[0].design_id;
-    const token = signToken(
-        { kind: 'consumer_design_recovery', designId, email: normalizedEmail },
-        { expiresIn: '15m' }
-    );
-    const origin = safeOrigin(req);
-    const link = origin + '/designer/?recoveryToken=' + encodeURIComponent(token);
-
-    await mailer.send(
-        normalizedEmail,
-        'Your RentSketch event design link',
-        'Continue editing your event design: ' + link + '\n\nThis link expires in 15 minutes.'
-    );
-
-    res.json({ ok: true });
-});
-
-// GET /api/consumer/designs/recover?token=...
-// Redeems the token from the emailed recovery link and hands back the
-// design id so the frontend can resume editing on this new device.
-router.get('/designs/recover', async (req, res) => {
-    const { token } = req.query || {};
-    if (!token) return res.status(400).json({ error: 'token is required' });
-    try {
-        const payload = verifyToken(token);
-        if (payload.kind !== 'consumer_design_recovery') {
-            return res.status(400).json({ error: 'Invalid recovery token' });
-        }
-        res.json({ designId: payload.designId });
-    } catch (err) {
-        res.status(400).json({ error: 'This recovery link is invalid or has expired.' });
-    }
 });
 
 module.exports = router;
