@@ -39,19 +39,17 @@ In Stripe LIVE dashboard (stripe.com/dashboard):
 
 In Railway dashboard → rentsketch-api service → Variables:
 
-Replace the 6 TEST price IDs with LIVE price IDs:
+Replace the 6 TEST price IDs with LIVE price IDs and update Stripe keys:
 - `STRIPE_PRICE_STARTER_MONTHLY` → LIVE Starter monthly
 - `STRIPE_PRICE_STARTER_ANNUAL` → LIVE Starter annual
 - `STRIPE_PRICE_PRO_MONTHLY` → LIVE Pro monthly
 - `STRIPE_PRICE_PRO_ANNUAL` → LIVE Pro annual
 - `STRIPE_PRICE_COMMERCE_MONTHLY` → LIVE Business monthly
 - `STRIPE_PRICE_COMMERCE_ANNUAL` → LIVE Business annual
-
-Also update:
 - `STRIPE_SECRET_KEY` → LIVE key (starts with `sk_live_`)
 - `STRIPE_WEBHOOK_SECRET` → LIVE webhook secret (starts with `whsec_live_`)
 
-**No code changes needed. No new deployment required.** The running service picks up environment variable changes immediately on next request.
+**After updating variables, Railway will automatically trigger a deployment.** Monitor the deployment to SUCCESS. No code changes needed.
 
 ### Step 3: Configure Webhook in Stripe LIVE
 
@@ -64,26 +62,34 @@ In Stripe LIVE dashboard → Developers → Webhooks → Add Endpoint:
   - `customer.subscription.updated`
   - `customer.subscription.deleted`
 - **Copy the Signing Secret** (starts with `whsec_live_`)
-- Update Railway's `STRIPE_WEBHOOK_SECRET` variable with this value
+- Update Railway's `STRIPE_WEBHOOK_SECRET` variable with this value (if not already set in Step 2)
 
-### Step 4: Sanity Test (Optional but Recommended)
+### Step 4: Verify LIVE Configuration (Required Before First Real Transaction)
 
 1. Log in to RentSketch as a test business user (not Friendly)
 2. Go to /dashboard → Billing
-3. Select "Starter / Monthly"
-4. **In Stripe Checkout, use Stripe's test card**: `4242 4242 4242 4242` (this always works, even in LIVE mode, for testing)
-5. Complete checkout
-6. Verify subscription appears in `/api/business/{slug}/billing/status`
-7. **Immediately cancel** the subscription in billing portal to avoid charges
-8. Monitor Stripe webhook logs for successful delivery
+3. **Verify the page loads without errors** and shows the correct plan pricing
+4. **Do NOT enter Stripe Checkout yet**
+5. Instead, in Stripe LIVE dashboard → Developers → Webhooks, verify the webhook endpoint is registered
+6. Confirm webhook test events deliver successfully (Stripe provides a "Send test event" option)
 
-### Step 5: Verify Production Behavior
+### Step 5: First Real Transaction (After Webhook Verified)
 
-- [ ] Friendly Party Rental still cannot access billing checkout
-- [ ] Test tenant checkout creates Stripe sessions with LIVE price IDs
-- [ ] Webhook delivers and processes successfully
-- [ ] Dashboard subscription status reflects reality
-- [ ] No error logs containing Price IDs or keys
+Only after webhook delivery is confirmed in Step 4:
+
+1. Create a small test transaction with a **real card** (Stripe LIVE never accepts test card numbers like `4242...`)
+2. Use a card you own or a temporary test debit card from your bank
+3. **Amount: Choose the smallest plan (Starter monthly = $49)** to minimize risk
+4. Monitor Stripe dashboard and webhook logs to verify payment processes end-to-end
+5. If successful, immediately cancel the subscription in the billing portal
+6. If any errors occur, do NOT retry; check logs and contact Stripe support
+
+### Step 6: Post-Launch Monitoring
+
+- [ ] Monitor Stripe dashboard webhook logs for failures
+- [ ] Check `processed_stripe_events` table for unexpected duplicates
+- [ ] Verify dashboard subscription status reflects Stripe state accurately
+- [ ] Friendly Party Rental still cannot access paid billing checkout
 
 ---
 
@@ -91,16 +97,18 @@ In Stripe LIVE dashboard → Developers → Webhooks → Add Endpoint:
 
 If anything goes wrong:
 
-1. Revert the 6 Price ID variables to TEST values in Railway
-2. Revert `STRIPE_SECRET_KEY` to TEST key
-3. Revert `STRIPE_WEBHOOK_SECRET` to TEST webhook secret
-4. No code changes. No redeployment. Service auto-updates on next request.
+1. Revert the 8 variables in Railway to TEST values:
+   - All 6 STRIPE_PRICE_* back to TEST price IDs
+   - `STRIPE_SECRET_KEY` to TEST key
+   - `STRIPE_WEBHOOK_SECRET` to TEST webhook secret
+2. Railway will automatically redeploy
+3. No code changes. Service auto-reverts on next request.
 
 ---
 
 ## Architecture Summary
 
-**Permanent Price IDs**: Stored in environment variables, never in code. Allows safe TEST→LIVE migration without redeployment.
+**Permanent Price IDs**: Stored in environment variables, never in code. Allows safe TEST→LIVE migration without code changes.
 
 **Backward Compatibility**: Plan ID `commerce` (database key) maps to "Business" (UI name). Existing tenant subscriptions unaffected.
 
@@ -122,5 +130,5 @@ If anything goes wrong:
 ---
 
 **Last Updated**: 2026-09-16  
-**Status**: LIVE migration ready. Awaiting human approval to execute Steps 1–3 above.
+**Status**: LIVE migration ready. Awaiting human approval to execute Steps 1–6 above.
 
