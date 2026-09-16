@@ -1,0 +1,109 @@
+/* RentSketch dedicated mobile pass. Loaded after style.css. */
+@media (max-width: 880px) {
+  html, body { width:100%; max-width:100%; overflow-x:hidden; }
+  body { -webkit-text-size-adjust:100%; }
+  .site-header { padding:12px 14px 10px; border-bottom-width:2px; }
+  .site-header-logo { max-height:52px; max-width:min(210px,72vw); margin:0 auto 5px; }
+  .site-header p { font-size:12px; line-height:1.35; }
+  #app { width:100%; margin:0; padding:0; max-width:none; }
+  .step { border-left:0; border-right:0; border-radius:0; padding:16px; }
+
+  /* Guided six-step experience: preview first, controls second. */
+  body.guided-active { min-height:100dvh; background:#fff; }
+  body.guided-active .site-footer { display:none; }
+  body.guided-active #step-intake.active,
+  body.guided-active #step-recommend.active { max-width:none; margin:0; padding:0; border:0; }
+  .studio-shell { display:flex !important; flex-direction:column; width:100%; min-width:0; min-height:100dvh; border:0; border-radius:0; overflow:visible; }
+  .studio-stage { order:0 !important; width:100%; min-width:0; min-height:clamp(220px,38dvh,340px); height:clamp(220px,38dvh,340px); padding:0 !important; position:relative; overflow:hidden; border-bottom:1px solid var(--studio-border); }
+  .studio-stage-inner, .studio-stage-inner.has-visual { width:100%; max-width:none; min-height:100%; height:100%; }
+  .studio-stage-visual { width:100%; height:100%; min-height:100%; border-radius:0; overflow:hidden; }
+  .studio-stage-visual canvas, .studio-plan-visual canvas, .viewport3d canvas { display:block; width:100% !important; height:100% !important; max-width:100%; touch-action:none; }
+  .studio-stage-overlay { left:10px; right:10px; top:10px; gap:5px; }
+  .studio-stage-overlay .studio-stage-occasion-label { font-size:15px; padding:4px 8px; }
+  .studio-stage-overlay .studio-stage-caption, .studio-stage-overlay .studio-stage-chip { font-size:11px; }
+  .studio-left { order:1; width:100%; min-width:0; overflow:visible; border-right:0; }
+  .studio-left-inner { padding:18px 14px calc(24px + env(safe-area-inset-bottom)); }
+  .studio-question h2 { font-size:22px; line-height:1.18; margin-bottom:7px; }
+  .studio-subtext { font-size:14px; line-height:1.4; margin-bottom:14px; }
+  .studio-progress { flex-direction:row; gap:5px; overflow-x:auto; scrollbar-width:none; margin:0 -14px 14px; padding:2px 14px 5px; }
+  .studio-progress::-webkit-scrollbar { display:none; }
+  .studio-progress-item { flex:0 0 auto; padding:6px 8px; border:1px solid var(--studio-border); border-radius:999px; background:#fff; font-size:11px; white-space:nowrap; }
+  .studio-progress-item .value { display:none; }
+  .studio-brief { margin-bottom:14px; overflow-x:auto; flex-wrap:nowrap; scrollbar-width:none; }
+  .studio-brief-chip { flex:0 0 auto; }
+  .studio-occasion-grid, .studio-option-grid, .studio-option-grid.small { grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .studio-occasion-card, .studio-option-card { min-width:0; padding:11px 10px; border-radius:10px; font-size:14px; }
+  .studio-option-card .hint { font-size:11px; }
+  .seat-visual { height:48px; }
+  .studio-feature-grid { gap:7px; }
+  .studio-feature-chip { min-height:42px; padding:8px 12px; font-size:13px; }
+  .studio-guest-count-display { margin:8px 0 12px; gap:14px; }
+  .studio-guest-count-number { font-size:38px; min-width:88px; }
+  .studio-guest-count-display .count-btn { width:46px; height:46px; }
+  .studio-guest-quickpicks { gap:6px; }
+  .studio-nav { position:sticky; bottom:0; z-index:15; margin:18px -14px -24px; padding:10px 14px calc(10px + env(safe-area-inset-bottom)); background:rgba(255,255,255,.96); border-top:1px solid var(--studio-border); backdrop-filter:blur(12px); }
+  .studio-nav .btn-primary { min-height:48px; flex:1; }
+  .studio-nav .btn-tertiary, .studio-nav .btn-secondary { min-height:48px; }
+
+  /* Plan/recommendation screen */
+  .studio-plan-header { padding:14px 14px 4px; margin:0; border-radius:0; border-left:0; border-right:0; }
+  .studio-plan-header .studio-progress { flex-direction:row; flex-wrap:nowrap; gap:5px; margin:0 -14px 10px; }
+  .studio-plan-title { font-size:20px; margin-bottom:10px; }
+  .studio-plan-layout { display:flex; flex-direction:column; gap:12px; padding:0 0 16px; }
+  .studio-plan-stage-host { width:100%; }
+  .studio-plan-stage { width:100%; min-height:300px; height:min(48dvh,390px); border-radius:0; }
+  .studio-plan-overlay { left:10px; right:10px; top:10px; }
+  .studio-plan-overlay-title { font-size:16px; }
+  .studio-plan-side { padding:0 14px calc(20px + env(safe-area-inset-bottom)); }
+  .studio-plan-options { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+  .studio-plan-option { min-width:0; padding:10px; }
+  .studio-plan-use { min-height:48px; position:sticky; bottom:8px; z-index:8; }
+
+  /* Full designer: canvas stays dominant and controls become thumb-friendly. */
+  body.designer-active { width:100%; height:100dvh; min-height:100dvh; overflow:hidden; }
+  body.designer-active #app, .step#step-designer, .step#step-designer.active { width:100%; height:100dvh; min-height:0; }
+  .designer-shell { width:100%; height:100%; min-width:0; overflow:hidden; }
+  .designer-toolbar { min-height:56px; height:auto; padding-left:max(8px,env(safe-area-inset-left)); padding-right:max(8px,env(safe-area-inset-right)); overflow-x:auto; scrollbar-width:none; }
+  .designer-toolbar::-webkit-scrollbar { display:none; }
+  .designer-toolbar button, .designer-toolbar .btn-icon { min-width:44px; min-height:44px; }
+  .tool-rail { width:100%; max-width:100%; height:auto; flex:0 0 auto; display:flex; flex-direction:row; overflow-x:auto; overflow-y:hidden; border-right:0; border-top:1px solid var(--border); scrollbar-width:none; }
+  .tool-rail::-webkit-scrollbar { display:none; }
+  .tool-rail button { flex:0 0 70px; min-height:58px; }
+  .designer-main { min-width:0; min-height:0; }
+  .canvas-wrap, .viewport3d { min-width:0; min-height:0; overflow:hidden; }
+  .status-bar { min-height:42px; height:auto; padding:0 8px; overflow-x:auto; scrollbar-width:none; }
+  .status-pill-group { gap:10px; }
+  .status-item, .status-flag { font-size:12px; }
+  .status-estimate { padding:6px 8px; font-size:13px; }
+  .drawer { left:0; right:0; top:auto; bottom:0; width:100%; max-width:none; height:min(72dvh,620px); border-radius:18px 18px 0 0; border-right:0; padding-bottom:env(safe-area-inset-bottom); }
+  .drawer-header { padding:14px 16px; }
+  .drawer-body { padding:12px 14px calc(16px + env(safe-area-inset-bottom)); }
+  .item-card-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:9px; }
+  .item-card { min-width:0; min-height:110px; padding:10px; }
+  .item-card-photo-wrap { height:82px; }
+  .inspector-panel { position:fixed; left:0; right:0; bottom:0; top:auto; z-index:24; width:100%; max-width:none; max-height:65dvh; padding:16px 14px calc(18px + env(safe-area-inset-bottom)); border-left:0; border-top:1px solid var(--border); border-radius:18px 18px 0 0; box-shadow:0 -10px 30px rgba(0,0,0,.14); }
+  .flyout { left:8px !important; right:8px !important; bottom:calc(8px + env(safe-area-inset-bottom)); width:auto; max-width:none; max-height:72dvh; padding:16px; }
+  .try-these-card, .empty-state-overlay { width:calc(100% - 20px); left:10px; right:10px; transform:none; }
+  .try-these-card { top:10px; }
+  .empty-state-overlay { top:10px; }
+  .review-section, .card, .review-visual-preview { max-width:100%; }
+  .button-row, .share-row { align-items:stretch; }
+  .button-row > button, .share-row > button { min-height:46px; }
+}
+
+@media (max-width: 430px) {
+  .studio-occasion-grid, .studio-option-grid, .studio-option-grid.small { grid-template-columns:1fr; }
+  .studio-stage { height:32dvh; min-height:210px; }
+  .studio-plan-stage { min-height:270px; height:40dvh; }
+  .studio-plan-options { grid-template-columns:1fr; }
+  .studio-question h2 { font-size:20px; }
+  .studio-occasion-card, .studio-option-card { min-height:48px; }
+  .item-card-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+@media (orientation: landscape) and (max-height: 520px) and (max-width: 950px) {
+  .studio-shell { display:grid !important; grid-template-columns:minmax(300px,42%) 1fr; min-height:100dvh; }
+  .studio-stage { order:1 !important; height:100dvh; min-height:0; }
+  .studio-left { order:0; max-height:100dvh; overflow-y:auto; }
+  .studio-nav { position:static; }
+}
