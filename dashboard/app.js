@@ -4,7 +4,7 @@
  var API_BASE = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
   var TOKEN_KEY = 'rentsketch_dashboard_token';
   var TENANT_KEY = 'rentsketch_dashboard_tenant';
-  var ROUTES = ['login', 'overview', 'products', 'branding', 'requests', 'install', 'superadmin'];
+  var ROUTES = ['login', 'overview', 'products', 'branding', 'requests', 'billing', 'install', 'superadmin'];
 
  function getToken() { return localStorage.getItem(TOKEN_KEY); }
   function setToken(t) { if (t) { localStorage.setItem(TOKEN_KEY, t); } else { localStorage.removeItem(TOKEN_KEY); } }
@@ -92,7 +92,7 @@ function esc(s) {
      '<div class="dash-brand">RentSketch <span class="dash-brand-sub">Business Dashboard</span></div>' +
      '<nav class="dash-nav">' +
      navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
-     navLink('branding', 'Branding') + navLink('install', 'Install') +
+     navLink('branding', 'Branding') + navLink('billing', 'Billing') + navLink('install', 'Install') +
      (state.user && state.user.isPlatformAdmin ? navLink('superadmin', 'Super Admin') : '') +
      '</nav>' +
      '<div class="dash-account">' + switcher + '<button id="btnLogout" class="btn-logout" type="button">Log out</button></div>' +
@@ -524,6 +524,118 @@ function esc(s) {
  // route guard below) - a regular tenant owner can never navigate here
  // because the server-side /api/admin/* routes independently enforce
  // requirePlatformAdmin regardless of what the client does.
+
+ async function viewBilling(route, gen) {
+   appEl().innerHTML = shellHtml(route, loadingHtml('Loading billing...'));
+   bindShellEvents();
+   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
+   try {
+     var status = await api('/api/business/' + state.tenant + '/billing/status');
+     var plans = await api('/api/business/plans');
+     if (gen !== renderGeneration) return;
+     var plansList = plans.plans || [];
+     var selectedInterval = 'monthly';
+     var planOptions = plansList.filter(function(p) { return p.id !== 'enterprise'; }).map(function(p) {
+       var monthly = (p.monthlyCents || 0) / 100;
+       var annual = (p.annualCents || 0) / 100;
+       return '<div class="plan-option" data-plan="' + esc(p.id) + '"><div class="plan-name">' + esc(p.name) + '</div><div class="plan-price"><span class="monthly-price" style="display:inline">$' + monthly.toFixed(2) + '/mo</span><span class="annual-price" style="display:none">$' + annual.toFixed(2) + '/yr</span></div></div>';
+     }).join('');
+     var currentStatus = status.friendlyFree ? '<span style="background:#e6f7ec;color:#1c7a3f;padding:4px 8px;border-radius:4px">Free Access</span>' : 
+       ('<span style="background:' + (status.status === 'active' ? '#e4edff' : '#fff3d6') + ';color:' + (status.status === 'active' ? '#2748a8' : '#8a6300') + ';padding:4px 8px;border-radius:4px;text-transform:capitalize">' + esc(status.status || 'unknown') + '</span>');
+     var trialText = '';
+     if (status.trialEndsAt) {
+       var end = new Date(status.trialEndsAt);
+       var now = new Date();
+       var daysLeft = Math.ceil((end - now) / (24*60*60*1000));
+       if (status.status === 'trialing' && daysLeft > 0) trialText = '<p class="trial-banner">Trial ends in ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' on ' + fmtDate(status.trialEndsAt) + '</p>';
+       else if (status.status === 'trialing' && daysLeft <= 0) trialText = '<p class="trial-banner trial-expired">Your free trial has ended. Choose a plan below to continue.</p>';
+     }
+     var msg = (window.location.search.indexOf('billing=success') > -1) ? '<div class="dash-saved">Upgrade successful! Your subscription is now active.</div>' : 
+       (window.location.search.indexOf('billing=cancelled') > -1) ? '<div class="dash-error">Checkout was cancelled.</div>' :
+       (window.location.search.indexOf('billing=portal-return') > -1) ? '<div class="dash-saved">Returned from billing portal.</div>' : '';
+     if (status.friendlyFree) {
+       document.getElementById('dashMain').innerHTML = '' +
+         '<h1 class="dash-title">Billing</h1>' +
+         msg +
+         '<div class="dash-empty"><strong>Friendly Party Rental</strong> has complimentary access to RentSketch. No billing required.</div>';
+     } else {
+       var billingHtml = '<h1 class="dash-title">Billing & Subscription</h1>' + msg + trialText + 
+         '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px;margin-bottom:20px">' +
+         '<h3 style="margin-top:0">Current Status</h3>' +
+         '<p><strong>Plan:</strong> ' + esc(status.plan || 'None') + ' &nbsp; <strong>Status:</strong> ' + currentStatus + '</p>' +
+         (status.subscription ? '<p class="muted">Period: ' + fmtDate(status.subscription.current_period_start) + ' – ' + fmtDate(status.subscription.current_period_end) + '</p>' : '') +
+         '</div>' +
+         '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px;margin-bottom:20px">' +
+         '<h3 style="margin-top:0">Choose Your Plan</h3>' +
+         '<div style="margin-bottom:14px"><label><input type="radio" name="interval" value="monthly" checked> Monthly billing &nbsp; <input type="radio" name="interval" value="annual"> Annual billing (save 2 months!)</label></div>' +
+         '<div id="plansGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">' + planOptions + '</div>' +
+         '<div id="billingError" class="dash-error" hidden></div>' +
+         '<button id="upgradeBtn" class="btn-primary" disabled>Choose Plan</button>' +
+         '</div>' +
+         '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px">' +
+         '<h3 style="margin-top:0">Manage Subscription</h3>' +
+         '<button id="portalBtn" class="btn-primary"' + (status.subscription ? '' : ' disabled') + '>Manage Billing in Stripe</button>' +
+         '<p class="muted">Change payment method, view invoices, or cancel your subscription</p>' +
+         '</div>';
+       document.getElementById('dashMain').innerHTML = billingHtml;
+       var selectedPlan = null;
+       document.querySelectorAll('.plan-option').forEach(function(el) {
+         el.style.cursor = 'pointer';
+         el.style.border = '1px solid #d3dae4';
+         el.style.borderRadius = '8px';
+         el.style.padding = '12px';
+         el.onclick = function() {
+           document.querySelectorAll('.plan-option').forEach(function(e) { e.style.background = ''; e.style.borderColor = '#d3dae4'; });
+           el.style.background = '#e4edff';
+           el.style.borderColor = '#2748a8';
+           selectedPlan = el.dataset.plan;
+           document.getElementById('upgradeBtn').disabled = false;
+         };
+       });
+       document.querySelectorAll('input[name="interval"]').forEach(function(radio) {
+         radio.addEventListener('change', function() {
+           selectedInterval = this.value;
+           document.querySelectorAll('.monthly-price').forEach(function(p) { p.style.display = selectedInterval === 'monthly' ? 'inline' : 'none'; });
+           document.querySelectorAll('.annual-price').forEach(function(p) { p.style.display = selectedInterval === 'annual' ? 'inline' : 'none'; });
+         });
+       });
+       document.getElementById('upgradeBtn').addEventListener('click', async function() {
+         if (!selectedPlan) { alert('Please choose a plan'); return; }
+         var btn = this;
+         btn.disabled = true;
+         btn.textContent = 'Redirecting to checkout...';
+         try {
+           var session = await api('/api/business/' + state.tenant + '/billing/checkout-session', {
+             method: 'POST',
+             body: { plan: selectedPlan, interval: selectedInterval }
+           });
+           window.location.href = session.url;
+         } catch (err) {
+           document.getElementById('billingError').textContent = err.message;
+           document.getElementById('billingError').hidden = false;
+           btn.disabled = false;
+           btn.textContent = 'Choose Plan';
+         }
+       });
+       document.getElementById('portalBtn').addEventListener('click', async function() {
+         var btn = this;
+         btn.disabled = true;
+         btn.textContent = 'Loading...';
+         try {
+           var portal = await api('/api/business/' + state.tenant + '/billing/portal-session', { method: 'POST' });
+           window.location.href = portal.url;
+         } catch (err) {
+           alert('Error: ' + err.message);
+           btn.disabled = false;
+           btn.textContent = 'Manage Billing in Stripe';
+         }
+       });
+     }
+   } catch (err) {
+     document.getElementById('dashMain').innerHTML = errorHtml(err);
+   }
+ }
+
  async function viewSuperAdmin(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading platform overview...'));
    bindShellEvents();
@@ -569,7 +681,7 @@ function esc(s) {
        '<div class="stat-card"><div class="stat-num">' + money((revenue.consumerPayments || []).reduce(function (sum, p) { return sum + p.total_cents; }, 0) / 100) + '</div><div class="stat-label">Event Pass Revenue</div></div>' +
        '<div class="stat-card"><div class="stat-num">\u2014</div><div class="stat-label">Tenant Subscriptions (not yet built)</div></div>' +
        '</div>' +
-       '<p class="muted">Consumer deposits are tenant revenue (RentSketch never touches these funds unless a Connect fee applies). Platform fees are RentSketch\'s own cut of a Connect deposit. Event Pass revenue is RentSketch\'s direct-to-consumer product, unrelated to any tenant. Tenant subscription billing (Starter/Pro/Commerce/Enterprise) has no Stripe Billing integration yet - pending real Price IDs and a business pricing decision.</p>' +
+       '<p class="muted">Consumer deposits are tenant revenue (RentSketch never touches these funds unless a Connect fee applies). Platform fees are RentSketch\'s own cut of a Connect deposit. Event Pass revenue is RentSketch\'s direct-to-consumer product, unrelated to any tenant. Tenant subscription billing is now integrated. See the Billing page.</p>' +
        '<h2 class="dash-section-title">All Tenants</h2>' +
        '<table class="dash-table"><thead><tr>' +
        '<th>Business</th><th>Plan</th><th>Status</th><th>Trial Ends</th><th>Connect</th>' +
@@ -599,6 +711,7 @@ function esc(s) {
    else if (route === 'requests') viewRequests(route, __gen);
    else if (route === 'products') viewProducts(route, __gen);
    else if (route === 'branding') viewBranding(route, __gen);
+   else if (route === 'billing') viewBilling(route, __gen);
    else if (route === 'install') viewInstall(route, __gen);
    else if (route === 'superadmin') viewSuperAdmin(route, __gen);
  }
