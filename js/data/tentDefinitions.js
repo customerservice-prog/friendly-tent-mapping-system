@@ -18,15 +18,32 @@ function perimeterNodes(widthFt, lengthFt, eaveHeightFt, spacingFt) {
   return out;
 }
 
+// Commercial pole-tent center poles sit on the longitudinal bay grid, not at
+// half-bay centers.  This matters visually: a 40x80 is three major peaks at
+// 20/40/60, while a 20x20 is one peak at 10.  Keep this parametric until an
+// inventory-specific manufacturer model overrides it.
 function centerNodes(type,widthFt,lengthFt,peakHeightFt) {
   if(type!=='pole') return [];
   const out=[];
-  if(widthFt>=40 && lengthFt>=40){ for(let z=20;z<=lengthFt-20+.01;z+=20) out.push(node('center-'+out.length,widthFt/2,z,peakHeightFt,'center')); }
-  else { const count=Math.max(1,Math.round(lengthFt/20)),bay=lengthFt/count; for(let i=0;i<count;i++) out.push(node('center-'+i,widthFt/2,bay*(i+.5),peakHeightFt,'center')); }
+  if(widthFt>=40){
+    for(let z=20;z<lengthFt-.01;z+=20) out.push(node('center-'+out.length,widthFt/2,z,peakHeightFt,'center'));
+  } else {
+    // Narrow pole tents use a center line with approximately 20 ft bays.
+    if(lengthFt<=20) out.push(node('center-0',widthFt/2,lengthFt/2,peakHeightFt,'center'));
+    else for(let z=10;z<lengthFt-.01;z+=20) out.push(node('center-'+out.length,widthFt/2,z,peakHeightFt,'center'));
+  }
   return out;
 }
 
-function peakHeight(type,widthFt){ if(type!=='pole') return 7+Math.max(4,widthFt*.24); if(widthFt<=20)return 10; if(widthFt<30)return 14.5; return 16.85; }
+function peakHeight(type,widthFt){
+  if(type!=='pole') return 7+Math.max(4,widthFt*.24);
+  if(widthFt<=20)return 10;
+  if(widthFt<30)return 14.5;
+  // Do not create the exaggerated 20+ ft pyramids that made the visualizer
+  // look unlike a rental pole tent. Inventory-specific verified dimensions
+  // can replace this estimate later.
+  return widthFt>=40?16.85:14.5;
+}
 
 export function createTentDefinition(catalogTent) {
   const type=catalogTent.type==='canopy'?'pop_up':catalogTent.type;
