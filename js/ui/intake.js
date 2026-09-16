@@ -96,6 +96,8 @@ const wiz = {
   customDanceFloorFt: null,
   spaceType: null,
   surfaceType: null,
+  spaceWidthFt: null,
+  spaceLengthFt: null,
 };
 
 let stepIndex = 0;
