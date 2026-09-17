@@ -43,9 +43,7 @@ var isEmbed = params.get('embed') === '1';
           // that request 404s, is slow, or fails outright.
           if (effectiveSlug === 'generic') {
             [TENTS, TABLES, CHAIRS].forEach(function (list) {
-              list.forEach(function (item) { item.pricePerDay = null; });
-            });
-          }
+              list.forEach(function (item) { item.pricePerDay = null; });\n            });\n          }
     // Dance floor / lighting / linens have no per-tenant catalog wiring yet
     // (unlike tents/tables/chairs, which get overwritten by real per-tenant
     // product data below). Until that exists, showing Friendly Party Rental's
@@ -95,8 +93,7 @@ var isEmbed = params.get('embed') === '1';
     applyBranding(tenant);
     (function () {
       var embedStyle = document.createElement('style');
-      embedStyle.textContent = 'body.embed-mode .site-header{display:none;}body.embed-mode .site-footer{display:none;}';
-      document.head.appendChild(embedStyle);
+      embedStyle.textContent = 'body.embed-mode .site-header{display:none;}body.embed-mode .site-footer{display:none;}';\ndocument.head.appendChild(embedStyle);
     })();
     
     if (window.RENTSKETCH_API_URL && window.RENTSKETCH_TENANT_SLUG) {
@@ -253,6 +250,7 @@ tenant.chairs = CHAIRS;
       })
       .catch(function () {});
     }
+    
     if (window.RENTSKETCH_EMBED) {
       var _fetch = window.fetch;
       window.fetch = function (input, opts) {
@@ -270,6 +268,19 @@ tenant.chairs = CHAIRS;
           return res;
         });
       };
+      
+      // AUTO-START DESIGNER IN EMBED MODE: load default tent and enter designer
+      var embedAutoStart = function() {
+        if (typeof window.FriendlyBridge === 'undefined' || !window.FriendlyBridge.enterDesigner) {
+          setTimeout(embedAutoStart, 50);
+          return;
+        }
+        var tentId = TENTS.length ? TENTS[0].id : 'pole-20x20';
+        window.FriendlyBridge.state.tentId = tentId;
+        window.FriendlyBridge.enterDesigner();
+      };
+      setTimeout(embedAutoStart, 100);
+      
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'rentsketch.ready', version: '1' }, '*');
         try {
@@ -304,7 +315,7 @@ tenant.chairs = CHAIRS;
       rsDbg('boot');
       document.addEventListener('DOMContentLoaded', function () { rsDbg('domcontentloaded'); });
       window.addEventListener('load', function () { rsDbg('winload'); });
-      document.addEventListener('visibilitychange', function () { rsDbg('visibilitychange', { state: document.visibilityState }); });
+      document.addEventListener('visibilitychange', function () { rsDbg('visibilitychange', { state: document.visibilitychange }); });
       ['pointerdown', 'pointerup', 'click'].forEach(function (type) {
         document.addEventListener(type, function (e) {
           rsDbg(type, { tag: e.target && e.target.tagName, step: activeStepId() });
@@ -441,20 +452,4 @@ tenant.chairs = CHAIRS;
 </div>
 <div class="button-row">
 <a id="btnEmailQuote" class="btn-primary" href="#">Request a Quote</a>
-  <button type="button" id="btnPayDeposit" class="btn-primary" hidden>Pay Deposit Now</button>
-<button id="btnBackToDesigner" class="btn-secondary">&larr; Back to Designer</button>
-</div>
-<p class="disclaimer" id="quoteDisclaimer">This creates a draft email only. Friendly Party Rental will confirm final pricing, availability, and details before anything is booked or charged.</p>
-</section>
-
-</main>
-
-<footer class="site-footer">
-<p id="siteFooterText">Friendly Party Rental &middot; 315-884-1498 &middot; customerservice@friendlypartyrental.com</p>
-</footer>
-
-<script type="module" src="../script.js"></script>
-<script type="module" src="../js/ui/intake.js"></script>
-  <script src="../js/ui/paywall.js"></script>
-</body>
-</html>
+  <button type="button" id="btnPayDeposit" class="btn-primary" hidden>Pay D
