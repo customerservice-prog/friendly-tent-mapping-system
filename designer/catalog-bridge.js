@@ -1,0 +1,10 @@
+// RentSketch tenant catalog bridge: never silently hide an active tenant product.
+(function(){
+  function norm(v){return String(v||'').toLowerCase().replace(/[^a-z0-9]/g,'');}
+  function infer(p){var c=norm(p.category),n=String(p.name||'').toLowerCase();if(c==='tent')return n.includes('frame')?'20x20-frame':'20x20-pole';if(c==='table')return n.includes('round')?'table-round-60':'table-banquet-6';if(c==='chair')return n.includes('resin')?'chair-resin-white':n.includes('chiavari')?'chair-chiavari-gold':'chair-folding-white';if(c==='lighting')return n.includes('bistro')?'lighting-bistro':'lighting-tent';if(c==='dancefloor')return'dance-floor';if(c==='linen')return n.includes('round')?'linen-skirt-round':'linen-skirt-rect';return null;}
+  window.RentSketchCatalogBridge={
+    inferVisual:infer,
+    resolve:function(product,masters){if(!product||product.active===false)return null;var cat=norm(product.category),pool=(masters&&masters[cat])||[],vid=product.visual_model_id||infer(product),base=pool.find(function(x){return x.id===vid;})||pool[0]||{};var item=JSON.parse(JSON.stringify(base));item.id=product.id;item.tenantProductId=product.id;item.externalId=product.external_id||null;item.visualModelId=vid;item.name=product.name||base.name||'Rental Item';item.imageUrl=product.image_url||product.imageUrl||base.imageUrl||null;item.pricePerDay=product.price_per_day==null?null:Number(product.price_per_day);item.category=cat;item.isRealTenantProduct=true;item.usesFallbackVisual=!product.visual_model_id||!pool.some(function(x){return x.id===product.visual_model_id;});return item;},
+    group:function(products,masters){var out={};(products||[]).forEach(function(p){if(p.active===false)return;var cat=norm(p.category)||'other';(out[cat]||(out[cat]=[])).push(window.RentSketchCatalogBridge.resolve(p,masters));});return out;}
+  };
+})();
