@@ -1,6 +1,7 @@
 // Friendly Party Rental — Tenant configuration.
 import { CHAIRS } from './chairs.js';
 import { TABLES } from './tables.js';
+import { TENTS as CANONICAL_TENTS } from './tents.js';
 export { CHAIRS, TABLES };
 
 export const TENTS = [
@@ -100,11 +101,66 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   };
 })();
 
+// Resolve tent deep-link by name/slug against canonical TENTS catalog
+// No dependency on window.FriendlyBridge.TENTS
+function resolveTentDeepLink(requestedName, requestedSlug, tentsCatalog) {
+  if (!Array.isArray(tentsCatalog) || !requestedName && !requestedSlug) return null;
+
+  // Normalize: lowercase, remove all non-alphanumeric for comparison
+  function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+
+  // Extract dimensions from name/slug: match patterns like "20x20", "20 x 30", "30×40"
+  function parseDims(v) {
+    const m = String(v || '').toLowerCase().match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/);
+    return m ? { w: parseInt(m[1]), l: parseInt(m[2]) } : null;
+  }
+
+  // Infer tent type from text
+  function inferType(text) {
+    const s = String(text || '').toLowerCase();
+    if (/frame/.test(s)) return 'frame';
+    if (/pop|canopy/.test(s)) return 'canopy';
+    if (/pole/.test(s)) return 'pole';
+    return null;
+  }
+
+  const normName = norm(requestedName);
+  const normSlug = norm(requestedSlug);
+  const typeHint = inferType(requestedName + ' ' + requestedSlug);
+  const dims = parseDims(requestedName) || parseDims(requestedSlug);
+
+  // Strategy 1: exact normalized canonical name match
+  let match = tentsCatalog.find(t => norm(t.name) === normName);
+  if (match) return match;
+
+  // Strategy 2: exact normalized canonical id match
+  match = tentsCatalog.find(t => norm(t.id) === normSlug);
+  if (match) return match;
+
+  // Strategy 3: exact canonical id match (case-sensitive)
+  match = tentsCatalog.find(t => t.id === requestedSlug);
+  if (match) return match;
+
+  // Strategy 4: match by dimensions + type (order-insensitive dimensions)
+  if (dims) {
+    match = tentsCatalog.find(t => {
+      const dimMatch = (t.widthFt === dims.w && t.lengthFt === dims.l) ||
+                       (t.widthFt === dims.l && t.lengthFt === dims.w);
+      const typeMatch = !typeHint || t.type === typeHint;
+      return dimMatch && typeMatch;
+    });
+    if (match) return match;
+  }
+
+  return null;
+}
+
 // Product-page tent deep links are PREVIEWS, not event/package builders.
 // They show exactly the clicked tent by itself in 3D. Seating prompts,
 // guest shortfall warnings and inherited wizard state are removed.
-// Fixed: proper async/catalog wait, punctuation normalization, canvas readiness,
-// tent mesh bounding box fitting, and visible error UI on resolve failure.
+// Fixed: resolves against canonical TENTS catalog (js/data/tents.js) instead of
+// relying on window.FriendlyBridge.TENTS, punctuation normalization, canvas
+// readiness, tent mesh bounding box fitting, and visible error UI on resolve failure.
 (function bootTentDeepLink() {
   if (typeof window === 'undefined') return;
   var q = new URLSearchParams(window.location.search);
@@ -113,6 +169,7 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   var requestedSlug = q.get('tentSlug') || '';
   if (!requestedName && !requestedSlug) return;
   window.__RENTSKETCH_TENT_PREVIEW__ = true;
+  var resolvedTent = resolveTentDeepLink(requestedName, requestedSlug, CANONICAL_TENTS);
 
   // Create dedicated error overlay (separate from #emptyStateOverlay which is hidden)
   var errorOverlay = document.createElement('div');
@@ -132,52 +189,44 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   ].join('');
   document.head.appendChild(style);
 
-  // Normalize names for matching: remove all non-alphanumeric
-  function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
-  function dims(v) { var m = String(v || '').toLowerCase().match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/); return m ? (m[1] + 'x' + m[2]) : ''; }
-  var wantedType = /frame/i.test(requestedName + ' ' + requestedSlug) ? 'frame' : (/pop|canopy/i.test(requestedName + ' ' + requestedSlug) ? 'canopy' : (/pole/i.test(requestedName + ' ' + requestedSlug) ? 'pole' : ''));
-  var wantedDims = dims(requestedName) || dims(requestedSlug);
-  var tryCount = 0;
   var errorShown = false;
-  
+
   function showError(msg) {
     if (errorShown) return;
     errorShown = true;
-    errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">Tent Not Found</h3><p style="color:#666;font-size:14px;margin:0">Could not locate: <strong>' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : '') + '</strong></p>';
+    errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">Tent Not Found</h3><p style="color:#666;font-size:14px;margin:0">' + msg + '</p>';
     errorOverlay.style.display = 'block';
   }
-  
+
+  // Catalog resolution is deterministic and already done (resolvedTent), so if
+  // the requested tent isn't in the canonical catalog there's nothing to wait
+  // for — surface the error immediately instead of polling forever.
+  if (!resolvedTent) {
+    console.warn('[TentPreview] tent not found in canonical catalog:', requestedName, requestedSlug);
+    showError('Tent not in catalog: ' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : ''));
+    return;
+  }
+
+  var match = resolvedTent;
+  var bridgeAttempt = 0;
+
   function attemptDeepLink() {
-    tryCount++;
-    if (tryCount > 200) {
-      console.warn('[TentPreview] catalog resolve timeout after 200 frames (~3.3sec)');
-      showError('Timeout resolving tent catalog');
+    bridgeAttempt++;
+    if (bridgeAttempt > 200) {
+      console.warn('[TentPreview] bridge unavailable after 200 frames (~3.3sec)');
+      showError('Designer failed to initialize (bridge unavailable)');
       return;
     }
     
     var b = window.FriendlyBridge;
-    // Wait for bridge AND its TENTS catalog to be ready
-    if (!b || !b.state || !b.TENTS || !Array.isArray(b.TENTS) || !b.customizeFromScratch) {
+    // Only wait for bridge state + customizeFromScratch — the tent itself was
+    // already resolved against the canonical catalog above.
+    if (!b || !b.state || !b.customizeFromScratch) {
       requestAnimationFrame(attemptDeepLink);
       return;
     }
     
-    // Exact match: normalized name or slug
-    var exact = b.TENTS.find(function (t) { 
-      return norm(t.name) === norm(requestedName) || norm(t.id) === norm(requestedSlug) || t.id === requestedSlug;
-    });
-    
-    // Fallback: match by dimensions + type
-    var match = exact || b.TENTS.find(function (t) { 
-      return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType);
-    });
-    
-    if (!match) {
-      requestAnimationFrame(attemptDeepLink);
-      return;
-    }
-    
-    console.log('[TentPreview] resolved tent:', match.name, 'after', tryCount, 'frames');
+    console.log('[TentPreview] resolved tent:', match.name, 'after', bridgeAttempt, 'frames');
     
     // Initialize state: ONLY tent, no objects
     b.state.tentId = match.id;
@@ -268,4 +317,44 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   
   requestAnimationFrame(attemptDeepLink);
 })();
+
+// Deterministic resolver tests
+if (typeof window !== 'undefined' && window.__RENTSKETCH_RESOLVER_TEST__) {
+  const tests = [
+    // Pole tents
+    { name: '20x20 Pole Tent', slug: '20x20-pole-tent', expect: 'pole-20x20' },
+    { name: '20x30 Pole Tent', slug: '20x30-pole-tent', expect: 'pole-20x30' },
+    { name: '20x40 Pole Tent', slug: '20x40-pole-tent', expect: 'pole-20x40' },
+    { name: '30x30 Pole Tent', slug: '30x30-pole-tent', expect: 'pole-30x30' },
+    { name: '30x45 Pole Tent', slug: '30x45-pole-tent', expect: 'pole-30x45' },
+    { name: '30x60 Pole Tent', slug: '30x60-pole-tent', expect: 'pole-30x60' },
+    { name: '40x40 Pole Tent', slug: '40x40-pole-tent', expect: 'pole-40x40' },
+    { name: '40x60 Pole Tent', slug: '40x60-pole-tent', expect: 'pole-40x60' },
+    { name: '40x80 Pole Tent', slug: '40x80-pole-tent', expect: 'pole-40x80' },
+    { name: '40x100 Pole Tent', slug: '40x100-pole-tent', expect: 'pole-40x100' },
+    // Frame tents
+    { name: '20x20 Frame Tent', slug: '20x20-frame-tent', expect: 'frame-20x20' },
+    { name: '20x30 Frame Tent', slug: '20x30-frame-tent', expect: 'frame-20x30' },
+    { name: '20x40 Frame Tent', slug: '20x40-frame-tent', expect: 'frame-20x40' },
+    { name: '30x40 Classic Frame Tent', slug: '30x40-classic-frame', expect: 'frame-30x40' },
+    // Canopy
+    { name: '10x10 EZ Pop-Up Canopy', slug: '10x10-popup-canopy', expect: 'canopy-10x10' },
+    { name: '10x20 EZ Pop-Up Canopy', slug: '10x20-popup-canopy', expect: 'canopy-10x20' },
+  ];
+  
+  const results = tests.map(tc => {
+    const resolved = resolveTentDeepLink(tc.name, tc.slug, CANONICAL_TENTS);
+    const pass = resolved && resolved.id === tc.expect;
+    return { ...tc, got: resolved?.id || null, pass };
+  });
+  
+  const failures = results.filter(r => !r.pass);
+  if (failures.length) {
+    console.error('[ResolveTentDeepLink] Test failures:', failures);
+    window.__RENTSKETCH_RESOLVER_TESTS__ = { pass: false, count: results.length, failures };
+  } else {
+    console.log('[ResolveTentDeepLink] All ' + results.length + ' tests passed');
+    window.__RENTSKETCH_RESOLVER_TESTS__ = { pass: true, count: results.length };
+  }
+}
 
