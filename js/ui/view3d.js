@@ -55,7 +55,7 @@ function grassTexture(){const c=document.createElement('canvas');c.width=c.heigh
 function skyTexture(isNight){const c=document.createElement('canvas');c.width=8;c.height=256;const ctx=c.getContext('2d');const g=ctx.createLinearGradient(0,0,0,256);if(isNight){g.addColorStop(0,'#050912');g.addColorStop(.45,'#0d1830');g.addColorStop(1,'#1c2740');}else{g.addColorStop(0,'#4f8fce');g.addColorStop(.45,'#a9d3ea');g.addColorStop(.75,'#dcecec');g.addColorStop(1,'#eef3ea');}ctx.fillStyle=g;ctx.fillRect(0,0,8,256);const tex=new THREE.CanvasTexture(c);tex.colorSpace=THREE.SRGBColorSpace;return tex;}
 function ground(t){const size=Math.max(t.widthFt,t.lengthFt)+900,tex=grassTexture();tex.repeat.set(size/6,size/6);const p=new THREE.Mesh(new THREE.PlaneGeometry(size,size),new THREE.MeshStandardMaterial({map:tex,color:0xffffff,roughness:1}));p.rotation.x=-Math.PI/2;p.position.y=-.02;p.receiveShadow=true;p.userData.buildStage='ground';return p;}
 function clear(){while(root&&root.children.length)root.remove(root.children[0]);renderedItems.clear();danceMesh=null;}
-function rebuild(d){state=d;clear();const t=d?.tent;if(!t)return;root.add(ground(t),tent(t,d.anchoringMethod));const hw=t.widthFt/2,hl=t.lengthFt/2,dance=[];(d.objects||[]).forEach(o=>{if(o.kind==='dance'){dance.push(o);return;}if(o.kind!=='table')return;const q=table(o);q.position.set(o.x+o.widthFt/2-hw,0,o.y+o.depthFt/2-hl);renderedItems.set(o.id,q);root.add(q);});if(dance.length){danceMesh=danceGroup(dance,t);root.add(danceMesh);}apply();frameNormal(t);invalidate();}
+function rebuild(d){state=d;clear();const t=d?.tent;if(!t)return;root.add(ground(t));const tentGroup=tent(t,d.anchoringMethod);tentGroup.userData.kind='tent';root.add(tentGroup);const hw=t.widthFt/2,hl=t.lengthFt/2,dance=[];(d.objects||[]).forEach(o=>{if(o.kind==='dance'){dance.push(o);return;}if(o.kind!=='table')return;const q=table(o);q.position.set(o.x+o.widthFt/2-hw,0,o.y+o.depthFt/2-hl);renderedItems.set(o.id,q);root.add(q);});if(dance.length){danceMesh=danceGroup(dance,t);root.add(danceMesh);}apply();frameNormal(t);invalidate();}
 function apply(){if(!scene)return;scene.background=skyTexture(night);scene.fog.color.set(night?0x1c2740:0xeef3ea);ambient.intensity=night?0.22:0.62;hemi.intensity=night?0.34:1.2;sun.intensity=night?0.1:2.25;fill.intensity=night?0.12:0.9;renderer.toneMappingExposure=night?0.9:1.08;if(M.bulb)M.bulb.emissiveIntensity=night?2.2:.25;invalidate();}
 function pointerRay(e){const r=renderer.domElement.getBoundingClientRect();pointer.x=((e.clientX-r.left)/r.width)*2-1;pointer.y=-((e.clientY-r.top)/r.height)*2+1;raycaster.setFromCamera(pointer,camera);return raycaster;}
 function groundPoint(e){const out=new THREE.Vector3();return pointerRay(e).ray.intersectPlane(GROUND,out)?out:null;}
@@ -368,6 +368,31 @@ export function playTimelapse(mode){
   timelapse=ctrl;
 }
 
+
+
+// Fit camera to tent mesh bounding box (excludes ground plane)
+// Returns true if successful, false if tent mesh is empty
+function fitCameraTentMesh(tentGroup){
+  if(!tentGroup||!camera||!controls)return false;
+  const bbox=new THREE.Box3();let hasGeo=false;
+  tentGroup.traverse(o=>{
+    if(o.userData?.buildStage==='ground')return;
+    if(o instanceof THREE.Mesh&&o.geometry){bbox.expandByObject(o);hasGeo=true;}
+  });
+  if(!hasGeo||bbox.min.equals(bbox.max))return false;
+  const center=bbox.getCenter(new THREE.Vector3()),size=bbox.getSize(new THREE.Vector3()),maxDim=Math.max(size.x,size.y,size.z),fov=camera.fov*Math.PI/180;
+  let cz=Math.abs(maxDim/2/Math.tan(fov/2))*1.2;
+  const dist=cz;
+  camera.position.set(center.x+dist*0.62,center.y+dist*0.34,center.z+dist*0.72);
+  camera.near=Math.max(0.1,cz-maxDim);
+  camera.far=cz+maxDim+50;
+  camera.updateProjectionMatrix();
+  controls.target.copy(center);
+  controls.update();
+  invalidate();
+  return true;
+}
+
 export function init(el,cb){
   container=el;
   callbacks=cb||{};
@@ -419,5 +444,5 @@ export function init(el,cb){
   sizeCanvas();
   loop();
   
-  return {rebuild,fitCamera:frameNormal,night:n=>{night=n;apply();},playTimelapse};
+  function fitTentPreview(){if(!root||!root.children)return false;var tentGroup=null;for(var i=0;i<root.children.length;i++){if(root.children[i].userData.kind==='tent'){tentGroup=root.children[i];break;}}if(!tentGroup)return false;return fitCameraTentMesh(tentGroup);}return {rebuild,fitCamera:frameNormal,fitCameraTentMesh,fitTentPreview,night:n=>{night=n;apply();},playTimelapse};
 }
