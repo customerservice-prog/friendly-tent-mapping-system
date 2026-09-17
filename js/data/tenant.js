@@ -126,7 +126,7 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   function showError(msg) {
     if (errorShown) return;
     errorShown = true;
-    errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">Tent Not Found</h3><p style="color:#666;font-size:14px;margin:0">Could not locate: <strong>' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : '') + '</strong></p>';
+    errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">Tent Preview Error</h3><p style="color:#666;font-size:14px;margin:0">' + msg + ' — <strong>' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : '') + '</strong></p>';
     errorOverlay.style.display = 'block';
   }
   
@@ -146,8 +146,8 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   
   function attemptDeepLink() {
     tryCount++;
-    if (tryCount > 200) {
-      console.warn('[TentPreview] catalog resolve timeout after 200 frames (~3.3sec)');
+    if (tryCount > 400) {
+      console.warn('[TentPreview] catalog resolve timeout after 400 frames (~3.3sec)');
       showError('Timeout resolving tent catalog');
       return;
     }
@@ -190,8 +190,8 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     var designerAttempt = 0;
     function waitForDesignerReady() {
       designerAttempt++;
-      if (designerAttempt > 120) {
-        console.warn('[TentPreview] designer layout never ready after 120 frames');
+      if (designerAttempt > 300) {
+        console.warn('[TentPreview] designer layout never ready after 300 frames');
         showError('Designer failed to initialize');
         return;
       }
@@ -233,7 +233,7 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     var cameraFitAttempt = 0;
     function attemptCameraFit() {
       cameraFitAttempt++;
-      if (cameraFitAttempt > 50) {
+      if (cameraFitAttempt > 150) {
         console.warn('[TentPreview] camera fit timeout after', cameraFitAttempt, 'attempts');
         return;
       }
