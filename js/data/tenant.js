@@ -126,7 +126,7 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   function showError(msg) {
     if (errorShown) return;
     errorShown = true;
-    errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">Tent Not Found</h3><p style="color:#666;font-size:14px;margin:0">Could not locate: <strong>' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : '') + '</strong></p>';
+    errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">' + (msg ? 'Still Finishing Setup' : 'Tent Not Found') + '</h3><p style="color:#666;font-size:14px;margin:0">' + (msg ? ('Tent found: <strong>' + requestedName + '</strong>. The 3D view is taking longer than expected - try the 3D View tab above, or reload this page.') : ('Could not locate: <strong>' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : '') + '</strong>')) + '</p>';
     errorOverlay.style.display = 'block';
   }
   
@@ -190,8 +190,8 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     var designerAttempt = 0;
     function waitForDesignerReady() {
       designerAttempt++;
-      if (designerAttempt > 120) {
-        console.warn('[TentPreview] designer layout never ready after 120 frames');
+      if (designerAttempt > 400) {
+        console.warn('[TentPreview] designer layout never ready after 400 frames');
         showError('Designer failed to initialize');
         return;
       }
