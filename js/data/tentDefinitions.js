@@ -18,31 +18,29 @@ function perimeterNodes(widthFt, lengthFt, eaveHeightFt, spacingFt) {
   return out;
 }
 
-// Commercial pole-tent center poles sit on the longitudinal bay grid, not at
-// half-bay centers.  This matters visually: a 40x80 is three major peaks at
-// 20/40/60, while a 20x20 is one peak at 10.  Keep this parametric until an
-// inventory-specific manufacturer model overrides it.
+// Commercial pole-tent center poles sit on the longitudinal bay grid. Keep the
+// geometry parametric so inventory-specific manufacturer models can override it.
 function centerNodes(type,widthFt,lengthFt,peakHeightFt) {
   if(type!=='pole') return [];
   const out=[];
   if(widthFt>=40){
     for(let z=20;z<lengthFt-.01;z+=20) out.push(node('center-'+out.length,widthFt/2,z,peakHeightFt,'center'));
   } else {
-    // Narrow pole tents use a center line with approximately 20 ft bays.
     if(lengthFt<=20) out.push(node('center-0',widthFt/2,lengthFt/2,peakHeightFt,'center'));
     else for(let z=10;z<lengthFt-.01;z+=20) out.push(node('center-'+out.length,widthFt/2,z,peakHeightFt,'center'));
   }
   return out;
 }
 
+// Keep canonical structure consistent with the 3D renderer. The previous 20 ft
+// pole definition used a 10 ft peak while view3d rendered 14.5 ft, producing two
+// incompatible physical models of the same tent. These remain estimated until
+// exact manufacturer dimensions are attached to each inventory SKU.
 function peakHeight(type,widthFt){
   if(type!=='pole') return 7+Math.max(4,widthFt*.24);
-  if(widthFt<=20)return 10;
-  if(widthFt<30)return 14.5;
-  // Do not create the exaggerated 20+ ft pyramids that made the visualizer
-  // look unlike a rental pole tent. Inventory-specific verified dimensions
-  // can replace this estimate later.
-  return widthFt>=40?16.85:14.5;
+  if(widthFt<=20) return 14.5;
+  if(widthFt<30) return 15.5;
+  return 17.5;
 }
 
 export function createTentDefinition(catalogTent) {
@@ -62,7 +60,7 @@ export function createTentDefinition(catalogTent) {
   return {
     id:catalogTent.id,type,widthFt,lengthFt,eaveHeightFt,
     centerPoles,sidePoles,stakes,guyLines,
-    roof:{segmentsPerFoot:1.5,curvature:1.7},
+    roof:{segmentsPerFoot:2,curvature:1.32,edgeTensionZoneFt:1.2,material:'white-vinyl'},
     installationClearanceFt:clearanceFt,
     installationFootprint:{x:-clearanceFt,z:-clearanceFt,widthFt:widthFt+clearanceFt*2,lengthFt:lengthFt+clearanceFt*2},
     manufacturer:catalogTent.manufacturer||null,model:catalogTent.model||null,
