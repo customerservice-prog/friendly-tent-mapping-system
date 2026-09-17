@@ -42,6 +42,64 @@ export const GENERIC_TENANT = {
 
 export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT : GENERIC_TENANT; }
 
+// Wire tenant inventory into the existing designer loader. The loader expects
+// visual_model_id; this adapter fills a safe visual id for active tent/table/chair
+// products that have not been manually mapped yet, so they remain visible.
+(function installTenantCatalogAdapter() {
+  if (typeof window === 'undefined' || !window.fetch || window.__RENTSKETCH_CATALOG_ADAPTER__) return;
+  window.__RENTSKETCH_CATALOG_ADAPTER__ = true;
+  var originalFetch = window.fetch.bind(window);
+  function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function tentVisual(name) {
+    var n = String(name || '').toLowerCase();
+    var m = n.match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/);
+    var size = m ? (m[1] + 'x' + m[2]) : '20x20';
+    var type = /frame/.test(n) ? 'frame' : (/pop|canopy/.test(n) ? 'canopy' : 'pole');
+    var id = type + '-' + size;
+    return TENTS.some(function (x) { return x.id === id; }) ? id : (type === 'frame' ? 'frame-20x20' : type === 'canopy' ? 'canopy-10x10' : 'pole-20x20');
+  }
+  function tableVisual(name) {
+    var n = String(name || '').toLowerCase();
+    if (/fill|chill/.test(n)) return 'fill-chill-4ft';
+    if (/cocktail|highboy|high boy/.test(n)) return 'cocktail';
+    if (/round/.test(n)) return 'round-5ft';
+    if (/8\s*(ft|foot|'|’)/.test(n)) return 'banquet-8ft';
+    return 'banquet-6ft';
+  }
+  function chairVisual(name) {
+    var n = String(name || '').toLowerCase();
+    if (/queen|tiffany/.test(n)) return 'throne-queen-tiffany';
+    if (/king.*throne|throne.*king/.test(n)) return 'throne-king';
+    if (/mahogany.*chiavari|chiavari.*mahogany/.test(n)) return 'chiavari-mahogany';
+    if (/white.*chiavari|chiavari.*white/.test(n)) return 'chiavari-white';
+    if (/chiavari/.test(n)) return 'chiavari-gold';
+    if (/resin/.test(n)) return 'resin-white';
+    return 'plastic-white';
+  }
+  function infer(p) {
+    var c = norm(p && p.category);
+    if (c === 'tent') return tentVisual(p.name);
+    if (c === 'table') return tableVisual(p.name);
+    if (c === 'chair') return chairVisual(p.name);
+    return null;
+  }
+  window.fetch = function(input, init) {
+    return originalFetch(input, init).then(function(res) {
+      var url = typeof input === 'string' ? input : (input && input.url) || '';
+      if (!res.ok || url.indexOf('/products') === -1 || (init && init.method && String(init.method).toUpperCase() !== 'GET')) return res;
+      return res.clone().json().then(function(data) {
+        if (!data || !Array.isArray(data.products)) return res;
+        data.products.forEach(function(p) {
+          if (!p || p.active === false || p.visual_model_id) return;
+          var v = infer(p);
+          if (v) { p.visual_model_id = v; p.visual_model_fallback = true; }
+        });
+        return new Response(JSON.stringify(data), { status: res.status, statusText: res.statusText, headers: { 'Content-Type': 'application/json' } });
+      }).catch(function() { return res; });
+    });
+  };
+})();
+
 // Product-page tent deep links are PREVIEWS, not event/package builders.
 // They must show exactly the clicked tent by itself in 3D. Seating prompts,
 // guest shortfall warnings and inherited wizard state are deliberately removed.
@@ -54,8 +112,6 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   if (!requestedName && !requestedSlug) return;
   window.__RENTSKETCH_TENT_PREVIEW__ = true;
 
-  // Preview-specific presentation. The normal designer remains unchanged for
-  // packages and for customers who intentionally build a full event layout.
   var style = document.createElement('style');
   style.id = 'tentPreviewModeStyles';
   style.textContent = [
@@ -81,16 +137,12 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     var match = exact || b.TENTS.find(function (t) { return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType); });
     if (!match) { if (tries > 120) clearInterval(timer); return; }
     clearInterval(timer);
-
-    // Kill stale event-wizard assumptions before the blank tent is rendered.
     b.state.tentId = match.id;
     b.state.guestCount = 0;
     b.state.matchedPackageId = null;
     b.state.eventType = '';
     b.state.eventCheckOpen = false;
     b.customizeFromScratch();
-
-    // Keep the preview title clean even if a prior wizard session had Wedding/50.
     var titleTimer = setInterval(function () {
       var title = document.getElementById('toolbarEventTitle');
       var meta = document.getElementById('toolbarEventMeta');
@@ -98,10 +150,6 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
       if (meta) meta.textContent = 'Tent only — rotate and zoom to explore';
     }, 250);
     setTimeout(function () { clearInterval(titleTimer); }, 6000);
-
-    setTimeout(function () {
-      var three = document.getElementById('viewMode3d');
-      if (three) three.click();
-    }, 80);
+    setTimeout(function () { var three = document.getElementById('viewMode3d'); if (three) three.click(); }, 80);
   }, 50);
 })();
