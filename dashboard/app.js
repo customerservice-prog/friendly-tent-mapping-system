@@ -175,7 +175,7 @@ function esc(s) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading overview...'));
    bindShellEvents();
    if (!state.tenant) {
-     document.getElementById('dashMain').innerHTML = '<div class="dash-empty">Your account is not a member of any tenant yet. Ask a RentSketch admin to add you.</div>';
+     document.getElementById('dashMain').innerHTML = '<div class="dash-empty"><div class="dash-empty-icon">RS</div><h3>No business assigned yet</h3><p>Your account is not a member of any tenant yet. Ask a RentSketch admin to add you.</p></div>';
      return;
    }
    try {
