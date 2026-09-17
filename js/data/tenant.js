@@ -103,8 +103,14 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
 // Product-page tent deep links are PREVIEWS, not event/package builders.
 // They show exactly the clicked tent by itself in 3D. Seating prompts,
 // guest shortfall warnings and inherited wizard state are removed.
-// Fixed: proper async/catalog wait, punctuation normalization, canvas readiness,
-// tent mesh bounding box fitting, and visible error UI on resolve failure.
+//
+// FIXED (2026-09-17): Resolve tent deterministically from canonical TENTS array,
+// NOT from FriendlyBridge.TENTS (which may not be ready). Website slugs
+// (20x20-pole-tent) differ from designer IDs (pole-20x20): extract dimensions
+// and type from request params, then resolve canonical tent ID. Once resolved,
+// wait only for FriendlyBridge readiness to call customizeFromScratch() with
+// the correct tent ID. Proper canvas readiness check (nonzero dimensions), error
+// UI overlay, and camera fit to tent mesh bounds only (excluding ground).
 (function bootTentDeepLink() {
   if (typeof window === 'undefined') return;
   var q = new URLSearchParams(window.location.search);
@@ -132,71 +138,96 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   ].join('');
   document.head.appendChild(style);
 
-  // Normalize names for matching: remove all non-alphanumeric
-  function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
-  function dims(v) { var m = String(v || '').toLowerCase().match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/); return m ? (m[1] + 'x' + m[2]) : ''; }
-  var wantedType = /frame/i.test(requestedName + ' ' + requestedSlug) ? 'frame' : (/pop|canopy/i.test(requestedName + ' ' + requestedSlug) ? 'canopy' : (/pole/i.test(requestedName + ' ' + requestedSlug) ? 'pole' : ''));
-  var wantedDims = dims(requestedName) || dims(requestedSlug);
-  var tryCount = 0;
-  var errorShown = false;
-  
   function showError(msg) {
-    if (errorShown) return;
-    errorShown = true;
     errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">Tent Not Found</h3><p style="color:#666;font-size:14px;margin:0">Could not locate: <strong>' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : '') + '</strong></p>';
     errorOverlay.style.display = 'block';
+    console.error('[TentPreview] resolution failed:', requestedName, requestedSlug);
   }
-  
-  function attemptDeepLink() {
+
+  // Extract dimensions and type from request params BEFORE waiting for bridge.
+  // Website slugs like "20x20-pole-tent" → extract "20x20" and "pole".
+  function parseDimensions(str) {
+    var m = String(str || '').match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/i);
+    return m ? (m[1] + 'x' + m[2]) : '';
+  }
+  function parseType(str) {
+    var s = String(str || '').toLowerCase();
+    if (/frame/.test(s)) return 'frame';
+    if (/canopy|pop/.test(s)) return 'canopy';
+    if (/pole/.test(s)) return 'pole';
+    return '';
+  }
+
+  var dimRequest = parseDimensions(requestedName) || parseDimensions(requestedSlug);
+  var typeRequest = parseType(requestedName) || parseType(requestedSlug);
+
+  console.log('[TentPreview] request:', { name: requestedName, slug: requestedSlug, dims: dimRequest, type: typeRequest });
+
+  // STEP 1: Resolve tent from canonical TENTS array (deterministic, no async).
+  var resolvedTent = null;
+  function resolveCanonicalTent() {
+    // Try exact match on name or ID
+    var exact = TENTS.find(function(t) {
+      var normName = String(t.name).toLowerCase().replace(/[^a-z0-9]/g, '');
+      var normReq = requestedName.toLowerCase().replace(/[^a-z0-9]/g, '');
+      var matchId = t.id === requestedSlug || t.id === requestedName;
+      return normName === normReq || matchId;
+    });
+    if (exact) return exact;
+
+    // Fallback: match by dimensions + type
+    return TENTS.find(function(t) {
+      var dims = (t.widthFt + 'x' + t.lengthFt);
+      var dimMatch = !dimRequest || dims === dimRequest;
+      var typeMatch = !typeRequest || t.type === typeRequest;
+      return dimMatch && typeMatch;
+    });
+  }
+
+  resolvedTent = resolveCanonicalTent();
+  if (!resolvedTent) {
+    showError('Tent not found in catalog');
+    return;
+  }
+
+  console.log('[TentPreview] resolved tent from TENTS catalog:', resolvedTent.name, '→', resolvedTent.id);
+
+  // STEP 2: Wait for FriendlyBridge readiness, then initialize state with resolved tent ID.
+  var tryCount = 0;
+  function attemptBridgeReady() {
     tryCount++;
     if (tryCount > 200) {
-      console.warn('[TentPreview] catalog resolve timeout after 200 frames (~3.3sec)');
-      showError('Timeout resolving tent catalog');
+      console.warn('[TentPreview] bridge ready timeout after 200 frames (~3.3sec)');
+      showError('Designer failed to initialize');
       return;
     }
-    
+
     var b = window.FriendlyBridge;
-    // Wait for bridge AND its TENTS catalog to be ready
-    if (!b || !b.state || !b.TENTS || !Array.isArray(b.TENTS) || !b.customizeFromScratch) {
-      requestAnimationFrame(attemptDeepLink);
+    if (!b || !b.state || !b.customizeFromScratch) {
+      requestAnimationFrame(attemptBridgeReady);
       return;
     }
-    
-    // Exact match: normalized name or slug
-    var exact = b.TENTS.find(function (t) { 
-      return norm(t.name) === norm(requestedName) || norm(t.id) === norm(requestedSlug) || t.id === requestedSlug;
-    });
-    
-    // Fallback: match by dimensions + type
-    var match = exact || b.TENTS.find(function (t) { 
-      return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType);
-    });
-    
-    if (!match) {
-      requestAnimationFrame(attemptDeepLink);
-      return;
-    }
-    
-    console.log('[TentPreview] resolved tent:', match.name, 'after', tryCount, 'frames');
-    
-    // Initialize state: ONLY tent, no objects
-    b.state.tentId = match.id;
+
+    console.log('[TentPreview] bridge ready at frame', tryCount);
+
+    // Initialize state with resolved tent ID (NOT from bridge catalog).
+    b.state.tentId = resolvedTent.id;
     b.state.guestCount = 0;
     b.state.matchedPackageId = null;
     b.state.eventType = '';
     b.state.eventCheckOpen = false;
     b.customizeFromScratch();
-    
+
     // Update UI labels
     var titleTimer = setInterval(function () {
       var title = document.getElementById('toolbarEventTitle');
       var meta = document.getElementById('toolbarEventMeta');
-      if (title) title.textContent = match.name + ' · 3D Preview';
+      if (title) title.textContent = resolvedTent.name + ' · 3D Preview';
       if (meta) meta.textContent = 'Tent only — rotate and zoom to explore';
     }, 250);
     setTimeout(function () { clearInterval(titleTimer); }, 5000);
-    
-    // Wait for designer DOM to be ready AND canvas to have real dimensions
+
+    // STEP 3: Wait for designer DOM to be ready AND canvas to have real dimensions.
     var designerAttempt = 0;
     function waitForDesignerReady() {
       designerAttempt++;
@@ -205,41 +236,41 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
         showError('Designer failed to initialize');
         return;
       }
-      
+
       var stepDesigner = document.getElementById('step-designer');
       var canvasEl = document.getElementById('canvas');
       var bodyHasClass = document.body.classList.contains('designer-active');
       var stepActive = stepDesigner && stepDesigner.classList.contains('active');
-      
+
       if (!stepDesigner || !canvasEl || !bodyHasClass || !stepActive) {
         requestAnimationFrame(waitForDesignerReady);
         return;
       }
-      
-      // CRITICAL: verify canvas has real, non-zero dimensions
+
+      // CRITICAL: verify canvas has real, non-zero dimensions and is displayed.
       var displayed = canvasEl.offsetParent !== null;
       var hasWidth = canvasEl.offsetWidth > 100;
       var hasHeight = canvasEl.offsetHeight > 100;
-      
+
       if (!displayed || !hasWidth || !hasHeight) {
         requestAnimationFrame(waitForDesignerReady);
         return;
       }
-      
+
       console.log('[TentPreview] canvas ready:', canvasEl.offsetWidth, 'x', canvasEl.offsetHeight);
-      
+
       // Trigger 3D mode
       var viewMode3dBtn = document.getElementById('viewMode3d');
       if (viewMode3dBtn) {
         viewMode3dBtn.click();
-        
+
         // After 3D mode activates, fit camera to tent mesh (excluding ground)
         setTimeout(function() {
           attemptCameraFit();
         }, 300);
       }
     }
-    
+
     var cameraFitAttempt = 0;
     function attemptCameraFit() {
       cameraFitAttempt++;
@@ -247,14 +278,14 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
         console.warn('[TentPreview] camera fit timeout after', cameraFitAttempt, 'attempts');
         return;
       }
-      
+
       // Access the view3d module's fitTentPreview method via FriendlyBridge
       var b = window.FriendlyBridge;
       if (!b || !b.fitTentPreview) {
         requestAnimationFrame(attemptCameraFit);
         return;
       }
-      
+
       console.log('[TentPreview] calling fitTentPreview at attempt', cameraFitAttempt);
       var success = b.fitTentPreview();
       if (!success) {
@@ -262,10 +293,10 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
         showError('Tent mesh failed to render');
       }
     }
-    
+
     requestAnimationFrame(waitForDesignerReady);
   }
-  
-  requestAnimationFrame(attemptDeepLink);
+
+  requestAnimationFrame(attemptBridgeReady);
 })();
 
