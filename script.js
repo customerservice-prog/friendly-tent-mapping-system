@@ -177,6 +177,7 @@ function mount3D(){
       if(inst.fitCamera)inst.fitCamera();
       view3dPendingSnapshot=null;
       view3dMountInProgress=false;
+      window.FriendlyBridge.fitTentPreview=inst.fitTentPreview;
     }).catch(function(e){console.error('3D mount failed:',e);view3dMountInProgress=false;});
   }
   requestAnimationFrame(checkCanvasReady);
