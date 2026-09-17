@@ -1,12 +1,26 @@
 const { verifyToken } = require('../auth');
 const db = require('../db');
 
-// Verifies the bearer token AND that the authenticated user actually has a
-// membership on the tenant referenced in the URL (req.params.slug - see
-// routes/quoteRequests.js, which mounts on '/:slug'). This enforces
-// AUTHORIZATION (can this user touch THIS tenant's data), not just
-// AUTHENTICATION (who are you) - every tenant-scoped staff route uses this
-// so one rental company can never read another rental company's records.
+function configuredPlatformAdminEmail() {
+  return String(process.env.PLATFORM_ADMIN_EMAIL || '').trim().toLowerCase();
+}
+
+// PLATFORM_ADMIN_EMAIL is the source of truth for the single RentSketch
+// super-admin identity. The database flag is still maintained for backwards
+// compatibility, but authorization does not depend on a stale JWT flag.
+async function isConfiguredPlatformAdmin(payload) {
+  if (!payload || !payload.userId) return false;
+  const configuredEmail = configuredPlatformAdminEmail();
+  if (!configuredEmail) return false;
+
+  const result = await db.query(
+    'SELECT email FROM users WHERE id = $1',
+    [payload.userId]
+  );
+  const user = result.rows[0];
+  return Boolean(user && String(user.email || '').trim().toLowerCase() === configuredEmail);
+}
+
 async function requireTenantAccess(req, res, next) {
   try {
     const header = req.headers.authorization || '';
@@ -14,13 +28,14 @@ async function requireTenantAccess(req, res, next) {
     if (!token) return res.status(401).json({ error: 'Missing bearer token' });
 
     const payload = verifyToken(token);
+    const platformAdmin = await isConfiguredPlatformAdmin(payload);
     const tenantSlug = req.params.slug;
 
     const tenantResult = await db.query('SELECT * FROM tenants WHERE slug = $1', [tenantSlug]);
     const tenant = tenantResult.rows[0];
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
 
-    if (!payload.isPlatformAdmin) {
+    if (!platformAdmin) {
       const membership = await db.query(
         'SELECT * FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
         [tenant.id, payload.userId]
@@ -28,29 +43,18 @@ async function requireTenantAccess(req, res, next) {
       if (!membership.rows[0]) return res.status(403).json({ error: 'You do not have access to this tenant' });
     }
 
-    // Block access once a trial has expired. We ONLY enforce this when
-    // trial_ends_at is explicitly set and in the past, and never for
-    // platform admins - tenants with no trial_ends_at (e.g. pre-existing
-    // tenants onboarded before trials existed, like Friendly) are never
-    // blocked by this check, so this can never lock out an existing customer.
-    if (!payload.isPlatformAdmin && tenant.subscription_status === 'trialing' && tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date()) {
+    if (!platformAdmin && tenant.subscription_status === 'trialing' && tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date()) {
       return res.status(402).json({ error: 'Your free trial has ended. Please upgrade your plan to continue.', trialEndsAt: tenant.trial_ends_at });
     }
 
     req.tenant = tenant;
-    req.user = payload;
+    req.user = { ...payload, isPlatformAdmin: platformAdmin };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
 
-// Verifies the bearer token AND that the authenticated user is flagged as a
-// platform admin (users.is_platform_admin in the DB, carried in the JWT as
-// isPlatformAdmin). Used to gate the cross-tenant super-admin panel/routes -
-// a regular tenant owner's token, no matter how many tenants they belong to,
-// will never pass this check. There is no self-service way to become a
-// platform admin; it can only be set directly in the database.
 async function requirePlatformAdmin(req, res, next) {
   try {
     const header = req.headers.authorization || '';
@@ -58,15 +62,14 @@ async function requirePlatformAdmin(req, res, next) {
     if (!token) return res.status(401).json({ error: 'Missing bearer token' });
 
     const payload = verifyToken(token);
-    if (!payload.isPlatformAdmin) {
-      return res.status(403).json({ error: 'Platform admin access required' });
-    }
+    const platformAdmin = await isConfiguredPlatformAdmin(payload);
+    if (!platformAdmin) return res.status(403).json({ error: 'Platform admin access required' });
 
-    req.user = payload;
+    req.user = { ...payload, isPlatformAdmin: true };
     next();
   } catch (err) {
     return res.status(401).json({ error: 'Invalid or expired token' });
   }
 }
 
-module.exports = { requireTenantAccess, requirePlatformAdmin };
+module.exports = { requireTenantAccess, requirePlatformAdmin, isConfiguredPlatformAdmin };
