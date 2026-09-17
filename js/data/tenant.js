@@ -1,29 +1,8 @@
 // Friendly Party Rental — Tenant configuration.
 import { CHAIRS } from './chairs.js';
 import { TABLES } from './tables.js';
-export { CHAIRS, TABLES };
-
-export const TENTS = [
-{ id: 'pole-20x20', type: 'pole', name: "20x20 Pole Tent", widthFt: 20, lengthFt: 20, pricePerDay: 250, maxGuests: { dining: 33, cocktail: 66 } },
-{ id: 'pole-20x30', type: 'pole', name: "20x30 Pole Tent", widthFt: 20, lengthFt: 30, pricePerDay: 350, maxGuests: { dining: 50, cocktail: 100 } },
-{ id: 'pole-20x40', type: 'pole', name: "20x40 Pole Tent", widthFt: 20, lengthFt: 40, pricePerDay: 450, maxGuests: { dining: 66, cocktail: 133 } },
-{ id: 'pole-30x30', type: 'pole', name: "30x30 Pole Tent", widthFt: 30, lengthFt: 30, pricePerDay: 575, maxGuests: { dining: 75, cocktail: 150 } },
-{ id: 'pole-30x45', type: 'pole', name: "30x45 Pole Tent", widthFt: 30, lengthFt: 45, pricePerDay: 700, maxGuests: { dining: 112, cocktail: 225 } },
-{ id: 'pole-30x60', type: 'pole', name: "30x60 Pole Tent", widthFt: 30, lengthFt: 60, pricePerDay: 850, maxGuests: { dining: 150, cocktail: 300 } },
-{ id: 'pole-40x40', type: 'pole', name: "40x40 Pole Tent", widthFt: 40, lengthFt: 40, pricePerDay: 1500, maxGuests: { dining: 133, cocktail: 266 } },
-{ id: 'pole-40x60', type: 'pole', name: "40x60 Pole Tent", widthFt: 40, lengthFt: 60, pricePerDay: 850, maxGuests: { dining: 200, cocktail: 400 } },
-{ id: 'pole-40x80', type: 'pole', name: "40x80 Pole Tent", widthFt: 40, lengthFt: 80, pricePerDay: 1850, maxGuests: { dining: 266, cocktail: 533 } },
-{ id: 'pole-40x100', type: 'pole', name: "40x100 Pole Tent", widthFt: 40, lengthFt: 100, pricePerDay: 1950, maxGuests: { dining: 333, cocktail: 666 } },
-{ id: 'frame-20x20', type: 'frame', name: "20x20 Frame Tent", widthFt: 20, lengthFt: 20, pricePerDay: 400, maxGuests: { dining: 33, cocktail: 66 } },
-{ id: 'frame-20x30', type: 'frame', name: "20x30 Frame Tent", widthFt: 20, lengthFt: 30, pricePerDay: 475, maxGuests: { dining: 50, cocktail: 100 } },
-{ id: 'frame-20x40', type: 'frame', name: "20x40 Frame Tent", widthFt: 20, lengthFt: 40, pricePerDay: 550, maxGuests: { dining: 66, cocktail: 133 } },
-{ id: 'frame-30x40', type: 'frame', name: "30x40 Frame Tent", widthFt: 30, lengthFt: 40, pricePerDay: 700, maxGuests: { dining: 100, cocktail: 200 } },
-{ id: 'canopy-10x10', type: 'canopy', name: "10x10 Pop-Up Canopy", widthFt: 10, lengthFt: 10, pricePerDay: 100, maxGuests: { dining: 8, cocktail: 16 } },
-{ id: 'canopy-10x20', type: 'canopy', name: "10x20 Pop-Up Canopy", widthFt: 10, lengthFt: 20, pricePerDay: 175, maxGuests: { dining: 16, cocktail: 33 } },
-];
-
-function cloneCatalog(list) { return list.map(function (item) { return JSON.parse(JSON.stringify(item)); }); }
-function stripPricing(list) { return list.map(function (item) { item.pricePerDay = null; return item; }); }
+import { TENTS } from './tents.js';
+export { CHAIRS, TABLES, TENTS };
 
 export const FRIENDLY_TENANT = {
   id: 'friendly', slug: 'friendly', name: 'Friendly Party Rental', logo: 'logo.png',
@@ -39,6 +18,9 @@ export const GENERIC_TENANT = {
   colors: { primary: '#2f6fed', primaryDark: '#1f4fbf', primaryTint: '#eaf1ff', secondary: '#0b1b3a' },
   tents: stripPricing(cloneCatalog(TENTS)), tables: stripPricing(cloneCatalog(TABLES)), chairs: stripPricing(cloneCatalog(CHAIRS)),
 };
+
+function cloneCatalog(list) { return list.map(function (item) { return JSON.parse(JSON.stringify(item)); }); }
+function stripPricing(list) { return list.map(function (item) { item.pricePerDay = null; return item; }); }
 
 export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT : GENERIC_TENANT; }
 
@@ -135,6 +117,7 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   // Normalize names for matching: remove all non-alphanumeric
   function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
   function dims(v) { var m = String(v || '').toLowerCase().match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/); return m ? (m[1] + 'x' + m[2]) : ''; }
+  
   var wantedType = /frame/i.test(requestedName + ' ' + requestedSlug) ? 'frame' : (/pop|canopy/i.test(requestedName + ' ' + requestedSlug) ? 'canopy' : (/pole/i.test(requestedName + ' ' + requestedSlug) ? 'pole' : ''));
   var wantedDims = dims(requestedName) || dims(requestedSlug);
   var tryCount = 0;
@@ -147,6 +130,20 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     errorOverlay.style.display = 'block';
   }
   
+  function resolveTentDeepLink(name, slug, catalog) {
+    // Exact match: normalized name or slug against canonical catalog
+    var exact = catalog.find(function (t) { 
+      return norm(t.name) === norm(name) || norm(t.id) === norm(slug) || t.id === slug;
+    });
+    if (exact) return exact;
+    
+    // Fallback: match by dimensions + type
+    var fallback = catalog.find(function (t) { 
+      return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType);
+    });
+    return fallback || null;
+  }
+  
   function attemptDeepLink() {
     tryCount++;
     if (tryCount > 200) {
@@ -156,28 +153,21 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     }
     
     var b = window.FriendlyBridge;
-    // Wait for bridge AND its TENTS catalog to be ready
-    if (!b || !b.state || !b.TENTS || !Array.isArray(b.TENTS) || !b.customizeFromScratch) {
+    // Wait for bridge state and customizeFromScratch to be ready (but NOT b.TENTS)
+    if (!b || !b.state || !b.customizeFromScratch) {
       requestAnimationFrame(attemptDeepLink);
       return;
     }
     
-    // Exact match: normalized name or slug
-    var exact = b.TENTS.find(function (t) { 
-      return norm(t.name) === norm(requestedName) || norm(t.id) === norm(requestedSlug) || t.id === requestedSlug;
-    });
-    
-    // Fallback: match by dimensions + type
-    var match = exact || b.TENTS.find(function (t) { 
-      return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType);
-    });
+    // Resolve tent using LOCAL canonical TENTS catalog
+    var match = resolveTentDeepLink(requestedName, requestedSlug, TENTS);
     
     if (!match) {
       requestAnimationFrame(attemptDeepLink);
       return;
     }
     
-    console.log('[TentPreview] resolved tent:', match.name, 'after', tryCount, 'frames');
+    console.log('[TentPreview] resolved tent:', match.name, 'canonical id:', match.id, 'after', tryCount, 'frames');
     
     // Initialize state: ONLY tent, no objects
     b.state.tentId = match.id;
