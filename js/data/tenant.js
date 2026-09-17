@@ -222,12 +222,12 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
       var viewMode3dBtn = document.getElementById('viewMode3d');
       if (viewMode3dBtn) {
         viewMode3dBtn.click();
-        
-        // After 3D mode activates, fit camera to tent mesh (excluding ground)
-        setTimeout(function() {
-          attemptCameraFit();
-        }, 300);
       }
+
+      // After 3D mode activates (or if already in 3D view / button not found), fit camera to tent mesh (excluding ground)
+      setTimeout(function() {
+        attemptCameraFit();
+      }, 300);
     }
     
     var cameraFitAttempt = 0;
