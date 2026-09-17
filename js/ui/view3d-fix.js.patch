@@ -1,0 +1,54 @@
+// New function to add after frameNormal() in view3d.js:
+
+// Fit camera to tent mesh only (excluding ground plane)
+function fitCameraToBounds(tentGroup) {
+  if (!tentGroup || !camera || !controls) return false;
+  
+  // Calculate bounding box excluding ground plane
+  const bbox = new THREE.Box3();
+  let hasGeometry = false;
+  
+  tentGroup.traverse((obj) => {
+    // Skip ground plane entirely
+    if (obj.userData?.buildStage === 'ground') return;
+    if (obj instanceof THREE.Mesh && obj.geometry) {
+      bbox.expandByObject(obj);
+      hasGeometry = true;
+    }
+  });
+  
+  if (!hasGeometry || !bbox.isEmpty()) {
+    // Fallback: validate bbox has meaningful bounds
+    if (bbox.min.equals(bbox.max)) return false;
+  }
+  
+  const center = bbox.getCenter(new THREE.Vector3());
+  const size = bbox.getSize(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const fov = camera.fov * Math.PI / 180; // convert to radians
+  let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+  
+  // Add padding: 20% extra distance
+  cameraZ *= 1.2;
+  
+  // Position camera at 3/4 angle: x=0.62, y=0.34, z=0.72 relative to distance
+  const dist = cameraZ;
+  camera.position.set(
+    center.x + dist * 0.62,
+    center.y + dist * 0.34,
+    center.z + dist * 0.72
+  );
+  
+  // Update near/far planes to avoid clipping
+  camera.near = Math.max(0.1, cameraZ - maxDim);
+  camera.far = cameraZ + maxDim + 50;
+  camera.updateProjectionMatrix();
+  
+  // Set controls target to bbox center
+  controls.target.copy(center);
+  controls.update();
+  
+  invalidate();
+  return true;
+}
+

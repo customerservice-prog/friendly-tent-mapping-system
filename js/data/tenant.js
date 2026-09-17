@@ -101,8 +101,10 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
 })();
 
 // Product-page tent deep links are PREVIEWS, not event/package builders.
-// They must show exactly the clicked tent by itself in 3D. Seating prompts,
-// guest shortfall warnings and inherited wizard state are deliberately removed.
+// They show exactly the clicked tent by itself in 3D. Seating prompts,
+// guest shortfall warnings and inherited wizard state are removed.
+// Fixed: proper async/catalog wait, punctuation normalization, canvas readiness,
+// tent mesh bounding box fitting, and visible error UI on resolve failure.
 (function bootTentDeepLink() {
   if (typeof window === 'undefined') return;
   var q = new URLSearchParams(window.location.search);
@@ -112,10 +114,16 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   if (!requestedName && !requestedSlug) return;
   window.__RENTSKETCH_TENT_PREVIEW__ = true;
 
+  // Create dedicated error overlay (separate from #emptyStateOverlay which is hidden)
+  var errorOverlay = document.createElement('div');
+  errorOverlay.id = 'tentPreviewErrorOverlay';
+  errorOverlay.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#fff;border:2px solid #c00;border-radius:8px;padding:20px;z-index:10000;text-align:center;font-family:sans-serif;max-width:400px;box-shadow:0 4px 12px rgba(0,0,0,0.3);display:none;';
+  document.body.appendChild(errorOverlay);
+
+  // Hide UI elements not relevant to preview mode
   var style = document.createElement('style');
   style.id = 'tentPreviewModeStyles';
   style.textContent = [
-    '#emptyStateOverlay{display:none!important}',
     '#statusBar .status-pill-group .status-item:first-child{display:none!important}',
     '#statusBar .status-pill-group .status-item:nth-child(2){display:none!important}',
     '#statusBar .status-pill-group .status-flag{display:none!important}',
@@ -124,33 +132,42 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   ].join('');
   document.head.appendChild(style);
 
+  // Normalize names for matching: remove all non-alphanumeric
   function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
   function dims(v) { var m = String(v || '').toLowerCase().match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/); return m ? (m[1] + 'x' + m[2]) : ''; }
   var wantedType = /frame/i.test(requestedName + ' ' + requestedSlug) ? 'frame' : (/pop|canopy/i.test(requestedName + ' ' + requestedSlug) ? 'canopy' : (/pole/i.test(requestedName + ' ' + requestedSlug) ? 'pole' : ''));
   var wantedDims = dims(requestedName) || dims(requestedSlug);
   var tryCount = 0;
+  var errorShown = false;
+  
+  function showError(msg) {
+    if (errorShown) return;
+    errorShown = true;
+    errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">Tent Not Found</h3><p style="color:#666;font-size:14px;margin:0">Could not locate: <strong>' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : '') + '</strong></p>';
+    errorOverlay.style.display = 'block';
+  }
   
   function attemptDeepLink() {
     tryCount++;
-    if (tryCount > 240) {
-      console.warn('Tent deep-link: could not resolve after 240 attempts (~12sec)');
-      var overlay = document.getElementById('emptyStateOverlay');
-      if (overlay && window.__RENTSKETCH_TENT_PREVIEW__) {
-        overlay.hidden = false;
-        overlay.innerHTML = '<h3 style="color:#c00">Tent Not Found</h3><p>Could not locate: ' + (requestedName || requestedSlug) + '</p>';
-      }
+    if (tryCount > 200) {
+      console.warn('[TentPreview] catalog resolve timeout after 200 frames (~3.3sec)');
+      showError('Timeout resolving tent catalog');
       return;
     }
     
     var b = window.FriendlyBridge;
-    if (!b || !b.state || !b.TENTS || !b.customizeFromScratch) {
+    // Wait for bridge AND its TENTS catalog to be ready
+    if (!b || !b.state || !b.TENTS || !Array.isArray(b.TENTS) || !b.customizeFromScratch) {
       requestAnimationFrame(attemptDeepLink);
       return;
     }
     
+    // Exact match: normalized name or slug
     var exact = b.TENTS.find(function (t) { 
       return norm(t.name) === norm(requestedName) || norm(t.id) === norm(requestedSlug) || t.id === requestedSlug;
     });
+    
+    // Fallback: match by dimensions + type
     var match = exact || b.TENTS.find(function (t) { 
       return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType);
     });
@@ -160,6 +177,9 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
       return;
     }
     
+    console.log('[TentPreview] resolved tent:', match.name, 'after', tryCount, 'frames');
+    
+    // Initialize state: ONLY tent, no objects
     b.state.tentId = match.id;
     b.state.guestCount = 0;
     b.state.matchedPackageId = null;
@@ -167,19 +187,22 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     b.state.eventCheckOpen = false;
     b.customizeFromScratch();
     
+    // Update UI labels
     var titleTimer = setInterval(function () {
       var title = document.getElementById('toolbarEventTitle');
       var meta = document.getElementById('toolbarEventMeta');
       if (title) title.textContent = match.name + ' · 3D Preview';
       if (meta) meta.textContent = 'Tent only — rotate and zoom to explore';
     }, 250);
-    setTimeout(function () { clearInterval(titleTimer); }, 6000);
+    setTimeout(function () { clearInterval(titleTimer); }, 5000);
     
+    // Wait for designer DOM to be ready AND canvas to have real dimensions
     var designerAttempt = 0;
     function waitForDesignerReady() {
       designerAttempt++;
-      if (designerAttempt > 100) {
-        console.warn('Tent deep-link: designer layout never ready');
+      if (designerAttempt > 120) {
+        console.warn('[TentPreview] designer layout never ready after 120 frames');
+        showError('Designer failed to initialize');
         return;
       }
       
@@ -193,18 +216,50 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
         return;
       }
       
+      // CRITICAL: verify canvas has real, non-zero dimensions
       var displayed = canvasEl.offsetParent !== null;
-      var hasWidth = canvasEl.offsetWidth >= 100;
-      var hasHeight = canvasEl.offsetHeight >= 100;
+      var hasWidth = canvasEl.offsetWidth > 100;
+      var hasHeight = canvasEl.offsetHeight > 100;
       
       if (!displayed || !hasWidth || !hasHeight) {
         requestAnimationFrame(waitForDesignerReady);
         return;
       }
       
+      console.log('[TentPreview] canvas ready:', canvasEl.offsetWidth, 'x', canvasEl.offsetHeight);
+      
+      // Trigger 3D mode
       var viewMode3dBtn = document.getElementById('viewMode3d');
       if (viewMode3dBtn) {
         viewMode3dBtn.click();
+        
+        // After 3D mode activates, fit camera to tent mesh (excluding ground)
+        setTimeout(function() {
+          attemptCameraFit();
+        }, 300);
+      }
+    }
+    
+    var cameraFitAttempt = 0;
+    function attemptCameraFit() {
+      cameraFitAttempt++;
+      if (cameraFitAttempt > 50) {
+        console.warn('[TentPreview] camera fit timeout after', cameraFitAttempt, 'attempts');
+        return;
+      }
+      
+      // Access the view3d module's fitTentPreview method via FriendlyBridge
+      var b = window.FriendlyBridge;
+      if (!b || !b.fitTentPreview) {
+        requestAnimationFrame(attemptCameraFit);
+        return;
+      }
+      
+      console.log('[TentPreview] calling fitTentPreview at attempt', cameraFitAttempt);
+      var success = b.fitTentPreview();
+      if (!success) {
+        console.warn('[TentPreview] tent mesh fit failed or empty');
+        showError('Tent mesh failed to render');
       }
     }
     
