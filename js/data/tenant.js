@@ -1,11 +1,4 @@
 // Friendly Party Rental — Tenant configuration.
-//
-// This is the first step toward RentSketch's multi-tenant architecture:
-// a single object describing "which rental company is this" (branding,
-// contact info, and its product catalogs), so the designer can eventually
-// be pointed at a different tenant instead of having Friendly hard-coded
-// throughout script.js. For now this also removes the old duplicate
-// TENTS array that used to live inline in script.js.
 import { CHAIRS } from './chairs.js';
 import { TABLES } from './tables.js';
 export { CHAIRS, TABLES };
@@ -29,74 +22,54 @@ export const TENTS = [
 { id: 'canopy-10x20', type: 'canopy', name: "10x20 Pop-Up Canopy", widthFt: 10, lengthFt: 20, pricePerDay: 175, maxGuests: { dining: 16, cocktail: 33 } },
 ];
 
-function cloneCatalog(list) {
-  return list.map(function (item) { return JSON.parse(JSON.stringify(item)); });
-}
-
-// Strips per-day pricing from a cloned catalog. Used for tenants (like the
-// generic/no-tenant RentSketch experience) that have not uploaded their own
-// real prices - showing Friendly's numbers to an unrelated visitor or an
-// unpriced business would be misleading, so these items render with no
-// price until that tenant supplies its own via the dashboard/API.
-function stripPricing(list) {
-  return list.map(function (item) { item.pricePerDay = null; return item; });
-}
+function cloneCatalog(list) { return list.map(function (item) { return JSON.parse(JSON.stringify(item)); }); }
+function stripPricing(list) { return list.map(function (item) { item.pricePerDay = null; return item; }); }
 
 export const FRIENDLY_TENANT = {
-  id: 'friendly',
-  slug: 'friendly',
-  name: 'Friendly Party Rental',
-  logo: 'logo.png',
+  id: 'friendly', slug: 'friendly', name: 'Friendly Party Rental', logo: 'logo.png',
   contactEmail: 'customerservice@friendlypartyrental.com',
-  colors: {
-    primary: '#2f7a3c',
-    primaryDark: '#22592c',
-    primaryTint: '#eef7ee',
-    secondary: '#f7f3ea',
-  },
-  tents: cloneCatalog(TENTS),
-  tables: cloneCatalog(TABLES),
-  chairs: cloneCatalog(CHAIRS),
+  colors: { primary: '#2f7a3c', primaryDark: '#22592c', primaryTint: '#eef7ee', secondary: '#f7f3ea' },
+  tents: cloneCatalog(TENTS), tables: cloneCatalog(TABLES), chairs: cloneCatalog(CHAIRS),
 };
+Object.assign(FRIENDLY_TENANT, { tagline: 'Plan your tent, tables, and chairs for your event with Friendly Party Rental', phone: '315-884-1498', shortName: 'Friendly', showPackages: true });
 
-// --- Extended tenant branding fields (additive; does not change existing behavior) ---
-Object.assign(FRIENDLY_TENANT, {
-  tagline: 'Plan your tent, tables, and chairs for your event with Friendly Party Rental',
-  phone: '315-884-1498',
-  shortName: 'Friendly',
-  showPackages: true,
-});
-
-// Generic, tenant-neutral RentSketch branding. Used when the designer is
-// accessed without a specific rental-company tenant context (e.g. the public
-// RentSketch demo and marketing site), so Friendly Party Rental's brand name
-// and package suggestions never leak into a generic visitor's experience.
-// Item shapes/dimensions are still borrowed from the master catalog for
-// layout purposes, but pricing is intentionally stripped (see stripPricing)
-// since a generic visitor is not tied to any business that has uploaded
-// real prices - items render with no price until a real tenant catalog
-// exists.
 export const GENERIC_TENANT = {
-  id: 'generic',
-  slug: 'generic',
-  name: 'RentSketch',
-  shortName: 'RentSketch',
-  logo: 'logo.png',
-  contactEmail: '',
-  phone: '',
-  tagline: 'Plan tents, tables, chairs, dance floors and more in a real-scale event layout.',
-  showPackages: false,
-  colors: {
-    primary: '#2f6fed',
-    primaryDark: '#1f4fbf',
-    primaryTint: '#eaf1ff',
-    secondary: '#0b1b3a',
-  },
-  tents: stripPricing(cloneCatalog(TENTS)),
-  tables: stripPricing(cloneCatalog(TABLES)),
-  chairs: stripPricing(cloneCatalog(CHAIRS)),
+  id: 'generic', slug: 'generic', name: 'RentSketch', shortName: 'RentSketch', logo: 'logo.png', contactEmail: '', phone: '',
+  tagline: 'Plan tents, tables, chairs, dance floors and more in a real-scale event layout.', showPackages: false,
+  colors: { primary: '#2f6fed', primaryDark: '#1f4fbf', primaryTint: '#eaf1ff', secondary: '#0b1b3a' },
+  tents: stripPricing(cloneCatalog(TENTS)), tables: stripPricing(cloneCatalog(TABLES)), chairs: stripPricing(cloneCatalog(CHAIRS)),
 };
 
-export function getTenant(slug) {
-    return slug === 'friendly' ? FRIENDLY_TENANT : GENERIC_TENANT;
-}
+export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT : GENERIC_TENANT; }
+
+// Product-page deep link: ?tent=20x40%20Pole%20Tent&tentSlug=20-x-40-pole-tent&view=3d&autoplace=1
+// Wait for script.js to expose FriendlyBridge, select the exact requested tent,
+// enter a blank layout (tent only), then switch directly to the real 3D renderer.
+(function bootTentDeepLink() {
+  if (typeof window === 'undefined') return;
+  var q = new URLSearchParams(window.location.search);
+  if (q.get('view') !== '3d' || q.get('focus') !== 'tent' || q.get('autoplace') !== '1') return;
+  var requestedName = q.get('tent') || '';
+  var requestedSlug = q.get('tentSlug') || '';
+  if (!requestedName && !requestedSlug) return;
+  function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function dims(v) { var m = String(v || '').toLowerCase().match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/); return m ? (m[1] + 'x' + m[2]) : ''; }
+  var wantedType = /frame/i.test(requestedName + ' ' + requestedSlug) ? 'frame' : (/pop|canopy/i.test(requestedName + ' ' + requestedSlug) ? 'canopy' : (/pole/i.test(requestedName + ' ' + requestedSlug) ? 'pole' : ''));
+  var wantedDims = dims(requestedName) || dims(requestedSlug);
+  var tries = 0;
+  var timer = setInterval(function () {
+    tries++;
+    var b = window.FriendlyBridge;
+    if (!b || !b.state || !b.TENTS || !b.enterDesigner) { if (tries > 120) clearInterval(timer); return; }
+    var exact = b.TENTS.find(function (t) { return norm(t.name) === norm(requestedName) || norm(t.id) === norm(requestedSlug); });
+    var match = exact || b.TENTS.find(function (t) { return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType); });
+    if (!match) { if (tries > 120) clearInterval(timer); return; }
+    clearInterval(timer);
+    b.state.tentId = match.id;
+    b.customizeFromScratch();
+    setTimeout(function () {
+      var three = document.getElementById('viewMode3d');
+      if (three) three.click();
+    }, 80);
+  }, 50);
+})();
