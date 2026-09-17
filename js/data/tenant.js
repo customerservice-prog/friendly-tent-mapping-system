@@ -42,9 +42,9 @@ export const GENERIC_TENANT = {
 
 export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT : GENERIC_TENANT; }
 
-// Product-page deep link: ?tent=20x40%20Pole%20Tent&tentSlug=20-x-40-pole-tent&view=3d&autoplace=1
-// Wait for script.js to expose FriendlyBridge, select the exact requested tent,
-// enter a blank layout (tent only), then switch directly to the real 3D renderer.
+// Product-page tent deep links are PREVIEWS, not event/package builders.
+// They must show exactly the clicked tent by itself in 3D. Seating prompts,
+// guest shortfall warnings and inherited wizard state are deliberately removed.
 (function bootTentDeepLink() {
   if (typeof window === 'undefined') return;
   var q = new URLSearchParams(window.location.search);
@@ -52,6 +52,22 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   var requestedName = q.get('tent') || '';
   var requestedSlug = q.get('tentSlug') || '';
   if (!requestedName && !requestedSlug) return;
+  window.__RENTSKETCH_TENT_PREVIEW__ = true;
+
+  // Preview-specific presentation. The normal designer remains unchanged for
+  // packages and for customers who intentionally build a full event layout.
+  var style = document.createElement('style');
+  style.id = 'tentPreviewModeStyles';
+  style.textContent = [
+    '#emptyStateOverlay{display:none!important}',
+    '#statusBar .status-pill-group .status-item:first-child{display:none!important}',
+    '#statusBar .status-pill-group .status-item:nth-child(2){display:none!important}',
+    '#statusBar .status-pill-group .status-flag{display:none!important}',
+    '#btnToReview{display:none!important}',
+    '#tryTheseCard{display:none!important}'
+  ].join('');
+  document.head.appendChild(style);
+
   function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
   function dims(v) { var m = String(v || '').toLowerCase().match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/); return m ? (m[1] + 'x' + m[2]) : ''; }
   var wantedType = /frame/i.test(requestedName + ' ' + requestedSlug) ? 'frame' : (/pop|canopy/i.test(requestedName + ' ' + requestedSlug) ? 'canopy' : (/pole/i.test(requestedName + ' ' + requestedSlug) ? 'pole' : ''));
@@ -65,8 +81,24 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     var match = exact || b.TENTS.find(function (t) { return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType); });
     if (!match) { if (tries > 120) clearInterval(timer); return; }
     clearInterval(timer);
+
+    // Kill stale event-wizard assumptions before the blank tent is rendered.
     b.state.tentId = match.id;
+    b.state.guestCount = 0;
+    b.state.matchedPackageId = null;
+    b.state.eventType = '';
+    b.state.eventCheckOpen = false;
     b.customizeFromScratch();
+
+    // Keep the preview title clean even if a prior wizard session had Wedding/50.
+    var titleTimer = setInterval(function () {
+      var title = document.getElementById('toolbarEventTitle');
+      var meta = document.getElementById('toolbarEventMeta');
+      if (title) title.textContent = match.name + ' · 3D Preview';
+      if (meta) meta.textContent = 'Tent only — rotate and zoom to explore';
+    }, 250);
+    setTimeout(function () { clearInterval(titleTimer); }, 6000);
+
     setTimeout(function () {
       var three = document.getElementById('viewMode3d');
       if (three) three.click();
