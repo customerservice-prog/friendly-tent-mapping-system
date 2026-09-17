@@ -380,7 +380,7 @@ export function init(el,cb){
   
   scene=new THREE.Scene();
   scene.fog=new THREE.Fog(0xeef3ea,500,1000);
-  camera=new THREE.PerspectiveCamera(38,container.clientWidth/container.clientHeight,0.1,2000);
+  var cw=Math.max(320,container.clientWidth||1024),ch=Math.max(360,container.clientHeight||768);camera=new THREE.PerspectiveCamera(38,cw/ch,0.1,2000);
   controls=new OrbitControls(camera,renderer.domElement);
   controls.dampingFactor=0.06;
   controls.enableDamping=true;

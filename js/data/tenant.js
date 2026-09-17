@@ -63,7 +63,7 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     if (/fill|chill/.test(n)) return 'fill-chill-4ft';
     if (/cocktail|highboy|high boy/.test(n)) return 'cocktail';
     if (/round/.test(n)) return 'round-5ft';
-    if (/8\s*(ft|foot|'|’)/.test(n)) return 'banquet-8ft';
+    if (/8\s*(ft|foot|'|')/.test(n)) return 'banquet-8ft';
     return 'banquet-6ft';
   }
   function chairVisual(name) {
@@ -128,21 +128,45 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
   function dims(v) { var m = String(v || '').toLowerCase().match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/); return m ? (m[1] + 'x' + m[2]) : ''; }
   var wantedType = /frame/i.test(requestedName + ' ' + requestedSlug) ? 'frame' : (/pop|canopy/i.test(requestedName + ' ' + requestedSlug) ? 'canopy' : (/pole/i.test(requestedName + ' ' + requestedSlug) ? 'pole' : ''));
   var wantedDims = dims(requestedName) || dims(requestedSlug);
-  var tries = 0;
-  var timer = setInterval(function () {
-    tries++;
+  var tryCount = 0;
+  
+  function attemptDeepLink() {
+    tryCount++;
+    if (tryCount > 240) {
+      console.warn('Tent deep-link: could not resolve after 240 attempts (~12sec)');
+      var overlay = document.getElementById('emptyStateOverlay');
+      if (overlay && window.__RENTSKETCH_TENT_PREVIEW__) {
+        overlay.hidden = false;
+        overlay.innerHTML = '<h3 style="color:#c00">Tent Not Found</h3><p>Could not locate: ' + (requestedName || requestedSlug) + '</p>';
+      }
+      return;
+    }
+    
     var b = window.FriendlyBridge;
-    if (!b || !b.state || !b.TENTS || !b.enterDesigner) { if (tries > 120) clearInterval(timer); return; }
-    var exact = b.TENTS.find(function (t) { return norm(t.name) === norm(requestedName) || norm(t.id) === norm(requestedSlug); });
-    var match = exact || b.TENTS.find(function (t) { return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType); });
-    if (!match) { if (tries > 120) clearInterval(timer); return; }
-    clearInterval(timer);
+    if (!b || !b.state || !b.TENTS || !b.customizeFromScratch) {
+      requestAnimationFrame(attemptDeepLink);
+      return;
+    }
+    
+    var exact = b.TENTS.find(function (t) { 
+      return norm(t.name) === norm(requestedName) || norm(t.id) === norm(requestedSlug) || t.id === requestedSlug;
+    });
+    var match = exact || b.TENTS.find(function (t) { 
+      return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType);
+    });
+    
+    if (!match) {
+      requestAnimationFrame(attemptDeepLink);
+      return;
+    }
+    
     b.state.tentId = match.id;
     b.state.guestCount = 0;
     b.state.matchedPackageId = null;
     b.state.eventType = '';
     b.state.eventCheckOpen = false;
     b.customizeFromScratch();
+    
     var titleTimer = setInterval(function () {
       var title = document.getElementById('toolbarEventTitle');
       var meta = document.getElementById('toolbarEventMeta');
@@ -150,6 +174,43 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
       if (meta) meta.textContent = 'Tent only — rotate and zoom to explore';
     }, 250);
     setTimeout(function () { clearInterval(titleTimer); }, 6000);
-    setTimeout(function () { var three = document.getElementById('viewMode3d'); if (three) three.click(); }, 80);
-  }, 50);
+    
+    var designerAttempt = 0;
+    function waitForDesignerReady() {
+      designerAttempt++;
+      if (designerAttempt > 100) {
+        console.warn('Tent deep-link: designer layout never ready');
+        return;
+      }
+      
+      var stepDesigner = document.getElementById('step-designer');
+      var canvasEl = document.getElementById('canvas');
+      var bodyHasClass = document.body.classList.contains('designer-active');
+      var stepActive = stepDesigner && stepDesigner.classList.contains('active');
+      
+      if (!stepDesigner || !canvasEl || !bodyHasClass || !stepActive) {
+        requestAnimationFrame(waitForDesignerReady);
+        return;
+      }
+      
+      var displayed = canvasEl.offsetParent !== null;
+      var hasWidth = canvasEl.offsetWidth >= 100;
+      var hasHeight = canvasEl.offsetHeight >= 100;
+      
+      if (!displayed || !hasWidth || !hasHeight) {
+        requestAnimationFrame(waitForDesignerReady);
+        return;
+      }
+      
+      var viewMode3dBtn = document.getElementById('viewMode3d');
+      if (viewMode3dBtn) {
+        viewMode3dBtn.click();
+      }
+    }
+    
+    requestAnimationFrame(waitForDesignerReady);
+  }
+  
+  requestAnimationFrame(attemptDeepLink);
 })();
+
