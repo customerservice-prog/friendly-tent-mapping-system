@@ -127,7 +127,8 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     if (errorShown) return;
     errorShown = true;
     errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">' + (msg ? 'Still Finishing Setup' : 'Tent Not Found') + '</h3><p style="color:#666;font-size:14px;margin:0">' + (msg ? ('Tent found: <strong>' + requestedName + '</strong>. The 3D view is taking longer than expected - try the 3D View tab above, or reload this page.') : ('Could not locate: <strong>' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : '') + '</strong>')) + '</p>';
-    errorOverlay.style.display = 'block';
+errorOverlay.style.display = 'block';
+        if (msg) { setTimeout(function () { errorOverlay.style.display = 'none'; }, 6000); }
   }
   
   function resolveTentDeepLink(name, slug, catalog) {
@@ -187,14 +188,19 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     setTimeout(function () { clearInterval(titleTimer); }, 5000);
     
     // Wait for designer DOM to be ready AND canvas to have real dimensions
-    var designerAttempt = 0;
-    function waitForDesignerReady() {
-      designerAttempt++;
-      if (designerAttempt > 400) {
-        console.warn('[TentPreview] designer layout never ready after 400 frames');
-        showError('Designer failed to initialize');
-        return;
-      }
+var designerAttempt = 0;
+        var designerSlowRetries = 0;
+        function waitForDesignerReady() {
+                designerAttempt++;
+                if (designerAttempt > 400) {
+                          if (!errorShown) {
+                                      console.warn('[TentPreview] designer layout not ready after 400 frames, retrying slowly in background');
+                                      showError('Designer failed to initialize');
+                          }
+                          designerSlowRetries++;
+                          if (designerSlowRetries <= 60) { setTimeout(waitForDesignerReady, 500); }
+                          return;
+                }
       
       var stepDesigner = document.getElementById('step-designer');
       var canvasEl = document.getElementById('canvas');
