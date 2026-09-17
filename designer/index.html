@@ -30,6 +30,7 @@ import { DANCE_SECTION } from '../js/data/danceFloor.js';
 var params = new URLSearchParams(window.location.search);
 var tenantSlug = params.get('tenant');
 var isEmbed = params.get('embed') === '1';
+var isTentPreview = params.get('view') === '3d' && params.get('focus') === 'tent' && params.get('autoplace') === '1';
     var effectiveSlug = tenantSlug || 'generic';
           var isKnownStatic = effectiveSlug === 'friendly' || effectiveSlug === 'generic';
     var tenant = isKnownStatic ? getTenant(effectiveSlug) : Object.assign({}, GENERIC_TENANT, {
@@ -43,7 +44,9 @@ var isEmbed = params.get('embed') === '1';
           // that request 404s, is slow, or fails outright.
           if (effectiveSlug === 'generic') {
             [TENTS, TABLES, CHAIRS].forEach(function (list) {
-              list.forEach(function (item) { item.pricePerDay = null; });\n            });\n          }
+              list.forEach(function (item) { item.pricePerDay = null; });
+            });
+          }
     // Dance floor / lighting / linens have no per-tenant catalog wiring yet
     // (unlike tents/tables/chairs, which get overwritten by real per-tenant
     // product data below). Until that exists, showing Friendly Party Rental's
@@ -60,6 +63,7 @@ var isEmbed = params.get('embed') === '1';
     }
     window.RENTSKETCH_API_URL = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
     window.RENTSKETCH_EMBED = isEmbed;
+    window.RENTSKETCH_TENT_PREVIEW = isTentPreview;
     var titleEl = document.getElementById('siteHeaderTitle');
     var taglineEl = document.getElementById('siteHeaderTagline');
     var logoEl = document.getElementById('siteHeaderLogo');
@@ -79,7 +83,7 @@ var isEmbed = params.get('embed') === '1';
         var bits = [t.name];
         if (t.phone) bits.push(t.phone);
         if (t.contactEmail) bits.push(t.contactEmail);
-        footerEl.textContent = bits.join(' \u00b7 ');
+        footerEl.textContent = bits.join(' · ');
       }
       var root = document.documentElement.style;
       if (t.colors) {
@@ -93,7 +97,8 @@ var isEmbed = params.get('embed') === '1';
     applyBranding(tenant);
     (function () {
       var embedStyle = document.createElement('style');
-      embedStyle.textContent = 'body.embed-mode .site-header{display:none;}body.embed-mode .site-footer{display:none;}';\ndocument.head.appendChild(embedStyle);
+      embedStyle.textContent = 'body.embed-mode .site-header{display:none;}body.embed-mode .site-footer{display:none;}';
+      document.head.appendChild(embedStyle);
     })();
     
     if (window.RENTSKETCH_API_URL && window.RENTSKETCH_TENANT_SLUG) {
@@ -113,7 +118,7 @@ var isEmbed = params.get('embed') === '1';
         applyBranding(tenant);
       })
       .catch(function () {});
-fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RENTSKETCH_TENANT_SLUG) + '/products')
+      fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RENTSKETCH_TENANT_SLUG) + '/products')
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data || !data.products) return;
@@ -213,9 +218,9 @@ fetch(window.RENTSKETCH_API_URL + '/api/tenants/' + encodeURIComponent(window.RE
             if (CHAIRS.length && !CHAIRS.some(function (c) { return c.id === fbState.chairId; })) fbState.chairId = CHAIRS[0].id;
           }
         tenant.tents = TENTS;
-tenant.tables = TABLES;
-tenant.chairs = CHAIRS;
-} else {
+        tenant.tables = TABLES;
+        tenant.chairs = CHAIRS;
+        } else {
           var byExternalId = {};
           data.products.forEach(function (p) { if (p.external_id) byExternalId[p.external_id] = p; });
           // IMPORTANT: mutate the shared TENTS/TABLES/CHAIRS catalog arrays (the
@@ -269,17 +274,20 @@ tenant.chairs = CHAIRS;
         });
       };
       
-      // AUTO-START DESIGNER IN EMBED MODE: load default tent and enter designer
-      var embedAutoStart = function() {
-        if (typeof window.FriendlyBridge === 'undefined' || !window.FriendlyBridge.enterDesigner) {
-          setTimeout(embedAutoStart, 50);
-          return;
-        }
-        var tentId = TENTS.length ? TENTS[0].id : 'pole-20x20';
-        window.FriendlyBridge.state.tentId = tentId;
-        window.FriendlyBridge.enterDesigner();
-      };
-      setTimeout(embedAutoStart, 100);
+      // AUTO-START DESIGNER IN EMBED MODE (general embeds only, not tent previews)
+      // Tent previews are handled separately by bootTentDeepLink() in tenant.js
+      if (!window.RENTSKETCH_TENT_PREVIEW) {
+        var embedAutoStart = function() {
+          if (typeof window.FriendlyBridge === 'undefined' || !window.FriendlyBridge.enterDesigner) {
+            setTimeout(embedAutoStart, 50);
+            return;
+          }
+          var tentId = TENTS.length ? TENTS[0].id : 'pole-20x20';
+          window.FriendlyBridge.state.tentId = tentId;
+          window.FriendlyBridge.enterDesigner();
+        };
+        setTimeout(embedAutoStart, 100);
+      }
       
       if (window.parent !== window) {
         window.parent.postMessage({ type: 'rentsketch.ready', version: '1' }, '*');
@@ -315,7 +323,7 @@ tenant.chairs = CHAIRS;
       rsDbg('boot');
       document.addEventListener('DOMContentLoaded', function () { rsDbg('domcontentloaded'); });
       window.addEventListener('load', function () { rsDbg('winload'); });
-      document.addEventListener('visibilitychange', function () { rsDbg('visibilitychange', { state: document.visibilitychange }); });
+      document.addEventListener('visibilitychange', function () { rsDbg('visibilitychange', { state: document.visibilityState }); });
       ['pointerdown', 'pointerup', 'click'].forEach(function (type) {
         document.addEventListener(type, function (e) {
           rsDbg(type, { tag: e.target && e.target.tagName, step: activeStepId() });
