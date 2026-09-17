@@ -123,7 +123,7 @@ function enterDesigner() {
   if (!TENTS.length) { alert('This designer needs at least one tent product with a visual configured.'); return; }
   document.body.classList.add('designer-active'); document.body.classList.remove('guided-active');
   state.viewMode='plan'; state.selectedId=null; state.activeDrawer=null; state.eventCheckOpen=false; state.estimateOpen=false;
-  validateLighting(); showStep('step-designer'); closeDrawer(); mountPlan(); setViewMode('plan'); refreshAll();
+  validateLighting(); showStep('step-designer'); closeDrawer(); mountPlan(); setViewMode('plan'); refreshAll(); try { requestAnimationFrame(function () { window.parent.postMessage({ type: 'rentsketch.ready' }, '*'); }); } catch (e) {}
 }
 
 function getScene() { var layout=store.getState(); return Object.assign({},state,{objects:layout.objects,zones:layout.zones,aisles:layout.aisles}); }
