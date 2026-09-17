@@ -22,189 +22,22 @@ TENTS.forEach(function (t) {
   t.installationClearanceFt = installationClearanceFt(t.type);
 });
 
-var state = {
-  eventType: 'wedding',
-  guestCount: 50,
-  spaceType: 'backyard',
-  surfaceType: 'notSure',
-  needDance: false,
-  danceFloorSizeId: '18x18',
-  customDanceFloorFt: null,
-  matchedPackageId: null,
-  tentId: 'pole-20x40',
-  chairId: 'plastic-white',
-  lightingId: 'lighting-none',
-  selectedId: null,
-  viewMode: 'plan',
-  activeDrawer: null,
-  lastTableConfig: null,
-  eventCheckOpen: false,
-  estimateOpen: false,
-  inspectorCollapsed: true,
-};
-
-var nextItemNum = 1;
-var tryTheseDismissed = false;
-function newItemId() { return 'item-' + (nextItemNum++); }
-
-var store = createLayoutStore({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
-var tableDraft = null;
-
-function byId(arr, id) { return arr.find(function (a) { return a.id === id; }); }
-function $(id) { return document.getElementById(id); }
-
-function showStep(id) {
-  document.querySelectorAll('.step').forEach(function (el) { el.classList.remove('active'); });
-  $(id).classList.add('active');
-}
-
-function money(n) { return '$' + n.toFixed(2); }
-
-function moneyOrAsk(n) { return (n === null || n === undefined) ? 'Ask for pricing' : money(n); }
-
-function danceFloorSizeFt() {
-  if (state.danceFloorSizeId === 'custom') return state.customDanceFloorFt || 18;
-  var sz = byId(DANCE_FLOOR_SIZES, state.danceFloorSizeId);
-  return sz ? sz.ft : 18;
-}
-
-function recommendDanceFloorFt() {
-  var g = state.guestCount;
-  if (g <= 30) return 12;
-  if (g <= 60) return 15;
-  if (g <= 100) return 18;
-  if (g <= 150) return 21;
-  return 24;
-}
-
-function validateLighting() {
-  var tent = byId(TENTS, state.tentId);
-  var opt = byId(LIGHTING_OPTIONS, state.lightingId);
-  if (opt && opt.dynamic && tentLightingPriceFor(tent) == null) state.lightingId = 'lighting-none';
-}
-
-function pickDefaultRoundTable() {
-  var exact = byId(TABLES, 'round-5ft');
-  if (exact) return exact;
-  var round = TABLES.filter(function (t) { return t.shape === 'round' && t.seatsDefault > 0; });
-  if (round.length) return round[0];
-  var anySeated = TABLES.filter(function (t) { return t.seatsDefault > 0; });
-  if (anySeated.length) return anySeated[0];
-  return TABLES.length ? TABLES[0] : null;
-}
-function useRecommendedLayout() {
-  store.reset({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
-  state.selectedId = null;
-  state.lastTableConfig = null;
-  var tent = byId(TENTS, state.tentId);
-  if (!tent) { enterDesigner(); return; }
-  if (CHAIRS.length && !byId(CHAIRS, state.chairId)) state.chairId = CHAIRS[0].id;
-  if (state.needDance) setDanceFloorCount(sectionsForSize(danceFloorSizeFt()));
-  var tablesNeeded = Math.ceil(state.guestCount / 8);
-  var tableDef = pickDefaultRoundTable();
-  if (tablesNeeded > 0 && tableDef) {
-    var cellFt = tableCellSize(tableDef, state.chairId);
-    var danceZone = mergeDanceFloorZone(forCollision(store.getState().objects));
-    var positions = computeBalancedGridPositions(tent, tablesNeeded, cellFt, danceZone);
-    for (var i = 0; i < Math.min(tablesNeeded, positions.length); i++) addTableCustom(tableDef.id, state.chairId, tableDef.seatsDefault, null, positions[i]);
-    state.lastTableConfig = { tableId: tableDef.id, chairId: state.chairId, seatCount: tableDef.seatsDefault, linenId: null };
-  }
-  enterDesigner();
-}
-
-function customizeFromScratch() {
-  store.reset({ tentId: state.tentId, objects: [], zones: [], aisles: [] });
-  state.selectedId = null; state.lastTableConfig = null;
-  if (CHAIRS.length && !byId(CHAIRS, state.chairId)) state.chairId = CHAIRS[0].id;
-  enterDesigner();
-}
-
-function enterDesigner() {
-  if (!TENTS.length) { alert('This designer needs at least one tent product with a visual configured.'); return; }
-  document.body.classList.add('designer-active'); document.body.classList.remove('guided-active');
-  state.viewMode='plan'; state.selectedId=null; state.activeDrawer=null; state.eventCheckOpen=false; state.estimateOpen=false;
-  validateLighting(); showStep('step-designer'); closeDrawer(); mountPlan(); setViewMode('plan'); refreshAll();
-}
-
-function getScene() { var layout=store.getState(); return Object.assign({},state,{objects:layout.objects,zones:layout.zones,aisles:layout.aisles}); }
-function loadScene(scene) {
-  if (!scene || typeof scene!=='object') return false;
-  var hasLayout=Array.isArray(scene.objects)&&scene.objects.length>0;
-  ['eventType','guestCount','spaceType','surfaceType','needDance','danceFloorSizeId','customDanceFloorFt','matchedPackageId','tentId','chairId','lightingId','lastTableConfig'].forEach(function(k){if(scene[k]!==undefined&&scene[k]!==null)state[k]=scene[k];});
-  if (!hasLayout) return false;
-  store.reset({tentId:state.tentId,objects:scene.objects,zones:Array.isArray(scene.zones)?scene.zones:[],aisles:Array.isArray(scene.aisles)?scene.aisles:[]}); enterDesigner(); return true;
-}
-function selectTent(tentId){state.tentId=tentId;validateLighting();refreshAll();}
-function nextGridPosition(index,tent,cellFt,danceZone){var cols=Math.max(1,Math.floor((tent.widthFt-4)/cellFt));return{x:2+(index%cols)*cellFt,y:2+Math.floor(index/cols)*cellFt};}
-function centerGridRows(){}
-function computeBalancedGridPositions(tent,count,cellFt,danceZone){var out=[];for(var i=0;i<count;i++)out.push(nextGridPosition(i,tent,cellFt,danceZone));return out;}
-function tableCellSize(tableDef,chairId){var base=tableDef.shape==='round'?tableDef.diameterFt:Math.max(tableDef.widthFt,tableDef.depthFt);var chair=chairVisualById(chairId)||{};var chairSpan=Math.max(chair.seatWidthFt||1.5,chair.seatDepthFt||1.5);return base+2*(chairSpan+.35)+2;}
-function addTableCustom(tableId,chairId,seatCount,linenId,explicitPos){var tent=byId(TENTS,state.tentId),t=byId(TABLES,tableId);var n=store.getState().objects.filter(function(i){return i.kind==='table';}).length;var pos=explicitPos||nextGridPosition(n,tent,tableCellSize(t,chairId));var item={id:newItemId(),kind:'table',tableId:tableId,shape:t.shape,widthFt:t.shape==='round'?t.diameterFt:t.widthFt,depthFt:t.shape==='round'?t.diameterFt:t.depthFt,x:pos.x,y:pos.y,seatCount:seatCount,chairId:chairId,linenId:linenId||null};store.addObject(item);return item.id;}
-function addTable(tableId,chairId,linenId){var t=byId(TABLES,tableId);addTableCustom(tableId,chairId,t.seatsDefault,linenId);}
-function ensureTableDraft(){if(!tableDraft&&TABLES.length){var t=TABLES[0];tableDraft={tableId:t.id,chairId:state.chairId,seatCount:t.seatsDefault,linenId:null};}return tableDraft;}
-function addTableFromDraft(){var t=byId(TABLES,tableDraft.tableId),seats=t.seatsDefault>0?tableDraft.seatCount:0;var id=addTableCustom(t.id,tableDraft.chairId,seats,tableDraft.linenId);state.lastTableConfig={tableId:t.id,chairId:tableDraft.chairId,seatCount:seats,linenId:tableDraft.linenId};return id;}
-function addTableFromConfig(cfg,n){if(!cfg)return;for(var i=0;i<n;i++)addTableCustom(cfg.tableId,cfg.chairId,cfg.seatCount,cfg.linenId);}
-function layoutDanceFloorPositions(tent,total){var per=Math.ceil(Math.sqrt(total)),out=[];for(var i=0;i<total;i++)out.push({x:2+(i%per)*DANCE_SECTION.ft,y:Math.max(2,tent.lengthFt-2-per*DANCE_SECTION.ft)+Math.floor(i/per)*DANCE_SECTION.ft});return out;}
-function removeAllDanceFloors(){store.getState().objects.filter(function(i){return i.kind==='dance';}).forEach(function(i){store.removeObject(i.id);});}
-function setDanceFloorCount(total){var tent=byId(TENTS,state.tentId);removeAllDanceFloors();layoutDanceFloorPositions(tent,total).forEach(function(pos){store.addObject({id:newItemId(),kind:'dance',widthFt:DANCE_SECTION.ft,depthFt:DANCE_SECTION.ft,x:pos.x,y:pos.y});});}
-function setDanceFloorToSize(ft){setDanceFloorCount(sectionsForSize(ft));}
-function forCollision(objects){return objects.map(function(o){return Object.assign({},o,{kind:o.kind==='table'?'tableGroup':o.kind==='dance'?'danceFloor':o.kind});});}
-function getConflicts(){return runAllChecks({objects:forCollision(store.getState().objects),aisles:[]},byId(TENTS,state.tentId),state.guestCount,state.surfaceType);}
-function conflictSeverityByItemId(conflicts){var map={};(conflicts||[]).forEach(function(c){(c.objectIds||[]).forEach(function(id){map[id]=c.severity;});});return map;}
-var view3dMod=null,view3dPendingSnapshot=null,planMounted=false,view3dMountInProgress=false;
-function buildSnapshot(conflicts){var tent=byId(TENTS,state.tentId);return{tent:tent,surfaceType:state.surfaceType,anchoringMethod:resolveAnchoringMethod(tent.type,state.surfaceType),objects:store.getState().objects,lightingOn:!!(state.lightingId&&state.lightingId!=='lighting-none'),lightingId:state.lightingId,selectedId:state.selectedId,severityMap:conflictSeverityByItemId(conflicts||[])};}
-function handleSelect(id){state.selectedId=id;refreshAll();}
-function handleMove(id,x,y){store.updateObject(id,{x:x,y:y});}
-function mountPlan(){if(planMounted)return;planMounted=true;plan2dMod.mount($('plan2d'),buildSnapshot(getConflicts()),{onSelect:handleSelect,onMove:handleMove});}
-
-function mount3D(){
-  if(view3dMod||view3dMountInProgress)return;
-  var canvas=$('canvas');
-  if(!canvas){console.warn('3D mount: canvas element not found');return;}
-  
-  var attempt=0;
-  function checkCanvasReady(){
-    attempt++;
-    if(attempt>60){console.warn('3D mount: canvas never became ready');return;}
-    var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
-    if(!stepDes||!displayed||!hasWidth||!hasHeight){requestAnimationFrame(checkCanvasReady);return;}
-    view3dMountInProgress=true;
-    import('./js/ui/view3d.js').then(function(mod){
-      view3dMod=mod;
-      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts());
-      var inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove});
-      inst.rebuild(snap);
-      if(inst.fitCamera)inst.fitCamera();
-      view3dPendingSnapshot=null;
-      view3dMountInProgress=false;
-      window.FriendlyBridge.fitTentPreview=inst.fitTentPreview;
-    }).catch(function(e){console.error('3D mount failed:',e);view3dMountInProgress=false;});
-  }
-  requestAnimationFrame(checkCanvasReady);
-}
-
-function renderViews(conflicts){var s=buildSnapshot(conflicts);if(planMounted)plan2dMod.update(s);if(view3dMod)view3dMod.update(s);else if(state.viewMode==='3d')view3dPendingSnapshot=s;}
-function setViewMode(mode){state.viewMode=mode;$('viewModePlan').classList.toggle('active',mode==='plan');$('viewMode3d').classList.toggle('active',mode==='3d');var planEl=$('plan2d'),canvasEl=$('canvas');if(planEl)planEl.style.display=mode==='plan'?'flex':'none';if(canvasEl)canvasEl.style.display=mode==='3d'?'block':'none';$('view3dDayNight').style.display=mode==='3d'?'':'none';if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').style.display=mode==='3d'?'':'none';if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').style.display=mode==='3d'?'':'none';if(mode==='3d'){requestAnimationFrame(function(){mount3D();});}}
-function closeDrawer(){state.activeDrawer=null;if($('drawerBackdrop'))$('drawerBackdrop').hidden=true;if($('drawer'))$('drawer').hidden=true;}
-function openDrawer(kind){state.activeDrawer=kind;$('drawerBackdrop').hidden=false;$('drawer').hidden=false;$('drawerTitle').textContent=kind==='tables'?'Tables & Chairs':kind;renderDrawerBody(kind);}
-function renderDrawerBody(kind){var body=$('drawerBody');if(kind==='tables')body.innerHTML=buildTablesDrawerHtml();else body.innerHTML='<p>Choose '+kind+' options for your event.</p>';}
-function buildTablesDrawerHtml(){ensureTableDraft();if(!tableDraft)return '<p>No tables configured.</p>';var html='<div class="drawer-section-title">Choose a Table</div><div class="item-card-grid">';TABLES.forEach(function(t){html+='<button class="item-card" data-role="table-card" data-id="'+t.id+'"><span class="item-card-name">'+t.name+'</span></button>';});html+='</div><button class="btn-primary drawer-add-btn" data-role="add-table">+ Add Table</button>';return html;}
-function computeLineItems(){var tent=byId(TENTS,state.tentId),objects=store.getState().objects,lines=[{label:tent.name+' (tent)',qty:1,amount:tent.pricePerDay}];var tc={},cc={};objects.forEach(function(i){if(i.kind==='table'){tc[i.tableId]=(tc[i.tableId]||0)+1;if(i.seatCount)cc[i.chairId]=(cc[i.chairId]||0)+i.seatCount;}});Object.keys(tc).forEach(function(id){var t=byId(TABLES,id);lines.push({label:t.name,qty:tc[id],amount:t.pricePerDay==null?null:t.pricePerDay*tc[id]});});Object.keys(cc).forEach(function(id){var c=byId(CHAIRS,id);lines.push({label:c.name,qty:cc[id],amount:c.pricePerDay==null?null:c.pricePerDay*cc[id]});});return lines;}
-function renderInspector(conflicts){var p=$('inspectorPanel'),item=store.getState().objects.find(function(i){return i.id===state.selectedId;});p.hidden=false;if(!item){p.innerHTML='<h3 class="inspector-title">Event Overview</h3><p>Select a table to customize it.</p>';return;}if(item.kind==='table'){var t=byId(TABLES,item.tableId);p.innerHTML='<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button><h3 class="inspector-title">'+t.name+'</h3><p>'+item.seatCount+' seats</p><div class="inspector-actions"><button class="btn-primary" data-role="insp-design-table" data-id="'+item.id+'">Design Table</button><button class="btn-danger" data-role="insp-delete" data-id="'+item.id+'">Delete</button></div>';}else p.innerHTML='<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button><h3>Dance Floor</h3>';}
-function renderStatusBar(){var total=computeLineItems().reduce(function(s,l){return s+(l.amount||0);},0);$('statusBar').innerHTML='<div class="status-pill-group"><span class="status-item">'+state.guestCount+' Guests</span></div><div class="status-estimate">'+money(total)+'/day</div>';}
-function renderEmptyState(){var o=$('emptyStateOverlay');if(store.getState().objects.length){o.hidden=true;return;}o.hidden=false;o.innerHTML='<h3>Let\'s Add Your Seating</h3><button class="btn-primary" data-role="empty-choose-own">Choose Tables</button>';}
-function refreshAll(){var c=getConflicts();renderViews(c);renderInspector(c);renderStatusBar(c);renderEmptyState();if(state.activeDrawer)renderDrawerBody(state.activeDrawer);}
-function goToReview(){showStep('step-review');document.body.classList.remove('designer-active');$('reviewSummary').innerHTML='<div class="review-section"><h3>Your Event</h3><p>'+state.guestCount+' guests · '+byId(TENTS,state.tentId).name+'</p></div>';}
-
-document.querySelectorAll('.rail-btn').forEach(function(btn){btn.addEventListener('click',function(){openDrawer(btn.dataset.drawer);});});
-if($('drawerClose'))$('drawerClose').addEventListener('click',closeDrawer);if($('drawerBackdrop'))$('drawerBackdrop').addEventListener('click',closeDrawer);
-$('drawerBody').addEventListener('click',function(e){var el=e.target.closest('[data-role]');if(!el)return;if(el.dataset.role==='table-card'){var t=byId(TABLES,el.dataset.id);tableDraft.tableId=t.id;tableDraft.seatCount=t.seatsDefault;tableDraft.activeItemId=addTableFromDraft();state.selectedId=tableDraft.activeItemId;}else if(el.dataset.role==='add-table'){tableDraft.activeItemId=addTableFromDraft();state.selectedId=tableDraft.activeItemId;}refreshAll();});
-$('inspectorPanel').addEventListener('click',function(e){var el=e.target.closest('[data-role]');if(!el)return;var role=el.dataset.role;if(role==='inspector-close'){state.selectedId=null;refreshAll();}else if(role==='insp-delete'){store.removeObject(el.dataset.id);state.selectedId=null;}else if(role==='insp-design-table'){import('./js/ui/tableStudio.js').then(function(m){m.openTableStudio(el.dataset.id,store);});}});
-$('emptyStateOverlay').addEventListener('click',function(e){var el=e.target.closest('[data-role]');if(el&&el.dataset.role==='empty-choose-own')openDrawer('tables');});
-$('viewModePlan').addEventListener('click',function(){setViewMode('plan');});$('viewMode3d').addEventListener('click',function(){setViewMode('3d');});
-$('view3dDayNight').addEventListener('click',function(){if(view3dMod){var n=view3dMod.toggleDayNight();this.textContent=n?'Day':'Night';}});if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('build');});if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('breakdown');});
-$('btnUndo').addEventListener('click',function(){store.undo();});$('btnRedo').addEventListener('click',function(){store.redo();});store.subscribe(refreshAll);
-$('btnBackToRecommend').addEventListener('click',function(){document.body.classList.remove('designer-active');showStep('step-recommend');});
-$('btnToReview').addEventListener('click',goToReview);$('btnBackToDesigner').addEventListener('click',function(){document.body.classList.add('designer-active');showStep('step-designer');});
+var state = { eventType:'wedding',guestCount:50,spaceType:'backyard',surfaceType:'notSure',needDance:false,danceFloorSizeId:'18x18',customDanceFloorFt:null,matchedPackageId:null,tentId:'pole-20x40',chairId:'plastic-white',lightingId:'lighting-none',selectedId:null,viewMode:'plan',activeDrawer:null,lastTableConfig:null,eventCheckOpen:false,estimateOpen:false,inspectorCollapsed:true };
+var nextItemNum=1,tryTheseDismissed=false;function newItemId(){return'item-'+(nextItemNum++);}var store=createLayoutStore({tentId:state.tentId,objects:[],zones:[],aisles:[]}),tableDraft=null;
+function byId(arr,id){return arr.find(function(a){return a.id===id;});}function $(id){return document.getElementById(id);}function showStep(id){document.querySelectorAll('.step').forEach(function(el){el.classList.remove('active');});$(id).classList.add('active');}function money(n){return'$'+n.toFixed(2);}function moneyOrAsk(n){return(n===null||n===undefined)?'Ask for pricing':money(n);}
+function danceFloorSizeFt(){if(state.danceFloorSizeId==='custom')return state.customDanceFloorFt||18;var sz=byId(DANCE_FLOOR_SIZES,state.danceFloorSizeId);return sz?sz.ft:18;}function recommendDanceFloorFt(){var g=state.guestCount;if(g<=30)return 12;if(g<=60)return 15;if(g<=100)return 18;if(g<=150)return 21;return 24;}function validateLighting(){var tent=byId(TENTS,state.tentId),opt=byId(LIGHTING_OPTIONS,state.lightingId);if(opt&&opt.dynamic&&tentLightingPriceFor(tent)==null)state.lightingId='lighting-none';}
+function pickDefaultRoundTable(){var exact=byId(TABLES,'round-5ft');if(exact)return exact;var round=TABLES.filter(function(t){return t.shape==='round'&&t.seatsDefault>0;});if(round.length)return round[0];var any=TABLES.filter(function(t){return t.seatsDefault>0;});return any.length?any[0]:(TABLES.length?TABLES[0]:null);}
+function useRecommendedLayout(){store.reset({tentId:state.tentId,objects:[],zones:[],aisles:[]});state.selectedId=null;state.lastTableConfig=null;var tent=byId(TENTS,state.tentId);if(!tent){enterDesigner();return;}if(CHAIRS.length&&!byId(CHAIRS,state.chairId))state.chairId=CHAIRS[0].id;if(state.needDance)setDanceFloorCount(sectionsForSize(danceFloorSizeFt()));var tablesNeeded=Math.ceil(state.guestCount/8),tableDef=pickDefaultRoundTable();if(tablesNeeded>0&&tableDef){var cellFt=tableCellSize(tableDef,state.chairId),danceZone=mergeDanceFloorZone(forCollision(store.getState().objects)),positions=computeBalancedGridPositions(tent,tablesNeeded,cellFt,danceZone);for(var i=0;i<Math.min(tablesNeeded,positions.length);i++)addTableCustom(tableDef.id,state.chairId,tableDef.seatsDefault,null,positions[i]);state.lastTableConfig={tableId:tableDef.id,chairId:state.chairId,seatCount:tableDef.seatsDefault,linenId:null};}enterDesigner();}
+function customizeFromScratch(){store.reset({tentId:state.tentId,objects:[],zones:[],aisles:[]});state.selectedId=null;state.lastTableConfig=null;if(CHAIRS.length&&!byId(CHAIRS,state.chairId))state.chairId=CHAIRS[0].id;enterDesigner();}
+function enterDesigner(){if(!TENTS.length){alert('This designer needs at least one tent product with a visual configured.');return;}document.body.classList.add('designer-active');document.body.classList.remove('guided-active');state.viewMode='plan';state.selectedId=null;state.activeDrawer=null;state.eventCheckOpen=false;state.estimateOpen=false;validateLighting();showStep('step-designer');closeDrawer();mountPlan();setViewMode('plan');refreshAll();}
+function getScene(){var layout=store.getState();return Object.assign({},state,{objects:layout.objects,zones:layout.zones,aisles:layout.aisles});}function loadScene(scene){if(!scene||typeof scene!=='object')return false;var hasLayout=Array.isArray(scene.objects)&&scene.objects.length>0;['eventType','guestCount','spaceType','surfaceType','needDance','danceFloorSizeId','customDanceFloorFt','matchedPackageId','tentId','chairId','lightingId','lastTableConfig'].forEach(function(k){if(scene[k]!==undefined&&scene[k]!==null)state[k]=scene[k];});if(!hasLayout)return false;store.reset({tentId:state.tentId,objects:scene.objects,zones:Array.isArray(scene.zones)?scene.zones:[],aisles:Array.isArray(scene.aisles)?scene.aisles:[]});enterDesigner();return true;}
+function selectTent(tentId){state.tentId=tentId;validateLighting();refreshAll();}function nextGridPosition(index,tent,cellFt){var cols=Math.max(1,Math.floor((tent.widthFt-4)/cellFt));return{x:2+(index%cols)*cellFt,y:2+Math.floor(index/cols)*cellFt};}function centerGridRows(){}function computeBalancedGridPositions(tent,count,cellFt){var out=[];for(var i=0;i<count;i++)out.push(nextGridPosition(i,tent,cellFt));return out;}function tableCellSize(tableDef,chairId){var base=tableDef.shape==='round'?tableDef.diameterFt:Math.max(tableDef.widthFt,tableDef.depthFt),chair=chairVisualById(chairId)||{},chairSpan=Math.max(chair.seatWidthFt||1.5,chair.seatDepthFt||1.5);return base+2*(chairSpan+.35)+2;}
+function addTableCustom(tableId,chairId,seatCount,linenId,explicitPos){var tent=byId(TENTS,state.tentId),t=byId(TABLES,tableId),n=store.getState().objects.filter(function(i){return i.kind==='table';}).length,pos=explicitPos||nextGridPosition(n,tent,tableCellSize(t,chairId)),item={id:newItemId(),kind:'table',tableId:tableId,shape:t.shape,widthFt:t.shape==='round'?t.diameterFt:t.widthFt,depthFt:t.shape==='round'?t.diameterFt:t.depthFt,x:pos.x,y:pos.y,seatCount:seatCount,chairId:chairId,linenId:linenId||null};store.addObject(item);return item.id;}function addTable(tableId,chairId,linenId){var t=byId(TABLES,tableId);addTableCustom(tableId,chairId,t.seatsDefault,linenId);}function ensureTableDraft(){if(!tableDraft&&TABLES.length){var t=TABLES[0];tableDraft={tableId:t.id,chairId:state.chairId,seatCount:t.seatsDefault,linenId:null};}return tableDraft;}function addTableFromDraft(){var t=byId(TABLES,tableDraft.tableId),seats=t.seatsDefault>0?tableDraft.seatCount:0,id=addTableCustom(t.id,tableDraft.chairId,seats,tableDraft.linenId);state.lastTableConfig={tableId:t.id,chairId:tableDraft.chairId,seatCount:seats,linenId:tableDraft.linenId};return id;}function addTableFromConfig(cfg,n){if(!cfg)return;for(var i=0;i<n;i++)addTableCustom(cfg.tableId,cfg.chairId,cfg.seatCount,cfg.linenId);}function layoutDanceFloorPositions(tent,total){var per=Math.ceil(Math.sqrt(total)),out=[];for(var i=0;i<total;i++)out.push({x:2+(i%per)*DANCE_SECTION.ft,y:Math.max(2,tent.lengthFt-2-per*DANCE_SECTION.ft)+Math.floor(i/per)*DANCE_SECTION.ft});return out;}function removeAllDanceFloors(){store.getState().objects.filter(function(i){return i.kind==='dance';}).forEach(function(i){store.removeObject(i.id);});}function setDanceFloorCount(total){var tent=byId(TENTS,state.tentId);removeAllDanceFloors();layoutDanceFloorPositions(tent,total).forEach(function(pos){store.addObject({id:newItemId(),kind:'dance',widthFt:DANCE_SECTION.ft,depthFt:DANCE_SECTION.ft,x:pos.x,y:pos.y});});}function setDanceFloorToSize(ft){setDanceFloorCount(sectionsForSize(ft));}function forCollision(objects){return objects.map(function(o){return Object.assign({},o,{kind:o.kind==='table'?'tableGroup':o.kind==='dance'?'danceFloor':o.kind});});}function getConflicts(){return runAllChecks({objects:forCollision(store.getState().objects),aisles:[]},byId(TENTS,state.tentId),state.guestCount,state.surfaceType);}function conflictSeverityByItemId(conflicts){var map={};(conflicts||[]).forEach(function(c){(c.objectIds||[]).forEach(function(id){map[id]=c.severity;});});return map;}
+var view3dMod=null,view3dPendingSnapshot=null,planMounted=false,view3dMountInProgress=false;function buildSnapshot(conflicts){var tent=byId(TENTS,state.tentId);return{tent:tent,surfaceType:state.surfaceType,anchoringMethod:resolveAnchoringMethod(tent.type,state.surfaceType),objects:store.getState().objects,lightingOn:!!(state.lightingId&&state.lightingId!=='lighting-none'),lightingId:state.lightingId,selectedId:state.selectedId,severityMap:conflictSeverityByItemId(conflicts||[])};}function handleSelect(id){state.selectedId=id;refreshAll();}function handleMove(id,x,y){store.updateObject(id,{x:x,y:y});}function mountPlan(){if(planMounted)return;planMounted=true;plan2dMod.mount($('plan2d'),buildSnapshot(getConflicts()),{onSelect:handleSelect,onMove:handleMove});}
+function mount3D(){if(view3dMod||view3dMountInProgress)return;var canvas=$('canvas');if(!canvas)return;var attempt=0;function ready(){attempt++;if(attempt>60)return;var s=$('step-designer');if(!s||canvas.offsetParent===null||canvas.offsetWidth<100||canvas.offsetHeight<100){requestAnimationFrame(ready);return;}view3dMountInProgress=true;import('./js/ui/view3d.js').then(function(mod){view3dMod=mod;var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove});inst.rebuild(snap);if(inst.fitCamera)inst.fitCamera();view3dPendingSnapshot=null;view3dMountInProgress=false;window.FriendlyBridge.fitTentPreview=inst.fitTentPreview;}).catch(function(e){console.error('3D mount failed:',e);view3dMountInProgress=false;if(window.RentSketchCustomerEntry)window.RentSketchCustomerEntry.showRecovery();});}requestAnimationFrame(ready);}
+function renderViews(conflicts){var s=buildSnapshot(conflicts);if(planMounted)plan2dMod.update(s);if(view3dMod)view3dMod.update(s);else if(state.viewMode==='3d')view3dPendingSnapshot=s;}function setViewMode(mode){state.viewMode=mode;$('viewModePlan').classList.toggle('active',mode==='plan');$('viewMode3d').classList.toggle('active',mode==='3d');var p=$('plan2d'),c=$('canvas');if(p)p.style.display=mode==='plan'?'flex':'none';if(c)c.style.display=mode==='3d'?'block':'none';$('view3dDayNight').style.display=mode==='3d'?'':'none';if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').style.display=mode==='3d'?'':'none';if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').style.display=mode==='3d'?'':'none';if(mode==='3d')requestAnimationFrame(mount3D);}
+function closeDrawer(){state.activeDrawer=null;if($('drawerBackdrop'))$('drawerBackdrop').hidden=true;if($('drawer'))$('drawer').hidden=true;}function openDrawer(kind){state.activeDrawer=kind;$('drawerBackdrop').hidden=false;$('drawer').hidden=false;$('drawerTitle').textContent=kind==='tables'?'Tables & Chairs':kind;renderDrawerBody(kind);}function renderDrawerBody(kind){var body=$('drawerBody');if(kind==='tables')body.innerHTML=buildTablesDrawerHtml();else body.innerHTML='<p>Choose '+kind+' options for your event.</p>';}function buildTablesDrawerHtml(){ensureTableDraft();if(!tableDraft)return'<p>No tables configured.</p>';var html='<div class="drawer-section-title">Choose a Table</div><div class="item-card-grid">';TABLES.forEach(function(t){html+='<button class="item-card" data-role="table-card" data-id="'+t.id+'"><span class="item-card-name">'+t.name+'</span></button>';});return html+'</div><button class="btn-primary drawer-add-btn" data-role="add-table">+ Add Table</button>';}
+function computeLineItems(){var tent=byId(TENTS,state.tentId),objects=store.getState().objects,lines=[{label:tent.name+' (tent)',qty:1,amount:tent.pricePerDay}],tc={},cc={};objects.forEach(function(i){if(i.kind==='table'){tc[i.tableId]=(tc[i.tableId]||0)+1;if(i.seatCount)cc[i.chairId]=(cc[i.chairId]||0)+i.seatCount;}});Object.keys(tc).forEach(function(id){var t=byId(TABLES,id);if(t)lines.push({label:t.name,qty:tc[id],amount:t.pricePerDay});});Object.keys(cc).forEach(function(id){var c=byId(CHAIRS,id);if(c)lines.push({label:c.name,qty:cc[id],amount:c.pricePerDay});});return lines;}function refreshAll(){var conflicts=getConflicts();renderViews(conflicts);}
+// Existing UI modules render the designer controls; attach handlers defensively so embeds cannot crash when optional controls are absent.
+function on(id,event,fn){var el=$(id);if(el)el.addEventListener(event,fn);}on('viewModePlan','click',function(){setViewMode('plan');});on('viewMode3d','click',function(){setViewMode('3d');});on('btnUndo','click',function(){store.undo();});on('btnRedo','click',function(){store.redo();});store.subscribe(refreshAll);on('btnBackToRecommend','click',function(){document.body.classList.remove('designer-active');showStep('step-recommend');});on('btnToReview','click',function(){showStep('step-review');});on('btnBackToDesigner','click',function(){document.body.classList.add('designer-active');showStep('step-designer');});
 window.FriendlyBridge={state:state,TENTS:TENTS,TABLES:TABLES,CHAIRS:CHAIRS,PACKAGES:PACKAGES,byId:byId,showStep:showStep,enterDesigner:enterDesigner,getScene:getScene,loadScene:loadScene,useRecommendedLayout:useRecommendedLayout,customizeFromScratch:customizeFromScratch};
-
