@@ -103,8 +103,13 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
 // Product-page tent deep links are PREVIEWS, not event/package builders.
 // They show exactly the clicked tent by itself in 3D. Seating prompts,
 // guest shortfall warnings and inherited wizard state are removed.
-// Fixed: proper async/catalog wait, punctuation normalization, canvas readiness,
-// tent mesh bounding box fitting, and visible error UI on resolve failure.
+//
+// CRITICAL FIX: Resolve tent directly from imported TENTS catalog (module-scoped),
+// NOT from window.FriendlyBridge.TENTS. The bridge may not exist yet when this
+// module loads (script.js hasn't finished executing), and the bridge's TENTS
+// reference may be stale after product fetches in designer/index.html. By resolving
+// against the canonical TENTS imported here, we guarantee a match independent of
+// initialization order and API mutations.
 (function bootTentDeepLink() {
   if (typeof window === 'undefined') return;
   var q = new URLSearchParams(window.location.search);
@@ -144,40 +149,45 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     if (errorShown) return;
     errorShown = true;
     errorOverlay.innerHTML = '<h3 style="color:#c00;margin:0 0 10px 0">Tent Not Found</h3><p style="color:#666;font-size:14px;margin:0">Could not locate: <strong>' + requestedName + (requestedSlug ? ' (' + requestedSlug + ')' : '') + '</strong></p>';
+    if (msg) {
+      errorOverlay.innerHTML += '<p style="color:#999;font-size:12px;margin:8px 0 0 0">Debug: ' + msg + '</p>';
+    }
     errorOverlay.style.display = 'block';
   }
   
   function attemptDeepLink() {
     tryCount++;
     if (tryCount > 200) {
-      console.warn('[TentPreview] catalog resolve timeout after 200 frames (~3.3sec)');
-      showError('Timeout resolving tent catalog');
+      console.warn('[TentPreview] bridge/action resolve timeout after 200 frames (~3.3sec)');
+      showError('FriendlyBridge.customizeFromScratch unavailable');
       return;
     }
     
     var b = window.FriendlyBridge;
-    // Wait for bridge AND its TENTS catalog to be ready
-    if (!b || !b.state || !b.TENTS || !Array.isArray(b.TENTS) || !b.customizeFromScratch) {
+    // Wait for bridge AND its customizeFromScratch action to be ready
+    // (catalog is local; bridge is needed for state/actions only)
+    if (!b || !b.state || !b.customizeFromScratch) {
       requestAnimationFrame(attemptDeepLink);
       return;
     }
     
-    // Exact match: normalized name or slug
-    var exact = b.TENTS.find(function (t) { 
+    // Exact match by normalized name or canonical ID
+    var exact = TENTS.find(function (t) { 
       return norm(t.name) === norm(requestedName) || norm(t.id) === norm(requestedSlug) || t.id === requestedSlug;
     });
     
-    // Fallback: match by dimensions + type
-    var match = exact || b.TENTS.find(function (t) { 
+    // Fallback: match by dimensions + type (in case slug/name is mangled)
+    var match = exact || TENTS.find(function (t) { 
       return (!wantedDims || (t.widthFt + 'x' + t.lengthFt) === wantedDims) && (!wantedType || t.type === wantedType);
     });
     
     if (!match) {
+      // No match found; loop until bridge available, then show error
       requestAnimationFrame(attemptDeepLink);
       return;
     }
     
-    console.log('[TentPreview] resolved tent:', match.name, 'after', tryCount, 'frames');
+    console.log('[TentPreview] resolved tent:', match.name, 'id:', match.id, 'after', tryCount, 'frames');
     
     // Initialize state: ONLY tent, no objects
     b.state.tentId = match.id;
@@ -191,7 +201,7 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
     var titleTimer = setInterval(function () {
       var title = document.getElementById('toolbarEventTitle');
       var meta = document.getElementById('toolbarEventMeta');
-      if (title) title.textContent = match.name + ' · 3D Preview';
+      if (title) title.textContent = '3D Preview — ' + match.name;
       if (meta) meta.textContent = 'Tent only — rotate and zoom to explore';
     }, 250);
     setTimeout(function () { clearInterval(titleTimer); }, 5000);
@@ -202,7 +212,7 @@ export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT :
       designerAttempt++;
       if (designerAttempt > 120) {
         console.warn('[TentPreview] designer layout never ready after 120 frames');
-        showError('Designer failed to initialize');
+        showError('Designer layout failed to initialize');
         return;
       }
       
