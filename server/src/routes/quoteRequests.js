@@ -3,7 +3,7 @@ const express=require('express');
 const db=require('../db');
 const {getMailer}=require('../mailer');
 const {requireTenantRole}=require('../middleware/requireAuth');
-const {syncOrderEntitlement}=require('../orderProviders/friendlyOrderProvider');
+const {syncOrderEntitlement}=require('../orderProviders/quoteRequestOrderProvider');
 const router=express.Router();
 const buckets=new Map();
 function text(v,max){return typeof v==='string'?v.trim().slice(0,max):'';}
