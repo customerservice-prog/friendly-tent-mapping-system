@@ -7,3 +7,5 @@ body.guided-active{background:radial-gradient(circle at 80% 0%,rgba(72,135,83,.1
 @media(max-width:430px){.studio-occasion-grid,.studio-option-grid{grid-template-columns:1fr!important}.studio-occasion-card,.studio-option-card{min-height:64px!important}.studio-guest-count-number{font-size:46px!important}.studio-stage{min-height:28vh!important}}
 
 @media (min-width:881px){body.guided-active .studio-shell{overflow-y:auto!important;overflow-x:hidden!important;height:100%!important;min-height:0!important}}
+
+@media (min-width:881px){body.guided-active .studio-shell{display:flex!important;flex-direction:row!important;overflow:hidden!important}body.guided-active .studio-left{flex:0 0 420px!important;width:420px!important;height:100%!important;min-height:0!important;overflow-y:scroll!important;-webkit-overflow-scrolling:touch!important}body.guided-active .studio-stage{flex:1 1 auto!important;height:100%!important;min-height:0!important;min-width:0!important;overflow:hidden!important}}
