@@ -15,6 +15,8 @@ var originalConsoleError=console.error&&console.error.bind(console);if(originalC
 function bindCanvas(){var host=document.getElementById('canvas');if(!host){setTimeout(bindCanvas,50);return;}function bind(el){if(!el||el.__rsContextBound)return;el.__rsContextBound=true;el.addEventListener('webglcontextlost',function(e){if(e&&e.preventDefault)e.preventDefault();record('webgl-context-lost','The browser lost the 3D graphics context.');},false);el.addEventListener('webglcontextrestored',function(){window.__rentsketchLast3dError=null;lastRecoveredError='';try{host.style.display='';var b=window.FriendlyBridge;if(b&&b.refreshAll)b.refreshAll();}catch(e){}},false);}bind(host);var observer=new MutationObserver(function(){host.querySelectorAll('canvas').forEach(bind);});observer.observe(host,{childList:true,subtree:true});host.querySelectorAll('canvas').forEach(bind);}
 // Also pick up failures written directly to the shared diagnostic variable, such as
 // a canvas that never became renderable on a phone after the 3D tab was selected.
-setInterval(function(){var err=window.__rentsketchLast3dError;if(!err||err===lastRecoveredError)return;var threeBtn=document.getElementById('viewMode3d');if(threeBtn&&threeBtn.classList.contains('active'))recover('3d-watchdog',err);},500);
+// Route those through record(), not only recover(), so tent-preview-entry can
+// immediately notify the embedding rental site instead of leaving its loader open.
+setInterval(function(){var err=window.__rentsketchLast3dError;if(!err)return;var threeBtn=document.getElementById('viewMode3d');if(threeBtn&&threeBtn.classList.contains('active'))record('3d-watchdog',err);},500);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindCanvas);else bindCanvas();
 })();
