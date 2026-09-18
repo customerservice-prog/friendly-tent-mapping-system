@@ -59,7 +59,8 @@
   .designer-toolbar { min-height:52px; height:auto; padding-left:max(8px,env(safe-area-inset-left)); padding-right:max(8px,env(safe-area-inset-right)); overflow-x:auto; scrollbar-width:none; }
   .designer-toolbar::-webkit-scrollbar { display:none; }
   .designer-toolbar button,.designer-toolbar .btn-icon { min-width:44px; min-height:44px; }
-  .designer-body { flex-direction:column; } .tool-rail { width:100%; max-width:100%; height:auto; flex:0 0 auto; display:flex; flex-direction:row; overflow-x:auto; overflow-y:hidden; border-right:0; border-top:1px solid var(--border); scrollbar-width:none; }
+  .designer-body { flex-direction:column; }
+  .tool-rail { width:100%; max-width:100%; height:auto; flex:0 0 auto; display:flex; flex-direction:row; overflow-x:auto; overflow-y:hidden; border-right:0; border-top:1px solid var(--border); scrollbar-width:none; }
   .tool-rail::-webkit-scrollbar { display:none; }
   .tool-rail button { flex:0 0 66px; min-height:54px; }
   .designer-body { min-width:0; min-height:0; flex:1 1 auto; }
@@ -69,7 +70,7 @@
   .status-item,.status-flag { font-size:12px; }
   .status-estimate { padding:5px 8px; font-size:12px; }
   .drawer,.inspector-panel,.flyout { visibility:hidden; pointer-events:none; transform:translateY(105%); }
-  .drawer.open,.drawer.active,.inspector-panel.open,.inspector-panel.active,.flyout.open,.flyout.active { visibility:visible; pointer-events:auto; transform:translateY(0); }
+  .drawer.open,.drawer.active,.drawer:not([hidden]),.inspector-panel.open,.inspector-panel.active,.inspector-panel:has(.inspector-close),.flyout.open,.flyout.active,.flyout:not([hidden]) { visibility:visible; pointer-events:auto; transform:translateY(0); }
   .drawer { left:0; right:0; top:auto; bottom:0; width:100%; max-width:none; height:min(64dvh,560px); border-radius:18px 18px 0 0; border-right:0; padding-bottom:env(safe-area-inset-bottom); z-index:30; transition:transform .2s ease; }
   .drawer-header { padding:14px 16px; }
   .drawer-body { padding:12px 14px calc(16px + env(safe-area-inset-bottom)); overflow:auto; }
