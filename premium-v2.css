@@ -10,4 +10,4 @@ body.guided-active{background:radial-gradient(circle at 80% 0%,rgba(72,135,83,.1
 
 @media (min-width:881px){body.guided-active .studio-shell{display:flex!important;flex-direction:row!important;overflow:hidden!important}body.guided-active .studio-left{flex:0 0 420px!important;width:420px!important;height:100%!important;min-height:0!important;overflow-y:scroll!important;-webkit-overflow-scrolling:touch!important}body.guided-active .studio-stage{flex:1 1 auto!important;height:100%!important;min-height:0!important;min-width:0!important;overflow:hidden!important}}
 
-.studio-left{border:12px solid red!important}
+@media (min-width:881px){body.guided-active #intakeWizard,body.guided-active #app,body.guided-active #step-intake.active{overflow-y:auto!important;overflow-x:hidden!important}}
