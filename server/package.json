@@ -2,7 +2,7 @@
   "name": "rentsketch-server",
   "version": "0.1.0",
   "private": true,
-  "description": "Minimal multi-tenant backend for RentSketch: tenants, products, designs, and quote requests.",
+  "description": "Multi-tenant backend for RentSketch: tenants, products, designs, quote requests, feedback, and notifications.",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
@@ -14,6 +14,7 @@
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.11.5",
+    "resend": "^4.0.0",
     "stripe": "^14.25.0"
   },
   "engines": {
