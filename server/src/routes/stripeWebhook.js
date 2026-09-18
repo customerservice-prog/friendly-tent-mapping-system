@@ -1,7 +1,7 @@
 const express = require('express');
 const { query } = require('../db');
 const { EVENT_PASS_DURATION_DAYS, EVENT_PASS_RENEWAL_DURATION_DAYS } = require('../pricing');
-const { syncOrderEntitlement } = require('../orderProviders/friendlyOrderProvider');
+const { syncOrderEntitlement } = require('../orderProviders/quoteRequestOrderProvider');
 
 const router = express.Router();
 
@@ -150,4 +150,3 @@ router.post('/', async (req, res) => {
 });
 
 module.exports = router;
-
