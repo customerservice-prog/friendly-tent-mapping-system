@@ -123,6 +123,7 @@ body.designer-active .site-header, body.designer-active .site-footer { display: 
           height: 100%;
           border: none;
           border-radius: 0;
+        overflow-y: auto;
     }
 }
 
