@@ -1,11 +1,22 @@
-// Friendly Party Rental — Shared 2D geometry helpers for the layout planner
-// Simple axis-aligned rectangle math. Rotation is not yet supported —
-// this is a foundation layer for the collision system.
+// RentSketch shared 2D geometry helpers.
+// Objects are represented by an axis-aligned bounding box for collision and
+// containment. For rotated rectangles the AABB is calculated from the actual
+// footprint so 90-degree tables/floors no longer collide using stale dimensions.
+
+function number(v, fallback) { v = Number(v); return Number.isFinite(v) ? v : fallback; }
 
 export function rectFromObject(obj) {
-  const w = obj.widthFt || obj.footprintFt || 0;
-  const d = obj.depthFt || obj.footprintFt || 0;
-  return { x: obj.x || 0, y: obj.y || 0, width: w, depth: d };
+  const w = number(obj.widthFt, number(obj.footprintFt, 0));
+  const d = number(obj.depthFt, number(obj.lengthFt, number(obj.footprintFt, 0)));
+  const angle = number(obj.rotationDeg, number(obj.rotation, 0)) * Math.PI / 180;
+  const c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
+  const width = w * c + d * s;
+  const depth = w * s + d * c;
+  // Scene objects historically store x/y as the top-left corner. Preserve that
+  // contract while expanding around the original footprint centre.
+  const cx = number(obj.x, 0) + w / 2;
+  const cy = number(obj.y, 0) + d / 2;
+  return { x: cx - width / 2, y: cy - depth / 2, width, depth };
 }
 
 export function rectsOverlap(a, b) {
@@ -23,7 +34,7 @@ export function expandRect(rect, margin) {
 export function distance(p1, p2) {
   const dx = p1.x - p2.x;
   const dy = p1.y - p2.y;
-    return Math.sqrt(dx * dx + dy * dy);
+  return Math.sqrt(dx * dx + dy * dy);
 }
 
 export function circleIntersectsRect(circle, rect) {
