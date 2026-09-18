@@ -477,6 +477,10 @@ function renderEventTypeStep() {
   });
   wrap.appendChild(grid);
   renderNav(wrap, { nextLabel: 'Continue' });
+    const skipBtn = el('button', 'btn-link', 'Skip questions, start designing from scratch');
+    skipBtn.type = 'button';
+    skipBtn.addEventListener('click', function () { Bridge.customizeFromScratch(); });
+    wrap.appendChild(skipBtn);
   return wrap;
 }
 
