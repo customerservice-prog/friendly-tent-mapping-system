@@ -1,4 +1,6 @@
-// Friendly Party Rental — Tenant configuration.
+// Friendly Party Rental — bootstrap tenant configuration.
+// Runtime tenant identity/branding/catalog comes from the tenant API; these local
+// catalogs are renderer primitives and a safe bootstrap for Friendly tenant #1.
 import { CHAIRS } from './chairs.js';
 import { TABLES } from './tables.js';
 import { TENTS } from './tents.js';
@@ -22,17 +24,9 @@ function cloneCatalog(list) { return list.map(function (item) { return JSON.pars
 function stripPricing(list) { return list.map(function (item) { item.pricePerDay = null; return item; }); }
 export function getTenant(slug) { return slug === 'friendly' ? FRIENDLY_TENANT : GENERIC_TENANT; }
 
-(function installTenantCatalogAdapter() {
-  if (typeof window === 'undefined' || !window.fetch || window.__RENTSKETCH_CATALOG_ADAPTER__) return;
-  window.__RENTSKETCH_CATALOG_ADAPTER__ = true;
-  var originalFetch = window.fetch.bind(window);
-  function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
-  function tentVisual(name) { var n=String(name||'').toLowerCase(),m=n.match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/),size=m?(m[1]+'x'+m[2]):'20x20',type=/frame/.test(n)?'frame':(/pop|canopy/.test(n)?'canopy':'pole'),id=type+'-'+size; return TENTS.some(function(x){return x.id===id;})?id:(type==='frame'?'frame-20x20':type==='canopy'?'canopy-10x10':'pole-20x20'); }
-  function tableVisual(name) { var n=String(name||'').toLowerCase(); if(/fill|chill/.test(n))return'fill-chill-4ft';if(/cocktail|highboy|high boy/.test(n))return'cocktail';if(/round/.test(n))return'round-5ft';if(/8\s*(ft|foot|'|')/.test(n))return'banquet-8ft';return'banquet-6ft'; }
-  function chairVisual(name) { var n=String(name||'').toLowerCase();if(/queen|tiffany/.test(n))return'throne-queen-tiffany';if(/king.*throne|throne.*king/.test(n))return'throne-king';if(/mahogany.*chiavari|chiavari.*mahogany/.test(n))return'chiavari-mahogany';if(/white.*chiavari|chiavari.*white/.test(n))return'chiavari-white';if(/chiavari/.test(n))return'chiavari-gold';if(/resin/.test(n))return'resin-white';return'plastic-white'; }
-  function infer(p){var c=norm(p&&p.category);if(c==='tent')return tentVisual(p.name);if(c==='table')return tableVisual(p.name);if(c==='chair')return chairVisual(p.name);return null;}
-  window.fetch=function(input,init){return originalFetch(input,init).then(function(res){var url=typeof input==='string'?input:(input&&input.url)||'';if(!res.ok||url.indexOf('/products')===-1||(init&&init.method&&String(init.method).toUpperCase()!=='GET'))return res;return res.clone().json().then(function(data){if(!data||!Array.isArray(data.products))return res;data.products.forEach(function(p){if(!p||p.active===false||p.visual_model_id)return;var v=infer(p);if(v){p.visual_model_id=v;p.visual_model_fallback=true;}});return new Response(JSON.stringify(data),{status:res.status,statusText:res.statusText,headers:{'Content-Type':'application/json'}});}).catch(function(){return res;});});};
-})();
+// IMPORTANT: tenant.js intentionally does not monkey-patch window.fetch.
+// Product visual_model_id is authoritative from the tenant catalog/API. A caller
+// that explicitly wants a conservative fallback can use visualResolver.js.
 
 (function bootTentDeepLink(){
   if(typeof window==='undefined')return;
