@@ -1,0 +1,43 @@
+# Railpack's static-site defaults, with revalidation for the customer designer.
+# https://railpack.com/languages/staticfile/#custom-caddyfile
+{
+	admin off
+	persist_config off
+	auto_https off
+	log {
+		format json
+	}
+	servers {
+		trusted_proxies static private_ranges
+	}
+}
+
+:{$PORT:8080} {
+	log {
+		format json
+	}
+	respond /health 200
+	header {
+		X-XSS-Protection "1; mode=block"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Content-Security-Policy "default-src 'self'; img-src 'self' data: https: *; style-src 'self' 'unsafe-inline' https: *; script-src 'self' 'unsafe-inline' https: *; font-src 'self' data: https: *; connect-src 'self' https: *; media-src 'self' https: *; object-src 'none'; frame-src 'self' https: *;"
+		-Server
+	}
+
+	# Keep cached copies, but check for updates before starting a new visit.
+	# Otherwise Friendly's iframe can retain an older entry page after a deploy.
+	@designer path /designer /designer/* /script.js /js/* /*.css
+	header @designer Cache-Control "no-cache"
+
+	root * /app
+	file_server {
+		hide .git .env*
+	}
+	encode gzip zstd
+	try_files {path} {path}.html {path}/index.html
+	handle_errors {
+		rewrite * /{err.status_code}.html
+		file_server
+	}
+}
