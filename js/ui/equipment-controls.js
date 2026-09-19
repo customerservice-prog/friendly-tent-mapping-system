@@ -3,6 +3,13 @@ import { chairPositions } from '../core/seating.js';
 import { linenColorHex } from '../data/linens.js';
 export function escapeHtml(value) {return String(value == null ? '' : value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
+// Common dining equipment first; imported catalog order can change after a sync.
+const DISPLAY_ORDER=['round-5ft','banquet-6ft','banquet-8ft','cocktail','fill-chill-4ft','plastic-white','resin-white','chiavari-gold','chiavari-white','chiavari-mahogany','throne-king','throne-queen-tiffany'];
+export function orderEquipment(items) {
+  const rank=item=>{const index=DISPLAY_ORDER.indexOf(item.id);return index<0?100:index;};
+  return [...items].sort((a,b)=>rank(a)-rank(b) || String(a.name||'').localeCompare(String(b.name||'')));
+}
+
 // Refresh controls without losing the customer's place during repeated edits.
 export function renderEquipmentContent(panel, html) {
   const active=panel.ownerDocument.activeElement;
@@ -44,7 +51,7 @@ export function chairsDrawer(chairs, defaultId, objects) {
   const tables=objects.filter(o=>o.kind==='table' && o.seatCount>0);
   const total=tables.reduce((n,o)=>n+Number(o.seatCount),0);
   const note=tables.length ? `Choose a style for all ${tables.length} seated ${tables.length===1?'table':'tables'} (${total} chairs). To change just one table, select it on the plan.` : 'Choose the chairs to include when you add tables.';
-  return `<p class="equipment-note">${note}</p><div class="item-card-grid">${chairs.map(chair=>{
+  return `<p class="equipment-note">${note}</p><div class="item-card-grid">${orderEquipment(chairs).map(chair=>{
     const quantity=tables.filter(o=>o.chairId===chair.id).reduce((n,o)=>n+Number(o.seatCount),0);
     const selected=tables.length ? tables.every(o=>o.chairId===chair.id) : chair.id===defaultId;
     const price=chair.pricePerDay==null ? 'Confirm pricing' : '$'+Number(chair.pricePerDay).toFixed(2)+' / chair / day';
@@ -78,7 +85,7 @@ export function tableControls(item, table, chairs, linens, matchingCount=1) {
   const linen=linens.find(l=>l.id===item.linenId),color=item.linenColor || 'White';
   const colors=linen?.colors || ['White'];
   return `${max>0?`<div class="table-seat-controls">
-      <label class="equipment-field">Chairs<select data-role="insp-chair" data-id="${esc(item.id)}">${options(chairs,item.chairId)}</select></label>
+      <label class="equipment-field">Chairs<select data-role="insp-chair" data-id="${esc(item.id)}">${options(orderEquipment(chairs),item.chairId)}</select></label>
       <div class="equipment-field"><span>Seats</span><div class="seat-stepper">
         <button type="button" data-role="insp-seats" data-delta="-1" data-id="${esc(item.id)}" aria-label="Remove one seat"${item.seatCount<=0?' disabled':''}>−</button>
         <output aria-label="Seat count">${item.seatCount || 0}</output>

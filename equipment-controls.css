@@ -111,7 +111,7 @@ body:has(.inspector-panel:not([hidden])) .rs-beta { display:none; }
 
 /* Detailed model cards and quieter, legible overhead equipment. */
 .equipment-model { display:block; width:100%; height:auto; aspect-ratio:4/3; object-fit:contain; border-radius:10px; background:#edf1ea; }
-.chair-visual.equipment-model { height:120px; }
+.chair-visual.equipment-model { height:120px; object-fit:cover; }
 .item-card:has(.equipment-model) { display:flex; flex-direction:column; text-align:left; gap:5px; }
 .item-card:has(.equipment-model) .item-card-price { margin-top:auto; }
 .equipment-visual { background:radial-gradient(ellipse,#f9faf6,#e9eee6); }
