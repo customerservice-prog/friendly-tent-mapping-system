@@ -1,25 +1,131 @@
-// Boot a tenant product-page tent CTA directly into its exact RentSketch 3D tent preview.
-(function(){
-'use strict';
-var q=new URLSearchParams(location.search);
-if(!(q.get('embed')==='1'&&q.get('view')==='3d'&&q.get('focus')==='tent'&&q.get('autoplace')==='1'))return;
-var requestedSlug=(q.get('tentSlug')||'').toLowerCase();
-var requestedName=(q.get('tent')||'').toLowerCase();
-var requestedProductId=q.get('productId')||'';
-var tenantSlug=q.get('tenant')||'generic';
-var LEGAL_VERSION='2026-09-17';
-var storageKey='rentsketch:entry-accepted:'+tenantSlug+':'+LEGAL_VERSION;
-var bootStarted=false,readySent=false,failed=false;
-function normalize(s){return String(s||'').toLowerCase().replace(/×/g,'x').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');}
-function findTent(list){list=list||[];if(requestedProductId){var byProduct=list.find(function(t){return String(t.productId||'')===String(requestedProductId);});if(byProduct)return byProduct;}if(requestedSlug){var external='fpr:'+requestedSlug,byExternal=list.find(function(t){return String(t.externalId||'').toLowerCase()===external;});if(byExternal)return byExternal;}var slug=normalize(requestedSlug),name=normalize(requestedName);var exact=list.find(function(t){var id=normalize(t.id),n=normalize(t.name);return (slug&&(id===slug||n===slug))||(name&&n===name);});if(exact)return exact;var fuzzy=list.find(function(t){var id=normalize(t.id),n=normalize(t.name);return (slug&&(slug.indexOf(id)>=0||slug.indexOf(n)>=0))||(name&&(name.indexOf(n)>=0||n.indexOf(name)>=0));});if(fuzzy)return fuzzy;var dims=(requestedName+' '+requestedSlug).match(/(\d+)\s*x\s*(\d+)/i);return list.find(function(t){if(!dims)return false;var a=Number(dims[1]),b=Number(dims[2]),same=(a===Number(t.widthFt)&&b===Number(t.lengthFt))||(b===Number(t.widthFt)&&a===Number(t.lengthFt));return same&&(!/frame/.test(requestedName+requestedSlug)||t.type==='frame')&&(!/pole/.test(requestedName+requestedSlug)||t.type==='pole');});}
-function entryAccepted(){try{return localStorage.getItem(storageKey)==='accepted';}catch(e){return false;}}
-function startBoot(){if(bootStarted)return;bootStarted=true;if(window.__rentsketchLast3dError)return fail(window.__rentsketchLast3dError);boot();}
-function rendererIsUsable(){var host=document.getElementById('canvas');if(!host)return false;var rendererCanvas=host.querySelector('canvas');if(!rendererCanvas)return false;var r=rendererCanvas.getBoundingClientRect();return r.width>=100&&r.height>=100&&rendererCanvas.width>0&&rendererCanvas.height>0;}
-function waitForVisible3d(b,tent,attempt){if(failed)return;attempt=attempt||0;var btn=document.getElementById('viewMode3d');if(!btn){if(attempt<240)return setTimeout(function(){waitForVisible3d(b,tent,attempt+1);},50);return fail('3D view control did not initialize');}if(attempt===0||attempt%20===0)btn.click();setTimeout(function(){if(failed)return;var host=document.getElementById('canvas'),r=host&&host.getBoundingClientRect();var rendererReady=typeof b.fitTentPreview==='function'&&rendererIsUsable();if(!r||r.width<100||r.height<100||!rendererReady){if(attempt<300)return setTimeout(function(){waitForVisible3d(b,tent,attempt+1);},50);return fail('3D renderer did not become usable (host='+(r?Math.round(r.width)+'x'+Math.round(r.height):'none')+', rendererCanvas='+(host?host.querySelectorAll('canvas').length:0)+', fit='+(typeof b.fitTentPreview)+', win='+window.innerWidth+'x'+window.innerHeight+', mount3dErr='+(window.__rentsketchLast3dError||'none')+')');}try{window.dispatchEvent(new Event('resize'));b.fitTentPreview();}catch(e){return fail('3D camera framing failed: '+(e&&e.message||e));}requestAnimationFrame(function(){requestAnimationFrame(function(){if(!rendererIsUsable())return waitForVisible3d(b,tent,attempt+1);ready(tent);});});},50);}
-var tries=0;
-function boot(){if(failed)return;tries++;if(tenantSlug!=='generic'&&!window.RENTSKETCH_CATALOG_READY){if(window.RENTSKETCH_CATALOG_ERROR)return fail('Tenant catalog failed to load: '+window.RENTSKETCH_CATALOG_ERROR);if(tries<300)return setTimeout(boot,50);return fail('Tenant catalog did not become ready');}var b=window.FriendlyBridge;if(!b||!b.state||!b.TENTS||!b.customizeFromScratch){if(tries<360)return setTimeout(boot,50);return fail('Designer bridge did not initialize');}var tent=findTent(b.TENTS);if(!tent)return fail('Requested tent was not found in the live tenant catalog: '+(requestedProductId||requestedSlug||requestedName||'missing identifier'));try{b.state.tentId=tent.id;b.customizeFromScratch();waitForVisible3d(b,tent,0);}catch(e){console.error('Tent preview boot failed',e);fail(e&&e.message||'Preview failed');}}
-function ready(tent){if(readySent||failed)return;readySent=true;try{parent.postMessage({type:'rentsketch.ready',mode:'tent-preview',tenant:tenantSlug,productId:tent.productId||null,externalId:tent.externalId||null,tentId:tent.id,tentName:tent.name,renderer:'webgl'},'*');}catch(e){}}
-function fail(reason){if(failed)return;failed=true;console.error('RentSketch 3D preview:',reason);if(window.RentSketchCustomerEntry&&window.RentSketchCustomerEntry.showRecovery)window.RentSketchCustomerEntry.showRecovery();try{parent.postMessage({type:'rentsketch.error',mode:'tent-preview',tenant:tenantSlug,productId:requestedProductId||null,reason:String(reason||'unknown')},'*');}catch(e){}}
-window.addEventListener('rentsketch:3d-error',function(e){var d=e&&e.detail||{},reason=d.message||d.code||window.__rentsketchLast3dError||'3D renderer failed';fail(reason);});
-if(entryAccepted())startBoot();else{window.addEventListener('rentsketch:entryAccepted',startBoot,{once:true});var entryWaits=0;(function waitForEntry(){if(bootStarted||failed)return;if(entryAccepted())return startBoot();entryWaits++;if(entryWaits<6000)return setTimeout(waitForEntry,100);fail('Customer entry was not accepted');})();}
+// The sole product-preview controller. Keep the existing store and renderer alive
+// when the customer continues into the full designer.
+(function () {
+  'use strict';
+  var q = new URLSearchParams(location.search);
+  if (!(q.get('focus') === 'tent' && q.get('autoplace') === '1')) return;
+  window.RENTSKETCH_TENT_PREVIEW = true;
+  var tenantSlug = q.get('tenant') || 'generic';
+  var requestedProductId = q.get('productId') || '';
+  var requestedSlug = q.get('tentSlug') || '';
+  var requestedName = q.get('tent') || '';
+  var readySent = false, failed = false, tent = null, startedAt = Date.now();
+  var want3d = q.get('view') !== '2d';
+  var bridge;
+  document.body.classList.add('tent-preview');
+
+  function normalize(value) {
+    return String(value || '').toLowerCase().replace(/×/g, 'x').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  }
+  function findTent(list) {
+    // An explicit product ID is authoritative; never silently substitute a tent.
+    if (requestedProductId) return list.find(function (t) { return String(t.productId) === requestedProductId; });
+    var slug = normalize(requestedSlug), name = normalize(requestedName);
+    return list.find(function (t) {
+      return (slug && (normalize(t.externalId && t.externalId.split(':').pop()) === slug || normalize(t.id) === slug || normalize(t.name) === slug)) ||
+        (name && normalize(t.name) === name);
+    });
+  }
+  var status = document.createElement('div');
+  status.id = 'tentPreviewStatus';
+  status.setAttribute('role', 'status');
+  status.textContent = 'Loading your tent…';
+  document.querySelector('.canvas-viewport').appendChild(status);
+  var title = document.getElementById('toolbarEventTitle');
+  title.textContent = 'Your ' + (requestedName || 'tent');
+  var meta = document.getElementById('toolbarEventMeta');
+  meta.textContent = 'Explore your tent, then make it your event.';
+  var actions = document.createElement('div');
+  actions.className = 'tent-preview-actions';
+  actions.innerHTML = '<p>Your tent is the starting point. Add seating and extras when you’re ready.</p><button type="button" class="btn-primary" id="designMyEvent" disabled>Design My Event</button>';
+  document.querySelector('.designer-shell').appendChild(actions);
+  var design = document.getElementById('designMyEvent');
+
+  function continueDesigning() {
+    if (!tent) return;
+    window.RENTSKETCH_TENT_PREVIEW = false;
+    document.body.classList.remove('tent-preview');
+    document.body.classList.add('product-designer');
+    actions.remove();
+    status.remove();
+    // Do not call customizeFromScratch / enterDesigner here: both reset state
+    // or view mode. The preview and full designer use this same live scene.
+    bridge.refreshAll();
+    window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new CustomEvent('rentsketch:designStarted', { detail: { tentId: tent.id, productId: tent.productId } }));
+  }
+  design.addEventListener('click', function () {
+    var entry = window.RentSketchCustomerEntry;
+    if (entry && entry.startDesigning) entry.startDesigning(continueDesigning);
+    else if (q.get('embed') !== '1') continueDesigning();
+  });
+  function ready(renderer) {
+    document.body.classList.remove('tent-preview-loading');
+    if (readySent) return;
+    readySent = true;
+    status.hidden = true;
+    design.disabled = false;
+    try { parent.postMessage({ type: 'rentsketch.ready', mode: 'tent-preview', tenant: tenantSlug, productId: tent.productId || null, externalId: tent.externalId || null, tentId: tent.id, tentName: tent.name, renderer: renderer }, '*'); } catch (_) {}
+  }
+  function fail(reason) {
+    if (failed) return;
+    failed = true;
+    console.error('RentSketch 3D preview:', reason);
+    if (tent) {
+      want3d = false;
+      bridge.setViewMode('plan');
+      status.hidden = false;
+      status.textContent = '3D is unavailable right now. Your tent is ready in 2D.';
+      design.disabled = false;
+      ready('2d');
+      status.hidden = false;
+    } else {
+      status.hidden = false;
+      status.textContent = 'We couldn’t load this exact tent. Please close the preview and try again.';
+      try { parent.postMessage({ type: 'rentsketch.error', mode: 'tent-preview', tenant: tenantSlug, productId: requestedProductId || null, reason: String(reason) }, '*'); } catch (_) {}
+    }
+  }
+  function waitFor3d() {
+    if (failed || readySent) return;
+    if (!want3d) return ready('2d');
+    if (window.__rentsketchLast3dError) return fail(window.__rentsketchLast3dError);
+    var canvas = document.querySelector('#canvas canvas');
+    if (canvas && canvas.clientWidth >= 100 && canvas.clientHeight >= 100 && bridge.fitTentPreview) {
+      bridge.fitTentPreview();
+      requestAnimationFrame(function () { requestAnimationFrame(function () { if (!failed) ready('webgl'); }); });
+      return;
+    }
+    if (Date.now() - startedAt > 18000) return fail('3D renderer did not become usable');
+    setTimeout(waitFor3d, 50);
+  }
+  function boot() {
+    bridge = window.FriendlyBridge;
+    if (window.RENTSKETCH_CATALOG_ERROR) return fail(window.RENTSKETCH_CATALOG_ERROR);
+    if ((tenantSlug !== 'generic' && !window.RENTSKETCH_CATALOG_READY) || !bridge || !bridge.customizeFromScratch) {
+      if (Date.now() - startedAt > 15000) return fail('Tenant catalog or designer did not become ready');
+      return setTimeout(boot, 50);
+    }
+    tent = findTent(bridge.TENTS || []);
+    if (!tent) return fail('Requested tent not found in the live tenant catalog');
+    title.textContent = 'Your ' + tent.name;
+    meta.textContent = tent.widthFt + ' × ' + tent.lengthFt + ' ft · ' + (window.ACTIVE_TENANT.name || 'RentSketch');
+    bridge.state.tentId = tent.id;
+    bridge.state.guestCount = 0;
+    bridge.customizeFromScratch();
+    // Paint the exact 2D footprint while WebGL initializes, rather than exposing
+    // an empty canvas or a questionnaire. It remains available if 3D fails.
+    if (want3d) {
+      document.body.classList.add('tent-preview-loading');
+      bridge.setViewMode('3d');
+      waitFor3d();
+    } else ready('2d');
+  }
+  document.getElementById('viewModePlan').addEventListener('click', function () {
+    want3d = false;
+    if (tent) ready('2d');
+    document.body.classList.remove('tent-preview-loading');
+  });
+  window.addEventListener('rentsketch:preview2d', function () { if (tent) ready('2d'); });
+  window.addEventListener('rentsketch:3d-error', function (e) { if (window.RENTSKETCH_TENT_PREVIEW) fail(e.detail && e.detail.message || '3D unavailable'); });
+  boot();
 })();
