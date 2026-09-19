@@ -88,6 +88,20 @@ async function moduleAt(file){
     positions.add(item.x+':'+item.y);
   }
   assert.equal(positions.size,4,'four tables occupy separate starting positions');
-  console.log('PASS: exact preview → table → seats/chairs/linen → duplicate/rotate/delete/undo/redo → complete review → return; no network writes');
+  const before=b.getScene().objects.map(o=>o.id).join(',');
+  window.document.querySelector('[data-drawer="setup"]').click();
+  const setup=window.document.getElementById('quickSetupForm');
+  setup.elements.guests.value='50';setup.elements.dance.value='6';setup.querySelector('[type="checkbox"]').checked=true;
+  setup.dispatchEvent(new window.Event('submit',{bubbles:true,cancelable:true}));
+  assert.equal(b.getScene().tentId,'pole-20x20');
+  assert.equal(b.getScene().objects.filter(o=>o.kind==='dance').length,4);
+  assert.equal(b.getScene().objects.filter(o=>o.kind==='table').length,3);
+  assert.match(window.document.getElementById('layoutNotice').textContent,/24 of your 50 guests/);
+  window.document.getElementById('btnUndo').click();
+  assert.equal(b.getScene().objects.map(o=>o.id).join(','),before,'one undo restores all previous equipment');
+  assert.equal(b.getScene().needDance,false);
+  window.document.getElementById('btnRedo').click();
+  assert.equal(b.getScene().objects.filter(o=>o.kind==='dance').length,4);
+  console.log('PASS: exact preview → table → seats/chairs/linen → duplicate/rotate/delete/undo/redo → complete review → return → optional suggestion keeps tent and respects capacity → one undo restores layout; no network writes');
   dom.window.close();
 })().catch(error=>{console.error(error);dom.window.close();process.exitCode=1;});

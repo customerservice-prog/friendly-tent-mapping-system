@@ -25,8 +25,8 @@
     import('./intake.js').then(function () {
       var attempts = 0;
       (function ready() {
-        var host = document.getElementById('intakeWizard');
-        if (window.FriendlyBridge && host && host.firstElementChild) {
+        var host = document.getElementById('step-designer');
+        if (window.FriendlyBridge && host && host.classList.contains('active')) {
           window.dispatchEvent(new CustomEvent('rentsketch:intakeReady'));
           if (window.parent !== window) window.parent.postMessage({type:'rentsketch.ready',mode:'designer',tenant:params.get('tenant') || 'generic'}, '*');
         } else if (++attempts < 100) setTimeout(ready, 100);

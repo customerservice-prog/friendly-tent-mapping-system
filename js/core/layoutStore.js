@@ -71,6 +71,12 @@ function addObject(obj) {
   commit(next);
 }
 
+function replaceObjects(objects) {
+  const next = cloneState(state);
+  next.objects = cloneState(objects);
+  commit(next);
+}
+
 function updateObject(id, changes) {
   const next = cloneState(state);
   next.objects = next.objects.map(function (o) { return o.id === id ? Object.assign({}, o, changes) : o; });
@@ -128,6 +134,7 @@ return {
   subscribe: subscribe,
   setTent: setTent,
   addObject: addObject,
+  replaceObjects: replaceObjects,
   updateObject: updateObject,
   removeObject: removeObject,
   duplicateObject: duplicateObject,

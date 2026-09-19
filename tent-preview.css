@@ -31,3 +31,19 @@ body.product-designer #btnBackToRecommend { display:none; }
   .tent-preview-actions p { font-size:12px; text-align:center; }
   body.tent-preview .rs-help { bottom:122px; right:8px; }
 }
+/* Keep the preview inside the available iframe height on every phone. */
+body.tent-preview .canvas-area { margin:0; }
+body.tent-preview .tent-preview-actions { order:3; flex:0 0 auto; }
+body.tent-preview .rs-help { display:none; }
+body.tent-preview #tentPreviewStatus { top:auto; bottom:12px; padding:8px 12px; font-size:12px; }
+@media(max-width:880px) {
+  body.tent-preview .designer-toolbar { display:flex; flex-direction:column; align-items:stretch; gap:8px; padding:12px 14px 8px; min-height:0; }
+  body.tent-preview .toolbar-left { flex:none; }
+  body.tent-preview .toolbar-center { width:100%; justify-content:space-between; }
+  body.tent-preview .toolbar-event-title { font-size:19px; line-height:1.2; }
+  body.tent-preview .toolbar-event-meta { display:block; font-size:11px; margin-top:3px; }
+  .tent-preview-actions { flex-direction:column; align-items:stretch; gap:7px; padding:10px 14px calc(10px + env(safe-area-inset-bottom)); }
+  .tent-preview-actions p { font-size:11px; text-align:center; line-height:1.35; }
+  .tent-preview-actions button { width:100%; min-height:48px; }
+  body.tent-preview .canvas-hint { display:none; }
+}

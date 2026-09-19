@@ -1,0 +1,11 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RentSketch responsive QA</title>
+<style>body{margin:0;font:14px system-ui;background:#e9ecf0;color:#22324a}header{padding:12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:white;position:sticky;top:0;z-index:2}select{padding:8px;font:inherit}main{padding:18px;display:flex;justify-content:center}iframe{display:block;border:1px solid #bec8c0;background:white;box-shadow:0 8px 28px #25354620;flex-shrink:0}p{margin:0;color:#687789;font-size:12px}</style>
+<header><strong>Responsive QA</strong><label>Viewport <select id="size"><option value="390,844">390 × 844</option><option value="320,640">320 × 640</option><option value="430,932">430 × 932</option><option value="844,390">844 × 390</option><option value="1440,900">1440 × 900</option></select></label><label>Entry <select id="entry"><option value="pole">20×20 pole preview</option><option value="frame">20×20 frame preview</option><option value="designer">Direct designer</option></select></label><button id="reload" type="button">Reload preview</button><p>CSS viewport check. This does not emulate phone hardware or touch. Do not submit quotes.</p></header>
+<main><iframe title="Responsive designer preview" id="preview"></iframe></main>
+<script>
+const frame=document.getElementById('preview'),size=document.getElementById('size'),entry=document.getElementById('entry');
+function resize(){const [width,height]=size.value.split(',');frame.style.width=width+'px';frame.style.height=height+'px';}
+function load(){const q=new URLSearchParams({tenant:'friendly',view:'2d',v:'20260919-visual'});if(entry.value!=='designer'){q.set('focus','tent');q.set('autoplace','1');q.set('tentSlug','20x20-'+entry.value+'-tent');}frame.src='/designer/?'+q;resize();}
+size.onchange=resize;entry.onchange=load;document.getElementById('reload').onclick=load;load();
+</script></html>

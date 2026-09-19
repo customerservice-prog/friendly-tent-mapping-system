@@ -37,7 +37,7 @@
   meta.textContent = 'Explore your tent, then make it your event.';
   var actions = document.createElement('div');
   actions.className = 'tent-preview-actions';
-  actions.innerHTML = '<p>Your tent is the starting point. Add seating and extras when you’re ready.</p><button type="button" class="btn-primary" id="designMyEvent" disabled>Design My Event</button>';
+  actions.innerHTML = '<p>Add tables, chairs and extras to this exact tent.</p><button type="button" class="btn-primary" id="designMyEvent" disabled>Design My Event</button>';
   document.querySelector('.designer-shell').appendChild(actions);
   var design = document.getElementById('designMyEvent');
 
