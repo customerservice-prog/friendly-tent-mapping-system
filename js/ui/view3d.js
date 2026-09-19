@@ -72,7 +72,7 @@ export function init(container,callbacks={}) {
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
   const furniture=new THREE.Group(),structure=new THREE.Group();scene.add(structure,furniture);
   const rendered=new Map(),pointers=new Set();let state=null,night=false,raf=0,drag=null,danceMesh=null,environment=null,lightGroup=null;
-  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',dirty=true,destroyed=false;
+  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',dirty=true,destroyed=false,animationFrame=0;
   const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pmrem.fromScene(room,.04);
   scene.environment=env.texture;room.dispose();pmrem.dispose();
   const hemi=new THREE.HemisphereLight(0xeaf6ff,0x667052,1.65);scene.add(hemi);
@@ -112,7 +112,7 @@ export function init(container,callbacks={}) {
   function down(e){
     if(e.button!==undefined&&e.button!==0)return;
     pointers.add(e.pointerId);
-    if(pointers.size>1){if(drag){const originals=drag.kind==='item'?[drag.orig]:drag.orig;state.objects=state.objects.map(o=>({...o,...originals.find(a=>a.id===o.id)}));furnitureKey='';}drag=null;controls.enableRotate=controls.enablePan=true;rebuild(state);return;}
+    if(pointers.size>1){if(drag){const originals=drag.kind==='item'?[drag.orig]:drag.orig;state.objects=state.objects.map(o=>({...o,...originals.find(a=>a.id===o.id)}));furnitureKey='';}drag=null;controls.enableRotate=true;rebuild(state);return;}
     const h=hit(e),point=groundPoint(e);if(!h||!point||!state)return;
     const u=h.object.userData;
     // Select first; dragging an already selected item avoids stealing one-finger orbit.
@@ -120,7 +120,7 @@ export function init(container,callbacks={}) {
     if(state.selectedId!==id){callbacks.onSelect?.(id);return;}
     if(u.kind==='danceGroup')drag={kind:'dance',ids:u.itemIds,start:point.clone(),orig:state.objects.filter(o=>u.itemIds.includes(o.id)).map(o=>({...o})),mesh:danceMesh.position.clone()};
     else{const o=state.objects.find(x=>x.id===id);if(!o)return;drag={kind:'item',id,start:point.clone(),orig:{...o}};}
-    controls.enableRotate=controls.enablePan=false;renderer.domElement.setPointerCapture?.(e.pointerId);
+    controls.enableRotate=false;renderer.domElement.setPointerCapture?.(e.pointerId);
   }
   function move(e){
     if(!drag||!state||pointers.size>1)return;
@@ -135,7 +135,7 @@ export function init(container,callbacks={}) {
     renderer.shadowMap.needsUpdate=true;invalidate();
   }
   function up(e){
-    pointers.delete(e.pointerId);if(!drag)return;const finished=drag;drag=null;controls.enableRotate=controls.enablePan=true;
+    pointers.delete(e.pointerId);if(!drag)return;const finished=drag;drag=null;controls.enableRotate=true;
     if(finished.kind==='item'){const o=state.objects.find(x=>x.id===finished.id);if(o)callbacks.onMove?.(o.id,o.x,o.y);}
     else{const updates=state.objects.filter(o=>finished.ids.includes(o.id)).map(o=>({id:o.id,x:o.x,y:o.y}));updates.forEach(o=>callbacks.onMove?.(o.id,o.x,o.y));}
     try{renderer.domElement.releasePointerCapture?.(e.pointerId);}catch{}
@@ -146,7 +146,8 @@ export function init(container,callbacks={}) {
   loop();document.addEventListener('visibilitychange',invalidate);
   function setNight(value){night=!!value;scene.background?.dispose?.();scene.background=sky(night);scene.fog.color.set(night?0x203044:0xdde8df);hemi.intensity=night?.4:1.65;sun.intensity=night?.15:3.2;fill.intensity=night?.2:.55;renderer.toneMappingExposure=night?.9:1.05;environment?.userData.setNight(night);lightGroup?.userData.setNight?.(night);renderer.shadowMap.needsUpdate=true;invalidate();}
   function fitCamera(){if(state?.tent){frame(state.tent);return true;}return false;}
-  const api={rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse(){fitCamera();},destroy(){destroyed=true;cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
+  function playTimelapse(){cancelAnimationFrame(animationFrame);const start=performance.now();function tick(now){if(destroyed)return;const k=Math.min(1,(now-start)/2200);structure.scale.y=Math.max(.02,1-Math.pow(1-k,3));renderer.shadowMap.needsUpdate=true;invalidate();if(k<1)animationFrame=requestAnimationFrame(tick);}animationFrame=requestAnimationFrame(tick);}
+  const api={rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
   active=api;return api;
 }
 export function update(s){active?.rebuild(s);}

@@ -5,13 +5,13 @@ export function setupPanel(state, tent, hasObjects) {
   const floors = [6,9,12,15,18,21,24].filter(ft => dancePositions(tent, ft).length);
   return `<form id="quickSetupForm" class="quick-setup">
     <p class="setup-tent">${escapeHtml(tent.name)} stays selected.</p>
-    <label class="equipment-field" for="setupGuests">How many guests?
+    <div class="setup-fields"><label class="equipment-field" for="setupGuests">How many guests?
       <input id="setupGuests" name="guests" type="number" inputmode="numeric" min="1" max="1000" required value="${state.guestCount || 32}">
     </label>
     <label class="equipment-field" for="setupDance">Dance floor
       <select id="setupDance" name="dance"><option value="0">No dance floor</option>${floors.map(ft => `<option value="${ft}">${ft} × ${ft} ft</option>`).join('')}</select>
     </label>
-    <p class="equipment-note">We’ll arrange tables with chairs around the tent poles and leave space for your dance floor. You can edit everything afterward.</p>
+    </div><p class="equipment-note setup-explanation">We’ll arrange tables with chairs around the tent poles and leave space for your dance floor. You can edit everything afterward.</p>
     ${hasObjects ? '<label class="setup-replace"><input type="checkbox" required> Replace the items in my current layout</label><p class="equipment-note">Undo restores your previous arrangement.</p>' : ''}
     <button class="btn-primary" type="submit">Build Suggested Layout</button>
     <button class="btn-tertiary" type="button" data-role="setup-manual">I’ll Design It Myself</button>
