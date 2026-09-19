@@ -1,3 +1,4 @@
+import { chairPlanSvg } from './equipment-symbols.js';
 import { chairPositions } from '../core/seating.js';
 import { linenColorHex } from '../data/linens.js';
 export function escapeHtml(value) {return String(value == null ? '' : value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -22,7 +23,14 @@ export function renderEquipmentContent(panel, html) {
   }
 }
 
+const MODEL_PREVIEWS=new Set(['plastic-white','resin-white','chiavari-gold','chiavari-white','chiavari-mahogany','throne-king','throne-queen-tiffany','round-5ft','banquet-6ft','banquet-8ft','cocktail','fill-chill-4ft','dance-floor','lighting-bistro','lighting-chandelier','lighting-uplight-single']);
+export function equipmentPreview(id, className='equipment-model') {
+  if(!MODEL_PREVIEWS.has(id))return '';
+  return `<img class="${escapeHtml(className)}" src="/assets/equipment/${id}.png?v=20260919-furniture" width="480" height="360" alt="" aria-hidden="true" decoding="async" loading="lazy">`;
+}
 export function chairVisual(chair) {
+  const preview=equipmentPreview(chair.id,'chair-visual equipment-model');
+  if(preview)return preview;
   const frame=escapeHtml(chair.frameColor || '#f2f1ec'),accent=escapeHtml(chair.accentColor || '#f2f1ec');
   let back;
   if(chair.silhouette==='throne') back=`<path d="M31 70V30Q31 18 42 18Q50 1 58 18Q69 18 69 30V70Z" fill="${accent}" stroke-width="5"/><path d="M37 35L63 61M63 35L37 61" opacity=".3"/><path d="M22 66V83M78 66V83M22 68H32M68 68H78" stroke-width="5"/>`;
@@ -44,19 +52,25 @@ export function chairsDrawer(chairs, defaultId, objects) {
     return `<button type="button" class="item-card equipment-card${selected?' selected':''}" data-role="chair-card" data-id="${escapeHtml(chair.id)}" aria-pressed="${selected}" aria-label="${escapeHtml(chair.name)}: ${action}">${selected?'<span class="item-card-check" aria-hidden="true">✓</span>':''}${chairVisual(chair)}<span class="item-card-name">${escapeHtml(chair.name)}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${quantity?quantity+' in your layout':chair.isThrone?'Statement chair':'Dining chair'}</span><span class="equipment-add">${selected?'✓ Selected':action}</span></button>`;
   }).join('')}</div>`;
 }
+let previewSequence=0;
 export function tableVisual(table, chair = {}, placed) {
   const item=placed || {shape:table.shape,widthFt:table.diameterFt || table.widthFt,depthFt:table.diameterFt || table.depthFt,seatCount:table.seatsDefault};
-  const w=item.widthFt,d=item.depthFt,span=Math.max(w,d)+5;
-  const seats=chairPositions(item,chair).map(p=>`<rect x="${p.x-.55}" y="${p.y-.55}" width="1.1" height="1.1" rx=".18" fill="${escapeHtml(chair.frameColor || '#fff')}" stroke="#78897f" stroke-width=".08" transform="rotate(${p.angle*180/Math.PI} ${p.x} ${p.y})"/>`).join('');
-  const top=item.shape==='round'?`<ellipse cx="0" cy="0" rx="${w/2}" ry="${d/2}"/>`:`<rect x="${-w/2}" y="${-d/2}" width="${w}" height="${d}" rx=".2"/>`;
-  const color=item.linenId ? linenColorHex(item.linenColor) : table.silhouette==='fillchill-tub'?'#343d43':'#b99165';
-  return `<svg class="equipment-visual" aria-hidden="true" viewBox="${-span/2} ${-span/2} ${span} ${span}">${seats}<g fill="${color}" stroke="#837558" stroke-width=".10">${top}</g></svg>`;
+  const w=item.widthFt,d=item.depthFt,span=Math.max(w,d)+5,id='table-surface-'+(++previewSequence);
+  const cw=chair.seatWidthFt || 1.5,cd=chair.seatDepthFt || 1.5;
+  const seats=chairPositions(item,chair).map(p=>`<svg x="${p.x-cw/2}" y="${p.y-cd/2}" width="${cw}" height="${cd}" viewBox="0 0 100 100" style="--chair-frame:${escapeHtml(chair.frameColor || '#fff')};--chair-accent:${escapeHtml(chair.accentColor || '#fff')}" transform="rotate(${p.angle*180/Math.PI-90} ${p.x} ${p.y})">${chairPlanSvg(chair.silhouette)}</svg>`).join('');
+  const top=item.shape==='round'?`<ellipse cx="0" cy="0" rx="${w/2}" ry="${d/2}"/>`:`<rect x="${-w/2}" y="${-d/2}" width="${w}" height="${d}" rx=".14"/>`;
+  const partial=['linen-runner-9ft','linen-napkins'].includes(item.linenId);
+  const tub=table.silhouette==='fillchill-tub',color=item.linenId && !partial ? linenColorHex(item.linenColor) : tub || table.id==='banquet-6ft'?'#eeeee5':'#b99165';
+  const grain=item.linenId?'<path d="M0 0H1M0 0V1" stroke="#fff" stroke-opacity=".16" stroke-width=".02"/>':'<path d="M0 .08Q.25 .04 .5 .08T1 .08M0 .23Q.25 .19 .5 .23T1 .23" fill="none" stroke="#6e451f" stroke-opacity=".24" stroke-width=".018"/>';
+  const linenOverlay=partial ? `<rect x="${item.linenId==='linen-napkins'?-.35:w>=d?-w/2:-.55}" y="${item.linenId==='linen-napkins'?-.25:w>=d?-.55:-d/2}" width="${item.linenId==='linen-napkins'?.7:w>=d?w:1.1}" height="${item.linenId==='linen-napkins'?.5:w>=d?1.1:d}" fill="${linenColorHex(item.linenColor)}" stroke="#667363" stroke-opacity=".4" stroke-width=".025"/>` : '';
+  const basin=tub&&!item.linenId?`<rect x="${-w/2+.15}" y="${-d/2+.15}" width="${w-.3}" height="${d-.3}" rx=".12" fill="#d2d5ce" stroke="#929c90" stroke-width=".05"/><circle cx="${w*.3}" cy="0" r=".07" fill="#7a8477"/>`:'';
+  return `<svg class="equipment-visual" aria-hidden="true" viewBox="${-span/2} ${-span/2} ${span} ${span}"><defs><pattern id="${id}" width="${item.linenId ? .12 : 1}" height="${item.linenId ? .12 : .3}" patternUnits="userSpaceOnUse">${grain}</pattern></defs>${seats}<g fill="${color}" stroke="#706e5b" stroke-width=".055">${top}</g><g fill="url(#${id})" stroke="none">${tub?'':top}</g>${basin}${linenOverlay}</svg>`;
 }
 export function tableCard(table, chair, quantity) {
   const seats=table.seatsDefault || 0;
   const price=table.pricePerDay == null || seats && chair?.pricePerDay==null ? 'Confirm pricing' : '$'+(Number(table.pricePerDay)+seats*Number(chair?.pricePerDay || 0)).toFixed(2)+'/day';
   const included=seats ? `Table + ${seats} chairs` : 'Table only';
-  return `<button class="item-card equipment-card" data-role="table-card" data-id="${escapeHtml(table.id)}" aria-label="Add ${escapeHtml(table.name)}">${tableVisual(table,chair)}<span class="item-card-name">${escapeHtml(table.name)}</span><span class="item-card-desc">${table.seatsDefault ? table.seatsDefault+' seats' : 'Standing / service'}${quantity ? ' · '+quantity+' in layout' : ''}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${included}</span><span class="equipment-add">+ Add table</span></button>`;
+  return `<button class="item-card equipment-card" data-role="table-card" data-id="${escapeHtml(table.id)}" aria-label="Add ${escapeHtml(table.name)}">${equipmentPreview(table.id) || tableVisual(table,chair)}<span class="item-card-name">${escapeHtml(table.name)}</span><span class="item-card-desc">${table.seatsDefault ? table.seatsDefault+' seats' : 'Standing / service'}${quantity ? ' · '+quantity+' in layout' : ''}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${included}</span><span class="equipment-add">+ Add table</span></button>`;
 }
 export function tableControls(item, table, chairs, linens, matchingCount=1) {
   const esc=escapeHtml,max=Math.max(0,...(table.seatsOptions||[12]));

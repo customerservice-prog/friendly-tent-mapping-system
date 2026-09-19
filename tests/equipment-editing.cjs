@@ -22,7 +22,9 @@ const change=(role,value)=>{const el=d.querySelector(`[data-role="${role}"]`);el
  b.loadScene({tentId:'pole-20x20',chairId:'plastic-white',objects:initial});
  const objects=()=>JSON.parse(JSON.stringify(b.getScene().objects));
  click('[data-drawer="chairs"]');
- assert.equal(d.querySelectorAll('[data-role="chair-card"] svg').length,b.CHAIRS.length);
+ assert.equal(d.querySelectorAll('[data-role="chair-card"] img').length,b.CHAIRS.length);
+ for(const image of d.querySelectorAll('[data-role="chair-card"] img'))assert.ok(fs.existsSync(path.join(root,new URL(image.src).pathname)));
+ assert.ok(d.querySelectorAll('.plan2d-chair svg').length>=20);
  assert.match(d.getElementById('drawerBody').textContent,/3 seated tables \(20 chairs\)/);
  d.getElementById('drawerBody').scrollTop=180;
  click('[data-role="chair-card"][data-id="chiavari-gold"]');

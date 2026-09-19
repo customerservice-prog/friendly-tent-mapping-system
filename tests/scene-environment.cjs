@@ -29,6 +29,48 @@ const root=path.resolve(__dirname,'..');
   assert.ok(cloth.length>0);assert.ok(cloth.every(o=>o.material.color.getHexString()==='172c52'));
   module.namespace.disposeGroup(bare);module.namespace.disposeGroup(dressed);
  }
+ // Real mesh interaction and scale checks for the upgraded furniture.
+ const equipment=await load(path.join(root,'js/ui/equipment3d.js'));await equipment.evaluate();
+ const chairs=(await load(path.join(root,'js/data/chairs.js'))).namespace.CHAIRS;
+ const counts=new Set();
+ for(const definition of chairs){
+  const chair=equipment.namespace.makeChair(definition),bounds=new THREE.Box3().setFromObject(chair);
+  assert.ok(bounds.min.y>=-.01 && bounds.max.y>2.4 && bounds.max.y<5.5,definition.id+' has believable chair height');
+  let vertices=0;chair.traverse(o=>{if(!o.isMesh)return;vertices+=o.geometry.attributes.position.count;assert.ok(Array.from(o.geometry.attributes.position.array).every(Number.isFinite));});
+  counts.add(vertices);assert.ok(chair.children.length<=3,'chair details consolidated into at most three draws');
+  module.namespace.disposeGroup(chair);
+ }
+ assert.ok(counts.size>=4,'folding, resin, Chiavari and throne have distinct geometry');
+ const item={id:'seated',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,seatCount:8,chairId:'resin-white'};
+ const seated=equipment.namespace.makeTable(item),batches=seated.children.filter(o=>o.isInstancedMesh);
+ assert.equal(batches.length,3);assert.ok(batches.every(o=>o.count===8 && o.userData.itemId==='seated'));
+ const matrix=new THREE.Matrix4();batches[0].getMatrixAt(0,matrix);
+ const seatPosition=new THREE.Vector3().setFromMatrixPosition(matrix),backDirection=new THREE.Vector3(0,0,-1).transformDirection(matrix);
+ assert.ok(backDirection.dot(seatPosition.clone().normalize())>.99,'chairs face the table, with their backs outward');
+ seated.updateMatrixWorld(true);
+ const hit=new THREE.Raycaster(new THREE.Vector3(seatPosition.x,5,seatPosition.z),new THREE.Vector3(0,-1,0)).intersectObject(seated,true);
+ assert.equal(hit[0]?.object.userData.itemId,'seated','tapping instanced chairs selects their actual table');
+ assert.ok(seated.children.length<=7,'four fully seated tables fit within 28 furniture draws');
+ const profile=equipment.namespace.tableProfile;
+ assert.equal(profile({...item,linenId:'linen-round-90'}).drop,1.25);
+ assert.equal(profile({...item,linenId:'linen-round-120'}).drop,2.44);
+ assert.equal(profile({...item,tableId:'cocktail'}).height,3.5);
+ for(const linenId of ['linen-runner-9ft','linen-napkins']){
+  const table=equipment.namespace.makeTable({...item,seatCount:0,linenId});
+  const cloth=table.children.find(o=>o.material?.isMeshPhysicalMaterial);cloth.geometry.computeBoundingBox();
+  assert.ok(cloth.geometry.boundingBox.min.y>.45,'partial linens never become a floor-length tablecloth');
+  module.namespace.disposeGroup(table);
+ }
+ const floor=equipment.namespace.makeDanceFloor([{id:'a',x:0,y:0,widthFt:3,depthFt:3},{id:'b',x:6,y:0,widthFt:3,depthFt:3}],{widthFt:9,lengthFt:3});floor.updateMatrixWorld(true);
+ const ray=new THREE.Raycaster(new THREE.Vector3(0,5,0),new THREE.Vector3(0,-1,0));
+ assert.equal(ray.intersectObject(floor,true).length,0,'a gap between floor sections must stay empty');
+ ray.set(new THREE.Vector3(-3,5,0),new THREE.Vector3(0,-1,0));assert.ok(ray.intersectObject(floor,true).length>0);
+ assert.equal(floor.children.length,5);
+ const light=view.namespace.makeLighting({id:'pole-20x20',type:'pole',widthFt:20,lengthFt:20},'lighting-chandelier');
+ const bulb=light.children.find(o=>o.material?.emissive?.getHex());assert.ok(bulb);
+ light.userData.setNight(true);assert.equal(bulb.material.emissiveIntensity,3);light.userData.setNight(false);assert.equal(bulb.material.emissiveIntensity,.25);
+ for(const group of [seated,floor,light])module.namespace.disposeGroup(group);
+ console.log('PASS furniture: distinct chair geometry, seating orientation and selectable instances, scale/linen length, floor gaps, bounded draw calls, day/night lighting, disposal');
  console.log('PASS 3D table geometry: removing linen removes cloth; selected linen uses its exact color on round and rectangular tables (not visual GPU QA)');
 
 })().catch(e=>{console.error(e);process.exitCode=1;});

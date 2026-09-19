@@ -4,6 +4,7 @@
 // default editing surface: it is easier to scan and arrange a layout from
 // directly above than in a 3D perspective view.
 
+import { chairPlanSvg } from './equipment-symbols.js';
 import { chairPositions } from '../core/seating.js';
 import { byId as chairById } from '../data/chairs.js';
 import { byId as tableById } from '../data/tables.js';
@@ -96,40 +97,6 @@ function inspectorOverlap() {
   return { w: 0, h: 0 };
 }
 
-function chairIconSvg(silhouette) {
-  if (silhouette === 'resin') {
-    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' +
-      '<ellipse cx="50" cy="42" rx="38" ry="34" fill="var(--chair-frame)" stroke="rgba(0,0,0,0.3)" stroke-width="3"/>' +
-      '<path d="M20 70 Q50 95 80 70" fill="none" stroke="rgba(0,0,0,0.35)" stroke-width="5" stroke-linecap="round"/>' +
-      '</svg>';
-  }
-  if (silhouette === 'chiavari') {
-    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' +
-      '<path d="M26 64 Q50 92 74 64" fill="none" stroke="var(--chair-frame)" stroke-width="4" stroke-linecap="round"/>' +
-      '<circle cx="50" cy="44" r="25" fill="var(--chair-accent)" stroke="var(--chair-frame)" stroke-width="5"/>' +
-      '<circle cx="17" cy="26" r="3" fill="var(--chair-frame)"/>' +
-      '<circle cx="83" cy="26" r="3" fill="var(--chair-frame)"/>' +
-      '<circle cx="17" cy="62" r="3" fill="var(--chair-frame)"/>' +
-      '<circle cx="83" cy="62" r="3" fill="var(--chair-frame)"/>' +
-      '</svg>';
-  }
-  if (silhouette === 'throne') {
-    return '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' +
-      '<path d="M6 40 Q6 4 50 4 Q94 4 94 40 L94 46 Q50 30 6 46 Z" fill="var(--chair-frame)" stroke="rgba(0,0,0,0.3)" stroke-width="2"/>' +
-      '<rect x="18" y="38" width="64" height="46" rx="10" fill="var(--chair-accent)" stroke="var(--chair-frame)" stroke-width="4"/>' +
-      '<rect x="4" y="46" width="14" height="30" rx="6" fill="var(--chair-frame)"/>' +
-      '<rect x="82" y="46" width="14" height="30" rx="6" fill="var(--chair-frame)"/>' +
-      '<circle cx="50" cy="10" r="5" fill="var(--chair-frame)"/>' +
-      '</svg>';
-  }
-  return '<svg viewBox="0 0 100 100" preserveAspectRatio="none">' +
-    '<rect x="14" y="10" width="72" height="58" rx="10" fill="var(--chair-frame)" stroke="rgba(0,0,0,0.35)" stroke-width="3"/>' +
-    '<rect x="24" y="64" width="52" height="16" rx="4" fill="var(--chair-frame)" stroke="rgba(0,0,0,0.35)" stroke-width="3"/>' +
-    '<line x1="16" y1="70" x2="6" y2="92" stroke="rgba(0,0,0,0.45)" stroke-width="4"/>' +
-    '<line x1="84" y1="70" x2="94" y2="92" stroke="rgba(0,0,0,0.45)" stroke-width="4"/>' +
-    '</svg>';
-}
-
 function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
   const count = item.seatCount || 0;
   if (!count) return;
@@ -154,7 +121,7 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
     dot.style.setProperty('--chair-frame', frameColor);
     dot.style.setProperty('--chair-accent', accentColor);
     dot.style.transform = 'translate(-50%, -50%) rotate(' + bearingDeg + 'deg)';
-    dot.innerHTML = chairIconSvg(silhouette);
+    dot.innerHTML = chairPlanSvg(silhouette);
     host.appendChild(dot);
   }
 }
@@ -352,6 +319,7 @@ renderLighting(data, tent);
   wrap.style.width = (dispSize.w * pxPerFt) + 'px';
   wrap.style.height = (dispSize.d * pxPerFt) + 'px';
   wrap.dataset.itemId = item.id;
+  if(tableDef)wrap.dataset.tableId=tableDef.id;
   wrap.tabIndex = 0;
   wrap.setAttribute('role','button');
   wrap.setAttribute('aria-label',(isDance?'Dance floor section':(tableDef?.name||'Table'))+' · '+(item.seatCount||0)+' seats');
@@ -359,8 +327,13 @@ renderLighting(data, tent);
 
                              const top = document.createElement('div');
   top.className = 'plan2d-table-top';
-  top.innerHTML = tableTopDetailHtml(silhouette);
-  if(item.linenId)top.style.background=linenColorHex(item.linenColor);
+  top.innerHTML = isDance ? '<span class="parquet-quadrants"><i></i><i></i><i></i><i></i></span>' : item.linenId ? '' : tableTopDetailHtml(silhouette);
+  if(['linen-runner-9ft','linen-napkins'].includes(item.linenId)){
+    const accent=document.createElement('span');accent.className=item.linenId==='linen-napkins'?'plan2d-napkin':'plan2d-runner';
+    accent.style.background=linenColorHex(item.linenColor);
+    if(item.linenId==='linen-runner-9ft'){accent.style.width=(Math.max(dispSize.w,dispSize.d)*pxPerFt)+'px';accent.style.height=(1.1*pxPerFt)+'px';if(dispSize.d>dispSize.w)accent.style.transform='translate(-50%,-50%) rotate(90deg)';}
+    top.appendChild(accent);
+  }else if(item.linenId){top.classList.add('has-linen');top.style.background=linenColorHex(item.linenColor);}
   const label = document.createElement('span');
   label.className = 'plan2d-table-label';
   if (isDance) {

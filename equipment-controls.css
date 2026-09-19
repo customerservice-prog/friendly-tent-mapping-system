@@ -108,3 +108,31 @@ body:has(.inspector-panel:not([hidden])) .rs-beta { display:none; }
   .ts-header h2 { font-size:17px; margin:0; }
   .ts-footer { padding:6px 16px; }
 }
+
+/* Detailed model cards and quieter, legible overhead equipment. */
+.equipment-model { display:block; width:100%; height:auto; aspect-ratio:4/3; object-fit:contain; border-radius:10px; background:#edf1ea; }
+.chair-visual.equipment-model { height:120px; }
+.item-card:has(.equipment-model) { display:flex; flex-direction:column; text-align:left; gap:5px; }
+.item-card:has(.equipment-model) .item-card-price { margin-top:auto; }
+.equipment-visual { background:radial-gradient(ellipse,#f9faf6,#e9eee6); }
+.plan2d-chair svg { filter:drop-shadow(0 1px 1px #344b372b); }
+.plan2d-object:not(.dance) .plan2d-table-top { border-width:1px; background-color:#c39c6f; background-image:repeating-linear-gradient(4deg,#77472216 0 1px,transparent 1px 4px),linear-gradient(135deg,#ffffff2b,transparent); box-shadow:inset 0 0 0 1px #ffffff30,0 2px 3px #31413230; }
+.plan2d-object:not(.dance) .plan2d-table-top.has-linen::after { content:''; position:absolute; inset:0; background-image:repeating-linear-gradient(0deg,#ffffff12 0 1px,transparent 1px 3px),repeating-linear-gradient(90deg,#00000008 0 1px,transparent 1px 3px),radial-gradient(ellipse at 35% 25%,#ffffff22,transparent); pointer-events:none; }
+.plan2d-table-label { position:relative; z-index:2; border-radius:4px; padding:2px 4px; background:#ffffffe0; color:#314b38; font-size:10px; line-height:1.2; }
+.plan2d-table-label:empty { display:none; }
+.plan2d-object.plan2d-table--fillchill-tub .plan2d-table-top { background:#efeee6; border-color:#97a190; }
+.plan2d-table-basin { background:#d7d9d1; box-shadow:inset 0 2px 3px #46523d40; }
+.plan2d-object.dance .plan2d-table-top { background:#ae8150; border:.5px solid #785b3f; }
+.plan2d-object.dance .plan2d-table-top::after { display:none; animation:none; }
+.parquet-quadrants { position:absolute; inset:0; display:grid; grid-template-columns:1fr 1fr; grid-template-rows:1fr 1fr; }
+.parquet-quadrants i { background:repeating-linear-gradient(0deg,#b98e5c 0 14%,#a57747 14% 16.66%); }
+.parquet-quadrants i:nth-child(2),.parquet-quadrants i:nth-child(3) { background:repeating-linear-gradient(90deg,#c29a65 0 14%,#a57747 14% 16.66%); }
+.plan2d-object.selected .plan2d-table-top { border-color:var(--brand-primary); box-shadow:0 0 0 3px #2f7a3c4d; }
+.plan2d-object.severity-warning .plan2d-table-top { border-color:var(--warn); box-shadow:0 0 0 3px #b4530940; }
+.plan2d-object.severity-error .plan2d-table-top { border-color:var(--danger); box-shadow:0 0 0 3px #b91c1c47; }
+
+.plan2d-napkin,.plan2d-runner { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); border:1px solid #56634d30; z-index:1; }
+.plan2d-runner { width:102%; height:22%; }
+.plan2d-napkin { width:15%; height:11%; transform:translate(-50%,-50%) rotate(12deg); }
+
+.plan2d-object[data-table-id="banquet-6ft"] .plan2d-table-top:not(.has-linen) { background:#eeeede; }

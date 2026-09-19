@@ -57,7 +57,7 @@ export const CHAIRS = [
   }),
   buildChair('resin-white', 'White Resin Folding Chair', CHAIR_CATEGORIES.STANDARD, 4.75, {
     silhouette: CHAIR_SILHOUETTES.RESIN,
-    frameColor: '#f1e8d5',
+    frameColor: '#f3f2eb',
     seatWidthFt: 1.55, seatDepthFt: 1.6, backHeightFt: 2.75,
     catalogImage: 'white-resin-folding-chair',
   }),

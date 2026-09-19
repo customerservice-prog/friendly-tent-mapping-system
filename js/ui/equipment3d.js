@@ -1,0 +1,192 @@
+// Detailed rental geometry, in feet. The existing layout store remains authoritative.
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { chairPositions } from '../core/seating.js';
+import { byId as chairById } from '../data/chairs.js';
+import { byId as tableById } from '../data/tables.js';
+import { linenColorHex } from '../data/linens.js';
+
+const UP=new THREE.Vector3(0,1,0);
+const mat=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:.65,...extra});
+function add(g,geometry,material,x=0,y=0,z=0,name='') {const mesh=new THREE.Mesh(geometry,material);mesh.position.set(x,y,z);mesh.name=name;mesh.castShadow=mesh.receiveShadow=true;g.add(mesh);return mesh;}
+function box(g,w,h,d,m,x=0,y=0,z=0,r=.025) {return add(g,r?new RoundedBoxGeometry(w,h,d,1,r):new THREE.BoxGeometry(w,h,d),m,x,y,z);}
+function rod(g,a,b,r,m,segments=8){const from=new THREE.Vector3(...a),to=new THREE.Vector3(...b),delta=to.clone().sub(from);const mesh=add(g,new THREE.CylinderGeometry(r,r,delta.length(),segments),m);mesh.position.copy(from).add(to).multiplyScalar(.5);mesh.quaternion.setFromUnitVectors(UP,delta.normalize());return mesh;}
+function roundPath(w,h,r,Path=THREE.Shape){const p=new Path(),x=-w/2,y=-h/2;p.moveTo(x+r,y);p.lineTo(x+w-r,y);p.quadraticCurveTo(x+w,y,x+w,y+r);p.lineTo(x+w,y+h-r);p.quadraticCurveTo(x+w,y+h,x+w-r,y+h);p.lineTo(x+r,y+h);p.quadraticCurveTo(x,y+h,x,y+h-r);p.lineTo(x,y+r);p.quadraticCurveTo(x,y,x+r,y);return p;}
+function panel(g,w,h,depth,m,x,y,z,{handle=false,bend=0}={}) {
+  const shape=roundPath(w,h,Math.min(.13,h/3));
+  if(handle){const hole=roundPath(w*.4,.09,.04,THREE.Path);shape.holes.push(hole);}
+  const geometry=new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelSegments:1,steps:1,bevelSize:.018,bevelThickness:.014,curveSegments:5});
+  if(bend){const p=geometry.attributes.position;for(let i=0;i<p.count;i++)p.setZ(i,p.getZ(i)+bend*Math.pow(p.getX(i)/(w/2),2));geometry.computeVertexNormals();}
+  return add(g,geometry,m,x,y,z-depth/2);
+}
+// Consolidate small details into a handful of draws per chair/table/floor.
+export function mergeParts(group) {
+  group.updateMatrixWorld(true);const buckets=new Map(),originals=new Set();
+  group.traverse(o=>{if(!o.isMesh)return;const geometry=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();geometry.applyMatrix4(o.matrixWorld);originals.add(o.geometry);const list=buckets.get(o.material)||[];list.push(geometry);buckets.set(o.material,list);});
+  group.clear();
+  for(const [material,parts] of buckets){const geometry=mergeGeometries(parts,false);parts.forEach(p=>p.dispose());const mesh=add(group,geometry,material);mesh.name=material.name || 'Equipment detail';}
+  originals.forEach(g=>g.dispose());return group;
+}
+export function makeChair(def={}) {
+  const g=new THREE.Group(),w=def.seatWidthFt||1.5,d=def.seatDepthFt||1.5,h=def.backHeightFt||2.6,seatY=1.48;
+  g.name=def.name || 'Chair';g.userData.silhouette=def.silhouette || 'folding';
+  const gold=def.silhouette==='throne'||def.id==='chiavari-gold';
+  const frame=mat(def.frameColor||'#f4f3ed',{roughness:gold?.3:.48,metalness:gold?.55:.05});frame.name='Chair frame';
+  const cushion=mat(def.accentColor||def.frameColor||'#f4f3ed',{roughness:.88});cushion.name='Seat cushion';
+  const feet=mat('#393c3b');feet.name='Non-marking feet';
+  box(g,w,.12,d,cushion,0,seatY,0,.055);
+  if(def.silhouette==='chiavari') {
+    // Open spindle back, turned legs and stretchers distinguish Chiavari seating.
+    for(const x of [-w*.43,w*.43]){
+      rod(g,[x,0,-d*.4],[x,h,-d*.42],.038,frame);
+      rod(g,[x,0,d*.42],[x,seatY,d*.4],.045,frame);
+      rod(g,[x,.55,-d*.4],[x,.55,d*.4],.024,frame);
+      for(const y of [.25,.65,1.1,1.85,h-.35])add(g,new THREE.SphereGeometry(.061,8,5),frame,x,y,-d*.42);
+    }
+    for(const y of [seatY+.14,2.02,h-.09])rod(g,[-w*.43,y,-d*.42],[w*.43,y,-d*.42],.036,frame);
+    for(const x of [-w*.23,0,w*.23])rod(g,[x,2.02,-d*.42],[x,h-.09,-d*.42],.023,frame);
+    rod(g,[-w*.43,.48,d*.4],[w*.43,.48,d*.4],.024,frame);
+  } else if(def.silhouette==='throne') {
+    const backH=h-seatY-.1;
+    panel(g,w*.92,backH,.18,frame,0,seatY+backH/2,-d*.43,{bend:.12});
+    panel(g,w*.76,backH-.28,.19,cushion,0,seatY+backH/2,-d*.39,{bend:.07});
+    for(const x of [-w*.25,0,w*.25])for(const y of [seatY+.5,seatY+1.1,seatY+1.7])if(y<h-.2)add(g,new THREE.SphereGeometry(.035,7,5),frame,x,y,-d*.28);
+    for(const x of [-w*.46,w*.46]){
+      rod(g,[x,0,d*.34],[x,seatY+.55,d*.34],.075,frame);
+      rod(g,[x,.05,-d*.36],[x,h-.12,-d*.4],.065,frame);
+      box(g,.16,.14,d*.83,frame,x,seatY+.6,0,.06);
+      add(g,new THREE.SphereGeometry(.13,10,6),frame,x,h-.04,-d*.4);
+    }
+    add(g,new THREE.SphereGeometry(.16,10,6),frame,0,h-.02,-d*.4);
+  } else {
+    const resin=def.silhouette==='resin',legR=resin?.047:.035;
+    // True crossing folding supports, hinge hardware and a curved back panel.
+    for(const x of [-w*.42,w*.42]){
+      rod(g,[x,.055,d*.5],[x,seatY+.02,-d*.35],legR,frame);
+      rod(g,[x,.055,-d*.48],[x,seatY+.02,d*.35],legR,frame);
+      rod(g,[x,seatY-.1,-d*.35],[x,h-.10,-d*.50],legR,frame);
+      const hinge=add(g,new THREE.CylinderGeometry(.075,.075,.06,10),feet,x,.9,0);hinge.rotation.z=Math.PI/2;
+    }
+    rod(g,[-w*.42,.35,d*.36],[w*.42,.35,d*.36],.026,frame);
+    rod(g,[-w*.42,seatY-.12,-d*.32],[w*.42,seatY-.12,-d*.32],.027,frame);
+    panel(g,w*.91,resin?.32:.48,.075,frame,0,h-.24,-d*.48,{handle:!resin,bend:.075});
+    if(resin)box(g,w*.88,.045,d*.89,cushion,0,seatY+.082,0,.02);
+  }
+  for(const x of [-w*.42,w*.42])for(const z of [-d*.43,d*.43])add(g,new THREE.CylinderGeometry(.058,.067,.065,8),feet,x,.032,z);
+  return mergeParts(g);
+}
+function texture(draw,w=256,h=256){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.wrapS=t.wrapT=THREE.RepeatWrapping;t.anisotropy=4;return t;}
+function woodMap(){return texture((c,w,h)=>{c.fillStyle='#d6b58c';c.fillRect(0,0,w,h);for(let i=0;i<100;i++){const y=(i*37)%h;c.strokeStyle=i%3?'rgba(89,52,20,.13)':'rgba(255,243,204,.22)';c.lineWidth=.4+(i%3)*.3;c.beginPath();c.moveTo(0,y);c.bezierCurveTo(w*.3,y+Math.sin(i)*4,w*.7,y-Math.cos(i)*5,w,y+Math.sin(i)*2);c.stroke();}},512,128);}
+function fabricMaterial(color){const map=texture((c,w,h)=>{c.fillStyle='#fff';c.fillRect(0,0,w,h);for(let i=0;i<w;i+=4){c.fillStyle='rgba(65,65,65,.045)';c.fillRect(i,0,1,h);c.fillRect(0,i,w,1);}},128,128);map.repeat.set(6,6);const m=new THREE.MeshPhysicalMaterial({color:linenColorHex(color),map,roughness:.94,sheen:.65,sheenRoughness:.9,side:THREE.DoubleSide});m.name='Linen fabric';return m;}
+export function tableProfile(o) {
+  const definition=tableById(o.tableId),silhouette=definition?.silhouette || (o.shape==='round'?'dining-round':'banquet-rect');
+  const height=silhouette==='cocktail-pedestal'?3.5:2.5,w=o.widthFt||5,d=o.depthFt||5;
+  let drop=height-.06,sideDrop=drop,endDrop=drop;
+  const roundSize={'linen-round-90':90,'linen-round-108':108,'linen-round-120':120}[o.linenId];
+  if(roundSize)drop=Math.max(0,Math.min(drop,(roundSize/12-w)/2));
+  if(o.linenId==='linen-banquet-54x120'){sideDrop=Math.min(drop,(4.5-Math.min(w,d))/2);endDrop=Math.min(drop,(10-Math.max(w,d))/2);}
+  if(o.linenId==='linen-banquet-72x120'){sideDrop=Math.min(drop,(6-Math.min(w,d))/2);endDrop=Math.min(drop,(10-Math.max(w,d))/2);}
+  return {silhouette,height,w,d,drop,sideDrop:Math.max(0,sideDrop),endDrop:Math.max(0,endDrop),stretch:/spandex|cocktail-cover/.test(o.linenId||'')};
+}
+function drape(g,o,p,m) {
+  const round=o.shape==='round',segments=round?72:80,rows=12,vertices=[],uv=[],indices=[];
+  for(let j=0;j<=rows;j++)for(let i=0;i<=segments;i++){
+    const t=j/rows,a=i/segments*Math.PI*2;
+    let x,z,nx,nz,drop;
+    if(round){nx=Math.cos(a);nz=Math.sin(a);x=nx*p.w/2;z=nz*p.d/2;drop=p.drop;}
+    else {const perimeter=2*(p.w+p.d),s=i/segments*perimeter;
+      if(s<p.w){x=-p.w/2+s;z=-p.d/2;nx=0;nz=-1;}
+      else if(s<p.w+p.d){x=p.w/2;z=-p.d/2+s-p.w;nx=1;nz=0;}
+      else if(s<2*p.w+p.d){x=p.w/2-(s-p.w-p.d);z=p.d/2;nx=0;nz=1;}
+      else{x=-p.w/2;z=p.d/2-(s-2*p.w-p.d);nx=-1;nz=0;}
+      const atLongEdge=p.w>=p.d?nz!==0:nx!==0;drop=atLongEdge?p.sideDrop:p.endDrop;
+    }
+    const fold=Math.sin(a*(round?18:24)+.4)*.055*Math.pow(t,.65)+Math.sin(a*7)*.015*t;
+    const inset=.04+(p.stretch?-.48*Math.sin(Math.PI*Math.max(0,(t-.06)/.94)):.04*t);
+    x+=nx*(fold+inset);z+=nz*(fold+inset);
+    vertices.push(x,p.height+.015-drop*t,z);uv.push(i/segments,t);
+    if(i<segments&&j<rows){const k=j*(segments+1)+i;indices.push(k,k+1,k+segments+1,k+1,k+segments+2,k+segments+1);}
+  }
+  const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(vertices,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));geometry.setIndex(indices);geometry.computeVertexNormals();add(g,geometry,m,0,0,0,'Draped linen');
+  if(round)add(g,new THREE.CylinderGeometry(p.w/2+.045,p.w/2+.045,.025,72),m,0,p.height+.02,0,'Linen tabletop');
+  else box(g,p.w+.09,.025,p.d+.09,m,0,p.height+.02,0,.012);
+}
+function tableLegs(g,p,metal,feet){
+  const long=Math.max(p.w,p.d),short=Math.min(p.w,p.d),turned=p.d>p.w;
+  const position=(x,y,z)=>turned?[z,y,x]:[x,y,z];
+  for(const x of [-long*.29,long*.29]){
+    for(const z of [-short*.31,short*.31])rod(g,position(x,.06,z),position(x,p.height-.1,z*.82),.055,metal);
+    rod(g,position(x,.22,-short*.31),position(x,.22,short*.31),.052,metal);
+    rod(g,position(x,p.height-.5,0),position(x-Math.sign(x)*.8,p.height-.1,0),.035,metal);
+    for(const z of [-short*.31,short*.31]){const v=position(x,.04,z);box(g,.16,.08,.16,feet,...v,.025);}
+  }
+}
+export function makeTable(o) {
+  const p=tableProfile(o),g=new THREE.Group(),wood=mat('#fff',{map:woodMap(),roughness:.62}),metal=mat('#6d7475',{metalness:.65,roughness:.32}),feet=mat('#303536');
+  g.name=tableById(o.tableId)?.name || 'Table';g.userData={itemId:o.id,kind:'table',profile:p};
+  const plastic=p.silhouette==='banquet-rect'&&o.tableId==='banquet-6ft',topMat=plastic?mat('#f3f1e7',{roughness:.62}):wood;
+  wood.name='Wood tabletop';metal.name='Folding table supports';feet.name='Table feet';
+  if(p.silhouette==='fillchill-tub'){
+    const tub=mat('#ecebe4',{roughness:.43});tub.name='Fill and Chill basin';
+    box(g,p.w,.12,p.d,tub,0,p.height-.38,0,.055);
+    for(const z of [-p.d/2,p.d/2])box(g,p.w,.4,.12,tub,0,p.height-.18,z,.04);
+    for(const x of [-p.w/2,p.w/2])box(g,.12,.4,p.d,tub,x,p.height-.18,0,.04);
+    add(g,new THREE.CylinderGeometry(.07,.07,.016,12),metal,p.w*.3,p.height-.31,0,'Basin drain');
+    tableLegs(g,{...p,height:p.height-.4},metal,feet);
+  } else if(p.silhouette==='cocktail-pedestal'){
+    add(g,new THREE.CylinderGeometry(p.w/2,p.w/2,.1,48),wood,0,p.height-.05,0);
+    rod(g,[0,.08,0],[0,p.height-.1,0],.075,metal,12);
+    for(const a of [0,Math.PI/2]){const foot=box(g,p.w*.85,.1,.17,metal,0,.065,0,.04);foot.rotation.y=a;}
+  } else {
+    if(o.shape==='round')add(g,new THREE.CylinderGeometry(p.w/2,p.w/2,.10,64),topMat,0,p.height-.05,0);
+    else box(g,p.w,.10,p.d,topMat,0,p.height-.05,0,.045);
+    tableLegs(g,p,metal,feet);
+  }
+  if(o.linenId){
+    const fabric=fabricMaterial(o.linenColor || 'White');
+    if(o.linenId==='linen-napkins'){
+      // This catalog item is priced individually; represent the single selected napkin.
+      const napkin=box(g,.7,.035,.5,fabric,0,p.height+.025,0,.014);napkin.rotation.y=.22;
+    }else if(o.linenId==='linen-runner-9ft'){
+      const alongX=p.w>=p.d,length=Math.max(p.w,p.d),width=1.1,drop=Math.max(0,(9-length)/2);
+      box(g,alongX?length:width,.025,alongX?width:length,fabric,0,p.height+.025,0,.01);
+      for(const side of [-1,1])box(g,alongX?.028:width,drop,alongX?width:.028,fabric,alongX?side*(length/2+.018):0,p.height-drop/2,alongX?0:side*(length/2+.018),.008);
+    }else drape(g,o,p,fabric);
+  }
+  mergeParts(g);
+  const chairDef=chairById(o.chairId)||{},positions=chairPositions(o,chairDef);
+  if(positions.length){
+    const prototype=makeChair(chairDef),dummy=new THREE.Object3D();
+    for(const part of prototype.children){
+      const batch=new THREE.InstancedMesh(part.geometry,part.material,positions.length);batch.name=part.name;
+      positions.forEach((point,i)=>{dummy.position.set(point.x,0,point.y);dummy.rotation.set(0,-point.angle-Math.PI/2,0);dummy.updateMatrix();batch.setMatrixAt(i,dummy.matrix);});
+      batch.castShadow=batch.receiveShadow=true;batch.instanceMatrix.needsUpdate=true;g.add(batch);
+    }
+    prototype.clear();
+  }
+  g.traverse(mesh=>{mesh.userData.itemId=o.id;});return g;
+}
+export function makeDanceFloor(items,tent) {
+  if(!items.length)return null;
+  const minX=Math.min(...items.map(o=>o.x)),minY=Math.min(...items.map(o=>o.y)),maxX=Math.max(...items.map(o=>o.x+o.widthFt)),maxY=Math.max(...items.map(o=>o.y+o.depthFt)),cx=(minX+maxX)/2,cz=(minY+maxY)/2;
+  const g=new THREE.Group(),grain=woodMap(),woods=['#ae7847','#bf8c56','#c59663'].map(color=>mat(color,{map:grain,roughness:.4,metalness:.02})),rim=mat('#8d9493',{metalness:.65,roughness:.32}),base=mat('#42392f');
+  woods.forEach(m=>m.name='Parquet oak');rim.name='Floor edge trim';
+  const occupied=(x,y)=>items.some(o=>x>o.x+.001&&x<o.x+o.widthFt-.001&&y>o.y+.001&&y<o.y+o.depthFt-.001);
+  for(const o of items){const x=o.x+o.widthFt/2-cx,z=o.y+o.depthFt/2-cz;
+    box(g,o.widthFt,.10,o.depthFt,base,x,.05,z,0);
+    for(let qx=0;qx<2;qx++)for(let qz=0;qz<2;qz++)for(let strip=0;strip<6;strip++){
+      const turned=(qx+qz)%2,tw=o.widthFt/2,td=o.depthFt/2;
+      const sx=turned?tw/6:tw,sz=turned?td:td/6;
+      const px=x-o.widthFt/2+qx*tw+(turned?(strip+.5)*sx:tw/2),pz=z-o.depthFt/2+qz*td+(turned?td/2:(strip+.5)*sz);
+      const plank=box(g,sx-.009,.027,sz-.009,woods[(strip+qx+qz)%3],px,.114,pz,0);
+      if(turned){plank.geometry.dispose();plank.geometry=new THREE.BoxGeometry(sz-.009,.027,sx-.009);plank.rotation.y=Math.PI/2;}
+    }
+    for(const side of [-1,1]){
+      if(!occupied(o.x+o.widthFt/2,o.y+(side<0?-.02:o.depthFt+.02)))box(g,o.widthFt+.08,.09,.12,rim,x,.06,z+side*o.depthFt/2,.02);
+      if(!occupied(o.x+(side<0?-.02:o.widthFt+.02),o.y+o.depthFt/2))box(g,.12,.09,o.depthFt+.08,rim,x+side*o.widthFt/2,.06,z,.02);
+    }
+  }
+  mergeParts(g);g.position.set(cx-tent.widthFt/2,0,cz-tent.lengthFt/2);g.name='Parquet dance floor';
+  g.userData={kind:'danceGroup',itemIds:items.map(o=>o.id)};g.traverse(q=>{q.userData.kind='danceGroup';q.userData.itemIds=g.userData.itemIds;});return g;
+}
