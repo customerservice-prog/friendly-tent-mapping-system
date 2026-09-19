@@ -58,24 +58,29 @@ export function tableCard(table, chair, quantity) {
   const included=seats ? `Table + ${seats} chairs` : 'Table only';
   return `<button class="item-card equipment-card" data-role="table-card" data-id="${escapeHtml(table.id)}" aria-label="Add ${escapeHtml(table.name)}">${tableVisual(table,chair)}<span class="item-card-name">${escapeHtml(table.name)}</span><span class="item-card-desc">${table.seatsDefault ? table.seatsDefault+' seats' : 'Standing / service'}${quantity ? ' · '+quantity+' in layout' : ''}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${included}</span><span class="equipment-add">+ Add table</span></button>`;
 }
-export function tableInspector(item, table, chairs, linens, matchingCount=1) {
-  const esc=escapeHtml,chair=chairs.find(c=>c.id===item.chairId) || {},max=Math.max(0,...(table.seatsOptions||[12]));
+export function tableControls(item, table, chairs, linens, matchingCount=1) {
+  const esc=escapeHtml,max=Math.max(0,...(table.seatsOptions||[12]));
   const options=(list,current)=>list.map(x=>`<option value="${esc(x.id)}"${x.id===current?' selected':''}>${esc(x.name)}</option>`).join('');
   const linen=linens.find(l=>l.id===item.linenId),color=item.linenColor || 'White';
   const colors=linen?.colors || ['White'];
-  return `<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button>
-    <h3 class="inspector-title">${esc(table.name)}</h3>${tableVisual(table,chair,item)}
-    <div class="table-seat-controls">
+  return `${max>0?`<div class="table-seat-controls">
       <label class="equipment-field">Chairs<select data-role="insp-chair" data-id="${esc(item.id)}">${options(chairs,item.chairId)}</select></label>
       <div class="equipment-field"><span>Seats</span><div class="seat-stepper">
         <button type="button" data-role="insp-seats" data-delta="-1" data-id="${esc(item.id)}" aria-label="Remove one seat"${item.seatCount<=0?' disabled':''}>−</button>
         <output aria-label="Seat count">${item.seatCount || 0}</output>
         <button type="button" data-role="insp-seats" data-delta="1" data-id="${esc(item.id)}" aria-label="Add one seat"${item.seatCount>=max?' disabled':''}>+</button>
       </div></div>
-    </div>
+    </div>`:'<p class="equipment-note">Standing / service table · no chairs</p>'}
     <label class="equipment-field">Linen<select data-role="insp-linen" data-id="${esc(item.id)}"><option value="">No linen</option>${options(linens,item.linenId)}</select></label>
     ${item.linenId?`<div class="equipment-field"><span>Linen color · ${esc(color)}</span><div class="linen-swatches" role="group" aria-label="Linen color" data-scroll-key="linen-colors">${colors.map(c=>`<button type="button" class="linen-swatch" style="--swatch:${linenColorHex(c)}" data-role="insp-linen-swatch" data-id="${esc(item.id)}" data-color="${esc(c)}" aria-label="${esc(c)}" title="${esc(c)}" aria-pressed="${c===color}"><span aria-hidden="true">${c===color?'✓':''}</span></button>`).join('')}</div></div>`:''}
     ${matchingCount>1?`<div class="match-table-style"><button type="button" class="btn-secondary" data-role="insp-match-tables" data-id="${esc(item.id)}">Use chairs &amp; linen on all ${matchingCount} matching tables</button><span>Table positions and seat counts stay the same.</span></div>`:''}
+    `;
+}
+export function tableInspector(item, table, chairs, linens, matchingCount=1) {
+  const esc=escapeHtml,chair=chairs.find(c=>c.id===item.chairId) || {};
+  return `<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button>
+    <h3 class="inspector-title">${esc(table.name)}</h3>${tableVisual(table,chair,item)}
+    ${tableControls(item,table,chairs,linens,matchingCount)}
     <div class="inspector-actions equipment-actions"><button class="btn-secondary" data-role="insp-rotate" data-id="${esc(item.id)}">Rotate 90°</button><button class="btn-secondary" data-role="insp-duplicate" data-id="${esc(item.id)}">Duplicate</button><button class="btn-danger" data-role="insp-delete" data-id="${esc(item.id)}">Delete</button></div>
     <button class="btn-tertiary" data-role="insp-design-table" data-id="${esc(item.id)}">Table details</button>
     <p class="equipment-note">Drag this table on the plan to move it.</p>`;

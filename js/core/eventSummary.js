@@ -1,5 +1,5 @@
 // One equipment list shared by on-screen review, print/share and quote requests.
-export function summarizeEvent(scene, catalog) {
+export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
   const lines = [], objects = scene.objects || [];
   const find = (list,id) => (list || []).find(item => item.id === id);
   const price = value => value == null || value === '' || !Number.isFinite(Number(value)) ? null : Number(value);
@@ -9,7 +9,7 @@ export function summarizeEvent(scene, catalog) {
     lines.push({label:label || item && item.name || fallback,qty,unitPrice,amount:unitPrice == null ? null : unitPrice * qty,productId:item && item.productId || null,category});
   }
   const tent = find(catalog.tents,scene.tentId);
-  add(tent,1,'tent','Tent — confirm selection');
+  if(includeTent) add(tent,1,'tent','Tent — confirm selection');
   const tables = new Map(), chairs = new Map(), linens = new Map();
   for(const object of objects) {
     if(object.kind !== 'table') continue;

@@ -1,19 +1,82 @@
-// RentSketch table-detail studio: focused tabletop editor shared by 2D/3D.
-// Decor fields are visual-only unless a future tenant catalog maps them to rentable SKUs.
-let overlay = null;
-let activeId = null;
-let storeRef = null;
-let applyAll = false;
+// The close-up edits the same rental objects and uses the same controls as the plan.
+import { escapeHtml, tableVisual, tableControls, renderEquipmentContent } from './equipment-controls.js';
+import { summarizeEvent } from '../core/eventSummary.js';
 
-const COLORS = ['White','Ivory','Champagne','Gold','Black','Navy Blue','Burgundy','Blush','Dusty Rose','Sage Green'];
-function esc(v){return String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
-function item(){return storeRef&&storeRef.getState().objects.find(o=>o.id===activeId);}
-function decor(o){return Object.assign({centerpiece:true,plates:true,napkins:true,flatware:true,glasses:true,tableNumber:false,napkinColor:o.napkinColor||o.linenColor||'White'},o.tableDecor||{});}
-function update(changes){const o=item();if(!o)return;const next=Object.assign({},decor(o),changes);if(applyAll){storeRef.getState().objects.filter(x=>x.kind==='table').forEach(x=>storeRef.updateObject(x.id,{tableDecor:Object.assign({},next)}));}else storeRef.updateObject(o.id,{tableDecor:next});render();}
-function preview(o,d){const seats=Math.max(1,o.seatCount||6),things=[];for(let i=0;i<seats;i++){const a=i/seats*Math.PI*2,x=50+37*Math.cos(a),y=50+37*Math.sin(a);things.push(`<span class="ts-place" style="left:${x}%;top:${y}%">${d.plates?'◯':''}${d.napkins?'<i></i>':''}${d.flatware?'<b>Ⅱ</b>':''}${d.glasses?'<em>○</em>':''}</span>`);}return `<div class="ts-table ${o.shape==='round'?'round':'rect'}" style="--nap:${color(d.napkinColor)}">${things.join('')}${d.centerpiece?'<span class="ts-center">✿</span>':''}${d.tableNumber?'<span class="ts-number">12</span>':''}</div>`;}
-function color(n){const m={'White':'#fff','Ivory':'#f3ead8','Champagne':'#d9c29d','Gold':'#c59b45','Black':'#222','Navy Blue':'#20365d','Burgundy':'#752f3c','Blush':'#e9c3c0','Dusty Rose':'#b98282','Sage Green':'#98a88a'};return m[n]||'#fff';}
-function render(){if(!overlay)return;const o=item();if(!o){close();return;}const d=decor(o);overlay.innerHTML=`<div class="ts-shell"><header><div><small>TABLE DETAIL</small><h2>Design This Table</h2><p>Zoomed tabletop view · changes appear in both 2D and 3D</p></div><button data-ts="close" aria-label="Close">×</button></header><main><section class="ts-preview"><div class="ts-stage">${preview(o,d)}</div><p>Visual décor does not change the rental estimate unless it is mapped to a tenant rental product.</p></section><section class="ts-controls"><h3>Place settings & décor</h3>${toggle('centerpiece','Centerpiece',d.centerpiece)}${toggle('plates','Plates',d.plates)}${toggle('napkins','Napkins',d.napkins)}${toggle('flatware','Flatware',d.flatware)}${toggle('glasses','Glasses',d.glasses)}${toggle('tableNumber','Table number',d.tableNumber)}<label class="ts-label">Napkin color<select data-ts="napkinColor">${COLORS.map(c=>`<option${c===d.napkinColor?' selected':''}>${c}</option>`).join('')}</select></label><label class="ts-apply"><input type="checkbox" data-ts="applyAll" ${applyAll?'checked':''}> Apply changes to all tables</label><button class="ts-done" data-ts="close">Done — Return to Event</button></section></main></div>`;}
-function toggle(k,label,on){return `<button class="ts-toggle ${on?'on':''}" data-ts="toggle" data-key="${k}"><span>${label}</span><strong>${on?'On':'Off'}</strong></button>`;}
-function ensure(){if(overlay)return;const s=document.createElement('style');s.textContent=`.ts-overlay{position:fixed;inset:0;z-index:300;background:rgba(8,18,30,.82);display:flex;align-items:center;justify-content:center;padding:18px}.ts-overlay[hidden]{display:none}.ts-shell{width:min(1050px,100%);max-height:94vh;overflow:auto;background:#fff;border-radius:22px;box-shadow:0 28px 80px #0007}.ts-shell header{display:flex;justify-content:space-between;align-items:flex-start;padding:22px 26px;border-bottom:1px solid #e7ebef}.ts-shell h2{margin:2px 0 3px;font-size:26px}.ts-shell header p,.ts-preview p{margin:0;color:#667085}.ts-shell header small{color:#28723d;font-weight:800;letter-spacing:.1em}.ts-shell header button{border:0;background:#f1f4f6;border-radius:50%;width:40px;height:40px;font-size:27px;cursor:pointer}.ts-shell main{display:grid;grid-template-columns:1.25fr .75fr;min-height:560px}.ts-preview{padding:28px;background:linear-gradient(#f6f3ec,#ece8dd);display:flex;flex-direction:column;align-items:center;justify-content:center}.ts-stage{width:min(520px,80vw);aspect-ratio:1;display:grid;place-items:center;perspective:700px}.ts-table{width:72%;height:72%;position:relative;background:#fff;border:8px solid #e8e5df;box-shadow:0 20px 35px #0003;transform:rotateX(18deg);transform-style:preserve-3d}.ts-table.round{border-radius:50%}.ts-table.rect{height:48%;border-radius:18px}.ts-place{position:absolute;transform:translate(-50%,-50%);font-size:30px;color:#b7b7b7}.ts-place i{display:block;width:20px;height:8px;background:var(--nap);position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(35deg)}.ts-place b{font-size:13px;position:absolute;left:24px;top:6px}.ts-place em{font-size:17px;position:absolute;right:-25px;top:-8px}.ts-center{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:58px;color:#a56a78}.ts-number{position:absolute;left:50%;top:61%;transform:translateX(-50%);background:#fff;padding:3px 7px;border:1px solid #bbb;border-radius:3px}.ts-controls{padding:28px}.ts-controls h3{margin-top:0}.ts-toggle{width:100%;display:flex;justify-content:space-between;padding:13px 14px;margin:7px 0;border:1px solid #dce2e8;border-radius:11px;background:#fff;cursor:pointer;font:inherit}.ts-toggle.on{border-color:#70aa7e;background:#f0f8f2}.ts-toggle strong{color:#28723d}.ts-label{display:flex;justify-content:space-between;align-items:center;margin:16px 0}.ts-label select{padding:9px;border:1px solid #ccd3db;border-radius:8px}.ts-apply{display:block;padding:14px;background:#f6f8fa;border-radius:10px;margin:14px 0}.ts-done{width:100%;padding:14px;border:0;border-radius:10px;background:#236532;color:#fff;font-weight:800;font-size:16px;cursor:pointer}@media(max-width:760px){.ts-shell main{grid-template-columns:1fr}.ts-preview{min-height:350px}.ts-stage{width:min(360px,82vw)}.ts-shell{max-height:97vh}.ts-controls{padding:20px}}`;document.head.appendChild(s);overlay=document.createElement('div');overlay.className='ts-overlay';overlay.hidden=true;document.body.appendChild(overlay);overlay.addEventListener('click',e=>{const b=e.target.closest('[data-ts]');if(!b)return;const a=b.dataset.ts;if(a==='close')close();else if(a==='toggle'){const o=item(),d=decor(o),k=b.dataset.key;update({[k]:!d[k]});}else if(a==='applyAll'){applyAll=b.checked;render();}else if(a==='napkinColor')update({napkinColor:b.value});});overlay.addEventListener('change',e=>{if(e.target.dataset.ts==='napkinColor')update({napkinColor:e.target.value});if(e.target.dataset.ts==='applyAll'){applyAll=e.target.checked;render();}});}
-export function openTableStudio(id,store){storeRef=store;activeId=id;applyAll=false;ensure();overlay.hidden=false;document.body.style.overflow='hidden';render();}
-export function close(){if(overlay)overlay.hidden=true;activeId=null;document.body.style.overflow='';}
+let dialog=null, activeId=null, storeRef=null, options=null, unsubscribe=null, previousOverflow='';
+const money=n=>'$'+Number(n).toFixed(2);
+const item=()=>storeRef?.getState().objects.find(o=>o.id===activeId && o.kind==='table');
+const find=(list,id)=>(list || []).find(o=>o.id===id);
+
+function render() {
+  const current=item(),table=current && find(options.tables,current.tableId);
+  if(!current || !table){close();return;}
+  const chair=find(options.chairs,current.chairId),linen=find(options.linens,current.linenId);
+  const matching=storeRef.getState().objects.filter(o=>o.kind==='table' && o.tableId===current.tableId).length;
+  const linens=options.linens.filter(l=>l.fitsTableIds?.includes(current.tableId) && !['linen-napkins','linen-runner-9ft'].includes(l.id));
+  const summary=summarizeEvent({objects:[current]},options,{includeTent:false});
+  const caption=[current.seatCount?`${current.seatCount} ${chair?.name || 'chairs'}`:'No chairs',linen?`${current.linenColor || 'White'} ${linen.name}`:'No linen'].join(' · ');
+  dialog.querySelector('#tableStudioTitle').textContent=table.name;
+  const preview=dialog.querySelector('.ts-visual');
+  preview.setAttribute('aria-label',table.name+': '+caption);
+  preview.innerHTML=tableVisual(table,chair,current);
+  dialog.querySelector('.ts-caption').textContent=caption;
+  renderEquipmentContent(dialog.querySelector('.ts-controls'),tableControls(current,table,options.chairs,linens,matching));
+  dialog.querySelector('.ts-price-lines').innerHTML=summary.lines.map(line=>`<div><span>${line.qty} × ${escapeHtml(line.label)}</span><strong>${line.amount==null?'Confirm pricing':money(line.amount)}</strong></div>`).join('');
+  dialog.querySelector('.ts-total').textContent=summary.total==null?'Confirm pricing':money(summary.total)+'/day';
+  dialog.querySelector('.ts-price-note').textContent=summary.total==null?`Known items: ${money(summary.knownSubtotal)}/day`:'Table, selected chairs and linen';
+  dialog.querySelector('[data-ts="undo"]').disabled=!storeRef.canUndo();
+  dialog.querySelector('[data-ts="redo"]').disabled=!storeRef.canRedo();
+}
+
+function ensure() {
+  if(dialog)return;
+  dialog=document.createElement('dialog');
+  dialog.className='ts-dialog';dialog.setAttribute('aria-labelledby','tableStudioTitle');
+  dialog.innerHTML=`<header class="ts-header"><div><small>YOUR TABLE</small><h2 id="tableStudioTitle"></h2></div><button type="button" class="btn-secondary" data-ts="close">← Event</button></header>
+    <div class="ts-body"><section class="ts-preview"><div class="ts-visual" role="img"></div><p class="ts-caption"></p></section>
+    <section class="ts-editing" aria-label="Customize this table"><p class="ts-intro">Changes update your event as you go.</p><div class="ts-controls"></div>
+      <details class="ts-breakdown"><summary>Price breakdown for this table</summary><div class="ts-price-lines"></div><p>Delivery, taxes and final pricing are confirmed with your rental company.</p></details>
+      <p class="ts-message" role="status"></p>
+    </section></div>
+    <footer class="ts-footer"><div class="ts-estimate" role="status"><span>This table setup</span><strong class="ts-total"></strong><small class="ts-price-note"></small></div><div class="ts-history"><button type="button" class="btn-secondary" data-ts="undo" aria-label="Undo">↶</button><button type="button" class="btn-secondary" data-ts="redo" aria-label="Redo">↷</button></div><button type="button" class="btn-primary ts-done" data-ts="close">Done</button></footer>`;
+  document.body.appendChild(dialog);
+  dialog.addEventListener('click',e=>{
+    const action=e.target.closest('[data-ts]')?.dataset.ts;
+    if(action==='close'){close();return;}
+    if(action==='undo'){storeRef.undo();return;}
+    if(action==='redo'){storeRef.redo();return;}
+    const control=e.target.closest('[data-role]');
+    if(!control)return;
+    options.onClick(e);
+    if(control.dataset.role==='insp-match-tables' && dialog.open)dialog.querySelector('.ts-message').textContent='Chairs and linens now match on tables of this size.';
+  });
+  dialog.addEventListener('change',e=>{if(e.target.matches('[data-role]'))options.onChange(e);});
+  // Keep Escape local so closing the detail does not deselect the event table.
+  dialog.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();close();}});
+  dialog.addEventListener('cancel',e=>{e.preventDefault();close();});
+  dialog.addEventListener('close',()=>{if(!dialog.open)cleanup();});
+}
+
+function cleanup() {
+  if(!storeRef)return;
+  const id=activeId;
+  unsubscribe?.();unsubscribe=null;storeRef=null;activeId=null;options=null;
+  document.body.style.overflow=previousOverflow;
+  // Edits replace the original inspector button, so resolve its current element.
+  const trigger=[...document.querySelectorAll('#inspectorPanel [data-role="insp-design-table"]')].find(el=>el.dataset.id===id);
+  (trigger || document.getElementById('btnUndo'))?.focus({preventScroll:true});
+}
+export function close(){if(dialog?.open)dialog.close();cleanup();}
+export function openTableStudio(id,store,config) {
+  close();ensure();
+  activeId=id;storeRef=store;options=config;
+  if(!item() || !find(config.tables,item().tableId)){cleanup();return;}
+  previousOverflow=document.body.style.overflow;
+  render();
+  dialog.querySelector('.ts-editing').scrollTop=0;
+  dialog.querySelector('.ts-breakdown').open=false;
+  dialog.querySelector('.ts-message').textContent='';
+  unsubscribe=store.subscribe(render);
+  dialog.showModal();document.body.style.overflow='hidden';
+  dialog.querySelector('[data-ts="close"]').focus({preventScroll:true});
+}
