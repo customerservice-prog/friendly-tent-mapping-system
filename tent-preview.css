@@ -1,0 +1,33 @@
+/* Product previews reuse the designer viewport; only the surrounding controls change. */
+body.designer-active #designerApp { height:100%; }
+body.tent-preview { height:100dvh; overflow:hidden; }
+body.tent-preview #app, body.tent-preview #designerApp { height:100%; margin:0; padding:0; max-width:none; }
+body.tent-preview .site-header, body.tent-preview .site-footer,
+body.tent-preview #step-intake, body.tent-preview #step-recommend,
+body.tent-preview .tool-rail, body.tent-preview .inspector-panel,
+body.tent-preview .status-bar, body.tent-preview #btnBackToRecommend,
+body.tent-preview .toolbar-right, body.tent-preview #emptyStateOverlay,
+body.tent-preview #tryTheseCard, body.tent-preview #view3dTimelapseBuild,
+body.tent-preview #view3dTimelapseBreak, body.tent-preview .rs-beta { display:none !important; }
+body.tent-preview #step-designer { display:block; height:100%; }
+body.tent-preview .designer-toolbar { justify-content:space-between; height:auto; min-height:76px; padding:14px 24px; overflow:visible; }
+body.tent-preview .toolbar-center { flex:0 0 auto; }
+body.tent-preview .toolbar-event-info { display:block; }
+body.tent-preview .toolbar-event-title { font-size:22px; white-space:normal; }
+body.tent-preview .toolbar-event-meta { display:block; margin-top:4px; }
+.tent-preview-actions { display:flex; justify-content:space-between; align-items:center; gap:20px; padding:16px 24px calc(16px + env(safe-area-inset-bottom)); background:white; border-top:1px solid #dce4df; }
+.tent-preview-actions p { margin:0; color:#526171; font-size:14px; }
+.tent-preview-actions button { min-height:48px; white-space:nowrap; }
+#tentPreviewStatus { position:absolute; top:65px; left:50%; transform:translateX(-50%); z-index:8; width:max-content; max-width:calc(100% - 32px); padding:10px 16px; background:#fff; border:1px solid #dce4df; border-radius:12px; text-align:center; box-shadow:0 4px 16px #0001; }
+body.tent-preview-loading #plan2d { display:flex !important; z-index:2; background:#eef3ef; }
+body.tent-preview .rs-help { bottom:100px; }
+body.product-designer #btnBackToRecommend { display:none; }
+@media(max-width:600px) {
+  body.tent-preview .designer-toolbar { flex-wrap:wrap; gap:10px; padding:12px 14px; }
+  body.tent-preview .toolbar-left { flex:1 1 100%; }
+  body.tent-preview .toolbar-event-title { font-size:20px; }
+  body.tent-preview .toolbar-center { width:100%; justify-content:flex-start; }
+  .tent-preview-actions { flex-direction:column; align-items:stretch; gap:10px; padding:12px 14px calc(12px + env(safe-area-inset-bottom)); }
+  .tent-preview-actions p { font-size:12px; text-align:center; }
+  body.tent-preview .rs-help { bottom:122px; right:8px; }
+}

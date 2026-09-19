@@ -1,8 +1,9 @@
 // RentSketch anonymous autosave/resume. Product tent previews are intentionally excluded.
 (function(){
 'use strict';
-var preview=!!window.RENTSKETCH_TENT_PREVIEW;if(preview)return;
-var api=window.RENTSKETCH_API_URL,slug=window.RENTSKETCH_TENANT_SLUG||'generic';if(!api||!slug)return;
+var params=new URLSearchParams(location.search),started=false;
+function start(skipRestore){if(started)return;started=true;
+var api=window.RENTSKETCH_API_URL,slug=window.RENTSKETCH_TENANT_SLUG||'generic';if(!api||!slug){started=false;setTimeout(function(){start(skipRestore);},100);return;}
 var KEY='rentsketch-autosave:'+slug,SESSION='rentsketch-anon-session',timer=null,saving=false,lastJson='',lastId=null,retryAfter=0,pending=false;
 function sessionId(){try{var id=localStorage.getItem(SESSION);if(!id){id=(crypto.randomUUID?crypto.randomUUID():'rs-'+Date.now()+'-'+Math.random().toString(36).slice(2));localStorage.setItem(SESSION,id);}return id;}catch(e){return null;}}
 function bridge(){return window.FriendlyBridge||{};}function scene(){var b=bridge();return b.getScene?b.getScene():null;}function meta(){var b=bridge(),s=b.state||{};return{eventType:s.eventType||null,guestCount:s.guestCount||null};}
@@ -17,6 +18,10 @@ function restorePrompt(){var saved=read(),b=bridge();if(!saved||saved.tenant!==s
 function restoreWhenAllowed(){var entry=document.querySelector('.rs-entry');if(!entry){restorePrompt();return;}var done=false;function resume(){if(done)return;done=true;window.removeEventListener('rentsketch:entryAccepted',resume);restorePrompt();}window.addEventListener('rentsketch:entryAccepted',resume,{once:true});}
 function emergencyLocalSave(){var sc=scene();if(!sc||!Array.isArray(sc.objects))return;snapshotLocal(sc,lastId);}
 window.RentSketchAutosave={flush:function(){return save(true);},getDesignId:function(){return lastId;}};
-function bind(){var b=bridge();if(!b.getScene){setTimeout(bind,100);return;}restoreWhenAllowed();document.addEventListener('pointerup',schedule,true);document.addEventListener('change',schedule,true);document.addEventListener('keyup',function(e){if(e.key==='Delete'||e.key==='Backspace')schedule();},true);window.addEventListener('pagehide',emergencyLocalSave);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')emergencyLocalSave();});window.addEventListener('rentsketch:requestSave',schedule);}
-if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bind);else bind();
+function bind(){var b=bridge();if(!b.getScene){setTimeout(bind,100);return;}if(!skipRestore)restoreWhenAllowed();document.addEventListener('pointerup',schedule,true);document.addEventListener('change',schedule,true);document.addEventListener('keyup',function(e){if(e.key==='Delete'||e.key==='Backspace')schedule();},true);window.addEventListener('pagehide',emergencyLocalSave);document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')emergencyLocalSave();});window.addEventListener('rentsketch:requestSave',schedule);}
+bind();
+}
+window.addEventListener('rentsketch:designStarted',function(){start(true);},{once:true});
+function boot(){if(params.get('focus')==='tent'&&params.get('autoplace')==='1')return;start(false);}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
