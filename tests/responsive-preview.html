@@ -6,6 +6,6 @@
 <script>
 const frame=document.getElementById('preview'),size=document.getElementById('size'),entry=document.getElementById('entry');
 function resize(){const [width,height]=size.value.split(',');frame.style.width=width+'px';frame.style.height=height+'px';}
-function load(){const q=new URLSearchParams({tenant:'friendly',view:'2d',v:'20260919-visual'});if(entry.value!=='designer'){q.set('focus','tent');q.set('autoplace','1');q.set('tentSlug','20x20-'+entry.value+'-tent');}frame.src='/designer/?'+q;resize();}
+function load(){const q=new URLSearchParams({tenant:'friendly',view:'2d',v:'20260919-visual'});if(entry.value!=='designer'){q.set('focus','tent');q.set('autoplace','1');q.set('tentSlug',entry.value==='frame'?'20-x-20-frame-tent':'20x20-pole-tent');}frame.src='/designer/?'+q;resize();}
 size.onchange=resize;entry.onchange=load;document.getElementById('reload').onclick=load;load();
 </script></html>
