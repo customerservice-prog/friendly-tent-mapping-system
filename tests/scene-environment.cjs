@@ -4,7 +4,7 @@ const root=path.resolve(__dirname,'..');
 (async()=>{
  const threePath=process.env.RENTSKETCH_THREE_MODULE || require.resolve('three').replace('/build/three.cjs','/build/three.module.js');
  const THREE=await import(require('node:url').pathToFileURL(threePath));
- const draw=new Proxy({createLinearGradient:()=>({addColorStop(){}})},{get:(t,k)=>t[k]||(()=>{}),set:(t,k,v)=>(t[k]=v,true)});
+ const draw=new Proxy({createLinearGradient:()=>({addColorStop(){}}),createRadialGradient:()=>({addColorStop(){}})},{get:(t,k)=>t[k]||(()=>{}),set:(t,k,v)=>(t[k]=v,true)});
  const context=vm.createContext({console,document:{createElement:()=>({width:0,height:0,getContext:()=>draw})}}),cache=new Map();
  const three=new vm.SyntheticModule(Object.keys(THREE),function(){for(const key of Object.keys(THREE))this.setExport(key,THREE[key]);},{context});
  async function load(file){if(cache.has(file))return cache.get(file);const source=fs.readFileSync(file,'utf8')+(file.endsWith('/ui/view3d.js')?'\nexport {table as buildTableForTest};':'');const module=new vm.SourceTextModule(source,{context,identifier:file});cache.set(file,module);await module.link((specifier,ref)=>specifier==='three'?three:load(specifier.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',specifier.slice('three/addons/'.length)):path.resolve(path.dirname(ref.identifier),specifier)));return module;}
@@ -75,8 +75,32 @@ const root=path.resolve(__dirname,'..');
  assert.equal(floor.children.length,5);
  const light=view.namespace.makeLighting({id:'pole-20x20',type:'pole',widthFt:20,lengthFt:20},'lighting-chandelier');
  const bulb=light.children.find(o=>o.material?.emissive?.getHex());assert.ok(bulb);
- light.userData.setNight(true);assert.equal(bulb.material.emissiveIntensity,3);light.userData.setNight(false);assert.equal(bulb.material.emissiveIntensity,.25);
+ light.userData.setNight(true);assert.equal(bulb.material.emissiveIntensity,5);light.userData.setNight(false);assert.equal(bulb.material.emissiveIntensity,.7);
  for(const group of [seated,floor,light])module.namespace.disposeGroup(group);
+ const weatherModule=await load(path.join(root,'js/ui/scene-weather.js'));await weatherModule.evaluate();
+ const guestModule=await load(path.join(root,'js/ui/scene-guests.js'));await guestModule.evaluate();
+ const framing=await load(path.join(root,'js/ui/view3d-framing.js'));await framing.evaluate();
+ const tent={type:'pole',widthFt:20,lengthFt:20};
+ const weather=weatherModule.namespace.createWeather(tent,{mobile:true});
+ assert.ok(weather.getObjectByName('Visible sun').visible);assert.ok(!weather.getObjectByName('Moon').visible);
+ for(const aspect of [390/550,1440/740]){
+  const fit=framing.namespace.fitTentCamera(tent,16,aspect,36,5),camera=new THREE.PerspectiveCamera(36,aspect,.1,1200);camera.position.set(...fit.position);camera.lookAt(new THREE.Vector3(...fit.target));camera.updateMatrixWorld(true);
+  const point=weather.getObjectByName('Visible sun').position.clone().project(camera);assert.ok(Math.abs(point.x)<1&&Math.abs(point.y)<1,'sun is in the opening view: '+JSON.stringify(point));
+ }
+ weather.userData.setNight(true);assert.ok(weather.getObjectByName('Moon').visible);assert.ok(!weather.getObjectByName('Visible sun').visible);
+ weather.userData.setWeather('rain');weather.userData.update(.033);
+ const rain=weather.getObjectByName('Rain outside the canopy');assert.ok(rain.visible);assert.equal(rain.geometry.attributes.position.count,720);
+ const drops=rain.geometry.attributes.position;for(let i=0;i<drops.count;i+=2){assert.ok([drops.getX(i),drops.getY(i),drops.getZ(i)].every(Number.isFinite));assert.ok(drops.getY(i)<0||Math.abs(drops.getX(i))>=11.5||Math.abs(drops.getZ(i))>=11.5,'no rain through the roof');}
+ weather.userData.setWeather('clear');assert.ok(!rain.visible&&weather.getObjectByName('Moon').visible);
+ const guestObjects=[{...item,kind:'table',x:2,y:2}],beforeGuests=JSON.stringify(guestObjects),guests=guestModule.namespace.createGuests(tent,guestObjects,{mobile:true});
+ assert.equal(guests.children.length,4);assert.equal(guests.userData.people.filter(p=>p.seated).length,8);
+ assert.ok(guests.userData.people.filter(p=>!p.seated).every(p=>p.z>tent.lengthFt/2+5));
+ const matrices=Array.from(guests.children[0].instanceMatrix.array);guests.userData.update(.1);assert.notDeepEqual(Array.from(guests.children[0].instanceMatrix.array),matrices);
+ for(const batch of guests.children){assert.ok(batch.isInstancedMesh);assert.ok(Array.from(batch.instanceMatrix.array).every(Number.isFinite));assert.ok(batch.count<=batch.instanceMatrix.count);}
+ assert.equal(JSON.stringify(guestObjects),beforeGuests,'decorative guests never mutate rental objects');
+ assert.ok(light.children.filter(o=>o.isPointLight).length<=6,'event lighting remains bounded on mobile');
+ for(const group of [weather,guests])module.namespace.disposeGroup(group);
+ console.log('PASS sky/guests: visible initial sun, day/moon/rain transitions, dry canopy, four guest draws, finite animated transforms, unchanged rental data');
  console.log('PASS furniture: distinct chair geometry, seating orientation and selectable instances, scale/linen length, floor gaps, bounded draw calls, day/night lighting, disposal');
  console.log('PASS 3D table geometry: removing linen removes cloth; selected linen uses its exact color on round and rectangular tables (not visual GPU QA)');
 

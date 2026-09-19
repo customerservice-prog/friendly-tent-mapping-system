@@ -9,7 +9,7 @@ async function load(file){if(cache.has(file))return cache.get(file);const m=new 
  assert.equal(d.querySelector('.step.active').id,'step-designer');assert.equal(b.getScene().tentId,'pole-20x20');assert.equal(b.getScene().guestCount,0);assert.equal(d.querySelector('.studio-progress'),null);assert.match(d.getElementById('toolbarEventTitle').textContent,/20.*20/);
  d.querySelector('[data-role="empty-suggest"]').click();assert.ok(d.getElementById('quickSetupForm'));
  d.querySelector('[data-role="setup-manual"]').click();assert.equal(d.getElementById('drawerTitle').textContent,'Tables & Chairs');
- d.querySelector('[data-role="table-card"]').click();assert.equal(b.getScene().objects.length,1);
+ d.querySelector('[data-role="table-card"]').click();d.querySelector('#placementConfirm').click();assert.equal(b.getScene().objects.length,1);
  d.querySelector('[data-drawer="setup"]').click();d.getElementById('drawerClose').click();assert.equal(d.getElementById('drawer').hidden,true);assert.equal(b.getScene().objects.length,1);
  console.log('PASS direct entry: visible 20×20, no wizard, optional suggestion, manual editing, close preserves layout');dom.window.close();
 })().catch(e=>{console.error(e);dom.window.close();process.exitCode=1;});

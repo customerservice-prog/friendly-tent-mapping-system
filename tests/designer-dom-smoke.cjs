@@ -40,7 +40,7 @@ async function moduleAt(file){
   assert.equal(window.RENTSKETCH_TENT_PREVIEW,false);
   assert.ok(window.RentSketchAutosave,'continuation activates autosave');
   window.document.querySelector('[data-drawer="tables"]').click();
-  window.document.querySelector('[data-role="table-card"][data-id="round-5ft"]').click();
+  window.document.querySelector('[data-role="table-card"][data-id="round-5ft"]').click();window.document.querySelector('#placementConfirm').click();
   assert.equal(b.getScene().objects.length,1);
   assert.equal(b.getScene().objects[0].seatCount,8);
   window.document.getElementById('btnUndo').click();
@@ -79,7 +79,7 @@ async function moduleAt(file){
   assert.equal(b.getScene().tentId,'pole-20x20');
   for(let i=0;i<3;i++){
     window.document.querySelector('[data-drawer="tables"]').click();
-    window.document.querySelector('[data-role="table-card"][data-id="round-5ft"]').click();
+    window.document.querySelector('[data-role="table-card"][data-id="round-5ft"]').click();window.document.querySelector('#placementConfirm').click();
   }
   assert.equal(b.getScene().objects.length,4);
   const positions=new Set();

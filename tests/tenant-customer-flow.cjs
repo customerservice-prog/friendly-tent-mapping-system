@@ -42,7 +42,7 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  assert.match(w.document.querySelector('.rs-entry').textContent,/Lakeside Events/);assert.doesNotMatch(w.document.querySelector('.rs-entry').textContent,/Friendly Party Rental/);
  w.document.querySelector('[data-start]').click();
  assert.equal(b.getScene().tentId,'frame-20x20');
- w.document.querySelector('[data-drawer="tables"]').click();w.document.querySelector('[data-role="table-card"]').click();
+ w.document.querySelector('[data-drawer="tables"]').click();w.document.querySelector('[data-role="table-card"]').click();w.document.querySelector('#placementConfirm').click();
  assert.equal(b.getScene().objects[0].chairId,'resin-white');
  w.document.querySelector('[data-drawer="chairs"]').click();
  assert.equal(w.document.querySelectorAll('[data-role="chair-card"]').length,2);

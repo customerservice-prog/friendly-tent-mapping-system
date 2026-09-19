@@ -140,3 +140,35 @@ body:has(#step-review.active) .site-header-logo { max-height:42px; margin-bottom
   .quick-setup .equipment-field select { padding-left:7px;padding-right:7px; }
   .inspector-panel:not([hidden]) { max-height:44%; }
 }
+
+/* Scene choices stay in one small panel, leaving the tent as the focus. */
+.scene-controls { position:relative; pointer-events:auto; color:#263e30; }
+.scene-controls summary { list-style:none; cursor:pointer; min-height:44px; padding:11px 16px; border:1px solid #d6ded3; border-radius:100px; background:#fffffff2; font-weight:650; font-size:13px; box-sizing:border-box; }
+.scene-controls summary::-webkit-details-marker { display:none; }
+.scene-controls summary::after { content:'⌄'; margin-left:10px; }
+.scene-controls[open] summary { background:#e4ede4; }
+.scene-panel { position:absolute; left:0; top:calc(100% + 8px); width:224px; padding:16px; border:1px solid #d6ded3; border-radius:16px; background:#fffffffa; box-shadow:0 12px 32px #203d3226; z-index:35; }
+.scene-panel strong { display:block; margin-bottom:12px; }
+.scene-panel button { width:100%; }
+.scene-panel label { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:46px; border-bottom:1px solid #edf1ec; font-size:14px; cursor:pointer; }
+.scene-panel input { width:21px; height:21px; accent-color:#35674c; }
+.scene-panel p { font-size:12px; line-height:1.4; color:#657469; margin:10px 0 0; }
+.placement-bar { position:absolute; z-index:12; bottom:12px; left:50%; transform:translateX(-50%); width:calc(100% - 24px); max-width:540px; padding:12px; box-sizing:border-box; display:grid; grid-template-columns:64px 1fr; gap:10px; border:1px solid #adbea9; border-radius:18px; background:#fffffff5; box-shadow:0 8px 28px #253e3226; }
+.placement-preview { width:64px; height:52px; overflow:hidden; border-radius:10px; background:#f0f3ed; }
+.placement-preview .equipment-model-preview, .placement-preview img { width:100%; height:100%; object-fit:contain; margin:0; }
+.placement-copy { min-width:0; align-self:center; display:grid; gap:4px; }
+.placement-copy strong { font-size:15px; color:#243c2d; }
+.placement-copy span { font-size:12px; color:#526752; line-height:1.4; }
+.placement-actions { grid-column:1/-1; display:flex; gap:8px; }
+.placement-actions button { min-height:44px; flex:1; padding:8px; font-size:13px; }
+.placement-ghost { opacity:.62; pointer-events:none!important; }
+.plan2d-object.placement-ghost { outline:2px dashed #247554; outline-offset:3px; box-shadow:0 0 0 5px #cde8d555; }
+.plan2d-stage.is-placing { cursor:crosshair; touch-action:none; }
+.placing-equipment #tryTheseCard,.placing-equipment .rs-help { display:none!important; }
+@media(max-width:600px) {
+  .scene-setting-label { display:none!important; }
+  .scene-controls summary { min-height:42px; padding:11px 14px; font-size:12px; }
+  .scene-controls { position:static; }
+  .scene-panel { left:0; right:auto; width:240px; max-width:calc(100vw - 40px); box-sizing:border-box; }
+  .placement-bar { bottom:8px; }
+}

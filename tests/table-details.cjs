@@ -21,7 +21,7 @@ const change=(role,value)=>{const el=d.querySelector(`.ts-dialog [data-role="${r
  const b=w.FriendlyBridge,linens=(await load(path.join(root,'js/data/linens.js'))).namespace.LINENS;
  b.TABLES.find(t=>t.id==='round-5ft').pricePerDay=15;b.CHAIRS.find(c=>c.id==='plastic-white').pricePerDay=3.75;b.CHAIRS.find(c=>c.id==='resin-white').pricePerDay=5;
  linens.find(l=>l.id==='linen-round-120').pricePerDay=12;
- for(let i=0;i<2;i++){click('[data-drawer="tables"]');click('[data-role="table-card"][data-id="round-5ft"]');}
+ for(let i=0;i<2;i++){click('[data-drawer="tables"]');click('[data-role="table-card"][data-id="round-5ft"]');click('#placementConfirm');}
  const snapshot=b.getScene();snapshot.objects=snapshot.objects.map(o=>({...o,tableDecor:{centerpiece:true,napkinColor:'Blush'}}));b.loadScene(snapshot);b.state.selectedId=snapshot.objects.at(-1).id;b.refreshAll();
  const selected=b.state.selectedId;click('[data-role="insp-design-table"]');await settle();await settle();
  const dialog=d.querySelector('.ts-dialog');assert.ok(dialog.open);assert.equal(d.body.style.overflow,'hidden');assert.equal(d.activeElement.dataset.ts,'close');
@@ -50,7 +50,7 @@ const change=(role,value)=>{const el=d.querySelector(`.ts-dialog [data-role="${r
  click('#btnToReview');assert.match(d.getElementById('reviewSummary').textContent,/Navy Blue 120/);assert.equal(b.computeLineItems().find(l=>l.category==='chair').qty,17);assert.equal(b.computeLineItems().find(l=>l.category==='linen').qty,2);
  assert.ok(b.computeLineItems().every(l=>['tent','table','chair','linen'].includes(l.category)));
  click('#btnBackToDesigner');click('[data-role="insp-design-table"]');await settle();assert.ok(dialog.open,'reopen works after review');
- click('.ts-dialog [data-ts="close"]');click('[data-drawer="tables"]');click('[data-role="table-card"][data-id="cocktail"]');click('[data-role="insp-design-table"]');await settle();
+ click('.ts-dialog [data-ts="close"]');click('[data-drawer="tables"]');click('[data-role="table-card"][data-id="cocktail"]');click('#placementConfirm');click('[data-role="insp-design-table"]');await settle();
  assert.ok(dialog.open);assert.equal(dialog.querySelector('[data-role="insp-seats"]'),null,'standing tables do not offer seats');assert.equal(dialog.querySelector('.ts-visual svg').querySelectorAll(':scope > rect').length,0,'zero seats stay zero');
  click('.ts-dialog [data-ts="undo"]');assert.equal(dialog.open,false,'undoing table creation closes stale detail');assert.equal(d.body.style.overflow,'');
  console.log('PASS table detail: actual lazy entry; live chairs/seats/linens and per-table pricing; unknown pricing; shared inspector and autosave; atomic match/undo/redo; preserved legacy data; review quantities; close/reopen; zero-seat tables; no network writes');

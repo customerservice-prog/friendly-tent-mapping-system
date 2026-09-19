@@ -32,6 +32,8 @@ let pxPerFt = 20;
 // narrow" can still be framed as a wide, landscape-filling floor plan on a
 // landscape canvas (and vice versa). See computeStageSize().
 let rotate90 = false;
+let placementPointer=null;
+const placementPointers=new Set();
 
 function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); }
 
@@ -49,6 +51,8 @@ function toDispWD(wFt, dFt) {
 
 function computeStageSize(tent) {
   const overlap = inspectorOverlap();
+  const bar=document.getElementById('placementBar');
+  if(currentData?.placement&&bar&&!bar.hidden)overlap.h=Math.max(overlap.h,bar.offsetHeight+24);
   container.style.paddingRight = overlap.w ? (overlap.w + 'px') : '';
   container.style.paddingBottom = overlap.h ? (overlap.h + 'px') : '';
   const rawW = container.clientWidth - 32 - overlap.w;
@@ -113,7 +117,7 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
     const effAngle = rotate90 ? (Math.PI / 2 - position.angle) : position.angle;
     const bearingDeg = Math.atan2(-Math.cos(effAngle), Math.sin(effAngle)) * 180 / Math.PI;
     const dot = document.createElement('div');
-    dot.className = 'plan2d-chair plan2d-chair--' + silhouette;
+    dot.className = 'plan2d-chair plan2d-chair--' + silhouette+(item.preview?' placement-ghost':'');
     dot.style.width = (wFt * pxPerFt) + 'px';
     dot.style.height = (dFt * pxPerFt) + 'px';
     dot.style.left = (disp.x * pxPerFt) + 'px';
@@ -121,6 +125,7 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
     dot.style.setProperty('--chair-frame', frameColor);
     dot.style.setProperty('--chair-accent', accentColor);
     dot.style.transform = 'translate(-50%, -50%) rotate(' + bearingDeg + 'deg)';
+    dot.dataset.chairFor=item.id;dot.dataset.modelX=fx;dot.dataset.modelY=fy;
     dot.innerHTML = chairPlanSvg(silhouette);
     host.appendChild(dot);
   }
@@ -303,7 +308,9 @@ renderLighting(data, tent);
   const selectedItem = (data.objects || []).find(function (o) { return o.id === data.selectedId; });
   const selectedDanceGroup = !!(selectedItem && selectedItem.kind === 'dance');
   
-  (data.objects || []).forEach(function (item) {
+  const displayObjects=(data.objects||[]).filter(o=>!(data.placement?.danceSizeId&&o.kind==='dance')).concat((data.placement?.objects||[]).map(o=>({...o,preview:true})));
+  stageEl.classList.toggle('is-placing',!!data.placement);
+  displayObjects.forEach(function (item) {
   const wrap = document.createElement('div');
   const isDance = item.kind === 'dance';
   const tableDef = (!isDance && item.kind === 'table') ? tableById(item.tableId) : null;
@@ -312,6 +319,7 @@ renderLighting(data, tent);
   const silhouetteClass = silhouette ? ' plan2d-table--' + silhouette : '';
   var linenClass = linenVisual(item.linenId) ? ' plan2d-linen--' + linenVisual(item.linenId) : '';
   wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + linenClass + ' ' + severityClass(data, item.id) + ((selectedDanceGroup ? item.kind === 'dance' : data.selectedId === item.id) ? ' selected' : '');
+  if(item.preview)wrap.classList.add('placement-ghost');
   const disp = toDispXY(item.x, item.y);
   const dispSize = toDispWD(item.widthFt, item.depthFt);
   wrap.style.left = (disp.x * pxPerFt) + 'px';
@@ -320,7 +328,8 @@ renderLighting(data, tent);
   wrap.style.height = (dispSize.d * pxPerFt) + 'px';
   wrap.dataset.itemId = item.id;
   if(tableDef)wrap.dataset.tableId=tableDef.id;
-  wrap.tabIndex = 0;
+  wrap.tabIndex = item.preview?-1:0;
+  if(item.preview)wrap.dataset.preview='true';
   wrap.setAttribute('role','button');
   wrap.setAttribute('aria-label',(isDance?'Dance floor section':(tableDef?.name||'Table'))+' · '+(item.seatCount||0)+' seats');
   wrap.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();callbacks.onSelect?.(item.id);}});
@@ -353,7 +362,7 @@ renderLighting(data, tent);
                              wrap.addEventListener('pointerdown', function (e) { onPointerDown(e, item); });
 });
 
-    var danceItems = (data.objects || []).filter(function (o) { return o.kind === 'dance'; });
+    var danceItems = displayObjects.filter(function (o) { return o.kind === 'dance'; });
   if (danceItems.length) {
     var fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity;
     danceItems.forEach(function (o) {
@@ -398,6 +407,7 @@ function tableTopDetailHtml(silhouette) {
 }
 
 function onPointerDown(e, item) {
+  if(currentData?.placement)return;
   if (e.button !== undefined && e.button !== 0) return;
   e.preventDefault();
   dragging = true;
@@ -428,6 +438,15 @@ const dModel = toDispXY(dxPx / pxPerFt, dyPx / pxPerFt);
   let newY = dragOrigFt.y + dModel.y;
   newX = Math.max(0, Math.min(tent.widthFt - dragTarget.widthFt, newX));
   newY = Math.max(0, Math.min(tent.lengthFt - dragTarget.depthFt, newY));
+  if(dragTarget.kind==='dance'){
+    const floor=currentData.objects.filter(o=>o.kind==='dance');
+    const dx=Math.max(-Math.min(...floor.map(o=>o.x)),Math.min(tent.widthFt-Math.max(...floor.map(o=>o.x+o.widthFt)),newX-dragOrigFt.x));
+    const dy=Math.max(-Math.min(...floor.map(o=>o.y)),Math.min(tent.lengthFt-Math.max(...floor.map(o=>o.y+o.depthFt)),newY-dragOrigFt.y));
+    newX=dragOrigFt.x+dx;newY=dragOrigFt.y+dy;
+    floor.forEach(item=>{const el=stageEl.querySelector('[data-item-id="'+item.id+'"]'),disp=toDispXY(item.x+dx,item.y+dy);if(el){el.style.left=disp.x*pxPerFt+'px';el.style.top=disp.y*pxPerFt+'px';}});
+    const frame=stageEl.querySelector('.plan2d-dance-frame'),delta=toDispXY(dx,dy);if(frame)frame.style.transform='translate('+delta.x*pxPerFt+'px,'+delta.y*pxPerFt+'px)';
+  }
+  stageEl.querySelectorAll('.plan2d-chair').forEach(chair=>{if(chair.dataset.chairFor!==dragTarget.id)return;const disp=toDispXY(Number(chair.dataset.modelX)+newX-dragOrigFt.x,Number(chair.dataset.modelY)+newY-dragOrigFt.y);chair.style.left=disp.x*pxPerFt+'px';chair.style.top=disp.y*pxPerFt+'px';});
   dragLiveFt = { x: newX, y: newY };
   const el = stageEl.querySelector('[data-item-id="' + dragTarget.id + '"]');
   if (el) {
@@ -437,7 +456,7 @@ const dModel = toDispXY(dxPx / pxPerFt, dyPx / pxPerFt);
   }
 }
 
-function onPointerUp() {
+function onPointerUp(event) {
   if (!dragging) return;
   dragging = false;
   window.removeEventListener('pointermove', onPointerMove);
@@ -448,6 +467,7 @@ function onPointerUp() {
   const el = target ? stageEl.querySelector('[data-item-id="' + target.id + '"]') : null;
   if (el) el.classList.remove('dragging');
   if (!target) return;
+  if(event?.type==='pointercancel'){render(currentData);return;}
   if (!dragMoved) {
     if (callbacks.onSelect) callbacks.onSelect(target.id);
   } else {
@@ -459,19 +479,44 @@ function onResize() {
   if (currentData) render(currentData);
 }
 
+function placementPoint(e){
+  const r=stageEl.getBoundingClientRect();return toDispXY((e.clientX-r.left)/pxPerFt,(e.clientY-r.top)/pxPerFt);
+}
+function placementDown(e){
+  if(!currentData?.placement||e.button>0)return;
+  e.preventDefault();e.stopPropagation();placementPointers.add(e.pointerId);
+  if(placementPointers.size>1){placementPointer=null;return;}
+  placementPointer=e.pointerId;stageEl.setPointerCapture?.(e.pointerId);
+  const p=placementPoint(e);callbacks.onPlacementMove?.(p.x,p.y);
+}
+function placementMove(e){
+  if(!currentData?.placement||placementPointers.size>1||!(e.pointerType==='mouse'||placementPointer===e.pointerId))return;
+  const p=placementPoint(e);callbacks.onPlacementMove?.(p.x,p.y);
+}
+function placementUp(e){
+  placementPointers.delete(e.pointerId);
+  if(placementPointer!==e.pointerId)return;placementPointer=null;
+  if(e.type!=='pointercancel'){const p=placementPoint(e);callbacks.onPlacementMove?.(p.x,p.y);callbacks.onPlace?.();}
+  try{stageEl.releasePointerCapture?.(e.pointerId);}catch{}
+}
+
 export function mount(containerEl, data, cbs) {
   container = containerEl;
   callbacks = cbs || {};
   clear(container);
   stageEl = document.createElement('div');
   stageEl.className = 'plan2d-stage';
+  stageEl.addEventListener('pointerdown',placementDown,true);
+  stageEl.addEventListener('pointermove',placementMove);
+  stageEl.addEventListener('pointerup',placementUp);
+  stageEl.addEventListener('pointercancel',placementUp);
   container.appendChild(stageEl);
   currentData = data;
   // Defer the first paint by a couple of frames so the container has a real,
 // stable measured size (fixes the plan rendering at a tiny collapsed scale
 // right after mount or after switching back from 3D view).
 requestAnimationFrame(function () {
-  requestAnimationFrame(function () { render(data); });
+  requestAnimationFrame(function () { if(currentData&&stageEl)render(currentData); });
 });
   if (window.ResizeObserver) {
     resizeObserver = new ResizeObserver(function () { onResize(); });
@@ -497,6 +542,7 @@ export function unmount() {
   window.removeEventListener('pointerup', onPointerUp);
   window.removeEventListener('pointercancel', onPointerUp);
   if (container) clear(container);
+  placementPointers.clear();placementPointer=null;
   container = null;
   stageEl = null;
   currentData = null;
