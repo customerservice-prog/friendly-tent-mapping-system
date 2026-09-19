@@ -4,9 +4,10 @@
 // default editing surface: it is easier to scan and arrange a layout from
 // directly above than in a 3D perspective view.
 
+import { chairPositions } from '../core/seating.js';
 import { byId as chairById } from '../data/chairs.js';
 import { byId as tableById } from '../data/tables.js';
-import { linenVisual } from '../data/linens.js';
+import { linenVisual, linenColorHex } from '../data/linens.js';
 import { byId as lightingById } from '../data/lighting.js';
 
 let container = null;
@@ -135,16 +136,14 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
   const chair = chairById(item.chairId) || {};
   const wFt = chair.seatWidthFt || 1.5;
   const dFt = chair.seatDepthFt || 1.5;
-  const chairR = radiusFt + Math.max(wFt, dFt) / 2 + 0.35;
   const silhouette = chair.silhouette || 'folding';
   const frameColor = chair.frameColor || '#ffffff';
   const accentColor = chair.accentColor || frameColor;
-  for (let i = 0; i < count; i++) {
-    const angle = (i / count) * Math.PI * 2;
-    const fx = cxFt + chairR * Math.cos(angle);
-    const fy = cyFt + chairR * Math.sin(angle);
+  for (const position of chairPositions(item,chair)) {
+    const fx = cxFt + position.x;
+    const fy = cyFt + position.y;
     const disp = toDispXY(fx, fy);
-    const effAngle = rotate90 ? (Math.PI / 2 - angle) : angle;
+    const effAngle = rotate90 ? (Math.PI / 2 - position.angle) : position.angle;
     const bearingDeg = Math.atan2(-Math.cos(effAngle), Math.sin(effAngle)) * 180 / Math.PI;
     const dot = document.createElement('div');
     dot.className = 'plan2d-chair plan2d-chair--' + silhouette;
@@ -257,7 +256,9 @@ function renderLighting(data, tent) {
   const layer = document.createElement('div');
   layer.className = 'plan2d-lighting-layer';
   stageEl.appendChild(layer);
-  if (visual === 'grid-canopy') buildCanopyLights(layer, tent);
+  if (visual === 'bistro-cross-runs') buildCanopyLights(layer, tent);
+  else if (visual === 'perimeter-eave') buildPerimeterLights(layer, tent, 4);
+  else if (visual === 'grid-canopy') buildCanopyLights(layer, tent);
   else if (visual === 'perimeter-swag') buildPerimeterLights(layer, tent, 4);
   else if (visual === 'perimeter-strand') buildPerimeterLights(layer, tent, 2.5);
   else if (visual === 'uplight-ring') buildUplights(layer, tent, 12);
@@ -272,10 +273,15 @@ function render(data) {
   clear(stageEl);
   stageEl.style.width = size.w + 'px';
   stageEl.style.height = size.h + 'px';
+  stageEl.style.setProperty('--plan-grid-size',pxPerFt+'px');
+  stageEl.dataset.dimensions = tent.widthFt+' × '+tent.lengthFt+' ft';
+  stageEl.setAttribute('role','group');
+  stageEl.setAttribute('aria-label',tent.name+' floor plan');
 
 (tent.centerPoles || []).forEach(function (p) {
   const pole = document.createElement('div');
   pole.className = 'plan2d-pole';
+  pole.title = 'Center pole';
   const r = 6;
   const disp = toDispXY(p.x, p.y);
   pole.style.width = r + 'px';
@@ -346,10 +352,15 @@ renderLighting(data, tent);
   wrap.style.width = (dispSize.w * pxPerFt) + 'px';
   wrap.style.height = (dispSize.d * pxPerFt) + 'px';
   wrap.dataset.itemId = item.id;
+  wrap.tabIndex = 0;
+  wrap.setAttribute('role','button');
+  wrap.setAttribute('aria-label',(isDance?'Dance floor section':(tableDef?.name||'Table'))+' · '+(item.seatCount||0)+' seats');
+  wrap.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();callbacks.onSelect?.(item.id);}});
 
                              const top = document.createElement('div');
   top.className = 'plan2d-table-top';
   top.innerHTML = tableTopDetailHtml(silhouette);
+  if(item.linenId)top.style.background=linenColorHex(item.linenColor);
   const label = document.createElement('span');
   label.className = 'plan2d-table-label';
   if (isDance) {
@@ -426,6 +437,7 @@ function onPointerDown(e, item) {
   el.classList.add('dragging');
   window.addEventListener('pointermove', onPointerMove);
   window.addEventListener('pointerup', onPointerUp);
+  window.addEventListener('pointercancel', onPointerUp);
 }
 
 function onPointerMove(e) {
@@ -457,6 +469,7 @@ function onPointerUp() {
   dragging = false;
   window.removeEventListener('pointermove', onPointerMove);
   window.removeEventListener('pointerup', onPointerUp);
+  window.removeEventListener('pointercancel', onPointerUp);
   const target = dragTarget;
   dragTarget = null;
   const el = target ? stageEl.querySelector('[data-item-id="' + target.id + '"]') : null;
@@ -509,6 +522,7 @@ export function unmount() {
   }
   window.removeEventListener('pointermove', onPointerMove);
   window.removeEventListener('pointerup', onPointerUp);
+  window.removeEventListener('pointercancel', onPointerUp);
   if (container) clear(container);
   container = null;
   stageEl = null;

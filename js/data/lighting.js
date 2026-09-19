@@ -24,7 +24,7 @@ function resetLivePricing(){
   Object.keys(TENT_LIGHTING_PRICE_BY_SIZE).forEach(k=>{TENT_LIGHTING_PRICE_BY_SIZE[k]=null;});
   LIGHTING_OPTIONS.forEach(o=>{if(o.id!=='lighting-none'){o.pricePerDay=null;delete o.productId;}});
 }
-function numericPrice(p){const n=Number(p&&p.price_per_day);return Number.isFinite(n)?n:null;}
+function numericPrice(p){if(!p||p.price_per_day==null||p.price_per_day==='')return null;const n=Number(p.price_per_day);return Number.isFinite(n)?n:null;}
 function applyTenantLighting(detail){
   resetLivePricing();
   const tenant=detail&&detail.tenant||window.ACTIVE_TENANT||{};

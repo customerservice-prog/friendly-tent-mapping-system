@@ -27,7 +27,7 @@ export const STAGE_RAMP = { id: 'stage-ramp', name: 'Stage Ramp', pricePerDay: n
 export const STAGE_STAIR = { id: 'stage-stair', name: 'Stage Stair', pricePerDay: null };
 export const STAGE_SKIRT = { id: 'stage-skirt', name: 'Stage Skirt', pricePerDay: null };
 
-function price(p){const n=Number(p&&p.price_per_day);return Number.isFinite(n)?n:null;}
+function price(p){if(!p||p.price_per_day==null||p.price_per_day==='')return null;const n=Number(p.price_per_day);return Number.isFinite(n)?n:null;}
 function reset(){[DANCE_SECTION,STAGE_SECTION,STAGE_RAMP,STAGE_STAIR,STAGE_SKIRT].forEach(x=>{x.pricePerDay=null;delete x.productId;});}
 function applyTenantDance(detail){
   reset();

@@ -11,6 +11,7 @@ export const LINEN_COLORS = [
 function buildLinen(id,name,fitsTableIds,colors){return{id,name,fitsTableIds,pricePerDay:null,colors:colors||LINEN_COLORS,active:true};}
 
 export const LINENS = [
+  buildLinen('linen-round-120','120" Round Polyester Tablecloth',['round-5ft']),
   buildLinen('linen-round-90','90" Round Tablecloth',['round-5ft']),
   buildLinen('linen-round-108','108" Round Tablecloth',['round-5ft']),
   buildLinen('linen-spandex-6ft','Spandex 6ft Table Linen',['banquet-6ft'],['Black','White']),
@@ -27,17 +28,18 @@ export function optionsForTable(tableId){return LINENS.filter(l=>l.fitsTableIds.
 export function byId(id){return LINENS.find(l=>l.id===id);}
 
 export const LINEN_VISUALS = {
-  'linen-round-90':'skirt-round','linen-round-108':'skirt-round',
+  'linen-round-120':'skirt-round','linen-round-90':'skirt-round','linen-round-108':'skirt-round',
   'linen-spandex-6ft':'skirt-rect','linen-spandex-8ft':'skirt-rect',
   'linen-banquet-54x120':'skirt-rect','linen-banquet-72x120':'skirt-rect',
   'linen-cocktail-cover':'skirt-round','linen-runner-9ft':'runner',
 };
 export function linenVisual(linenId){return LINEN_VISUALS[linenId]||null;}
 
-function price(p){const n=Number(p&&p.price_per_day);return Number.isFinite(n)?n:null;}
+function price(p){if(!p||p.price_per_day==null||p.price_per_day==='')return null;const n=Number(p.price_per_day);return Number.isFinite(n)?n:null;}
 function findCompatible(products,id){
   const live=products.filter(p=>p&&p.active!==false&&String(p.category||'').toLowerCase()==='linen');
   const rules={
+    'linen-round-120':n=>/120/.test(n)&&/round/.test(n)&&/polyester/.test(n),
     'linen-round-90':n=>/90/.test(n)&&/round/.test(n),
     'linen-round-108':n=>/108/.test(n)&&/round/.test(n),
     'linen-spandex-6ft':n=>/spandex/.test(n)&&/(^|\D)6\s*(?:ft|foot|feet|'|$)/.test(n),
@@ -59,3 +61,6 @@ function applyTenantLinens(detail){
   LINENS.forEach(l=>{const p=findCompatible(products,l.id),n=price(p);if(p&&n!=null){l.pricePerDay=n;l.productId=p.id;}});
 }
 if(typeof window!=='undefined')window.addEventListener('rentsketch:catalogReady',e=>applyTenantLinens(e.detail||{}));
+
+export const LINEN_COLOR_HEX = {'White':'#ffffff','Ivory':'#eee4cf','Champagne':'#d9c39d','Gold':'#b58b42','Black':'#18191b','Silver':'#aeb3b8','Navy Blue':'#172c52','Royal Blue':'#2350a2','Dusty Blue':'#829cae','Burgundy':'#681f2d','Red':'#a72b2c','Blush':'#e4bbb7','Dusty Rose':'#b97c7c','Pink':'#e4a9bd','Purple':'#76538f','Sage Green':'#8b9b79','Hunter Emerald Green':'#285d49'};
+export function linenColorHex(name){return LINEN_COLOR_HEX[name] || '#ffffff';}
