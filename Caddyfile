@@ -27,7 +27,7 @@
 
 	# Keep cached copies, but check for updates before starting a new visit.
 	# Otherwise Friendly's iframe can retain an older entry page after a deploy.
-	@designer path /designer /designer/* /script.js /js/* /*.css
+	@designer path /designer /designer/* /script.js /js/* /embed/* /*.css
 	header @designer Cache-Control "no-cache"
 
 	root * /app

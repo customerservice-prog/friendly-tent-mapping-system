@@ -17,10 +17,51 @@ A small, versioned, dependency-free loader that renders the iframe for you and f
 
 ```
 <div id="rentsketch-embed"></div>
-<script src="https://rentsketch.com/embed/v1.js" data-tenant="YOUR_SLUG" data-embed-key="YOUR_EMBED_KEY" defer></script>
+<script src="https://rentsketch.com/embed/v1.js?v=20260919-integration" data-tenant="YOUR_SLUG" data-embed-key="YOUR_EMBED_KEY" defer></script>
 ```
 
 Optional attributes on the same script tag. data-target sets the id of a different container element, default rentsketch-embed. data-height sets a fixed height in px, default is responsive and auto-resizing. data-mode="button" renders a "Design Your Event" button that opens the designer in a modal overlay instead of rendering inline. data-label sets the button text when using data-mode="button".
+
+## Exact product preview from a product page
+
+Use the same hosted designer for every rental company. Pass that company's
+RentSketch tenant slug, public embed key, and **RentSketch product ID** from its
+catalog. A storefront's own item ID is not a RentSketch product ID.
+
+```html
+<div id="rentsketch-product"></div>
+<script src="https://rentsketch.com/embed/v1.js?v=20260919-integration"
+  data-tenant="YOUR_SLUG"
+  data-embed-key="YOUR_EMBED_KEY"
+  data-target="rentsketch-product"
+  data-mode="button"
+  data-product-id="YOUR_RENTSKETCH_PRODUCT_ID"
+  data-tent-name="20×20 Pole Tent"
+  data-label="See This Tent in a Layout"
+  defer></script>
+```
+
+`data-tent-name` supplies a loading label; the live product name replaces it.
+An explicit product ID is authoritative: an unknown ID shows an error instead
+of silently selecting another tent. For older storefront integrations,
+`data-tent-slug` supports exact catalog slug matching. Use `data-view="2d"` to
+start with the plan. 3D is the default for product previews.
+
+Product previews show the tent before the existing Early Access acknowledgment.
+**Design My Event** retains that same tent and scene. The loader bounds loading
+at 25 seconds and offers Retry, 2D, and Full Screen while preserving the product.
+It does not copy the renderer or store a second scene in the host website.
+
+When using multiple embeds, give each one a unique `data-target`. Events bubble
+to that container, including for the button/modal mode. Check both the source
+iframe and origin when implementing your own message listener; also check the
+tenant and requested product before treating a preview as ready.
+
+The iframe URL equivalent is:
+
+```text
+https://rentsketch.com/designer/?tenant=YOUR_SLUG&embed=1&focus=tent&autoplace=1&view=3d&productId=YOUR_RENTSKETCH_PRODUCT_ID&v=20260919-integration
+```
 
 ## Where to find YOUR_SLUG and YOUR_EMBED_KEY
 
@@ -38,7 +79,7 @@ If you use the loader script, the iframe element it creates dispatches DOM Custo
 document.getElementById('rentsketch-embed').querySelector('iframe').addEventListener('rentsketch:quoteRequested', function (e) { /* e.detail has the raw postMessage payload */ });
 ```
 
-Event names are rentsketch:ready, rentsketch:designSaved, and rentsketch:quoteRequested. If you build your own iframe by hand (Option 1) you can listen for the underlying postMessage events directly on window instead. Always check that event.origin === 'https://rentsketch.com' before trusting a message.
+Event names are rentsketch:ready, rentsketch:error, rentsketch:designSaved, and rentsketch:quoteRequested. Product readiness includes mode=tent-preview, tenant, productId, tentId and renderer (webgl or 2d). Generic readiness is emitted after the catalog and questionnaire are usable. If you build your own iframe by hand (Option 1) you can listen for the underlying postMessage events directly on window instead. Always check that event.origin === 'https://rentsketch.com' before trusting a message.
 
 ## Mobile
 

@@ -15,7 +15,7 @@
     window.addEventListener('rentsketch:tenantError',function(e){if(restarted)return;restarted=true;var wrap=document.createElement('div');wrap.style.cssText='position:fixed;inset:0;z-index:2147483600;background:#f5f8f6;display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui';wrap.innerHTML='<div style="max-width:520px;background:#fff;border-radius:18px;padding:24px;box-shadow:0 20px 60px #0002;text-align:center"><h2 style="margin-top:0">This event designer is temporarily unavailable</h2><p style="color:#526171">We could not load this rental company’s live RentSketch catalog. Please reload and try again.</p><button type="button" style="border:0;border-radius:10px;padding:11px 16px;font-weight:700;cursor:pointer" data-reload>Reload</button></div>';document.body.appendChild(wrap);wrap.querySelector('[data-reload]').onclick=function(){location.reload();};},{once:true});
     return;
   }
-  var isTentPreview = q.get('view') === '3d' && q.get('focus') === 'tent' && q.get('autoplace') === '1';
+  var isTentPreview = q.get('focus') === 'tent' && q.get('autoplace') === '1';
   var tenant = window.ACTIVE_TENANT || {};
   var tenantName = tenant.name || 'your rental company';
   var supportEmail = tenant.contactEmail || tenant.contact_email || '';

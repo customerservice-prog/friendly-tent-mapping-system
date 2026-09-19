@@ -2,9 +2,13 @@
 // Prevents recommendations/demo mode from racing the async tenant/products fetch.
 (function () {
   'use strict';
+  var params = new URLSearchParams(location.search);
+  // Product entry owns its preview; the questionnaire must never race it.
+  if (params.get('focus') === 'tent' && params.get('autoplace') === '1') return;
   var started = false;
   var timeout = null;
   function showCatalogFailure(message) {
+    if (window.parent !== window) window.parent.postMessage({type:'rentsketch.error',tenant:params.get('tenant') || 'generic',reason:message || 'Catalog unavailable'}, '*');
     var host = document.getElementById('intakeWizard');
     if (!host) return;
     host.innerHTML = '<div class="card" style="max-width:680px;margin:32px auto;text-align:center"><h2>Event designer is temporarily unavailable</h2><p>We could not load this rental company’s current catalog. Please try again so we do not show outdated inventory or pricing.</p><button type="button" class="btn-primary" id="catalogRetryBtn">Try Again</button><p class="disclaimer">'+String(message||'Catalog unavailable').replace(/[<>]/g,'')+'</p></div>';
@@ -14,14 +18,28 @@
     if (started) return;
     started = true;
     if (timeout) clearTimeout(timeout);
-    import('./intake.js').catch(function (err) {
+    if (params.get('tenant') && params.get('tenant') !== 'generic' && !((window.ACTIVE_TENANT || {}).tents || []).length) {
+      showCatalogFailure('This rental company has no tent previews available yet.');
+      return;
+    }
+    import('./intake.js').then(function () {
+      var attempts = 0;
+      (function ready() {
+        var host = document.getElementById('intakeWizard');
+        if (window.FriendlyBridge && host && host.firstElementChild) {
+          window.dispatchEvent(new CustomEvent('rentsketch:intakeReady'));
+          if (window.parent !== window) window.parent.postMessage({type:'rentsketch.ready',mode:'designer',tenant:params.get('tenant') || 'generic'}, '*');
+        } else if (++attempts < 100) setTimeout(ready, 100);
+        else showCatalogFailure('The designer could not start. Please try again.');
+      })();
+    }).catch(function (err) {
       console.error('[RentSketch] intake failed to load', err);
       showCatalogFailure('Designer module failed to load.');
     });
   }
   // Generic mode intentionally uses local renderer/demo definitions and does not
   // require a business catalog. Real tenants must wait for the API result.
-  var slug = window.RENTSKETCH_TENANT_SLUG || 'generic';
+  var slug = params.get('tenant') || 'generic';
   if (slug === 'generic' || window.RENTSKETCH_CATALOG_READY) { start(); return; }
   if (window.RENTSKETCH_CATALOG_ERROR) { showCatalogFailure(window.RENTSKETCH_CATALOG_ERROR); return; }
   window.addEventListener('rentsketch:catalogReady', start, { once: true });

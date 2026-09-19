@@ -1,0 +1,9 @@
+{
+  "private": true,
+  "scripts": {
+    "test": "node --test *.test.mjs && node --experimental-vm-modules designer-dom-smoke.cjs && node embed-integration.cjs && node --experimental-vm-modules tenant-customer-flow.cjs"
+  },
+  "devDependencies": {
+    "jsdom": "30.1.0"
+  }
+}
