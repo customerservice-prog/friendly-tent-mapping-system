@@ -8,6 +8,7 @@ const products=[
  {id:'lake-tent',external_id:'lake:20x20-frame',category:'tent',visual_model_id:'frame-20x20',name:'Lakeside White Frame Tent',price_per_day:399},
  {id:'lake-table',category:'table',visual_model_id:'round-5ft',name:'Lakeside Round Table',price_per_day:19},
  {id:'lake-chair',category:'chair',visual_model_id:'resin-white',name:'Lakeside Resin Chair',price_per_day:4},
+ {id:'lake-gold-chair',category:'chair',visual_model_id:'chiavari-gold',name:'Lakeside Gold Chair',price_per_day:6.50},
 ];
 w.fetch=async(url,options={})=>{
  requests.push({url,method:options.method||'GET',body:options.body&&JSON.parse(options.body)});
@@ -43,14 +44,19 @@ const settle=()=>new Promise(resolve=>setImmediate(resolve));
  assert.equal(b.getScene().tentId,'frame-20x20');
  w.document.querySelector('[data-drawer="tables"]').click();w.document.querySelector('[data-role="table-card"]').click();
  assert.equal(b.getScene().objects[0].chairId,'resin-white');
+ w.document.querySelector('[data-drawer="chairs"]').click();
+ assert.equal(w.document.querySelectorAll('[data-role="chair-card"]').length,2);
+ assert.doesNotMatch(w.document.getElementById('drawerBody').textContent,/Friendly|Plastic/);
+ w.document.querySelector('[data-role="chair-card"][data-id="chiavari-gold"]').click();
+ assert.equal(b.getScene().objects[0].chairId,'chiavari-gold');
  w.document.getElementById('btnToReview').click();
- assert.match(w.document.getElementById('reviewSummary').textContent,/Lakeside White Frame Tent/);assert.match(w.document.getElementById('reviewSummary').textContent,/\$450.00/);
- assert.deepEqual(Array.from(b.computeLineItems(),x=>x.productId),['lake-tent','lake-table','lake-chair']);
+ assert.match(w.document.getElementById('reviewSummary').textContent,/Lakeside White Frame Tent/);assert.match(w.document.getElementById('reviewSummary').textContent,/\$470.00/);
+ assert.deepEqual(Array.from(b.computeLineItems(),x=>x.productId),['lake-tent','lake-table','lake-gold-chair']);
  evalScript('js/ui/review-actions.js');
  w.document.getElementById('customerName').value='Test Customer';w.document.getElementById('customerEmail').value='qa@example.invalid';w.document.getElementById('customerDate').value='2026-10-10';
  await w.RentSketchAutosave.flush();w.document.getElementById('btnEmailQuote').click();await settle();await settle();
  const saves=requests.filter(r=>r.method==='POST'&&r.url.endsWith('/designs')),quotes=requests.filter(r=>r.url.endsWith('/quote-requests'));
- assert.equal(saves.length,1);assert.equal(quotes.length,1);assert.equal(quotes[0].body.designId,'lake-design');assert.equal(quotes[0].body.estimateTotal,450);assert.equal(quotes[0].body.lineItems[0].productId,'lake-tent');
+ assert.equal(saves.length,1);assert.equal(quotes.length,1);assert.equal(quotes[0].body.designId,'lake-design');assert.equal(quotes[0].body.estimateTotal,470);assert.equal(quotes[0].body.lineItems[0].productId,'lake-tent');
  assert.ok(requests.every(r=>!r.url.includes('/friendly')));assert.match(messages.join(' '),/Lakeside Events/);
  console.log('PASS: delayed second-tenant hydration → exact 2D preview → tenant acknowledgment → own equipment/prices → complete review → mocked quote reuses same tenant design; no network writes');
  dom.window.close();

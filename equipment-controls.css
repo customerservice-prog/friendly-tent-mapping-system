@@ -1,5 +1,19 @@
 /* Real equipment choices and controls within the existing designer shell. */
 .equipment-card { text-align:left; display:flex; flex-direction:column; gap:5px; }
+.equipment-card:focus-visible, .linen-swatch:focus-visible { outline:3px solid #286440; outline-offset:3px; }
+.chair-visual { width:100%; height:120px; border-radius:10px; background:linear-gradient(150deg,#e1e9e2,#f5f7f3); }
+.equipment-card .equipment-add { margin-top:auto; padding-top:7px; }
+.equipment-card .item-card-price { white-space:normal; line-height:1.4; }
+.linen-swatches { display:flex; gap:6px; overflow-x:auto; overscroll-behavior-x:contain; padding:3px 3px 8px; scrollbar-width:thin; }
+.linen-swatch { position:relative; flex:0 0 44px; width:44px; height:44px; padding:5px; border:1px solid #c2cec4; border-radius:50%; background:#fff; cursor:pointer; }
+.linen-swatch::before { content:''; position:absolute; inset:5px; border:1px solid #0002; border-radius:50%; background:var(--swatch); }
+.linen-swatch[aria-pressed="true"] { border:2px solid #286440; }
+.linen-swatch span { position:relative; display:block; width:20px; height:20px; margin:auto; border-radius:50%; font-weight:800; line-height:20px; }
+.linen-swatch[aria-pressed="true"] span { color:#fff; background:#286440; }
+.match-table-style { margin:12px 0; display:grid; gap:5px; }
+.match-table-style button { width:100%; min-height:44px; white-space:normal; line-height:1.4; }
+.match-table-style > span { font-size:12px; color:#596a60; line-height:1.4; }
+.table-seat-controls { display:grid; grid-template-columns:minmax(0,1fr); }
 .equipment-visual { width:100%; height:115px; background:#f1f5f2; border-radius:10px; }
 .equipment-add { color:#266238; font-size:13px; font-weight:700; margin-top:5px; }
 .equipment-field { display:flex; flex-direction:column; gap:7px; margin:14px 0; font-size:14px; font-weight:600; }

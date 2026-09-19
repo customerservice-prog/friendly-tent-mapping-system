@@ -1,18 +1,82 @@
 import { chairPositions } from '../core/seating.js';
+import { linenColorHex } from '../data/linens.js';
 export function escapeHtml(value) {return String(value == null ? '' : value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+// Refresh controls without losing the customer's place during repeated edits.
+export function renderEquipmentContent(panel, html) {
+  const active=panel.ownerDocument.activeElement;
+  const focused=panel.contains(active) && active.dataset.role ? {...active.dataset} : null;
+  const scrollTop=panel.scrollTop;
+  const horizontal=[...panel.querySelectorAll('[data-scroll-key]')].map(el=>[el.dataset.scrollKey,el.scrollLeft]);
+  panel.innerHTML=html;
+  if(focused) {
+    const controls=[...panel.querySelectorAll('[data-role]')];
+    const replacement=controls.find(el=>!el.disabled && Object.entries(focused).every(([k,v])=>el.dataset[k]===v))
+      || controls.find(el=>!el.disabled && el.dataset.role===focused.role && el.dataset.id===focused.id);
+    replacement?.focus({preventScroll:true});
+  }
+  panel.scrollTop=scrollTop;
+  for(const [key,left] of horizontal) {
+    const row=[...panel.querySelectorAll('[data-scroll-key]')].find(el=>el.dataset.scrollKey===key);
+    if(row)row.scrollLeft=left;
+  }
+}
+
+export function chairVisual(chair) {
+  const frame=escapeHtml(chair.frameColor || '#f2f1ec'),accent=escapeHtml(chair.accentColor || '#f2f1ec');
+  let back;
+  if(chair.silhouette==='throne') back=`<path d="M31 70V30Q31 18 42 18Q50 1 58 18Q69 18 69 30V70Z" fill="${accent}" stroke-width="5"/><path d="M37 35L63 61M63 35L37 61" opacity=".3"/><path d="M22 66V83M78 66V83M22 68H32M68 68H78" stroke-width="5"/>`;
+  else if(chair.silhouette==='chiavari') back='<path d="M32 78V23Q50 14 68 23V78M32 31H68M32 57H68M40 30V57M50 30V57M60 30V57M32 91H68" fill="none" stroke-width="4"/>';
+  else if(chair.silhouette==='resin') back=`<path d="M31 76V27Q50 18 69 27V76" fill="none" stroke-width="5"/><path d="M32 32H68V44H32Z" fill="${frame}"/><path d="M33 84H67" stroke-width="4"/>`;
+  else back=`<rect x="30" y="29" width="40" height="23" rx="7" fill="${frame}"/><path d="M33 52L67 106M67 52L33 106" stroke-width="4" fill="none"/>`;
+  return `<svg class="chair-visual" aria-hidden="true" viewBox="0 0 100 120"><ellipse cx="50" cy="110" rx="31" ry="4" fill="#dce3dd"/><g stroke="${frame}" stroke-linejoin="round" stroke-linecap="round">${back}<path d="M32 76L28 106M68 76L72 106" stroke-width="5"/><rect x="28" y="70" width="44" height="9" rx="3" fill="${accent}" stroke-width="3"/></g><path d="M30 79H70" stroke="#66776b" opacity=".35"/></svg>`;
+}
+
+export function chairsDrawer(chairs, defaultId, objects) {
+  const tables=objects.filter(o=>o.kind==='table' && o.seatCount>0);
+  const total=tables.reduce((n,o)=>n+Number(o.seatCount),0);
+  const note=tables.length ? `Choose a style for all ${tables.length} seated ${tables.length===1?'table':'tables'} (${total} chairs). To change just one table, select it on the plan.` : 'Choose the chairs to include when you add tables.';
+  return `<p class="equipment-note">${note}</p><div class="item-card-grid">${chairs.map(chair=>{
+    const quantity=tables.filter(o=>o.chairId===chair.id).reduce((n,o)=>n+Number(o.seatCount),0);
+    const selected=tables.length ? tables.every(o=>o.chairId===chair.id) : chair.id===defaultId;
+    const price=chair.pricePerDay==null ? 'Confirm pricing' : '$'+Number(chair.pricePerDay).toFixed(2)+' / chair / day';
+    const action=tables.length ? `Use for ${total} chairs` : 'Use with new tables';
+    return `<button type="button" class="item-card equipment-card${selected?' selected':''}" data-role="chair-card" data-id="${escapeHtml(chair.id)}" aria-pressed="${selected}" aria-label="${escapeHtml(chair.name)}: ${action}">${selected?'<span class="item-card-check" aria-hidden="true">✓</span>':''}${chairVisual(chair)}<span class="item-card-name">${escapeHtml(chair.name)}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${quantity?quantity+' in your layout':chair.isThrone?'Statement chair':'Dining chair'}</span><span class="equipment-add">${selected?'✓ Selected':action}</span></button>`;
+  }).join('')}</div>`;
+}
 export function tableVisual(table, chair = {}, placed) {
   const item=placed || {shape:table.shape,widthFt:table.diameterFt || table.widthFt,depthFt:table.diameterFt || table.depthFt,seatCount:table.seatsDefault};
   const w=item.widthFt,d=item.depthFt,span=Math.max(w,d)+5;
   const seats=chairPositions(item,chair).map(p=>`<rect x="${p.x-.55}" y="${p.y-.55}" width="1.1" height="1.1" rx=".18" fill="${escapeHtml(chair.frameColor || '#fff')}" stroke="#78897f" stroke-width=".08" transform="rotate(${p.angle*180/Math.PI} ${p.x} ${p.y})"/>`).join('');
   const top=item.shape==='round'?`<ellipse cx="0" cy="0" rx="${w/2}" ry="${d/2}"/>`:`<rect x="${-w/2}" y="${-d/2}" width="${w}" height="${d}" rx=".2"/>`;
-  return `<svg class="equipment-visual" aria-hidden="true" viewBox="${-span/2} ${-span/2} ${span} ${span}">${seats}<g fill="${table.silhouette==='fillchill-tub'?'#343d43':'#f7f2e7'}" stroke="#b6a786" stroke-width=".10">${top}</g></svg>`;
+  const color=item.linenId ? linenColorHex(item.linenColor) : table.silhouette==='fillchill-tub'?'#343d43':'#b99165';
+  return `<svg class="equipment-visual" aria-hidden="true" viewBox="${-span/2} ${-span/2} ${span} ${span}">${seats}<g fill="${color}" stroke="#837558" stroke-width=".10">${top}</g></svg>`;
 }
 export function tableCard(table, chair, quantity) {
-  const price=table.pricePerDay == null ? 'Confirm pricing' : '$'+Number(table.pricePerDay).toFixed(2)+'/day';
-  return `<button class="item-card equipment-card" data-role="table-card" data-id="${escapeHtml(table.id)}" aria-label="Add ${escapeHtml(table.name)}">${tableVisual(table,chair)}<span class="item-card-name">${escapeHtml(table.name)}</span><span class="item-card-desc">${table.seatsDefault ? table.seatsDefault+' seats' : 'Standing / service'}${quantity ? ' · '+quantity+' in layout' : ''}</span><span class="item-card-price">${price}</span><span class="equipment-add">+ Add table</span></button>`;
+  const seats=table.seatsDefault || 0;
+  const price=table.pricePerDay == null || seats && chair?.pricePerDay==null ? 'Confirm pricing' : '$'+(Number(table.pricePerDay)+seats*Number(chair?.pricePerDay || 0)).toFixed(2)+'/day';
+  const included=seats ? `Table + ${seats} chairs` : 'Table only';
+  return `<button class="item-card equipment-card" data-role="table-card" data-id="${escapeHtml(table.id)}" aria-label="Add ${escapeHtml(table.name)}">${tableVisual(table,chair)}<span class="item-card-name">${escapeHtml(table.name)}</span><span class="item-card-desc">${table.seatsDefault ? table.seatsDefault+' seats' : 'Standing / service'}${quantity ? ' · '+quantity+' in layout' : ''}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${included}</span><span class="equipment-add">+ Add table</span></button>`;
 }
-export function tableInspector(item, table, chairs, linens) {
+export function tableInspector(item, table, chairs, linens, matchingCount=1) {
   const esc=escapeHtml,chair=chairs.find(c=>c.id===item.chairId) || {},max=Math.max(0,...(table.seatsOptions||[12]));
   const options=(list,current)=>list.map(x=>`<option value="${esc(x.id)}"${x.id===current?' selected':''}>${esc(x.name)}</option>`).join('');
-  return `<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button><h3 class="inspector-title">${esc(table.name)}</h3>${tableVisual(table,chair,item)}<label class="equipment-field">Chairs<select data-role="insp-chair" data-id="${esc(item.id)}">${options(chairs,item.chairId)}</select></label><div class="equipment-field"><span>Seats</span><div class="seat-stepper"><button type="button" data-role="insp-seats" data-delta="-1" data-id="${esc(item.id)}" aria-label="Remove one seat"${item.seatCount<=0?' disabled':''}>−</button><output aria-label="Seat count">${item.seatCount || 0}</output><button type="button" data-role="insp-seats" data-delta="1" data-id="${esc(item.id)}" aria-label="Add one seat"${item.seatCount>=max?' disabled':''}>+</button></div></div><label class="equipment-field">Linen<select data-role="insp-linen" data-id="${esc(item.id)}"><option value="">No linen</option>${options(linens,item.linenId)}</select></label>${item.linenId?`<label class="equipment-field">Linen color<select data-role="insp-linen-color" data-id="${esc(item.id)}">${(linens.find(l=>l.id===item.linenId)?.colors||['White']).map(c=>`<option${c===(item.linenColor||'White')?' selected':''}>${esc(c)}</option>`).join('')}</select></label>`:''}<div class="inspector-actions equipment-actions"><button class="btn-secondary" data-role="insp-rotate" data-id="${esc(item.id)}">Rotate 90°</button><button class="btn-secondary" data-role="insp-duplicate" data-id="${esc(item.id)}">Duplicate</button><button class="btn-danger" data-role="insp-delete" data-id="${esc(item.id)}">Delete</button></div><button class="btn-tertiary" data-role="insp-design-table" data-id="${esc(item.id)}">Table details</button><p class="equipment-note">Drag this table on the plan to move it.</p>`;
+  const linen=linens.find(l=>l.id===item.linenId),color=item.linenColor || 'White';
+  const colors=linen?.colors || ['White'];
+  return `<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button>
+    <h3 class="inspector-title">${esc(table.name)}</h3>${tableVisual(table,chair,item)}
+    <div class="table-seat-controls">
+      <label class="equipment-field">Chairs<select data-role="insp-chair" data-id="${esc(item.id)}">${options(chairs,item.chairId)}</select></label>
+      <div class="equipment-field"><span>Seats</span><div class="seat-stepper">
+        <button type="button" data-role="insp-seats" data-delta="-1" data-id="${esc(item.id)}" aria-label="Remove one seat"${item.seatCount<=0?' disabled':''}>−</button>
+        <output aria-label="Seat count">${item.seatCount || 0}</output>
+        <button type="button" data-role="insp-seats" data-delta="1" data-id="${esc(item.id)}" aria-label="Add one seat"${item.seatCount>=max?' disabled':''}>+</button>
+      </div></div>
+    </div>
+    <label class="equipment-field">Linen<select data-role="insp-linen" data-id="${esc(item.id)}"><option value="">No linen</option>${options(linens,item.linenId)}</select></label>
+    ${item.linenId?`<div class="equipment-field"><span>Linen color · ${esc(color)}</span><div class="linen-swatches" role="group" aria-label="Linen color" data-scroll-key="linen-colors">${colors.map(c=>`<button type="button" class="linen-swatch" style="--swatch:${linenColorHex(c)}" data-role="insp-linen-swatch" data-id="${esc(item.id)}" data-color="${esc(c)}" aria-label="${esc(c)}" title="${esc(c)}" aria-pressed="${c===color}"><span aria-hidden="true">${c===color?'✓':''}</span></button>`).join('')}</div></div>`:''}
+    ${matchingCount>1?`<div class="match-table-style"><button type="button" class="btn-secondary" data-role="insp-match-tables" data-id="${esc(item.id)}">Use chairs &amp; linen on all ${matchingCount} matching tables</button><span>Table positions and seat counts stay the same.</span></div>`:''}
+    <div class="inspector-actions equipment-actions"><button class="btn-secondary" data-role="insp-rotate" data-id="${esc(item.id)}">Rotate 90°</button><button class="btn-secondary" data-role="insp-duplicate" data-id="${esc(item.id)}">Duplicate</button><button class="btn-danger" data-role="insp-delete" data-id="${esc(item.id)}">Delete</button></div>
+    <button class="btn-tertiary" data-role="insp-design-table" data-id="${esc(item.id)}">Table details</button>
+    <p class="equipment-note">Drag this table on the plan to move it.</p>`;
 }
