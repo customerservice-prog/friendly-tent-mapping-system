@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createBoundaryTrees } from './scene-trees.js';
 import { sceneSetting, environmentBounds } from './scene-setting.js';
 
 // Self-contained scenery: no stock-photo downloads or large model dependencies.
@@ -80,18 +81,7 @@ function fence(group, bounds) {
   }
 }
 function trees(group,bounds) {
-  const rand=random(19),trunks=[],crowns=[];
-  const positions=[[-bounds.side-7,-bounds.back+8],[-bounds.side-8,6],[bounds.side+8,-bounds.back+10],[bounds.side+9,4],[-bounds.side+5,-bounds.back-12],[bounds.side*.2,-bounds.back-15]];
-  positions.forEach(([x,z],i)=>{
-    const h=15+(i%3)*3;
-    trunks.push({x,y:h/2,z,sy:h/10,sx:1+(i%2)*.25,sz:1+(i%2)*.25});
-    for(let n=0;n<13;n++){
-      const angle=rand()*Math.PI*2,r=rand()*4.7;
-      crowns.push({x:x+Math.cos(angle)*r,y:h-1+rand()*6,z:z+Math.sin(angle)*r,sx:2+rand()*2.7,sy:2.3+rand()*2.4,sz:2+rand()*2.7,ry:rand()*6,color:['#466544','#577649','#688050','#758958'][n%4]});
-    }
-  });
-  instances(group,new THREE.CylinderGeometry(.23,.45,10,7),material('#695642'),trunks);
-  instances(group,new THREE.IcosahedronGeometry(1,1),material('#608252'),crowns);
+  group.add(createBoundaryTrees(bounds));
   const hedges=[];
   for(let x=-bounds.side+4;x<bounds.side-3;x+=2.8)hedges.push({x,y:1.25,z:-bounds.back+2.5,sx:1.8,sy:1.7,sz:1.5,color:x%3?'#567046':'#657d50'});
   instances(group,new THREE.IcosahedronGeometry(1,1),material('#65784b'),hedges);

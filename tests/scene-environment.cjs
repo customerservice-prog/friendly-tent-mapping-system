@@ -15,6 +15,13 @@ const root=path.resolve(__dirname,'..');
   assert.ok(draws<160,'scenery draw-call budget: '+draws);assert.ok(triangles<50000,'scenery triangle budget: '+triangles);
   assert.equal(env.userData.setting,tent.type==='pole'?'backyard':'driveway');
   assert.equal(!!env.getObjectByName('Paved tent surface'),tent.type==='frame');
+  const trees=env.getObjectByName('Backyard boundary trees');assert.equal(trees.children.length,6);
+  const installation=new THREE.Box3(new THREE.Vector3(-tent.widthFt/2-5,0,-tent.lengthFt/2-5),new THREE.Vector3(tent.widthFt/2+5,35,tent.lengthFt/2+5));
+  for(const tree of trees.children){
+    const leaves=tree.getObjectByName('Individual broadleaf sprays');
+    assert.ok(leaves?.isInstancedMesh && Array.from(leaves.instanceMatrix.array).every(Number.isFinite),'foliage transforms must be renderable');
+    assert.ok(!new THREE.Box3().setFromObject(tree).intersectsBox(installation),'trees must stay outside the tent and its anchoring clearance');
+  }
   const home=env.getObjectByName('Background home');assert.ok(home.position.z<-tent.lengthFt/2-10);
   env.userData.setNight(true);env.userData.setNight(false);module.namespace.disposeGroup(env);assert.ok(disposed>0);assert.equal(env.children.length,0);
   console.log('PASS '+tent.type+' '+tent.widthFt+'×'+tent.lengthFt+': finite geometry, '+draws+' draw calls, '+triangles+' triangles, correct surface, clear tent footprint, disposable resources');
