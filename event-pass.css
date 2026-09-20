@@ -42,4 +42,9 @@
 .pass-recover,.pass-legal { border:0;background:none;color:#1766b1;text-decoration:underline;font:inherit;cursor:pointer; }
 .pass-recover { min-height:44px;font-size:13px;padding:8px; }
 .pass-legal { padding:0; }
+@media(max-width:600px) {
+  .event-pass-product { gap:0 8px; }
+  .event-pass-product > .pass-recover { flex:0 1 auto; display:inline-flex; align-items:center; justify-content:center; padding:4px 0; font-size:12px; }
+  body.tent-preview .event-preview-mark { bottom:8px; width:max-content; max-width:calc(100% - 20px); padding:5px 8px; font-size:10px; }
+}
 @media print { .rs-pass-preview #step-review,.rs-pass-checking #step-review { display:none!important; }.rs-pass-preview .event-preview-mark,.rs-pass-checking .event-preview-mark { display:block!important;position:fixed;bottom:20px; }.paywall-overlay,.rs-help,.event-pass-bar { display:none!important; } }

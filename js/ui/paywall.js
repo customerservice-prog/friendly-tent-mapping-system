@@ -101,7 +101,7 @@
       bar.querySelector('small').textContent = (renew ? money(offer.renewalPriceCents) : money(offer.priceCents)) + ' · one event · ' + (renew ? offer.renewalDurationDays : offer.durationDays) + ' days · no subscription';
       bar.querySelector('[data-buy-pass]').textContent = renew ? 'Renew Event Pass' : 'Design My Event';
       bar.querySelector('[data-buy-pass]').onclick = function () { requestAccess(); };
-      var recovery = document.createElement('button'); recovery.type = 'button'; recovery.className = 'pass-recover'; recovery.textContent = 'Open my saved event'; recovery.onclick = showRecovery; bar.appendChild(recovery);
+      var recovery = document.createElement('button'); recovery.type = 'button'; recovery.className = 'pass-recover'; recovery.textContent = 'Open my event'; recovery.setAttribute('aria-label', 'Open my saved event'); recovery.onclick = showRecovery; bar.appendChild(recovery);
       if (savedPaidEvent) {
         var resume = document.createElement('button'); resume.type = 'button'; resume.className = 'btn-secondary'; resume.textContent = 'Continue my saved event';
         resume.onclick = function () { restoreScene(savedPaidEvent); continueProduct(); };
@@ -112,7 +112,7 @@
     if (quote && verified?.includedWithOrder && !quote.hasAttribute('data-sent')) quote.textContent = 'Send layout to Friendly';
     if (verified?.includedWithOrder && document.getElementById('quoteDisclaimer')) document.getElementById('quoteDisclaimer').textContent = 'This sends your layout for review alongside your existing Friendly order. It does not change booked items, prices, delivery, or payments. Friendly will confirm any changes with you.';
     if (!active() && ['friendly', 'generic'].includes(slug) && !bar.querySelector('[data-order-access]')) {
-      var orderLink = document.createElement('a'); orderLink.dataset.orderAccess = ''; orderLink.className = 'pass-recover'; orderLink.href = 'https://rentsketch.com/my-event/?tenant=friendly&mode=order'; orderLink.target = '_blank'; orderLink.rel = 'noopener'; orderLink.textContent = 'Already booked with Friendly? Design for free'; bar.appendChild(orderLink);
+      var orderLink = document.createElement('a'); orderLink.dataset.orderAccess = ''; orderLink.className = 'pass-recover'; orderLink.href = 'https://rentsketch.com/my-event/?tenant=friendly&mode=order'; orderLink.target = '_blank'; orderLink.rel = 'noopener'; orderLink.textContent = 'Booked? Design for free'; orderLink.setAttribute('aria-label', 'Already booked with Friendly? Design for free'); bar.appendChild(orderLink);
     }
     var previewButton = document.getElementById('designMyEvent');
     if (previewButton && !active()) previewButton.textContent = 'Design My Event · ' + money(offer.priceCents);
