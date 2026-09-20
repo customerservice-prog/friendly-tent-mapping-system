@@ -1,0 +1,617 @@
+{
+  "date": "2026-09-20",
+  "products": [
+    {
+      "id": "ae0b92f2-5a38-406d-89c6-5caa756973fe",
+      "name": "Spandex 6ft Table Linen",
+      "category": "linen",
+      "price_per_day": "18.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/black-spandex-6ft-table-linen?v=1787090805611",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "7ea18dbd-8720-4484-aa55-c04cec0a5b1c",
+      "name": "90x156 Banquet Polyester Tablecloth",
+      "category": "linen",
+      "price_per_day": "26.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/90x156-banquet-polyester-tablecloth?v=1787090023628",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "69505f85-4687-49b0-89a2-286b25d8cce8",
+      "name": "90x132 Banquet Polyester Tablecloth",
+      "category": "linen",
+      "price_per_day": "24.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/90x132-banquet-polyester-tablecloth?v=1787090287579",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "c7eef240-3b2d-4cb3-b143-a99fea7c8abe",
+      "name": "Spandex Chair Cover",
+      "category": "linen",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/spandex-chair-cover?v=1787092739598",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "0cdf43b1-fd22-4549-9fd9-29ce4e115187",
+      "name": "Black Spandex 8ft Table Linen",
+      "category": "linen",
+      "price_per_day": "20.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/black-spandex-8ft-table-linen?v=1787090631615",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "1aa1edfd-caa2-4149-a9ee-7285d9746d7c",
+      "name": "9ft Table Runner",
+      "category": "linen",
+      "price_per_day": "4.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/9ft-table-runner?v=1787092428583",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "5023d73f-40e2-4117-a567-0175ca951869",
+      "name": "White Aisle Runner (100ft)",
+      "category": "linen",
+      "price_per_day": "100.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/white-aisle-runner-100ft?v=1789322068186",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "6103c84f-3785-4110-9d43-bbb112e90b30",
+      "name": "Cocktail Table Cover",
+      "category": "linen",
+      "price_per_day": "12.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/cocktail-table-cover-white?v=1787091648601",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "4f2afbe9-a2c0-4c55-bb5e-d465652c5425",
+      "name": "72 x 120 Banquet Tablecloth",
+      "category": "linen",
+      "price_per_day": "18.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/72-x-120-banquet-tablecloth?v=1787090711585",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "20eb6499-944b-4526-aafe-e39789c5d162",
+      "name": "Plastic Linen Clips (12 Pack)",
+      "category": "linen",
+      "price_per_day": "4.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/plastic-linen-clips?v=1787092475597",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "879cf3f3-a92d-412e-940e-cb2787fcc1bc",
+      "name": "Matching Napkins",
+      "category": "linen",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/matching-napkins?v=1787092692587",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "5f4bfcda-4dab-42be-bbfd-300fb41b0360",
+      "name": "120 inch Round Polyester Tablecloth",
+      "category": "linen",
+      "price_per_day": "20.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/120-inch-round-polyester-tablecloth?v=1787090514631",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "36585af9-b5bd-48d3-9756-8414cab6b9d8",
+      "name": "90 Round Polyester Tablecloth",
+      "category": "linen",
+      "price_per_day": "17.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/90-round-polyester-tablecloth?v=1787090845583",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "e29879b4-eb8a-49e4-ac5d-1eb2444da1de",
+      "name": "Linen Tent Package",
+      "category": "linen",
+      "price_per_day": "425.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/linen-tent-package-tent-tables-chairs-tablecloths-syracuse-ny?v=1786395426127",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "9016b7b3-513b-4d71-a6c7-2da8a7d633f2",
+      "name": "120 Round Satin Tablecloth",
+      "category": "linen",
+      "price_per_day": "22.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/120-round-satin-tablecloth?v=1787090337591",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "d86ae32a-dd71-453a-8d0a-e41af0846ee5",
+      "name": "White Table Linen Round 60\"",
+      "category": "linen",
+      "price_per_day": "16.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/white-table-linen-round-60?v=1786560288779",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "75ddf63f-0490-4724-8135-a93d6dba0fed",
+      "name": "108 Round Polyester Tablecloth",
+      "category": "linen",
+      "price_per_day": "18.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/108-round-polyester-tablecloth?v=1787090671581",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "223cd91a-5c47-4eb8-8568-088bdf9a9691",
+      "name": "120 Round Sequin Tablecloth",
+      "category": "linen",
+      "price_per_day": "22.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/120in-round-sequin-tablecloth-rose-gold?v=1787090396571",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "76688b02-1bd5-4f38-8e4d-985bbe230d1f",
+      "name": "54x120 Banquet Polyester Tablecloth",
+      "category": "linen",
+      "price_per_day": "16.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/54x120-banquet-polyester-tablecloth?v=1787090885587",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "10e62bc0-441a-423e-953d-46c266903625",
+      "name": "132 Round Polyester Tablecloth",
+      "category": "linen",
+      "price_per_day": "24.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/132-round-polyester-tablecloth?v=1787090249587",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "5a7b117d-d14d-4b1d-997b-6da7ae477deb",
+      "name": "Tall Highball Glass",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/tall-highball-glass?v=1787092899609",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "752493ed-9d6e-4cfb-86a9-6e0eb05a320e",
+      "name": "8-Quart Full-Size Chafer",
+      "category": "other",
+      "price_per_day": "30.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/8-quart-full-size-chafer?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "18b67662-fca4-4ba9-8b99-9a6d0e6f5879",
+      "name": "6.5 Qt Round Top Chafer",
+      "category": "other",
+      "price_per_day": "25.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/65-qt-round-top-chafer?v=1787090057617",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "acdb9af1-31a8-425d-945c-6fe124334534",
+      "name": "11 Qt Round Soup Chafer",
+      "category": "other",
+      "price_per_day": "40.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/11-qt-round-soup-chafer?v=1787089140580",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "fb26be84-f3eb-4f0a-9c34-82922382faef",
+      "name": "Plastic Round Catering / Serving Bowl",
+      "category": "other",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/large-family-style-serving-bowl?v=1787227419156",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "08a373dc-92a3-4e84-b3ac-274c601f9676",
+      "name": "Glass Water Pitcher (64 oz)",
+      "category": "other",
+      "price_per_day": "10.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/glass-water-pitcher-64-oz?v=1787091927573",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "945bb633-ec36-4cdd-bad2-1e8d8d6ede75",
+      "name": "Glass Beaded Charger Plate",
+      "category": "other",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/glass-beaded-charger-plate?v=1787094518627",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "80b8a785-0eb3-407a-a868-a3f23c9f08b1",
+      "name": "60 oz Beverage Pitcher",
+      "category": "other",
+      "price_per_day": "10.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/60-oz-beverage-pitcher?v=1787091882624",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "e7b49b48-bf6f-4458-93ea-0bc3e4f9c507",
+      "name": "10 Gallon Insulated Beverage Dispenser",
+      "category": "other",
+      "price_per_day": "35.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/10-gallon-insulated-beverage-dispenser?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "c888ac98-3fa7-4097-ae04-901855650a43",
+      "name": "Teaspoon",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/teaspoon?v=1787093190608",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "0886afe0-919d-4de0-b7fb-770cbb6072fd",
+      "name": "Gold Pedestal Cake Stand (14in)",
+      "category": "other",
+      "price_per_day": "15.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/gold-pedestal-cake-stand-14in?v=1787094350613",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "00a9f1eb-5e03-4547-bf74-9fddf095ee59",
+      "name": "Gold 5-Arm Candelabra",
+      "category": "other",
+      "price_per_day": "20.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/gold-5-arm-candelabra?v=1787094317604",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "dc0c23bf-d933-4b9a-920a-1dc94c03cef7",
+      "name": "Salad Fork",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/salad-fork?v=1787093059604",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "e325c427-64b3-440d-96f9-6205facac192",
+      "name": "Cake Fork",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/cake-fork?v=1787093108587",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "f927e2c4-801c-477f-91be-1b65314f661f",
+      "name": "Rustic Lantern Table Centerpiece",
+      "category": "other",
+      "price_per_day": "25.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/rustic-lantern-table-centerpiece?v=1789318746267",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "f3e7e30d-173a-4184-bd30-098f9d7f69ae",
+      "name": "Pilsner Beer Glass",
+      "category": "other",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/pilsner-beer-glass?v=1787092551598",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "552fdece-b633-4b81-a6b7-538a11287cbb",
+      "name": "Serving Tongs",
+      "category": "other",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/serving-tongs?v=1787243794857",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "53b21f3f-3523-49b5-b2f1-85626fe4da4d",
+      "name": "Round Gold Metal Display Dish",
+      "category": "other",
+      "price_per_day": "10.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/round-gold-metal-display-dish?v=1787094450598",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "e5e273eb-df2b-4f98-b69a-e95416ff9153",
+      "name": "Tiered Cake Display - 3-Level Gold",
+      "category": "other",
+      "price_per_day": "25.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/tiered-cake-display-3-level-gold?v=1787094251598",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "8b610325-9206-456c-8b82-9b5289db70e8",
+      "name": "Gold Card Box",
+      "category": "other",
+      "price_per_day": "15.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/gold-card-box?v=1787094383630",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "6b431da2-efc0-4cf9-86c5-cdbb2fdb382e",
+      "name": "Gold Beaded Charger Plate",
+      "category": "other",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/gold-beaded-charger-plate?v=1787094485625",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "f6157012-62dd-49d2-89db-3edf0cfa60b3",
+      "name": "Roll-Top 8 Qt Chafer",
+      "category": "other",
+      "price_per_day": "45.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/roll-top-8-qt-chafer?v=1787089040574",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "340eb414-b342-4cf8-b726-04adf4f9b9ab",
+      "name": "7.25 oz Martini Glass",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/725-oz-martini-glass?v=1787092851584",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "a971b50c-0b57-4416-b378-fcbaea79a073",
+      "name": "2.5 Gallon Insulated Beverage Dispenser",
+      "category": "other",
+      "price_per_day": "25.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/25-gallon-insulated-beverage-dispenser?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "16d25b9e-904c-44bf-9f5b-0edcf176cbd9",
+      "name": "4 Qt Round Chafer",
+      "category": "other",
+      "price_per_day": "30.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/4-qt-round-chafer?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "c694bc13-ee55-41b1-bdbd-352d03556e13",
+      "name": "Pie/Cake Server",
+      "category": "other",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/piecake-server?v=1787242877581",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "79888d91-b339-4e94-b69a-7301829da026",
+      "name": "Sheet Pan",
+      "category": "other",
+      "price_per_day": "7.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/sheet-pan?v=1787092253614",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "d7955485-9290-4430-af2e-278a8b29ed3f",
+      "name": "Table Number Stands",
+      "category": "other",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/table-number-stands?v=1787227149604",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "009a84a7-1444-49c8-8085-a551a0ad36fa",
+      "name": "10 1/2 oz. Water Goblet",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/10-12-oz-water-goblet?v=1787092802578",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "524567a9-bd5c-420c-9d27-7e1195af91df",
+      "name": "5 oz Footed Rocks Glass",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/5-oz-footed-rocks-glass?v=1787092949593",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "16ab8868-2f7a-4981-b64d-187922709794",
+      "name": "6-Inch Bread and Butter Plate",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/6-inch-bread-and-butter-plate?v=1787092999623",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "e8d48353-9a2b-4f17-b42a-4e929d10f743",
+      "name": "Tablespoon / Soup Spoon",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/tablespoon-soup-spoon?v=1787093139633",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "b92ee0c3-b756-4257-b523-97b894bcd5c4",
+      "name": "Dinner Fork",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/dinner-fork?v=1787227630594",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "9086df05-7ce4-4cbe-905a-05b11f8f8a71",
+      "name": "Dinner Knife",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/dinner-knife?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "2f2b5613-907f-434e-91d5-e9ba5a58e217",
+      "name": "Salt and Pepper Shaker Set",
+      "category": "other",
+      "price_per_day": "3.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/salt-and-pepper-shaker-set?v=1787243449561",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "c9cdb279-23fd-4dc2-92ed-29743a394a97",
+      "name": "Chocolate Fountain",
+      "category": "other",
+      "price_per_day": "75.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/chocolate-fountain?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "03c868a6-f270-4242-a1a4-6080166f7b20",
+      "name": "Wine / Champagne Bucket",
+      "category": "other",
+      "price_per_day": "15.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/wine-champagne-bucket?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "eea88082-5e3c-43df-9684-483e4aeabde0",
+      "name": "8.5 oz Wine Glass",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/85-oz-wine-glass?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "e8745057-723a-4f19-946a-2588af9d34d2",
+      "name": "8.5-Inch Rim Soup Bowl",
+      "category": "other",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/85-inch-rim-soup-bowl?v=1787092645590",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "8d980863-f7df-4b16-b1ab-097197b33d22",
+      "name": "10-5/8 Dinner Plate",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/10-58-dinner-plate?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "4229f771-a6ec-4913-98a5-6defc58ce910",
+      "name": "Glass Carafe",
+      "category": "other",
+      "price_per_day": "4.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/glass-carafe?v=1787226997657",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "aeea6b71-ba74-4a00-9117-acf4983b3ef2",
+      "name": "7-Inch Salad Plate",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/7-inch-salad-plate?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "96cfc3cb-410d-419b-a9b0-7dd64cb53f16",
+      "name": "Glass Coffee Mug",
+      "category": "other",
+      "price_per_day": "2.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/glass-coffee-mug?v=1787244665564",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "a815e30a-d14d-4c6c-8357-9bfb1b76181d",
+      "name": "Coffee Urn / Percolator",
+      "category": "other",
+      "price_per_day": "35.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/coffee-urn-percolator?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "0f0a9717-91d2-4ea2-adbf-c6d08c97f6c1",
+      "name": "Serving Spoon",
+      "category": "other",
+      "price_per_day": "3.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/serving-spoon?v=1787092495586",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "08e9a11f-f154-4f42-aa14-acef15e9f229",
+      "name": "Sugar and Creamer Set",
+      "category": "other",
+      "price_per_day": "5.00",
+      "photo_url": null,
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "ec2fac43-e266-40ed-895c-1ffe10782c7f",
+      "name": "4.5 oz Champagne Flute",
+      "category": "other",
+      "price_per_day": "1.50",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/45-oz-champagne-flute?v=1786395426308",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "21d6adb4-e168-40c1-952c-03cfb143073e",
+      "name": "10-Inch Cake Plate",
+      "category": "other",
+      "price_per_day": "1.00",
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/10-inch-cake-plate?v=1787093242589",
+      "metadata": {},
+      "active": true
+    }
+  ]
+}

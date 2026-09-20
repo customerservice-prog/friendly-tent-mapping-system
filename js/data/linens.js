@@ -33,7 +33,7 @@ export const LINEN_VISUALS = {
   'linen-banquet-54x120':'skirt-rect','linen-banquet-72x120':'skirt-rect',
   'linen-cocktail-cover':'skirt-round','linen-runner-9ft':'runner',
 };
-export function linenVisual(linenId){return LINEN_VISUALS[linenId]||null;}
+export function linenVisual(linenId){return LINEN_VISUALS[linenId]||byId(linenId)?.visual||null;}
 
 function price(p){if(!p||p.price_per_day==null||p.price_per_day==='')return null;const n=Number(p.price_per_day);return Number.isFinite(n)?n:null;}
 function findCompatible(products,id){
@@ -53,12 +53,21 @@ function findCompatible(products,id){
   };
   const rule=rules[id];return rule?live.find(p=>rule(String(p.name||'').toLowerCase())):null;
 }
+const LINEN_BASE=JSON.parse(JSON.stringify(LINENS));
 function applyTenantLinens(detail){
-  LINENS.forEach(l=>{l.pricePerDay=null;delete l.productId;});
+  LINENS.splice(0,LINENS.length,...JSON.parse(JSON.stringify(LINEN_BASE)));
   const tenant=detail&&detail.tenant||window.ACTIVE_TENANT||{};
-  if(tenant.slug==='generic'||tenant.showPrices===false)return;
-  const products=Array.isArray(detail&&detail.products)?detail.products:[];
-  LINENS.forEach(l=>{const p=findCompatible(products,l.id),n=price(p);if(p&&n!=null){l.pricePerDay=n;l.productId=p.id;}});
+  const products=Array.isArray(detail&&detail.products)?detail.products:[],show=tenant.slug!=='generic'&&tenant.showPrices!==false;
+  const used=new Set();
+  function hydrate(l,p){l.name=p.name;l.productId=p.id;l.pricePerDay=show?price(p):null;l.photoUrl=p.photo_url||p.image_url||null;if(Array.isArray(p.metadata?.colors)&&p.metadata.colors.length)l.colors=p.metadata.colors;else if(/black/i.test(p.name))l.colors=['Black'];else if(/white/i.test(p.name))l.colors=['White'];used.add(p.id);}
+  LINENS.forEach(l=>{const p=findCompatible(products,l.id);if(p)hydrate(l,p);});
+  for(const p of products){
+    if(used.has(p.id)||p.active===false||String(p.category).toLowerCase()!=='linen'||/package|aisle|chair|clip|napkin|runner/i.test(p.name))continue;
+    const n=p.name.toLowerCase(),round=/round/.test(n)&&n.match(/(60|90|108|120|132)/),rect=n.match(/(54|72|90)\s*[x×]\s*(120|132|156)/);
+    if(!round&&!rect)continue;
+    const id='linen-product-'+p.id,fit=round?['round-5ft']:Number(rect[2])>=156?['banquet-8ft']:Number(rect[2])===132?['banquet-6ft']:['banquet-6ft','banquet-8ft'];
+    const l=buildLinen(id,p.name,fit);l.visual=round?'skirt-round':'skirt-rect';if(round)l.roundSizeIn=Number(round[1]);else{l.clothWidthIn=Number(rect[1]);l.clothLengthIn=Number(rect[2]);}hydrate(l,p);LINENS.push(l);
+  }
 }
 if(typeof window!=='undefined')window.addEventListener('rentsketch:catalogReady',e=>applyTenantLinens(e.detail||{}));
 

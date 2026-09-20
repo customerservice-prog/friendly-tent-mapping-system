@@ -34,8 +34,8 @@ const change=(role,value)=>{const el=d.querySelector(`.ts-dialog [data-role="${r
  assert.equal(d.activeElement.dataset.role,'insp-seats');
  change('insp-chair','resin-white');assert.equal(dialog.querySelector('.ts-total').textContent,'$60.00/day');
  change('insp-linen','linen-round-120');click('.ts-dialog [data-role="insp-linen-swatch"][data-color="Navy Blue"]');
- assert.equal(dialog.querySelector('.ts-total').textContent,'$72.00/day');assert.equal(dialog.querySelector('.equipment-visual g').getAttribute('fill'),'#172c52');
- assert.equal(d.querySelector('#inspectorPanel .equipment-visual g').getAttribute('fill'),'#172c52','event inspector sees the same edit');
+ assert.equal(dialog.querySelector('.ts-total').textContent,'$72.00/day');assert.equal(dialog.querySelector('.equipment-visual .table-surface').getAttribute('fill'),'#172c52');
+ assert.equal(d.querySelector('#inspectorPanel .equipment-visual .table-surface').getAttribute('fill'),'#172c52','event inspector sees the same edit');
  change('insp-linen','linen-round-90');assert.equal(dialog.querySelector('.ts-total').textContent,'Confirm pricing');assert.match(dialog.querySelector('.ts-price-note').textContent,/Known items: \$60.00/);
  change('insp-linen','linen-round-120');
  const before=JSON.parse(JSON.stringify(b.getScene().objects));

@@ -1,0 +1,55 @@
+// Exercise the actual lazy-loaded table detail through customer controls.
+const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
+const root=path.resolve(__dirname,'..'),dom=new JSDOM(fs.readFileSync(path.join(root,'designer/index.html'),'utf8'),{url:'https://rentsketch.com/designer/?tenant=friendly',runScripts:'outside-only',pretendToBeVisual:true});
+const w=dom.window,d=w.document;
+w.ResizeObserver=class{observe(){}disconnect(){}};w.ACTIVE_TENANT={slug:'friendly',name:'Friendly Party Rental'};
+w.fetch=()=>{throw new Error('No network calls permitted');};
+// jsdom has no top-layer layout; real modal layout/focus trapping is checked in Browser.
+if(!w.HTMLDialogElement.prototype.showModal)w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
+if(!w.HTMLDialogElement.prototype.close)w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
+const context=dom.getInternalVMContext(),cache=new Map();
+function moduleFor(file){
+ if(cache.has(file))return cache.get(file);
+ const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file,initializeImportMeta(meta){meta.url=require('node:url').pathToFileURL(file).href;},importModuleDynamically:async(spec,ref)=>{const dep=await load(path.resolve(path.dirname(ref.identifier),spec));if(dep.status!=='evaluated')await dep.evaluate();return dep;}});
+ cache.set(file,m);return m;
+}
+async function load(file){const m=moduleFor(file);if(m.status==='unlinked')await m.link((spec,ref)=>moduleFor(path.resolve(path.dirname(ref.identifier),spec)));return m;}
+const settle=()=>new Promise(resolve=>setImmediate(resolve));
+const click=selector=>{const el=d.querySelector(selector);assert.ok(el,selector);el.focus();el.click();};
+const change=(role,value)=>{const el=d.querySelector(`.ts-dialog [data-role="${role}"]`);el.focus();el.value=value;el.dispatchEvent(new w.Event('change',{bubbles:true}));};
+(async()=>{
+ await(await load(path.join(root,'script.js'))).evaluate();await(await load(path.join(root,'js/ui/intake.js'))).evaluate();
+ const b=w.FriendlyBridge,top=(await load(path.join(root,'js/data/tabletop.js'))).namespace,linen=(await load(path.join(root,'js/data/linens.js'))).namespace;
+ const fixture=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/friendly-tabletop-20260920.json'),'utf8'));
+ w.dispatchEvent(new w.CustomEvent('rentsketch:catalogReady',{detail:{tenant:{slug:'friendly',showPrices:true},products:fixture.products}}));
+ assert.equal(top.TABLETOP.length,50);assert.ok(linen.LINENS.some(l=>/Satin/.test(l.name)));assert.ok(linen.LINENS.some(l=>/90x156/.test(l.name)));
+ b.TABLES.find(t=>t.id==='round-5ft').pricePerDay=15;b.CHAIRS.find(c=>c.id==='plastic-white').pricePerDay=2.5;
+ const product=name=>top.TABLETOP.find(p=>p.name===name),plate=product('10-5/8 Dinner Plate'),napkin=product('Matching Napkins'),runner=product('9ft Table Runner'),lantern=product('Rustic Lantern Table Centerpiece');
+ const add=p=>{click('.ts-dialog [data-ts="category"][data-category="'+p.group+'"]');click('.ts-dialog [data-ts="add"][data-product="'+p.id+'"]');};
+ const openDraft=async()=>{if(!d.querySelector('[data-role="table-style"]'))click('[data-drawer="tables"]');click('[data-role="table-style"][data-id="round-5ft"]');await settle();await settle();};
+ const objectCount=b.getScene().objects.length;
+ await openDraft();let dialog=d.querySelector('.ts-dialog');assert.ok(dialog.open);assert.equal(b.getScene().objects.length,objectCount,'style first does not create a rental');
+ add(plate);add(napkin);add(runner);add(lantern);
+ change('insp-linen','linen-round-120');
+ assert.equal(b.getScene().objects.length,objectCount,'all draft styling remains outside the event');
+ click('.ts-dialog [data-ts="close"]');assert.equal(b.getScene().objects.length,objectCount,'closing a draft adds no rentals');
+ await openDraft();add(plate);click('.ts-dialog [data-ts="done"]');assert.equal(b.getScene().objects.length,objectCount);assert.ok(!d.getElementById('placementBar').hidden);click('#placementCancel');assert.equal(b.getScene().objects.length,objectCount,'cancelling styled placement adds no rentals');
+ await openDraft();add(plate);add(napkin);add(runner);add(lantern);change('insp-linen','linen-round-120');
+ click('.ts-dialog [data-role="insp-seats"][data-delta="-1"]');
+ click('.ts-dialog [data-ts="done"]');click('#placementConfirm');let placed=b.getScene().objects.at(-1);assert.equal(placed.seatCount,7);assert.equal(placed.tabletop.length,4);
+ let lines=b.computeLineItems();assert.equal(lines.find(l=>l.productId===plate.id).qty,7);assert.equal(lines.find(l=>l.productId===napkin.id).qty,7);assert.equal(lines.find(l=>l.productId===runner.id).qty,1);assert.equal(lines.find(l=>l.productId===plate.id).amount,10.5);assert.equal(lines.find(l=>l.productId===napkin.id).amount,14);
+ assert.ok(d.querySelector('[data-item-id="'+placed.id+'"] .plan-tabletop svg'),'the 2D plan shows selected rentals');
+ click('[data-role="insp-design-table"]');await settle();await settle();assert.ok(dialog.open);assert.equal(dialog.dataset.view,'2d','failed WebGL import leaves usable overhead controls');
+ click('.ts-dialog [data-ts="category"][data-category="Napkins & runners"]');click('.ts-dialog [data-ts="quantity"][data-product="'+napkin.id+'"][data-delta="1"]');
+ click('.ts-dialog [data-role="insp-seats"][data-delta="1"]');lines=b.computeLineItems();assert.equal(lines.find(l=>l.productId===plate.id).qty,8);assert.equal(lines.find(l=>l.productId===napkin.id).qty,8,'manual count is preserved');
+ click('.ts-dialog [data-role="insp-seats"][data-delta="1"]');assert.equal(b.computeLineItems().find(l=>l.productId===napkin.id).qty,8);assert.equal(b.computeLineItems().find(l=>l.productId===plate.id).qty,9);
+ const color=d.querySelector('[data-ts="top-color"][data-product="'+napkin.id+'"]');color.value='Sage Green';color.dispatchEvent(new w.Event('change',{bubbles:true}));assert.match(b.computeLineItems().find(l=>l.productId===napkin.id).label,/Sage Green/);
+ const snapshot=JSON.parse(JSON.stringify(b.getScene()));click('.ts-dialog [data-ts="done"]');b.loadScene(snapshot);b.state.selectedId=placed.id;b.refreshAll();assert.equal(b.getScene().objects.at(-1).tabletop.length,4,'saved object retains extras');
+ click('[data-role="insp-duplicate"]');assert.equal(b.computeLineItems().find(l=>l.productId===plate.id).qty,18);assert.equal(b.computeLineItems().find(l=>l.productId===runner.id).qty,2);click('#btnUndo');assert.equal(b.computeLineItems().find(l=>l.productId===plate.id).qty,9);
+ click('#btnToReview');assert.match(d.getElementById('reviewSummary').textContent,/Dinner Plate/);assert.match(d.getElementById('reviewSummary').textContent,/Sage Green Matching Napkins/);click('#btnBackToDesigner');
+ const plan=d.getElementById('plan2d');Object.defineProperties(plan,{clientWidth:{get:()=>380},clientHeight:{get:()=>520}});b.refreshAll();const stage=d.querySelector('.plan2d-stage'),width=parseFloat(stage.style.width);
+ click('[data-plan="in"]');assert.ok(parseFloat(stage.style.width)>width);click('[data-plan="grid"]');assert.ok(stage.classList.contains('show-grid'));click('[data-plan="fit"]');assert.equal(parseFloat(stage.style.width),width);assert.equal(d.querySelector('.plan-tools output').textContent,'100%');
+ b.state.selectedId=placed.id;b.refreshAll();click('[data-role="insp-delete"]');assert.ok(!b.computeLineItems().some(l=>l.category==='tabletop'),'deleting table removes attached rentals');
+ w.dispatchEvent(new w.CustomEvent('rentsketch:catalogReady',{detail:{tenant:{slug:'second',showPrices:false},products:[{id:'second-plate',name:'Porcelain Dinner Plate',price_per_day:8,category:'other'}]}}));assert.equal(top.TABLETOP.length,1);assert.equal(top.TABLETOP[0].id,'second-plate');assert.equal(top.TABLETOP[0].pricePerDay,null);assert.ok(!linen.LINENS.some(l=>l.productId===runner.id),'second tenant resets Friendly accessory prices');
+ console.log('PASS Table Studio: all 50 live products, additional linen styles, isolated draft/cancel/place, per-seat vs manual quantities, selected 2D artwork, WebGL fallback, saved extras, duplicate/undo/delete, exact product IDs/prices in review, plan zoom/grid, tenant isolation. No live writes.');w.close();
+})().catch(e=>{console.error(e);w.close();process.exitCode=1;});

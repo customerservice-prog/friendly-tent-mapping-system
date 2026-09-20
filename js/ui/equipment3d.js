@@ -1,3 +1,4 @@
+import { makeTabletop } from './tabletop3d.js';
 // Detailed rental geometry, in feet. The existing layout store remains authoritative.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
@@ -5,7 +6,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { chairPositions } from '../core/seating.js';
 import { byId as chairById } from '../data/chairs.js';
 import { byId as tableById } from '../data/tables.js';
-import { linenColorHex } from '../data/linens.js';
+import { linenColorHex, byId as linenById } from '../data/linens.js';
 
 const UP=new THREE.Vector3(0,1,0);
 const mat=(color,extra={})=>new THREE.MeshStandardMaterial({color,roughness:.65,...extra});
@@ -83,10 +84,11 @@ export function tableProfile(o) {
   const definition=tableById(o.tableId),silhouette=definition?.silhouette || (o.shape==='round'?'dining-round':'banquet-rect');
   const height=silhouette==='cocktail-pedestal'?3.5:2.5,w=o.widthFt||5,d=o.depthFt||5;
   let drop=height-.06,sideDrop=drop,endDrop=drop;
-  const roundSize={'linen-round-90':90,'linen-round-108':108,'linen-round-120':120}[o.linenId];
+  const linen=linenById(o.linenId),roundSize=linen?.roundSizeIn||{'linen-round-90':90,'linen-round-108':108,'linen-round-120':120}[o.linenId];
   if(roundSize)drop=Math.max(0,Math.min(drop,(roundSize/12-w)/2));
   if(o.linenId==='linen-banquet-54x120'){sideDrop=Math.min(drop,(4.5-Math.min(w,d))/2);endDrop=Math.min(drop,(10-Math.max(w,d))/2);}
   if(o.linenId==='linen-banquet-72x120'){sideDrop=Math.min(drop,(6-Math.min(w,d))/2);endDrop=Math.min(drop,(10-Math.max(w,d))/2);}
+  if(linen?.clothWidthIn){sideDrop=Math.min(drop,(linen.clothWidthIn/12-Math.min(w,d))/2);endDrop=Math.min(drop,(linen.clothLengthIn/12-Math.max(w,d))/2);}
   return {silhouette,height,w,d,drop,sideDrop:Math.max(0,sideDrop),endDrop:Math.max(0,endDrop),stretch:/spandex|cocktail-cover/.test(o.linenId||'')};
 }
 function drape(g,o,p,m) {
@@ -165,6 +167,7 @@ export function makeTable(o) {
     }
     prototype.clear();
   }
+  if(o.tabletop?.length)g.add(mergeParts(makeTabletop(o,p.height)));
   g.traverse(mesh=>{mesh.userData.itemId=o.id;});return g;
 }
 export function makeDanceFloor(items,tent) {

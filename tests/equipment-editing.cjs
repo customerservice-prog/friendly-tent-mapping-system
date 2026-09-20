@@ -45,7 +45,7 @@ const change=(role,value)=>{const el=d.querySelector(`[data-role="${role}"]`);el
  const swatches=d.querySelector('.linen-swatches');swatches.scrollLeft=110;panel.scrollTop=170;
  click('[data-role="insp-linen-swatch"][data-color="Sage Green"]');
  assert.equal(d.activeElement.dataset.color,'Sage Green');assert.equal(panel.scrollTop,170);assert.equal(d.querySelector('.linen-swatches').scrollLeft,110);
- assert.equal(d.querySelector('.equipment-visual g').getAttribute('fill'),'#8b9b79','table thumbnail uses chosen linen');
+ assert.equal(d.querySelector('.equipment-visual .table-surface').getAttribute('fill'),'#8b9b79','table thumbnail uses chosen linen');
  assert.equal(d.querySelector('[data-item-id="round-a"] .plan2d-table-top')?.style.background || d.querySelector('[data-item-id="round-a"] .plan2d-top')?.style.background,'rgb(139, 155, 121)','2D uses chosen linen');
  const before=objects();click('[data-role="insp-match-tables"]');
  const after=objects();
@@ -60,7 +60,7 @@ const change=(role,value)=>{const el=d.querySelector(`[data-role="${role}"]`);el
  assert.equal(b.computeLineItems().find(l=>l.category==='chair'&&/Resin/.test(l.label)).qty,14);
  click('#btnBackToDesigner');
  change('insp-linen','');assert.equal(objects()[0].linenId,null);assert.equal(objects()[0].linenColor,null);
- assert.equal(d.querySelector('.linen-swatches'),null);assert.equal(d.querySelector('.equipment-visual g').getAttribute('fill'),'#b99165');
+ assert.equal(d.querySelector('.linen-swatches'),null);assert.equal(d.querySelector('.equipment-visual .table-surface').getAttribute('fill'),'#b99165');
  // Repeated keyboard edits preserve focus even when reaching the seat limit.
  b.state.selectedId='round-b';b.refreshAll();
  for(let i=0;i<4;i++)click('[data-role="insp-seats"][data-delta="1"]');

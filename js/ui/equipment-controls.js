@@ -1,3 +1,4 @@
+import { tabletopSvg } from './tabletop-symbols.js';
 import { chairPlanSvg } from './equipment-symbols.js';
 import { chairPositions } from '../core/seating.js';
 import { linenColorHex } from '../data/linens.js';
@@ -64,20 +65,20 @@ export function tableVisual(table, chair = {}, placed) {
   const item=placed || {shape:table.shape,widthFt:table.diameterFt || table.widthFt,depthFt:table.diameterFt || table.depthFt,seatCount:table.seatsDefault};
   const w=item.widthFt,d=item.depthFt,span=Math.max(w,d)+5,id='table-surface-'+(++previewSequence);
   const cw=chair.seatWidthFt || 1.5,cd=chair.seatDepthFt || 1.5;
-  const seats=chairPositions(item,chair).map(p=>`<svg x="${p.x-cw/2}" y="${p.y-cd/2}" width="${cw}" height="${cd}" viewBox="0 0 100 100" style="--chair-frame:${escapeHtml(chair.frameColor || '#fff')};--chair-accent:${escapeHtml(chair.accentColor || '#fff')}" transform="rotate(${p.angle*180/Math.PI-90} ${p.x} ${p.y})">${chairPlanSvg(chair.silhouette)}</svg>`).join('');
+  const seats=chairPositions(item,chair).map(p=>`<g style="--chair-frame:${escapeHtml(chair.frameColor || '#fff')};--chair-accent:${escapeHtml(chair.accentColor || '#fff')}" transform="translate(${p.x} ${p.y}) rotate(${p.angle*180/Math.PI-90})">${chairPlanSvg(chair.silhouette).replace('<svg ', '<svg x="'+(-cw/2)+'" y="'+(-cd/2)+'" width="'+cw+'" height="'+cd+'" overflow="visible" ')}</g>`).join('');
   const top=item.shape==='round'?`<ellipse cx="0" cy="0" rx="${w/2}" ry="${d/2}"/>`:`<rect x="${-w/2}" y="${-d/2}" width="${w}" height="${d}" rx=".14"/>`;
   const partial=['linen-runner-9ft','linen-napkins'].includes(item.linenId);
   const tub=table.silhouette==='fillchill-tub',color=item.linenId && !partial ? linenColorHex(item.linenColor) : tub || table.id==='banquet-6ft'?'#eeeee5':'#b99165';
   const grain=item.linenId?'<path d="M0 0H1M0 0V1" stroke="#fff" stroke-opacity=".16" stroke-width=".02"/>':'<path d="M0 .08Q.25 .04 .5 .08T1 .08M0 .23Q.25 .19 .5 .23T1 .23" fill="none" stroke="#6e451f" stroke-opacity=".24" stroke-width=".018"/>';
   const linenOverlay=partial ? `<rect x="${item.linenId==='linen-napkins'?-.35:w>=d?-w/2:-.55}" y="${item.linenId==='linen-napkins'?-.25:w>=d?-.55:-d/2}" width="${item.linenId==='linen-napkins'?.7:w>=d?w:1.1}" height="${item.linenId==='linen-napkins'?.5:w>=d?1.1:d}" fill="${linenColorHex(item.linenColor)}" stroke="#667363" stroke-opacity=".4" stroke-width=".025"/>` : '';
   const basin=tub&&!item.linenId?`<rect x="${-w/2+.15}" y="${-d/2+.15}" width="${w-.3}" height="${d-.3}" rx=".12" fill="#d2d5ce" stroke="#929c90" stroke-width=".05"/><circle cx="${w*.3}" cy="0" r=".07" fill="#7a8477"/>`:'';
-  return `<svg class="equipment-visual" aria-hidden="true" viewBox="${-span/2} ${-span/2} ${span} ${span}"><defs><pattern id="${id}" width="${item.linenId ? .12 : 1}" height="${item.linenId ? .12 : .3}" patternUnits="userSpaceOnUse">${grain}</pattern></defs>${seats}<g fill="${color}" stroke="#706e5b" stroke-width=".055">${top}</g><g fill="url(#${id})" stroke="none">${tub?'':top}</g>${basin}${linenOverlay}</svg>`;
+  return `<svg class="equipment-visual" aria-hidden="true" viewBox="${-span/2} ${-span/2} ${span} ${span}"><defs><pattern id="${id}" width="${item.linenId ? .12 : 1}" height="${item.linenId ? .12 : .3}" patternUnits="userSpaceOnUse">${grain}</pattern></defs>${seats}<g class="table-surface" fill="${color}" stroke="#8f917f" stroke-width=".025">${top}</g><g fill="url(#${id})" stroke="none">${tub?'':top}</g>${basin}${linenOverlay}${tabletopSvg(item).replace('<svg ','<svg x="'+(-w/2)+'" y="'+(-d/2)+'" width="'+w+'" height="'+d+'" ')}</svg>`;
 }
 export function tableCard(table, chair, quantity) {
   const seats=table.seatsDefault || 0;
   const price=table.pricePerDay == null || seats && chair?.pricePerDay==null ? 'Confirm pricing' : '$'+(Number(table.pricePerDay)+seats*Number(chair?.pricePerDay || 0)).toFixed(2)+'/day';
   const included=seats ? `Table + ${seats} chairs` : 'Table only';
-  return `<button class="item-card equipment-card" data-role="table-card" data-id="${escapeHtml(table.id)}" aria-label="Add ${escapeHtml(table.name)}">${equipmentPreview(table.id) || tableVisual(table,chair)}<span class="item-card-name">${escapeHtml(table.name)}</span><span class="item-card-desc">${table.seatsDefault ? table.seatsDefault+' seats' : 'Standing / service'}${quantity ? ' · '+quantity+' in layout' : ''}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${included}</span><span class="equipment-add">+ Add table</span></button>`;
+  return `<div class="table-choice"><button class="item-card equipment-card" data-role="table-card" data-id="${escapeHtml(table.id)}" aria-label="Add ${escapeHtml(table.name)}">${equipmentPreview(table.id) || tableVisual(table,chair)}<span class="item-card-name">${escapeHtml(table.name)}</span><span class="item-card-desc">${table.seatsDefault ? table.seatsDefault+' seats' : 'Standing / service'}${quantity ? ' · '+quantity+' in layout' : ''}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${included}</span><span class="equipment-add">+ Add table</span></button><button type="button" class="table-style-link" data-role="table-style" data-id="${escapeHtml(table.id)}">Style a table first ↗</button></div>`;
 }
 export function tableControls(item, table, chairs, linens, matchingCount=1) {
   const esc=escapeHtml,max=Math.max(0,...(table.seatsOptions||[12]));
@@ -103,6 +104,6 @@ export function tableInspector(item, table, chairs, linens, matchingCount=1) {
     <h3 class="inspector-title">${esc(table.name)}</h3>${tableVisual(table,chair,item)}
     ${tableControls(item,table,chairs,linens,matchingCount)}
     <div class="inspector-actions equipment-actions"><button class="btn-secondary" data-role="insp-rotate" data-id="${esc(item.id)}">Rotate 90°</button><button class="btn-secondary" data-role="insp-duplicate" data-id="${esc(item.id)}">Duplicate</button><button class="btn-danger" data-role="insp-delete" data-id="${esc(item.id)}">Delete</button></div>
-    <button class="btn-tertiary" data-role="insp-design-table" data-id="${esc(item.id)}">Table details</button>
+    <button class="btn-primary table-studio-launch" data-role="insp-design-table" data-id="${esc(item.id)}">Style This Table · Close-up</button>
     <p class="equipment-note">Drag this table on the plan to move it.</p>`;
 }

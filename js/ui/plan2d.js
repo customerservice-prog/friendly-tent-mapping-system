@@ -1,3 +1,4 @@
+import { tabletopSvg } from './tabletop-symbols.js';
 // Friendly Event Designer - 2D top-down plan view
 // Lightweight DOM-based renderer that mirrors the mount/update API of
 // js/ui/view3d.js so script.js can swap between the two views. This is the
@@ -34,6 +35,7 @@ let pxPerFt = 20;
 // narrow" can still be framed as a wide, landscape-filling floor plan on a
 // landscape canvas (and vice versa). See computeStageSize().
 let rotate90 = false;
+let zoom=1,gridVisible=false,scrollEl=null,sheetEl=null,toolbarEl=null;
 let placementPointer=null;
 const placementPointers=new Set();
 
@@ -57,8 +59,8 @@ function computeStageSize(tent) {
   if(currentData?.placement&&bar&&!bar.hidden)overlap.h=Math.max(overlap.h,bar.offsetHeight+24);
   container.style.paddingRight = overlap.w ? (overlap.w + 'px') : '';
   container.style.paddingBottom = overlap.h ? (overlap.h + 'px') : '';
-  const rawW = container.clientWidth - 32 - overlap.w;
-  const rawH = container.clientHeight - 32 - overlap.h;
+  const rawW = container.clientWidth - 64 - overlap.w;
+  const rawH = container.clientHeight - 104 - overlap.h;
   if (rawW <= 0 || rawH <= 0) {
     const w = rotate90 ? tent.lengthFt : tent.widthFt;
     const h = rotate90 ? tent.widthFt : tent.lengthFt;
@@ -72,7 +74,7 @@ function computeStageSize(tent) {
   const scale = rotate90 ? scaleRotated : scaleNormal;
   // Large tents must fit short phone canvases too. A four-pixel minimum per
   // foot made a 100-foot tent taller than the entire visible preview.
-  pxPerFt = scale;
+  pxPerFt = scale * zoom;
   const effW = rotate90 ? tent.lengthFt : tent.widthFt;
   const effH = rotate90 ? tent.widthFt : tent.lengthFt;
   return { w: effW * pxPerFt, h: effH * pxPerFt };
@@ -249,9 +251,15 @@ function render(data) {
   clear(stageEl);
   stageEl.style.width = size.w + 'px';
   stageEl.style.height = size.h + 'px';
-  stageEl.style.setProperty('--plan-grid-size',pxPerFt+'px');
+  stageEl.style.setProperty('--plan-grid-size',(pxPerFt*5)+'px');
+  stageEl.classList.toggle('show-grid',gridVisible);
+  if(sheetEl){sheetEl.style.width=(size.w+64)+'px';sheetEl.style.height=(size.h+64)+'px';}
+  if(toolbarEl){toolbarEl.querySelector('output').textContent=Math.round(zoom*100)+'%';toolbarEl.querySelector('[data-plan=out]').disabled=zoom<=1;toolbarEl.querySelector('[data-plan=in]').disabled=zoom>=3;}
   stageEl.classList.toggle('is-outdoor',!!tent.isSite);
   stageEl.dataset.dimensions = tent.widthFt+' × '+tent.lengthFt+' ft';
+  stageEl.dataset.surface=data.surfaceType==='concrete'||data.surfaceType==='asphalt'?'paved':'grass';
+  const dimension=document.createElement('span');dimension.className='plan-dimension plan-dimension-width';dimension.textContent=(rotate90?tent.lengthFt:tent.widthFt)+' ft';stageEl.appendChild(dimension);
+  const length=document.createElement('span');length.className='plan-dimension plan-dimension-length';length.textContent=(rotate90?tent.widthFt:tent.lengthFt)+' ft';stageEl.appendChild(length);
   stageEl.setAttribute('role','group');
   stageEl.setAttribute('aria-label',tent.name+' floor plan');
 
@@ -350,6 +358,7 @@ renderLighting(data, tent);
     if(item.linenId==='linen-runner-9ft'){accent.style.width=(Math.max(dispSize.w,dispSize.d)*pxPerFt)+'px';accent.style.height=(1.1*pxPerFt)+'px';if(dispSize.d>dispSize.w)accent.style.transform='translate(-50%,-50%) rotate(90deg)';}
     top.appendChild(accent);
   }else if(item.linenId){top.classList.add('has-linen');top.style.background=linenColorHex(item.linenColor);}
+  if(tableDef&&item.tabletop?.length){const rentals=document.createElement('div');rentals.className='plan-tabletop';rentals.innerHTML=tabletopSvg(item,undefined,rotate90);top.appendChild(rentals);}
   const label = document.createElement('span');
   label.className = 'plan2d-table-label';
   if (isDance) {
@@ -517,7 +526,12 @@ export function mount(containerEl, data, cbs) {
   stageEl.addEventListener('pointermove',placementMove);
   stageEl.addEventListener('pointerup',placementUp);
   stageEl.addEventListener('pointercancel',placementUp);
-  container.appendChild(stageEl);
+  zoom=1;
+  toolbarEl=document.createElement('div');toolbarEl.className='plan-tools';toolbarEl.setAttribute('aria-label','Plan controls');
+  toolbarEl.innerHTML='<span class="plan-view-label">OVERHEAD PLAN</span><div><button type="button" data-plan="grid" aria-pressed="false">5 ft grid</button><button type="button" data-plan="out" aria-label="Zoom out">−</button><output aria-label="Plan zoom">100%</output><button type="button" data-plan="in" aria-label="Zoom in">+</button><button type="button" data-plan="fit">Fit</button></div>';
+  toolbarEl.addEventListener('click',e=>{const action=e.target.closest('[data-plan]')?.dataset.plan;if(!action)return;if(action==='grid'){gridVisible=!gridVisible;e.target.setAttribute('aria-pressed',String(gridVisible));}else zoom=action==='fit'?1:Math.max(1,Math.min(3,zoom+(action==='in'?.5:-.5)));render(currentData);if(action!=='grid'&&scrollEl){scrollEl.scrollLeft=Math.max(0,(scrollEl.scrollWidth-scrollEl.clientWidth)/2);scrollEl.scrollTop=Math.max(0,(scrollEl.scrollHeight-scrollEl.clientHeight)/2);}});
+  scrollEl=document.createElement('div');scrollEl.className='plan-scroll';sheetEl=document.createElement('div');sheetEl.className='plan-sheet';sheetEl.appendChild(stageEl);scrollEl.appendChild(sheetEl);container.append(toolbarEl,scrollEl);
+
   currentData = data;
   // Defer the first paint by a couple of frames so the container has a real,
 // stable measured size (fixes the plan rendering at a tiny collapsed scale
@@ -551,7 +565,7 @@ export function unmount() {
   if (container) clear(container);
   placementPointers.clear();placementPointer=null;
   container = null;
-  stageEl = null;
+  stageEl = null;scrollEl=null;sheetEl=null;toolbarEl=null;zoom=1;
   currentData = null;
   callbacks = {};
 }

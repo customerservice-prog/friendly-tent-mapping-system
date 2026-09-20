@@ -14,7 +14,7 @@ export function createPartyStyling(tent,objects){
   function glass(x,y,z){put('stem',x,y+.07,z,.014,.13,.014);put('stem',x,y+.01,z,.10,.018,.10);put('glass',x,y+.24,z,.105,.23,.105);}
   let styled=0;
   for(const item of objects){
-    if(item.kind!=='table'||styled>=12)continue;
+    if(item.kind!=='table'||Array.isArray(item.tabletop)||styled>=12)continue;
     const p=tableProfile(item);if(p.silhouette==='fillchill-tub')continue;styled++;
     const cx=item.x+item.widthFt/2-tent.widthFt/2,cz=item.y+item.depthFt/2-tent.lengthFt/2,y=p.height+.035;
     for(const seat of chairPositions(item,chairById(item.chairId)||{})){
