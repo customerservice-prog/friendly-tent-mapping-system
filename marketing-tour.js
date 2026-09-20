@@ -1,53 +1,67 @@
-// A read-only product demonstration. Uses the actual designer renderer and
-// models; it never reads customer storage, starts a preview, saves, or quotes.
-const studio = document.querySelector('[data-tour]');
-if (studio) {
-  const target = studio.querySelector('.tour-3d');
-  const status = studio.querySelector('.tour-status');
-  const note = studio.querySelector('.tour-note');
-  const image = studio.querySelector('.plan-img');
-  const actions = studio.querySelector('.tour-actions');
-  const buttons = [...studio.querySelectorAll('[data-view]')];
-  let view, loading, selected = '2d', night = false;
-  const tables = [];
-  for (const x of [10, 30]) for (const y of [8, 22, 38, 52]) {
-    tables.push({id:'sample-table-'+x+'-'+y,kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:x-2.5,y:y-2.5,rotationDeg:0,seatCount:8,chairId:'resin-white',linenId:'linen-round-120',linenColor:'White'});
-  }
-  const dance = [];
-  for (let x=14;x<26;x+=3) for (let y=24;y<36;y+=3) dance.push({id:'sample-floor-'+x+'-'+y,kind:'dance',widthFt:3,depthFt:3,x,y});
-  const scene = {tent:{id:'pole-40x60',type:'pole',widthFt:40,lengthFt:60,installationClearanceFt:5,centerPoles:[{x:20,y:20},{x:20,y:40}]},surfaceType:'grass',anchoringMethod:'stake',objects:[...tables,...dance],lightingId:'lighting-bistro'};
-  function say(text) { status.textContent = text; status.hidden = !text; }
-  function show() {
-    target.classList.toggle('active', selected === '3d');
-    image.style.visibility = selected === '3d' && view ? 'hidden' : 'visible';
-    actions.hidden = selected !== '3d' || !view;
-    note.textContent = selected === '3d' && view ? 'Drag to explore · scroll or pinch to zoom' : 'Example layout · switch views to explore';
-    buttons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === selected)));
-    if (view && selected === '3d') view.fitCamera();
-  }
-  async function load() {
-    say('Loading the 3D example…');
-    try {
-      const module = await import('/js/ui/view3d.js');
-      view = module.init(target);
-      view.rebuild(scene);
-      view.setScene({motion:false,guests:false,styling:true,night:false});
-      say(''); show();
-    } catch (_) {
-      view?.destroy(); view = null; selected = '2d';
-      say('3D could not load in this browser. You can still explore the 2D example.'); show();
-    } finally { loading = null; buttons.forEach(button => {button.disabled=false;}); }
-  }
-  buttons.forEach(button => button.addEventListener('click', () => {
-    selected = button.dataset.view; show();
-    if (selected === '3d' && !view && !loading) { button.disabled=true; loading=load(); }
-  }));
-  studio.querySelectorAll('[data-camera]').forEach(button => button.addEventListener('click', () => {
-    studio.querySelectorAll('[data-camera]').forEach(other => other.setAttribute('aria-pressed',String(other===button)));
-    if (button.dataset.camera === 'inside') view?.inside(); else view?.fitCamera();
-  }));
-  studio.querySelector('[data-night]').addEventListener('click', event => {
-    night = !night; event.currentTarget.setAttribute('aria-pressed',String(night)); view?.night(night);
-  });
-  window.addEventListener('pagehide',()=>view?.destroy(),{once:true});
+import { marketingReception } from './js/data/marketing-reception.js';
+
+// Public, read-only example. Never opens a preview entitlement or customer data.
+const studio=document.querySelector('[data-tour]');
+if(studio){
+ const target=studio.querySelector('.tour-3d'),status=studio.querySelector('.tour-status');
+ const note=studio.querySelector('.tour-note'),poster=studio.querySelector('.tour-poster');
+ const plan=studio.querySelector('.plan-img'),actions=studio.querySelector('.tour-actions');
+ const buttons=[...studio.querySelectorAll('[data-view]')];
+ let view=null,pendingView=null,loading=null,selected='3d',camera='reception',night=false,failed=false,disposed=false,generation=0;
+ const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+ function say(message){status.textContent=message;status.hidden=!message;note.hidden=!!message;}
+ function show(){
+  const is3D=selected==='3d';
+  plan.hidden=is3D;poster.hidden=!is3D||!!view;
+  target.classList.toggle('active',is3D&&!!view);
+  target.setAttribute('aria-hidden',String(!is3D||!view));
+  actions.hidden=!is3D||!view;
+  buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===selected)));
+  note.textContent=is3D?(view?'Drag to explore · scroll or pinch to zoom':'3D reception preview'):'Overhead plan · the same 64-seat layout';
+  if(!is3D||view)say('');
+  else if(failed)say('Showing the 3D preview image. Interactive 3D is unavailable in this browser.');
+ }
+ async function load(){
+  const ticket=++generation;failed=false;say('Opening the interactive 3D reception…');
+  try{
+   const renderer=await import('/js/ui/view3d.js');
+   if(disposed||ticket!==generation)return;
+   // Establish a real viewport before creating/fitting the renderer. The poster
+   // remains visible until the first scene frame is ready.
+   target.classList.add('active');target.style.visibility='hidden';
+   const next=renderer.init(target);pendingView=next;
+   try{
+    next.rebuild(marketingReception());
+    next.setScene({motion:false,guests:false,styling:true,night});
+    if(camera==='reception')next.reception();else next.fitCamera();
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+    if(disposed||ticket!==generation){if(pendingView===next){next.destroy();pendingView=null;}return;}
+    view=next;pendingView=null;target.style.visibility='';show();
+    if(!reducedMotion&&selected==='3d')view.playTimelapse();
+   }catch(error){if(pendingView===next){next.destroy();pendingView=null;}throw error;}
+  }catch(error){
+   if(disposed||ticket!==generation)return;
+   view=null;failed=true;target.style.visibility='';target.classList.remove('active');show();
+  }finally{if(ticket===generation)loading=null;}
+ }
+ function ensure3D(){if(!disposed&&selected==='3d'&&!view&&!loading)loading=load();}
+ buttons.forEach(button=>button.addEventListener('click',()=>{
+  selected=button.dataset.view;show();if(selected==='3d'){ensure3D();if(view){if(camera==='reception')view.reception();else view.fitCamera();}}
+ }));
+ studio.querySelectorAll('[data-camera]').forEach(button=>button.addEventListener('click',()=>{
+  camera=button.dataset.camera;
+  studio.querySelectorAll('[data-camera]').forEach(other=>other.setAttribute('aria-pressed',String(other===button)));
+  if(camera==='reception')view?.reception();else view?.fitCamera();
+ }));
+ studio.querySelector('[data-night]').addEventListener('click',event=>{
+  night=!night;event.currentTarget.setAttribute('aria-pressed',String(night));view?.night(night);
+ });
+ show();
+ // Load automatically near the viewport after the first paint. No start click.
+ if('IntersectionObserver' in window){
+  const observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){observer.disconnect();requestAnimationFrame(ensure3D);}},{rootMargin:'220px'});
+  observer.observe(studio);
+ }else requestAnimationFrame(ensure3D);
+ window.addEventListener('pagehide',()=>{disposed=true;generation++;view?.destroy();pendingView?.destroy();view=null;pendingView=null;loading=null;});
+ window.addEventListener('pageshow',event=>{if(event.persisted){disposed=false;show();ensure3D();}});
 }
