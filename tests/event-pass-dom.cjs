@@ -25,6 +25,8 @@ async function setup(query, options = {}) {
     else if (url.endsWith('/designs/recovery-link')) data = { ok: true };
     else if (url.endsWith('/event-pass/restore')) data = options.restored;
     else if (url.endsWith('/event-pass/resume')) { if (options.failResume) throw Error('Connection unavailable'); data = options.resumed || draft; }
+    else if (url.includes('/review-pricing')) data = { available: true, zip: new URL(url).searchParams.get('zip'), deliveryFee: new URL(url).searchParams.has('zip') ? 49.99 : null, taxRate: 8, taxDelivery: true };
+    else if (url.endsWith('/quote-requests')) data = { id: 'isolated-quote', notificationSent: true };
     else if (url.endsWith('/event-pass/checkout-session') || url.endsWith('/event-pass/renewal-checkout-session')) { checkouts++; data = { url: 'https://checkout.stripe.com/c/pay/cs_live_fixturecheckout' }; }
     else if (/\/designs(?:\/draft-owned)?$/.test(url)) { draft = { id: 'draft-owned', scene: body.scene, tenant: 'friendly', anonymousSessionId: body.anonymousSessionId, active: false }; data = { id: draft.id }; }
     else throw Error('Unexpected API request ' + url);
@@ -42,7 +44,7 @@ async function setup(query, options = {}) {
   await (await load(path.join(root, 'script.js'))).evaluate();
   evalScript('js/ui/paywall.js'); evalScript('js/ui/autosave.js');
   if (query.includes('autoplace=1')) evalScript('js/ui/tent-preview-entry.js'); else await (await load(path.join(root, 'js/ui/intake.js'))).evaluate();
-  await wait(150); evalScript('js/ui/customer-entry.js');
+  await wait(150); evalScript('js/ui/customer-entry.js'); evalScript('js/ui/review-actions.js');
   return { dom, w, calls, get draft() { return draft; }, get checkouts() { return checkouts; } };
 }
 (async () => {
@@ -65,7 +67,7 @@ async function setup(query, options = {}) {
   assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 1, 'checkout reuses one autosaved draft');
   assert.equal(t.calls.find(c => c.url.endsWith('/event-pass/checkout-session')).body.priceCents, undefined);
   t.dom.window.close();
-  const emptyFrame = { id: 'draft-owned', tenant: 'friendly', scene: { tentId: 'frame-20x20', objects: [], surfaceType: 'concrete', lightingId: 'lighting-none' }, anonymousSessionId: 'restored-owner', active: true, renewable: true, expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), customerEmail: 'paid@example.invalid', accessUrl: 'https://rentsketch.com/designer/?tenant=friendly#recoveryToken=fixture.private.token', emailDelivery: 'sent' };
+  const emptyFrame = { id: 'draft-owned', tenant: 'friendly', scene: { tentId: 'frame-20x20', objects: [], surfaceType: 'concrete', lightingId: 'lighting-none', customer: { name: '', email: '', date: '' } }, anonymousSessionId: 'restored-owner', active: true, renewable: true, expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), customerEmail: 'paid@example.invalid', accessUrl: 'https://rentsketch.com/designer/?tenant=friendly#recoveryToken=fixture.private.token', emailDelivery: 'sent' };
   t = await setup('?tenant=friendly&payment=success&checkout_session_id=cs_live_fixturecheckout', { restored: emptyFrame });
   w = t.w; d = w.document; b = w.FriendlyBridge;
   assert.equal(b.getScene().tentId, 'frame-20x20', 'paid empty frame replaces the initial pole tent'); assert.equal(b.getScene().surfaceType, 'concrete'); assert.equal(b.getScene().objects.length, 0);
@@ -75,7 +77,50 @@ async function setup(query, options = {}) {
   assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 0, 'return never saves the initial blank/default scene over the paid design');
   assert.match(d.querySelector('#eventPassBar').textContent, /Event Pass active/); assert.ok(d.querySelector('.pass-access-link').value.includes('#recoveryToken=fixture.private.token')); assert.match(d.querySelector('[data-email-status]').textContent, /sent to paid@example.invalid/);
   assert.equal(w.location.search.includes('checkout_session_id'), false, 'private credential removed from address after restore');
+  assert.equal(d.getElementById('customerEmail').value, 'paid@example.invalid', 'checkout email fills an empty saved contact email');
   d.querySelector('.pass-close').click(); d.querySelector('[data-drawer="tables"]').click(); assert.equal(d.getElementById('drawer').hidden, false);
+  // Save real edits, then reopen the server snapshot on a separate device.
+  b.loadScene({ ...b.getScene(), surfaceType: 'grass', objects: [{ id: 'dining', kind: 'table', tableId: 'round-5ft', shape: 'round', widthFt: 5, depthFt: 5, x: 2, y: 2, seatCount: 8, chairId: 'resin-white', linenId: null }] });
+  for (const [id, value] of [['customerName', 'Sam Event'], ['customerEmail', 'organizer@example.invalid'], ['customerDate', '2027-06-01']]) {
+    d.getElementById(id).value = value; d.getElementById(id).dispatchEvent(new w.Event('input', { bubbles: true }));
+  }
+  d.getElementById('view3dDayNight').click();
+  d.getElementById('sceneRain').checked = true; d.getElementById('sceneRain').dispatchEvent(new w.Event('change', { bubbles: true }));
+  d.getElementById('sceneMotion').checked = false; d.getElementById('sceneMotion').dispatchEvent(new w.Event('change', { bubbles: true }));
+  d.getElementById('btnToReview').click(); await wait(10);
+  d.querySelector('[name="deliveryZip"]').value = '13090'; d.querySelector('[name="deliveryZip"]').dispatchEvent(new w.Event('input', { bubbles: true }));
+  await w.RentSketchAutosave.flush();
+  const savedScene = JSON.parse(JSON.stringify(t.calls.filter(c => c.method === 'PATCH').at(-1).body.scene));
+  assert.deepEqual(savedScene.customer, { name: 'Sam Event', email: 'organizer@example.invalid', date: '2027-06-01' });
+  assert.equal(savedScene.deliveryZip, '13090'); assert.equal(savedScene.sceneOptions.night, true); assert.equal(savedScene.sceneOptions.weather, 'rain'); assert.equal(savedScene.sceneOptions.motion, false);
+  assert.equal(t.checkouts, 0, 'paid editing does not start another checkout');
+  t.dom.window.close();
+  const savedEvent = { ...emptyFrame, scene: savedScene };
+  t = await setup('?tenant=friendly#recoveryToken=fixture.private.token', { restored: savedEvent });
+  w = t.w; d = w.document; b = w.FriendlyBridge;
+  assert.equal(w.RentSketchEventPass.canEdit(), true); assert.equal(d.querySelector('.paywall-overlay'), null);
+  assert.equal(b.getScene().tentId, 'frame-20x20'); assert.equal(b.getScene().objects[0].id, 'dining');
+  assert.equal(d.getElementById('customerName').value, 'Sam Event'); assert.equal(d.getElementById('customerEmail').value, 'organizer@example.invalid', 'contact email is not overwritten by the payer email'); assert.equal(d.getElementById('customerDate').value, '2027-06-01');
+  assert.equal(d.getElementById('view3dDayNight').getAttribute('aria-pressed'), 'true'); assert.equal(d.getElementById('sceneRain').checked, true); assert.equal(d.getElementById('sceneMotion').checked, false);
+  assert.equal(b.currentReviewPricing().total, null, 'saved rates are never reused as current prices');
+  d.getElementById('btnToReview').click(); await wait(10);
+  assert.equal(d.querySelector('[name="deliveryZip"]').value, '13090'); assert.ok(t.calls.some(c => c.url.endsWith('/review-pricing?zip=13090'))); assert.equal(b.currentReviewPricing().deliveryFee, 49.99);
+  d.getElementById('btnEmailQuote').click(); await wait(20);
+  const quote = t.calls.find(c => c.url.endsWith('/quote-requests')).body;
+  assert.equal(quote.designId, 'draft-owned'); assert.equal(quote.anonymousSessionId, 'restored-owner'); assert.equal(quote.customerName, 'Sam Event'); assert.equal(quote.customerEmail, 'organizer@example.invalid'); assert.equal(quote.eventDate, '2027-06-01'); assert.equal(quote.lineItems.find(l => l.category === 'delivery').amount, 49.99); assert.equal(quote.estimateTotal, b.currentReviewPricing().total);
+  assert.equal(t.checkouts, 0); assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 0, 'Review reuses the paid event on another device');
+  b.loadScene(emptyFrame.scene);
+  assert.equal(d.getElementById('customerName').value, ''); assert.equal(d.getElementById('customerDate').value, ''); assert.equal(d.getElementById('customerEmail').value, ''); assert.equal(b.getScene().deliveryZip, '', 'opening a different legacy scene clears the prior event ZIP'); assert.equal(b.currentReviewPricing().deliveryFee, null);
+  assert.equal(d.getElementById('view3dDayNight').getAttribute('aria-pressed'), 'false'); assert.equal(d.getElementById('sceneRain').checked, false);
+  w.matchMedia = () => ({ matches: true });
+  b.loadScene({ ...emptyFrame.scene, viewMode: '3d', sceneOptions: { night: false, weather: 'clear', motion: true } });
+  assert.equal(b.state.viewMode, '3d', 'the saved 3D view is reopened'); assert.equal(d.getElementById('sceneMotion').checked, false, 'the returning device reduced-motion preference is respected');
+  assert.equal(b.getScene().sceneOptions.night, false, 'an explicit saved day setting is preserved');
+  t.dom.window.close();
+  t = await setup('?tenant=friendly&embed=1&focus=tent&autoplace=1&view=2d&productId=fpr-pole', { embedded: true, saved: savedEvent, resumed: savedEvent });
+  assert.equal(t.w.FriendlyBridge.getScene().tentId, 'pole-20x20', 'a different product still opens its exact free preview');
+  [...t.w.document.querySelectorAll('#eventPassBar button')].find(button => button.textContent === 'Continue my paid event').click();
+  assert.equal(t.w.FriendlyBridge.getScene().tentId, 'frame-20x20'); assert.equal(t.w.RENTSKETCH_TENT_PREVIEW, false); assert.equal(t.w.document.querySelector('.tent-preview-actions'), null); assert.match(t.w.document.getElementById('toolbarEventTitle').textContent, /Frame/); assert.equal(t.w.document.getElementById('customerName').value, 'Sam Event'); assert.equal(t.checkouts, 0);
   t.dom.window.close();
   t = await setup('?tenant=friendly&payment=cancelled#draft=fixturetoken', { restored: { ...emptyFrame, active: false, renewable: false } });
   assert.equal(t.w.FriendlyBridge.getScene().tentId, 'frame-20x20'); assert.equal(t.w.document.body.classList.contains('rs-pass-preview'), true); assert.equal(t.w.document.querySelector('.paywall-overlay'), null);
@@ -102,5 +147,5 @@ async function setup(query, options = {}) {
   assert.equal(JSON.parse(t.w.localStorage.getItem('rentsketch-autosave:friendly')).id, 'draft-owned', 'failed recovery plus page exit does not overwrite the original draft');
   assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 0);
   t.dom.window.close();
-  console.log('PASS Event Pass UI: real entry/store/autosave, free exact preview, clear $9.99 offer, cancel preserves scene, duplicate click guard, iframe checkout link, same empty-frame return, private recovery link, forged success cannot unlock, $4.99 renewal and launch-off behavior. DOM checks only; no GPU or payment/network writes.');
+  console.log('PASS Event Pass UI: free exact preview, $9.99 / 30-day offer, iframe checkout, paid save/reopen with contact details, delivery ZIP and scene preferences, fresh review prices, same paid design for isolated quote, other-product resume, private recovery, forged success rejection, $4.99 renewal and launch-off behavior. DOM checks only; no GPU or payment/network writes.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

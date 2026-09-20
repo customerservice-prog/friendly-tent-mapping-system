@@ -1,5 +1,11 @@
 import {reviewTotals} from '../core/reviewTotals.js';
 let rates=null,request=0,controller=null,zip='',host=null;
+// Save the customer's location with the event; always fetch prices again.
+export function reviewDeliveryZip(){return zip;}
+export function restoreReviewDeliveryZip(value){
+ controller?.abort();request++;rates=null;host=null;
+ zip=typeof value==='string'&&/^\d{0,5}$/.test(value.trim())?value.trim():'';
+}
 const money=n=>n==null?'Confirm pricing':'$'+n.toFixed(2);
 function totals(){return reviewTotals(window.FriendlyBridge?.computeLineItems?.()||[],rates);}
 export function currentReviewPricing(){return {...totals(),status:rates?.available?'connected':'unavailable'};}
@@ -29,6 +35,6 @@ export function mountReviewPricing(container){
  host.innerHTML='<section class="review-costs"><h3>Your event estimate</h3><p>Enter the event delivery ZIP to include available delivery charges and sales tax.</p><form class="review-location"><label>Delivery ZIP<input name="deliveryZip" autocomplete="postal-code" inputmode="numeric" maxlength="5" pattern="[0-9]{5}" aria-label="Event delivery ZIP"></label><button type="submit" class="btn-secondary">Calculate total</button></form><p class="review-pricing-status" role="status"></p><div class="review-cost-lines" aria-live="polite"></div><p class="review-cost-note"></p></section>';
  const input=host.querySelector('input');input.value=zip;
  host.querySelector('form').addEventListener('submit',e=>{e.preventDefault();calculate();});
- input.addEventListener('input',()=>{controller?.abort();request++;rates=null;zip=input.value.trim();host.querySelector('button').disabled=false;render();host.querySelector('.review-pricing-status').textContent='Select Calculate total to update delivery and tax.';});
+ input.addEventListener('input',()=>{controller?.abort();request++;rates=null;zip=input.value.trim();host.querySelector('button').disabled=false;render();host.querySelector('.review-pricing-status').textContent='Select Calculate total to update delivery and tax.';window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});
  render();calculate();
 }

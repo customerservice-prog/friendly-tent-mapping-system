@@ -122,7 +122,7 @@
     window.RENTSKETCH_PASS_RESTORING = true;
     try {
       var auto = autosave();
-      if (!bridge().loadScene(data.scene)) throw new Error('Your saved layout could not be restored. Please retry.');
+      if (!bridge().loadScene(data.scene, { customerEmail: data.customerEmail })) throw new Error('Your saved layout could not be restored. Please retry.');
       auto.adopt(data);
       verified = data;
     } finally { window.RENTSKETCH_PASS_RESTORING = false; }
