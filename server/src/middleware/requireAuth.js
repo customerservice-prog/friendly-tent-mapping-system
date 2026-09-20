@@ -37,6 +37,9 @@ async function resolveTenantAuth(req) {
     if (tenant.subscription_status === 'trialing' && tenant.trial_ends_at && new Date(tenant.trial_ends_at) < new Date()) {
       return { status: 402, error: 'Your free trial has ended. Please upgrade your plan to continue.', trialEndsAt: tenant.trial_ends_at };
     }
+    if (tenant.slug !== 'friendly' && ['canceled','unpaid','past_due','incomplete','incomplete_expired','paused'].includes(tenant.subscription_status)) {
+      return { status:402, error:'Your subscription needs attention. Open Billing to manage your plan or payment.' };
+    }
   }
   return { payload, platformAdmin, tenant, role };
 }

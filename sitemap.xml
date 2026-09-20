@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://rentsketch.com/</loc><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://rentsketch.com/party-rental-software/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://rentsketch.com/tent-layout-software/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://rentsketch.com/event-rental-software/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://rentsketch.com/tent-diagram-software/</loc><changefreq>monthly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://rentsketch.com/designer/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://rentsketch.com/demo/</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://rentsketch.com/business/</loc><changefreq>weekly</changefreq><priority>0.9</priority></url>
-  <url><loc>https://rentsketch.com/business/pricing.html</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://rentsketch.com/</loc></url>
+  <url><loc>https://rentsketch.com/demo/</loc></url>
+  <url><loc>https://rentsketch.com/business/</loc></url>
+  <url><loc>https://rentsketch.com/business/pricing.html</loc></url>
+  <url><loc>https://rentsketch.com/tent-layout-software/</loc></url>
+  <url><loc>https://rentsketch.com/tent-diagram-software/</loc></url>
+  <url><loc>https://rentsketch.com/party-rental-software/</loc></url>
+  <url><loc>https://rentsketch.com/event-rental-software/</loc></url>
+  <url><loc>https://rentsketch.com/event-layout-software/</loc></url>
+  <url><loc>https://rentsketch.com/wedding-layout-planner/</loc></url>
+  <url><loc>https://rentsketch.com/help/</loc></url>
+  <url><loc>https://rentsketch.com/privacy/</loc></url>
 </urlset>

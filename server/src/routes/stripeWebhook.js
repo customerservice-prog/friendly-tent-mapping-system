@@ -1,5 +1,5 @@
 const express = require('express');
-const { query } = require('../db');
+const { query, pool } = require('../db');
 const { fulfillEventPass, PASS_KINDS } = require('../eventPass');
 const { syncOrderEntitlement } = require('../orderProviders/quoteRequestOrderProvider');
 
@@ -15,26 +15,33 @@ function getStripe() {
 // This is the authoritative source for subscription status; access decisions
 // must check the subscription status in the database, never assume success
 // from the success URL.
-async function upsertBusinessSubscription(sub, metadata = {}) {
+async function upsertBusinessSubscription(sub, metadata = {}, execute = query) {
   const tenantId = metadata.tenantId || sub.metadata?.tenantId;
   if (!tenantId) return;
 
-  const planId = metadata.planId || sub.metadata?.planId || 'starter';
-  const interval = metadata.interval || sub.metadata?.interval || 'monthly';
+  let planId = metadata.planId || sub.metadata?.planId || 'starter';
+  let interval = metadata.interval || sub.metadata?.interval || 'monthly';
+  const priceId = sub.items?.data?.[0]?.price?.id;
+  // Portal changes update subscription items, not the original metadata.
+  if (priceId) for (const plan of ['starter','pro','commerce']) for (const term of ['monthly','annual']) {
+    if (process.env[`STRIPE_PRICE_${plan.toUpperCase()}_${term.toUpperCase()}`] === priceId) { planId=plan; interval=term; }
+  }
   const status = sub.status || 'active';
-  const start = sub.current_period_start ? new Date(sub.current_period_start * 1000) : null;
-  const end = sub.current_period_end ? new Date(sub.current_period_end * 1000) : null;
+  const periodStart = sub.current_period_start || sub.items?.data?.[0]?.current_period_start;
+  const periodEnd = sub.current_period_end || sub.items?.data?.[0]?.current_period_end;
+  const start = periodStart ? new Date(periodStart * 1000) : null;
+  const end = periodEnd ? new Date(periodEnd * 1000) : null;
 
-  await query(
+  await execute(
     `INSERT INTO subscriptions(tenant_id,plan_id,provider_customer_id,provider_subscription_id,status,billing_interval,current_period_start,current_period_end,cancel_at_period_end)
     VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)
-    ON CONFLICT(provider_subscription_id) DO UPDATE SET plan_id=EXCLUDED.plan_id,status=EXCLUDED.status,billing_interval=EXCLUDED.billing_interval,current_period_start=EXCLUDED.current_period_start,current_period_end=EXCLUDED.current_period_end,cancel_at_period_end=EXCLUDED.cancel_at_period_end`,
+    ON CONFLICT(provider_subscription_id) WHERE provider_subscription_id IS NOT NULL DO UPDATE SET plan_id=EXCLUDED.plan_id,status=EXCLUDED.status,billing_interval=EXCLUDED.billing_interval,current_period_start=EXCLUDED.current_period_start,current_period_end=EXCLUDED.current_period_end,cancel_at_period_end=EXCLUDED.cancel_at_period_end`,
     [tenantId, planId, String(sub.customer || ''), sub.id, status, interval, start, end, !!sub.cancel_at_period_end]
   );
 
   // Update tenant's billing snapshot for fast dashboard queries.
   // The subscription table remains the authoritative source.
-  await query('UPDATE tenants SET subscription_plan=$1,subscription_status=$2,updated_at=now() WHERE id=$3', [
+  await execute('UPDATE tenants SET subscription_plan=$1,subscription_status=$2,updated_at=now() WHERE id=$3', [
     planId,
     status,
     tenantId,
@@ -68,6 +75,35 @@ router.post('/', async (req, res) => {
       console.error('[stripe webhook] Event Pass fulfillment failed', event.id, err.message);
       return res.status(500).send('Event Pass fulfillment failed');
     }
+  }
+
+  // Commit the business update and event marker together. An interrupted
+  // update must remain retryable; recording the marker first outside a
+  // transaction previously caused Stripe retries to skip failed purchases.
+  const object = event.data.object;
+  const businessCheckout = event.type === 'checkout.session.completed' && object.metadata?.kind === 'business_subscription' && object.subscription;
+  const businessChange = ['customer.subscription.created','customer.subscription.updated','customer.subscription.deleted'].includes(event.type) && object.metadata?.tenantId;
+  if (businessCheckout || businessChange) {
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const tenantId = object.metadata.tenantId;
+      // Serialize status updates before fetching Stripe's latest state so an
+      // older delivered event cannot overwrite a later cancellation/payment.
+      await client.query('SELECT id FROM tenants WHERE id=$1 FOR UPDATE', [tenantId]);
+      const marker = await client.query('INSERT INTO processed_stripe_events(id,event_type) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id',[event.id,event.type]);
+      if (marker.rows.length) {
+        const subscription = await stripe.subscriptions.retrieve(businessCheckout ? object.subscription : object.id);
+        await upsertBusinessSubscription(subscription, businessCheckout ? object.metadata : {}, (sql,args)=>client.query(sql,args));
+      }
+      await client.query('COMMIT');
+      return res.json({received:true,...(!marker.rows.length?{duplicate:true}:{})});
+    } catch (err) {
+      if (client) await client.query('ROLLBACK');
+      console.error('[stripe webhook] Business subscription fulfillment failed',event.id,err.message);
+      return res.status(500).send('Subscription fulfillment failed');
+    } finally { client?.release(); }
   }
 
   // Idempotency: attempt to record this event as processed. If it already

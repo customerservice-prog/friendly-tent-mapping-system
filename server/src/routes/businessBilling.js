@@ -2,6 +2,8 @@ const express = require('express');
 const { verifyToken } = require('../auth');
 const db = require('../db');
 const { BUSINESS_PLANS } = require('../pricing');
+const { isConfiguredPlatformAdmin } = require('../middleware/requireAuth');
+const { businessPaymentReadiness } = require('../businessPaymentReadiness');
 
 const router = express.Router();
 
@@ -31,7 +33,7 @@ async function requireBillingAccess(req, res, next) {
     const tenantResult = await db.query('SELECT * FROM tenants WHERE slug=$1', [req.params.slug]);
     const tenant = tenantResult.rows[0];
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
-    if (!payload.isPlatformAdmin) {
+    if (!await isConfiguredPlatformAdmin(payload)) {
       const membership = await db.query(
         'SELECT role FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',
         [tenant.id, payload.userId]
@@ -51,9 +53,14 @@ async function requireBillingAccess(req, res, next) {
 
 // Public plan catalog. Prices shown by clients should come from here.
 router.get('/plans', (req, res) => res.json({ currency: 'usd', plans: Object.values(BUSINESS_PLANS) }));
+router.get('/payment-status', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  res.json(await businessPaymentReadiness(stripeClient()));
+});
 
 // Current server-authoritative billing state for dashboard/account UI.
 router.get('/:slug/billing/status', requireBillingAccess, async (req, res) => {
+  try {
   const t = req.tenant;
   const sub = await db.query(
     `SELECT plan_id,status,billing_interval,current_period_start,current_period_end,cancel_at_period_end
@@ -67,12 +74,14 @@ router.get('/:slug/billing/status', requireBillingAccess, async (req, res) => {
     friendlyFree: t.slug === 'friendly',
     subscription: sub.rows[0] || null,
   });
+  } catch (_) { res.status(503).json({ error: 'Billing status is temporarily unavailable. Please try again.' }); }
 });
 
 // Starts a recurring Stripe subscription for an authenticated tenant.
 // Uses permanent Stripe Price IDs from environment variables to enable
 // safe test→live migration without code changes.
 router.post('/:slug/billing/checkout-session', requireBillingAccess, async (req, res) => {
+  let lock;
   try {
     const stripe = stripeClient();
     if (!stripe) return res.status(503).json({ error: 'Payments are not configured.' });
@@ -83,6 +92,12 @@ router.post('/:slug/billing/checkout-session', requireBillingAccess, async (req,
     if (tenant.slug === 'friendly') {
       return res.status(400).json({ error: 'Friendly Party Rental currently has free RentSketch access.' });
     }
+    // Serialize checkout attempts for a workspace, including requests for
+    // different plans, so two tabs cannot start two recurring subscriptions.
+    lock = await db.pool.connect();
+    await lock.query('BEGIN');
+    const lockedTenant = (await lock.query('SELECT * FROM tenants WHERE id=$1 FOR UPDATE', [tenant.id])).rows[0];
+    Object.assign(tenant, lockedTenant);
 
     const planId = String(req.body?.plan || '').toLowerCase();
     const interval = req.body?.interval === 'annual' ? 'annual' : 'monthly';
@@ -106,6 +121,10 @@ router.post('/:slug/billing/checkout-session', requireBillingAccess, async (req,
       );
       return res.status(503).json({ error: 'Payments are not fully configured.' });
     }
+    const readiness = await businessPaymentReadiness(stripe);
+    if (!readiness.plans[planId]?.[interval]) {
+      return res.status(503).json({ error: 'This plan is temporarily unavailable for purchase. No charge was made. Please contact RentSketch support.' });
+    }
 
     let customerId = tenant.stripe_billing_customer_id || null;
     if (!customerId) {
@@ -114,9 +133,9 @@ router.post('/:slug/billing/checkout-session', requireBillingAccess, async (req,
           email: tenant.contact_email || undefined,
           name: tenant.name,
           metadata: { tenantId: tenant.id, tenantSlug: tenant.slug },
-        });
+        }, { idempotencyKey: `rentsketch-customer:${tenant.id}` });
         customerId = customer.id;
-        await db.query('UPDATE tenants SET stripe_billing_customer_id=$1, updated_at=now() WHERE id=$2', [
+        await lock.query('UPDATE tenants SET stripe_billing_customer_id=$1, updated_at=now() WHERE id=$2', [
           customerId,
           tenant.id,
         ]);
@@ -128,13 +147,28 @@ router.post('/:slug/billing/checkout-session', requireBillingAccess, async (req,
         return res.status(503).json({ error: 'Failed to create billing customer. Please contact support.' });
       }
     }
+    // Check Stripe, including a just-completed checkout whose webhook is still
+    // pending, before allowing another recurring subscription for this tenant.
+    const subscriptions = await stripe.subscriptions.list({ customer:customerId, status:'all', limit:100 });
+    if (subscriptions.data.some(sub => !['canceled','incomplete_expired'].includes(sub.status))) {
+      return res.status(409).json({ error: 'A subscription already exists. Use Manage Billing in Stripe for payment details or cancellation. Contact RentSketch support for a plan change.' });
+    }
+    const pending = await stripe.checkout.sessions.list({customer:customerId,status:'open',limit:100});
+    const existingCheckout = pending.data.find(s => s.mode === 'subscription' && s.metadata?.kind === 'business_subscription');
+    if (existingCheckout) {
+      if (existingCheckout.metadata.planId === planId && existingCheckout.metadata.interval === interval) {
+        await lock.query('COMMIT');
+        return res.json({url:existingCheckout.url});
+      }
+      return res.status(409).json({error:'You already have another plan open in Checkout. Finish or let that checkout expire before choosing a different plan.'});
+    }
 
     const origin = safeOrigin(req);
 
     // Idempotency: use tenant_id + plan + interval as idempotency key to prevent
     // duplicate sessions if the request is retried. Stripe will return the same
     // session URL on retry.
-    const idempotencyKey = `${tenant.id}-${planId}-${interval}`;
+    const idempotencyKey = `${tenant.id}-${planId}-${interval}-${Math.floor(Date.now()/1800000)}`;
 
     const session = await stripe.checkout.sessions.create(
       {
@@ -159,18 +193,21 @@ router.post('/:slug/billing/checkout-session', requireBillingAccess, async (req,
         },
         allow_promotion_codes: true,
         billing_address_collection: 'auto',
-        success_url: `${origin}/dashboard/?billing=success`,
-        cancel_url: `${origin}/business/pricing.html?billing=cancelled&plan=${encodeURIComponent(planId)}`,
+        success_url: `${origin}/dashboard/?billing=success#/billing`,
+        cancel_url: `${origin}/dashboard/?billing=cancelled#/billing`,
       },
       { idempotencyKey }
     );
-    res.json(session);
+    await lock.query('COMMIT');
+    res.json({ url:session.url });
   } catch (err) {
     const errCode = err.code || 'unknown_code';
     const errType = err.type || 'unknown_type';
     const errReqId = err.requestId || 'no_request_id';
     console.error(`[billing checkout] Stripe API error: type=${errType}, code=${errCode}, request_id=${errReqId}, message=${err.message}`);
     res.status(500).json({ error: 'Failed to create checkout session' });
+  } finally {
+    if (lock) { await lock.query('ROLLBACK'); lock.release(); }
   }
 });
 
@@ -191,7 +228,7 @@ router.post('/:slug/billing/portal-session', requireBillingAccess, async (req, r
   try {
     const session = await stripe.billingPortal.sessions.create({
       customer: tenant.stripe_billing_customer_id,
-      return_url: `${safeOrigin(req)}/dashboard/?billing=portal-return`,
+      return_url: `${safeOrigin(req)}/dashboard/?billing=portal-return#/billing`,
     });
     res.json({ url: session.url });
   } catch (err) {
@@ -204,4 +241,3 @@ router.post('/:slug/billing/portal-session', requireBillingAccess, async (req, r
 });
 
 module.exports = router;
-

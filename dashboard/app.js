@@ -102,7 +102,7 @@ function esc(s) {
  }
 
  function loadingHtml(label) { return '<div class="dash-loading">' + esc(label || 'Loading...') + '</div>'; }
-  function errorHtml(err) { return '<div class="dash-error">' + esc(err && err.message ? err.message : String(err)) + '</div>'; }
+ function errorHtml(err) { return '<div class="dash-error">' + esc(err && err.message ? err.message : String(err)) + (err && err.status === 402 ? ' <a href="#/billing">Open Billing to continue →</a>' : '') + '</div>'; }
 
  function bindShellEvents() {
    var logout = document.getElementById('btnLogout');
@@ -134,6 +134,7 @@ function esc(s) {
      '<div id="loginError" class="dash-error" hidden></div>' +
      '<button type="submit" class="btn-primary" id="loginSubmit">Log in</button>' +
      '</form>' +
+     '<p class="login-sub"><a href="/business/signup.html">Start a free business trial</a> · <a href="/help/">Need help signing in?</a></p>' +
      '</div>' +
      '</div>';
    document.getElementById('loginForm').addEventListener('submit', async function (e) {
@@ -202,6 +203,7 @@ function esc(s) {
           }
           return '';
         })() +
+       (!(designs.designs || []).length ? '<section class="dash-onboarding"><h2>Set up your customer designer</h2><p>Your workspace is ready. Complete these steps before sharing it with customers.</p><div class="dash-setup-grid"><a href="#/products"><strong>1. Add your products</strong><span>Set dimensions, prices and visual models.</span></a><a href="#/branding"><strong>2. Add your branding</strong><span>Make the customer experience yours.</span></a><a href="#/install"><strong>3. Preview and install</strong><span>Check your designer, then add it to your website.</span></a></div><p><a href="/help/#business" target="_blank" rel="noopener">Read the getting-started guide ↗</a></p></section>' : '') +
        '<div class="stat-row">' +
        '<div class="stat-card"><div class="stat-num">' + reqs.length + '</div><div class="stat-label">Quote Requests</div></div>' +
        '<div class="stat-card"><div class="stat-num">' + newCount + '</div><div class="stat-label">New / Unread</div></div>' +
@@ -550,7 +552,7 @@ function esc(s) {
        if (status.status === 'trialing' && daysLeft > 0) trialText = '<p class="trial-banner">Trial ends in ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' on ' + fmtDate(status.trialEndsAt) + '</p>';
        else if (status.status === 'trialing' && daysLeft <= 0) trialText = '<p class="trial-banner trial-expired">Your free trial has ended. Choose a plan below to continue.</p>';
      }
-     var msg = (window.location.search.indexOf('billing=success') > -1) ? '<div class="dash-saved">Upgrade successful! Your subscription is now active.</div>' : 
+     var msg = (window.location.search.indexOf('billing=success') > -1) ? (status.subscription && status.subscription.status === 'active' ? '<div class="dash-saved">Your active subscription has been confirmed.</div>' : '<div class="trial-banner">Checkout returned. Your subscription is not confirmed yet. Refresh billing in a moment; do not start another payment. <button type="button" id="refreshBilling">Refresh billing</button></div>') :
        (window.location.search.indexOf('billing=cancelled') > -1) ? '<div class="dash-error">Checkout was cancelled.</div>' :
        (window.location.search.indexOf('billing=portal-return') > -1) ? '<div class="dash-saved">Returned from billing portal.</div>' : '';
      if (status.friendlyFree) {
@@ -574,10 +576,12 @@ function esc(s) {
          '</div>' +
          '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px">' +
          '<h3 style="margin-top:0">Manage Subscription</h3>' +
-         '<button id="portalBtn" class="btn-primary"' + (status.subscription ? '' : ' disabled') + '>Manage Billing in Stripe</button>' +
+         '<button id="portalBtn" class="btn-primary">Manage Billing in Stripe</button>' +
          '<p class="muted">Change payment method, view invoices, or cancel your subscription</p>' +
          '</div>';
        document.getElementById('dashMain').innerHTML = billingHtml;
+       var refreshBilling = document.getElementById('refreshBilling');
+       if (refreshBilling) refreshBilling.addEventListener('click', function () { render(); });
        var selectedPlan = null;
        document.querySelectorAll('.plan-option').forEach(function(el) {
          el.style.cursor = 'pointer';

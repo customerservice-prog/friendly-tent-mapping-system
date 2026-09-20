@@ -1,9 +1,11 @@
 User-agent: *
 Allow: /
-Disallow: /dashboard/
-Disallow: /admin/
 Disallow: /api/
-Disallow: /business/login
-Disallow: /business/signup
+Disallow: /server/
+Disallow: /docs/
+Disallow: /scripts/
+
+# Account and designer pages return noindex headers. Allow crawling so
+# Google can see those directives and remove previously indexed copies.
 
 Sitemap: https://rentsketch.com/sitemap.xml
