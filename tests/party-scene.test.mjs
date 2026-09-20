@@ -5,7 +5,17 @@ import {TABLES} from '../js/data/tables.js';
 import {CHAIRS} from '../js/data/chairs.js';
 import {LINENS} from '../js/data/linens.js';
 import {chairPositions} from '../js/core/seating.js';
+import {TENTS} from '../js/data/tents.js';
 const tent={id:'pole-20x20',type:'pole',widthFt:20,lengthFt:20,centerPoles:[{x:10,y:10}]};
+test('every tent gets seating inside its footprint, with larger tents receiving a fuller setup',()=>{
+ for(const t of TENTS){
+  const objects=partyLayout(t,{tables:TABLES,chairs:CHAIRS,linens:LINENS,danceAvailable:true});
+  assert.ok(objects.some(o=>o.seatCount>0),t.name);
+  for(const o of objects){assert.ok(o.x>=0&&o.y>=0&&o.x+o.widthFt<=t.widthFt&&o.y+o.depthFt<=t.lengthFt,t.name);for(const c of chairPositions(o,CHAIRS.find(c=>c.id===o.chairId)||{})){const x=o.x+o.widthFt/2+c.x,y=o.y+o.depthFt/2+c.y;assert.ok(x>=0&&y>=0&&x<=t.widthFt&&y<=t.lengthFt,t.name+' chair');}}
+  if(t.widthFt===10&&t.lengthFt===10)assert.equal(objects.filter(o=>o.kind==='dance').length,0);
+  if(t.widthFt===40&&t.lengthFt===100)assert.equal(objects.filter(o=>o.seatCount>0).length,12);
+ }
+});
 test('party starter uses actual catalog items, preserves the exact tent and leaves room around the center pole',()=>{
  const before=JSON.stringify(tent),items=partyLayout(tent,{tables:TABLES,chairs:CHAIRS,linens:LINENS,danceAvailable:true});
  assert.equal(JSON.stringify(tent),before);assert.equal(items.filter(o=>o.kind==='dance').length,4);assert.equal(items.filter(o=>o.seatCount).length,2);assert.equal(items.filter(o=>o.tableId==='cocktail').length,1);assert.equal(items.reduce((n,o)=>n+(o.seatCount||0),0),16);

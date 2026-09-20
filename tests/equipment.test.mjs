@@ -3,6 +3,14 @@ import {test} from 'node:test';
 import {liveCatalog} from '../js/data/catalog.js';
 import {summarizeEvent} from '../js/core/eventSummary.js';
 import {chairPositions} from '../js/core/seating.js';
+import {inferVisualModel} from '../js/data/visualResolver.js';
+
+test('complete tent dimensions resolve without truncating 100 to 10 or guessing unsupported models',()=>{
+ assert.equal(inferVisualModel({category:'tent',name:'40 x 100 Pole Tent'}),'pole-40x100');
+ assert.equal(inferVisualModel({category:'tent',name:'40 x 1000 Pole Tent'}),null);
+ assert.equal(inferVisualModel({category:'tent',name:'20 x 20 Tent'}),null);
+ assert.equal(inferVisualModel({category:'tent',name:'20 x 20 Pole Tent',visual_model_id:'custom-model'}),'custom-model');
+});
 
 test('live imported products replace duplicate seed cards; explicit product identity wins',()=>{
  const models=[{id:'pole-20x20',widthFt:20,lengthFt:20}],seed={id:'seed',category:'tent',external_id:'pole-20x20',visual_model_id:'pole-20x20',price_per_day:'250'},live={...seed,id:'live',external_id:'fpr:20x20-pole-tent'};

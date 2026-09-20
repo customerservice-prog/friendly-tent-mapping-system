@@ -4,7 +4,7 @@ import { TENTS } from './tents.js';
 
 function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
 function tentVisual(name) {
-  var n=String(name||'').toLowerCase(),m=n.match(/(10|20|30|40)\s*[x×-]\s*(10|20|30|40|45|60|80|100)/);
+  var n=String(name||'').toLowerCase(),m=n.match(/\b(\d+)\s*[x×-]\s*(\d+)\b/);
   if(!m)return null;
   var size=m[1]+'x'+m[2],type=/frame/.test(n)?'frame':(/pop|canopy/.test(n)?'canopy':(/pole/.test(n)?'pole':null));
   if(!type)return null;

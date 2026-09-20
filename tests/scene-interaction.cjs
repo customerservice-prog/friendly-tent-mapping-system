@@ -7,12 +7,12 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  const dom=new JSDOM('<!doctype html><div id="scene"></div>',{pretendToBeVisual:true}),w=dom.window,container=w.document.getElementById('scene');
  const ctx=new Proxy({createLinearGradient:()=>({addColorStop(){}}),createRadialGradient:()=>({addColorStop(){}})},{get:(t,k)=>t[k]||(()=>{})});
  w.HTMLCanvasElement.prototype.getContext=()=>ctx;w.matchMedia=()=>({matches:false});
- Object.defineProperties(container,{clientWidth:{value:800},clientHeight:{value:600}});
- let renderer,control,clock=0,callbacks=[],frames=new Map();
+ let viewportWidth=800,viewportHeight=600;Object.defineProperties(container,{clientWidth:{get:()=>viewportWidth},clientHeight:{get:()=>viewportHeight}});
+ let renderer,control,clock=0,callbacks=[],frames=new Map(),resizeScene;
  class Renderer{constructor(){renderer=this;this.domElement=w.document.createElement('canvas');this.domElement.getBoundingClientRect=()=>({left:0,top:0,width:800,height:600});this.shadowMap={};}setPixelRatio(){}setSize(){}render(scene,camera){this.scene=scene;this.camera=camera;}dispose(){this.disposed=true;}}
  class Controls{constructor(camera){control=this;this.camera=camera;this.target=new THREE.Vector3();this.touches={};}addEventListener(){}update(){this.camera.lookAt(this.target);this.camera.updateMatrixWorld(true);}dispose(){}}
  class PMREM{fromScene(){return{texture:new THREE.Texture(),dispose(){}};}dispose(){}}
- const context=vm.createContext({console,document:w.document,window:w,ResizeObserver:class{observe(){}disconnect(){}},requestAnimationFrame:fn=>{frames.set(++clock,fn);return clock;},cancelAnimationFrame:id=>frames.delete(id),performance:{now:()=>0}}),cache=new Map();
+ const context=vm.createContext({console,document:w.document,window:w,ResizeObserver:class{constructor(fn){resizeScene=fn;}observe(){}disconnect(){}},requestAnimationFrame:fn=>{frames.set(++clock,fn);return clock;},cancelAnimationFrame:id=>frames.delete(id),performance:{now:()=>0}}),cache=new Map();
  const overrides={WebGLRenderer:Renderer,PMREMGenerator:PMREM};
  const three=new vm.SyntheticModule(Object.keys(THREE),function(){for(const key of Object.keys(THREE))this.setExport(key,overrides[key]||THREE[key]);},{context});
  const orbit=new vm.SyntheticModule(['OrbitControls'],function(){this.setExport('OrbitControls',Controls);},{context});
@@ -36,6 +36,24 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  pointer('pointerdown');pointer('pointercancel');assert.ok(callbacks.some(c=>c[0]==='move'));assert.ok(!callbacks.some(c=>c[0]==='place'));
  callbacks=[];pointer('pointerdown');pointer('pointerdown',2);pointer('pointerup',2);pointer('pointerup');assert.ok(!callbacks.some(c=>c[0]==='place'),'pinch does not place');
  callbacks=[];pointer('pointerdown');pointer('pointerup');assert.equal(callbacks.filter(c=>c[0]==='place').length,1);
- view.rebuild(data);assert.equal(control.enableRotate,true);view.destroy();assert.equal(container.children.length,0);assert.ok(renderer.disposed);assert.equal(frames.size,0);
- console.log('PASS 3D controller: actual scene assembly, day/night/rain/guest preferences survive edits, placement/cancel/pinch gestures, cleanup (renderer stub, not GPU QA)');w.close();
+ view.rebuild(data);assert.equal(control.enableRotate,true);
+ const catalog=await load(path.join(root,'js/data/tents.js'));await catalog.evaluate();
+ const partyModule=await load(path.join(root,'js/core/party-scene.js'));await partyModule.evaluate();
+ const tableModule=await load(path.join(root,'js/data/tables.js'));await tableModule.evaluate();
+ const chairModule=await load(path.join(root,'js/data/chairs.js'));await chairModule.evaluate();
+ for(const width of [320,1280]){
+  viewportWidth=width;viewportHeight=width===320?640:760;resizeScene();
+  for(const tent of catalog.namespace.TENTS){
+   const objects=partyModule.namespace.partyLayout(tent,{tables:tableModule.namespace.TABLES,chairs:chairModule.namespace.CHAIRS,danceAvailable:true});
+   view.rebuild({...data,tent,objects});view.fitCamera();
+   assert.ok(renderer.camera.position.distanceTo(control.target)<control.maxDistance,tent.id+' camera limit');
+   const height=tent.type==='pole'?(tent.widthFt<=20?14.5:17.5):7+Math.max(4,tent.widthFt*.24);
+   for(const x of [-tent.widthFt/2,tent.widthFt/2])for(const y of [0,height])for(const z of [-tent.lengthFt/2,tent.lengthFt/2]){
+    const point=new THREE.Vector3(x,y,z).project(renderer.camera);assert.ok(Math.abs(point.x)<1&&Math.abs(point.y)<1,tent.id+' fits '+width);
+   }
+   assert.ok(scene.getObjectByName('Party table styling'));
+  }
+ }
+ view.destroy();assert.equal(container.children.length,0);assert.ok(renderer.disposed);assert.equal(frames.size,0);
+ console.log('PASS 3D controller: all 16 tent sizes at phone/desktop dimensions, actual scene assembly, day/night/rain/guest preferences survive edits, placement/cancel/pinch gestures, cleanup (renderer stub, not GPU QA)');w.close();
 })().catch(e=>{console.error(e);process.exitCode=1;});

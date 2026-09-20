@@ -1,0 +1,868 @@
+{
+  "products": [
+    {
+      "id": "c1fee2e8-70ff-4b58-93bc-ebac0f1d8aa3",
+      "category": "chair",
+      "external_id": "fpr:mahogany-chiavari-chair",
+      "visual_model_id": "chiavari-mahogany",
+      "name": "Mahogany Chiavari Chair",
+      "price_per_day": "12.00",
+      "active": true
+    },
+    {
+      "id": "ff643017-3e55-4e36-82bb-80e0f3f38095",
+      "category": "chair",
+      "external_id": "fpr:queen-tiffany-throne-chair",
+      "visual_model_id": "throne-queen-tiffany",
+      "name": "Queen Tiffany Throne Chair",
+      "price_per_day": "125.00",
+      "active": true
+    },
+    {
+      "id": "fa45d90a-65c0-4b57-b3a4-e98bd68dadc5",
+      "category": "chair",
+      "external_id": "fpr:gold-chiavari-chair",
+      "visual_model_id": "chiavari-gold",
+      "name": "Gold Chiavari Chair",
+      "price_per_day": "11.99",
+      "active": true
+    },
+    {
+      "id": "aa3e897e-447e-4b9d-93f9-0e987e8e57eb",
+      "category": "chair",
+      "external_id": "fpr:king-throne-chair",
+      "visual_model_id": "throne-king",
+      "name": "King Throne Chair",
+      "price_per_day": "120.00",
+      "active": true
+    },
+    {
+      "id": "4673f53c-b2e2-42d4-96b4-e2f0ac5954f5",
+      "category": "chair",
+      "external_id": "fpr:white-plastic-folding-chair",
+      "visual_model_id": "plastic-white",
+      "name": "White Plastic Folding Chair",
+      "price_per_day": "2.50",
+      "active": true
+    },
+    {
+      "id": "6781ba01-0e56-45c1-9509-5bf1f991fb3b",
+      "category": "chair",
+      "external_id": "fpr:white-chiavari-chair",
+      "visual_model_id": "chiavari-white",
+      "name": "White Chiavari Chair",
+      "price_per_day": "11.99",
+      "active": true
+    },
+    {
+      "id": "002200a7-b62a-4f85-97f8-fafc6bc0ec4b",
+      "category": "chair",
+      "external_id": "fpr:white-resin-folding-chair",
+      "visual_model_id": "resin-white",
+      "name": "White Resin Folding Chair",
+      "price_per_day": "4.75",
+      "active": true
+    },
+    {
+      "id": "d23589cd-f30f-48a9-a979-73c135f57c58",
+      "category": "chair",
+      "external_id": "plastic-white",
+      "visual_model_id": "plastic-white",
+      "name": "White Plastic Folding Chair",
+      "price_per_day": "2.50",
+      "active": true
+    },
+    {
+      "id": "5cd0fa82-4921-4b71-a2a3-ab7a29d44563",
+      "category": "chair",
+      "external_id": "resin-white",
+      "visual_model_id": "resin-white",
+      "name": "White Resin Folding Chair",
+      "price_per_day": "4.75",
+      "active": true
+    },
+    {
+      "id": "178139e4-e3bb-47ad-b263-d8be7b37229b",
+      "category": "chair",
+      "external_id": "chiavari-gold",
+      "visual_model_id": "chiavari-gold",
+      "name": "Gold Chiavari Chair",
+      "price_per_day": "11.99",
+      "active": true
+    },
+    {
+      "id": "e7305a5e-cfb5-4f7e-9b2d-07c499832b85",
+      "category": "chair",
+      "external_id": "chiavari-white",
+      "visual_model_id": "chiavari-white",
+      "name": "White Chiavari Chair",
+      "price_per_day": "11.99",
+      "active": true
+    },
+    {
+      "id": "2f9c3698-66a1-4cc0-b669-92482ff5749f",
+      "category": "chair",
+      "external_id": "chiavari-mahogany",
+      "visual_model_id": "chiavari-mahogany",
+      "name": "Mahogany Chiavari Chair",
+      "price_per_day": "12.00",
+      "active": true
+    },
+    {
+      "id": "77bf0f44-3971-40dd-b379-5f03a8f865a3",
+      "category": "chair",
+      "external_id": "throne-king",
+      "visual_model_id": "throne-king",
+      "name": "King Throne Chair",
+      "price_per_day": "120.00",
+      "active": true
+    },
+    {
+      "id": "2fc9b75b-7095-4a16-acda-a4e14b3a8756",
+      "category": "chair",
+      "external_id": "throne-queen-tiffany",
+      "visual_model_id": "throne-queen-tiffany",
+      "name": "Queen Tiffany Throne Chair",
+      "price_per_day": "125.00",
+      "active": true
+    },
+    {
+      "id": "82247162-2a7f-42a3-b1de-fcec45ec3476",
+      "category": "dance_floor",
+      "external_id": "fpr:stage-section",
+      "visual_model_id": "stage-section",
+      "name": "Stage Section",
+      "price_per_day": "125.00",
+      "active": true
+    },
+    {
+      "id": "13ab2242-b549-4cff-9ced-9ca9bc431107",
+      "category": "dance_floor",
+      "external_id": "fpr:stage-stair",
+      "visual_model_id": null,
+      "name": "Stage Stair",
+      "price_per_day": "55.00",
+      "active": true
+    },
+    {
+      "id": "2b727ec1-73c5-49ee-ac60-7253831cc284",
+      "category": "dance_floor",
+      "external_id": "fpr:stage-ramp",
+      "visual_model_id": null,
+      "name": "Stage Ramp",
+      "price_per_day": "50.00",
+      "active": true
+    },
+    {
+      "id": "ffbb6818-2960-4af7-bcf4-57eaee5a9a7f",
+      "category": "dance_floor",
+      "external_id": "fpr:8ft-x-31in-stage-skirt",
+      "visual_model_id": null,
+      "name": "8ft x 31in Stage Skirt",
+      "price_per_day": "25.00",
+      "active": true
+    },
+    {
+      "id": "e3540acc-9828-4186-b32f-580d69b8d1a8",
+      "category": "dance_floor",
+      "external_id": "fpr:dance-floor-3x3-section",
+      "visual_model_id": "dance-floor",
+      "name": "Dance Floor 3x3 Section",
+      "price_per_day": "35.00",
+      "active": true
+    },
+    {
+      "id": "49243d60-b1be-4aff-92a4-182a7683effe",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-30x45",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting - 30x45",
+      "price_per_day": "175.00",
+      "active": true
+    },
+    {
+      "id": "9a370d11-a327-4540-9366-aad29c190059",
+      "category": "lighting",
+      "external_id": "fpr:uplighting-package-12-lights",
+      "visual_model_id": "lighting-uplighting-12",
+      "name": "Uplighting Package - 12 Lights",
+      "price_per_day": "225.00",
+      "active": true
+    },
+    {
+      "id": "cd649599-a456-4742-87f0-9a2b6688b2d6",
+      "category": "lighting",
+      "external_id": "fpr:bistro-lighting-20x20",
+      "visual_model_id": "lighting-bistro",
+      "name": "Bistro Lighting (20x20)",
+      "price_per_day": "125.00",
+      "active": true
+    },
+    {
+      "id": "07b59d7b-de7f-4be4-afcd-576a6aa5d0f0",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-20x20",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting (20x20)",
+      "price_per_day": "100.00",
+      "active": true
+    },
+    {
+      "id": "4954a855-4928-48be-b1b6-57fa2fa8299f",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-40x40",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting - 40x40",
+      "price_per_day": "225.00",
+      "active": true
+    },
+    {
+      "id": "c963f4ea-0bff-45b6-b37f-b137ffbcc88a",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-40x60",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting - 40x60",
+      "price_per_day": "250.00",
+      "active": true
+    },
+    {
+      "id": "47097d42-00cb-4138-b932-0ac62b867682",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-40x80",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting - 40x80",
+      "price_per_day": "300.00",
+      "active": true
+    },
+    {
+      "id": "21166db8-f94d-4c7a-b90b-90b70bb1a3d8",
+      "category": "lighting",
+      "external_id": "fpr:custom-lighting-300ft",
+      "visual_model_id": "lighting-custom-300",
+      "name": "Custom Lighting - 300ft",
+      "price_per_day": "200.00",
+      "active": true
+    },
+    {
+      "id": "3c5df743-f55c-4ec3-8a46-8bcd7dafeb54",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-40x100",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting - 40x100",
+      "price_per_day": "350.00",
+      "active": true
+    },
+    {
+      "id": "deeaa708-c362-4a03-8e04-0bfdab03bd45",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-30x60",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting - 30x60",
+      "price_per_day": "200.00",
+      "active": true
+    },
+    {
+      "id": "7b3a17cf-92da-4a2d-ac00-2b04c03c4525",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-30x30",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting - 30x30",
+      "price_per_day": "125.00",
+      "active": true
+    },
+    {
+      "id": "89dd5116-8b68-4760-9ffe-b435cf853f19",
+      "category": "lighting",
+      "external_id": "fpr:wireless-led-uplight",
+      "visual_model_id": "lighting-uplight-single",
+      "name": "Wireless LED Uplight",
+      "price_per_day": "25.00",
+      "active": true
+    },
+    {
+      "id": "2991a8a0-0ae1-4329-8006-ba7ee4aeef93",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-20x40",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting (20x40)",
+      "price_per_day": "150.00",
+      "active": true
+    },
+    {
+      "id": "30f4f1fa-0cd7-429e-9a88-c715023aad9b",
+      "category": "lighting",
+      "external_id": "fpr:battery-operated-crystal-chandelier",
+      "visual_model_id": "lighting-chandelier",
+      "name": "Battery-Operated Crystal Chandelier",
+      "price_per_day": "99.00",
+      "active": true
+    },
+    {
+      "id": "4a4dc12a-653f-40b4-aa60-7a3ba1f89042",
+      "category": "lighting",
+      "external_id": "fpr:tent-lighting-20x30",
+      "visual_model_id": "lighting-tent",
+      "name": "Tent Lighting - 20x30",
+      "price_per_day": "125.00",
+      "active": true
+    },
+    {
+      "id": "879cf3f3-a92d-412e-940e-cb2787fcc1bc",
+      "category": "linen",
+      "external_id": "fpr:matching-napkins",
+      "visual_model_id": null,
+      "name": "Matching Napkins",
+      "price_per_day": "2.00",
+      "active": true
+    },
+    {
+      "id": "69505f85-4687-49b0-89a2-286b25d8cce8",
+      "category": "linen",
+      "external_id": "fpr:90x132-banquet-polyester-tablecloth",
+      "visual_model_id": "linen-skirt-rect",
+      "name": "90x132 Banquet Polyester Tablecloth",
+      "price_per_day": "24.00",
+      "active": true
+    },
+    {
+      "id": "76688b02-1bd5-4f38-8e4d-985bbe230d1f",
+      "category": "linen",
+      "external_id": "fpr:54x120-banquet-polyester-tablecloth",
+      "visual_model_id": "linen-skirt-rect",
+      "name": "54x120 Banquet Polyester Tablecloth",
+      "price_per_day": "16.00",
+      "active": true
+    },
+    {
+      "id": "9016b7b3-513b-4d71-a6c7-2da8a7d633f2",
+      "category": "linen",
+      "external_id": "fpr:120-round-satin-tablecloth",
+      "visual_model_id": "linen-skirt-round",
+      "name": "120 Round Satin Tablecloth",
+      "price_per_day": "22.50",
+      "active": true
+    },
+    {
+      "id": "e29879b4-eb8a-49e4-ac5d-1eb2444da1de",
+      "category": "linen",
+      "external_id": "fpr:linen-tent-package-tent-tables-chairs-tablecloths-syracuse-ny",
+      "visual_model_id": null,
+      "name": "Linen Tent Package",
+      "price_per_day": "425.00",
+      "active": true
+    },
+    {
+      "id": "7ea18dbd-8720-4484-aa55-c04cec0a5b1c",
+      "category": "linen",
+      "external_id": "fpr:90x156-banquet-polyester-tablecloth",
+      "visual_model_id": "linen-skirt-rect",
+      "name": "90x156 Banquet Polyester Tablecloth",
+      "price_per_day": "26.00",
+      "active": true
+    },
+    {
+      "id": "5023d73f-40e2-4117-a567-0175ca951869",
+      "category": "linen",
+      "external_id": "fpr:white-aisle-runner-100ft",
+      "visual_model_id": "linen-runner",
+      "name": "White Aisle Runner (100ft)",
+      "price_per_day": "100.00",
+      "active": true
+    },
+    {
+      "id": "20eb6499-944b-4526-aafe-e39789c5d162",
+      "category": "linen",
+      "external_id": "fpr:plastic-linen-clips",
+      "visual_model_id": null,
+      "name": "Plastic Linen Clips (12 Pack)",
+      "price_per_day": "4.00",
+      "active": true
+    },
+    {
+      "id": "6103c84f-3785-4110-9d43-bbb112e90b30",
+      "category": "linen",
+      "external_id": "fpr:cocktail-table-cover-white",
+      "visual_model_id": "linen-skirt-round",
+      "name": "Cocktail Table Cover",
+      "price_per_day": "12.00",
+      "active": true
+    },
+    {
+      "id": "4f2afbe9-a2c0-4c55-bb5e-d465652c5425",
+      "category": "linen",
+      "external_id": "fpr:72-x-120-banquet-tablecloth",
+      "visual_model_id": "linen-skirt-rect",
+      "name": "72 x 120 Banquet Tablecloth",
+      "price_per_day": "18.00",
+      "active": true
+    },
+    {
+      "id": "0cdf43b1-fd22-4549-9fd9-29ce4e115187",
+      "category": "linen",
+      "external_id": "fpr:black-spandex-8ft-table-linen",
+      "visual_model_id": "linen-skirt-rect",
+      "name": "Black Spandex 8ft Table Linen",
+      "price_per_day": "20.00",
+      "active": true
+    },
+    {
+      "id": "5f4bfcda-4dab-42be-bbfd-300fb41b0360",
+      "category": "linen",
+      "external_id": "fpr:120-inch-round-polyester-tablecloth",
+      "visual_model_id": "linen-skirt-round",
+      "name": "120 inch Round Polyester Tablecloth",
+      "price_per_day": "20.00",
+      "active": true
+    },
+    {
+      "id": "ae0b92f2-5a38-406d-89c6-5caa756973fe",
+      "category": "linen",
+      "external_id": "fpr:black-spandex-6ft-table-linen",
+      "visual_model_id": "linen-skirt-rect",
+      "name": "Spandex 6ft Table Linen",
+      "price_per_day": "18.00",
+      "active": true
+    },
+    {
+      "id": "c7eef240-3b2d-4cb3-b143-a99fea7c8abe",
+      "category": "linen",
+      "external_id": "fpr:spandex-chair-cover",
+      "visual_model_id": "linen-skirt-rect",
+      "name": "Spandex Chair Cover",
+      "price_per_day": "2.00",
+      "active": true
+    },
+    {
+      "id": "36585af9-b5bd-48d3-9756-8414cab6b9d8",
+      "category": "linen",
+      "external_id": "fpr:90-round-polyester-tablecloth",
+      "visual_model_id": "linen-skirt-round",
+      "name": "90 Round Polyester Tablecloth",
+      "price_per_day": "17.00",
+      "active": true
+    },
+    {
+      "id": "1aa1edfd-caa2-4149-a9ee-7285d9746d7c",
+      "category": "linen",
+      "external_id": "fpr:9ft-table-runner",
+      "visual_model_id": "linen-runner",
+      "name": "9ft Table Runner",
+      "price_per_day": "4.00",
+      "active": true
+    },
+    {
+      "id": "10e62bc0-441a-423e-953d-46c266903625",
+      "category": "linen",
+      "external_id": "fpr:132-round-polyester-tablecloth",
+      "visual_model_id": "linen-skirt-round",
+      "name": "132 Round Polyester Tablecloth",
+      "price_per_day": "24.00",
+      "active": true
+    },
+    {
+      "id": "d86ae32a-dd71-453a-8d0a-e41af0846ee5",
+      "category": "linen",
+      "external_id": "fpr:white-table-linen-round-60",
+      "visual_model_id": "linen-skirt-round",
+      "name": "White Table Linen Round 60\"",
+      "price_per_day": "16.00",
+      "active": true
+    },
+    {
+      "id": "75ddf63f-0490-4724-8135-a93d6dba0fed",
+      "category": "linen",
+      "external_id": "fpr:108-round-polyester-tablecloth",
+      "visual_model_id": "linen-skirt-round",
+      "name": "108 Round Polyester Tablecloth",
+      "price_per_day": "18.00",
+      "active": true
+    },
+    {
+      "id": "223cd91a-5c47-4eb8-8568-088bdf9a9691",
+      "category": "linen",
+      "external_id": "fpr:120in-round-sequin-tablecloth-rose-gold",
+      "visual_model_id": "linen-skirt-round",
+      "name": "120 Round Sequin Tablecloth",
+      "price_per_day": "22.50",
+      "active": true
+    },
+    {
+      "id": "327d8117-5649-48d4-bd0f-c6e3f261ee14",
+      "category": "table",
+      "external_id": "fpr:4ft-fill-and-chill-table",
+      "visual_model_id": "fill-chill-4ft",
+      "name": "4ft Fill and Chill Table",
+      "price_per_day": "40.00",
+      "active": true
+    },
+    {
+      "id": "3f2b5a66-6c06-492b-9e32-3fde4b89bfbf",
+      "category": "table",
+      "external_id": "fpr:8ft-banquet-table",
+      "visual_model_id": "banquet-8ft",
+      "name": "8ft Banquet Table",
+      "price_per_day": "14.00",
+      "active": true
+    },
+    {
+      "id": "ca24b497-e1da-4e2c-be85-9d138c7f8380",
+      "category": "table",
+      "external_id": "fpr:5ft-round-table",
+      "visual_model_id": "round-5ft",
+      "name": "5ft Round Table",
+      "price_per_day": "15.00",
+      "active": true
+    },
+    {
+      "id": "b4992ddf-3987-4e6a-bc00-1bee9eb1a7c5",
+      "category": "table",
+      "external_id": "fpr:cocktail-table",
+      "visual_model_id": "cocktail",
+      "name": "Cocktail Table",
+      "price_per_day": "12.00",
+      "active": true
+    },
+    {
+      "id": "416fd8a4-cbf6-43c2-9351-ddbab3b333b3",
+      "category": "table",
+      "external_id": "round-5ft",
+      "visual_model_id": "round-5ft",
+      "name": "5' Round Table",
+      "price_per_day": "15.00",
+      "active": true
+    },
+    {
+      "id": "1cc4493e-bf2f-4aa0-ac6d-acd35df88809",
+      "category": "table",
+      "external_id": "banquet-6ft",
+      "visual_model_id": "banquet-6ft",
+      "name": "6' Banquet Table",
+      "price_per_day": "13.00",
+      "active": true
+    },
+    {
+      "id": "4a54e406-bd7c-4c59-8dad-71e096828f2b",
+      "category": "table",
+      "external_id": "banquet-8ft",
+      "visual_model_id": "banquet-8ft",
+      "name": "8' Banquet Table",
+      "price_per_day": "14.00",
+      "active": true
+    },
+    {
+      "id": "9f2c4ba5-330f-4809-b20e-c85d918a829c",
+      "category": "table",
+      "external_id": "cocktail",
+      "visual_model_id": "cocktail",
+      "name": "Cocktail Table",
+      "price_per_day": "12.00",
+      "active": true
+    },
+    {
+      "id": "badc02aa-ebc6-424a-a102-58870839ade8",
+      "category": "table",
+      "external_id": "fill-chill-4ft",
+      "visual_model_id": "fill-chill-4ft",
+      "name": "4' Fill & Chill Table",
+      "price_per_day": "40.00",
+      "active": true
+    },
+    {
+      "id": "c1fd343c-51bb-42bd-a0b2-f4e03febbf52",
+      "category": "tent",
+      "external_id": "fpr:10-x-20-ez-pop-up-canopy-tent",
+      "visual_model_id": "canopy-10x20",
+      "name": "10 x 20 EZ Pop Up Canopy Tent",
+      "price_per_day": "175.00",
+      "active": true
+    },
+    {
+      "id": "6a1318ec-72bf-40ad-9057-c00616c96a35",
+      "category": "tent",
+      "external_id": "fpr:40-x-100-pole-tent",
+      "visual_model_id": null,
+      "name": "40 x 100 Pole Tent",
+      "price_per_day": "1950.00",
+      "active": true
+    },
+    {
+      "id": "46952d95-23f0-4a03-801a-7d4a2ced6bdb",
+      "category": "tent",
+      "external_id": "fpr:30x40-classic-frame-tent",
+      "visual_model_id": "frame-30x40",
+      "name": "30x40 Classic Frame Tent",
+      "price_per_day": "700.00",
+      "active": true
+    },
+    {
+      "id": "9d356aee-95ed-4691-86d6-30e67e12bdf0",
+      "category": "tent",
+      "external_id": "fpr:20x20-pole-tent",
+      "visual_model_id": "pole-20x20",
+      "name": "20x20 Pole Tent",
+      "price_per_day": "250.00",
+      "active": true
+    },
+    {
+      "id": "0bf4d829-9688-471a-b228-7ba0eef2860d",
+      "category": "tent",
+      "external_id": "fpr:40-x-40-pole-tent",
+      "visual_model_id": "pole-40x40",
+      "name": "40 x 40 Pole Tent",
+      "price_per_day": "1500.00",
+      "active": true
+    },
+    {
+      "id": "e1073703-21fa-472a-8d47-39e8f92778ad",
+      "category": "tent",
+      "external_id": "fpr:20x30-pole-tent",
+      "visual_model_id": "pole-20x30",
+      "name": "20x30 Pole Tent",
+      "price_per_day": "350.00",
+      "active": true
+    },
+    {
+      "id": "cb2216bd-2845-4b9c-811b-c4591a6cc333",
+      "category": "tent",
+      "external_id": "fpr:40x60-pole-tent",
+      "visual_model_id": "pole-40x60",
+      "name": "40x60 Pole Tent",
+      "price_per_day": "1600.00",
+      "active": true
+    },
+    {
+      "id": "65bb70ea-837e-4cce-b4d9-af6849ea44a0",
+      "category": "tent",
+      "external_id": "fpr:tent-misting-10x10-pop-up-tent",
+      "visual_model_id": "canopy-10x10",
+      "name": "Tent Misting 10x10 Pop Up Tent",
+      "price_per_day": "149.99",
+      "active": true
+    },
+    {
+      "id": "8a325db1-2890-4ca4-b43c-bcca52e3aebc",
+      "category": "tent",
+      "external_id": "fpr:40-x-80-pole-tent",
+      "visual_model_id": "pole-40x80",
+      "name": "40 x 80 Pole Tent",
+      "price_per_day": "1850.00",
+      "active": true
+    },
+    {
+      "id": "2cacb95b-42a4-4809-9e21-6f935216d1ee",
+      "category": "tent",
+      "external_id": "fpr:30-x-45-pole-tent",
+      "visual_model_id": "pole-30x45",
+      "name": "30 x 45 Pole Tent",
+      "price_per_day": "700.00",
+      "active": true
+    },
+    {
+      "id": "4f634bbf-38f0-4144-adf6-69df783448f6",
+      "category": "tent",
+      "external_id": "fpr:30-x-60-pole-tent",
+      "visual_model_id": "pole-30x60",
+      "name": "30 x 60 Pole Tent",
+      "price_per_day": "850.00",
+      "active": true
+    },
+    {
+      "id": "4fbf119e-d4b0-4b79-9c97-0e3ac81d8580",
+      "category": "tent",
+      "external_id": "fpr:20-x-30-frame-tent",
+      "visual_model_id": "frame-20x30",
+      "name": "20 x 30 Frame Tent",
+      "price_per_day": "475.00",
+      "active": true
+    },
+    {
+      "id": "3222b4d1-f6a2-4b96-a350-173ac5c9a4cd",
+      "category": "tent",
+      "external_id": "fpr:20x40-pole-tent",
+      "visual_model_id": "pole-20x40",
+      "name": "20x40 Pole Tent",
+      "price_per_day": "450.00",
+      "active": true
+    },
+    {
+      "id": "365725bf-bcc0-4a0d-9216-ac381dae505d",
+      "category": "tent",
+      "external_id": "fpr:10-x-10-ez-pop-up-canopy-tent",
+      "visual_model_id": "canopy-10x10",
+      "name": "10 x 10 EZ Pop Up Canopy Tent",
+      "price_per_day": "100.00",
+      "active": true
+    },
+    {
+      "id": "872d76c0-61d9-4c5a-b070-07e3e92ab0fa",
+      "category": "tent",
+      "external_id": "fpr:30-x-30-pole-tent",
+      "visual_model_id": "pole-30x30",
+      "name": "30 x 30 Pole Tent",
+      "price_per_day": "575.00",
+      "active": true
+    },
+    {
+      "id": "01215753-f24c-4396-86ea-44d93a42b8ef",
+      "category": "tent",
+      "external_id": "fpr:20-x-20-frame-tent",
+      "visual_model_id": "frame-20x20",
+      "name": "20 x 20 Frame Tent",
+      "price_per_day": "400.00",
+      "active": true
+    },
+    {
+      "id": "3d1342d9-5157-4bfa-81bb-3f155bbcbc54",
+      "category": "tent",
+      "external_id": "pole-20x20",
+      "visual_model_id": "pole-20x20",
+      "name": "20x20 Pole Tent",
+      "price_per_day": "250.00",
+      "active": true
+    },
+    {
+      "id": "486e08a8-ced3-475d-a2ec-9b4d38edebdf",
+      "category": "tent",
+      "external_id": "fpr:20-x-40-frame-tent",
+      "visual_model_id": "frame-20x40",
+      "name": "20 x 40 Frame Tent",
+      "price_per_day": "550.00",
+      "active": true
+    },
+    {
+      "id": "df8eda25-0ccc-49f3-9013-ade5428430da",
+      "category": "tent",
+      "external_id": "pole-20x30",
+      "visual_model_id": "pole-20x30",
+      "name": "20x30 Pole Tent",
+      "price_per_day": "350.00",
+      "active": true
+    },
+    {
+      "id": "adb434c3-9eb9-42e4-b5d4-727c60fb0a3b",
+      "category": "tent",
+      "external_id": "pole-20x40",
+      "visual_model_id": "pole-20x40",
+      "name": "20x40 Pole Tent",
+      "price_per_day": "450.00",
+      "active": true
+    },
+    {
+      "id": "c3af043b-784c-457a-ac82-d60e5f7e883a",
+      "category": "tent",
+      "external_id": "pole-30x30",
+      "visual_model_id": "pole-30x30",
+      "name": "30x30 Pole Tent",
+      "price_per_day": "575.00",
+      "active": true
+    },
+    {
+      "id": "53ebb3bc-42f1-40f7-a438-be916b7444c5",
+      "category": "tent",
+      "external_id": "pole-30x45",
+      "visual_model_id": "pole-30x45",
+      "name": "30x45 Pole Tent",
+      "price_per_day": "700.00",
+      "active": true
+    },
+    {
+      "id": "aa5ab004-3765-4be3-a536-5c82324f0822",
+      "category": "tent",
+      "external_id": "pole-30x60",
+      "visual_model_id": "pole-30x60",
+      "name": "30x60 Pole Tent",
+      "price_per_day": "850.00",
+      "active": true
+    },
+    {
+      "id": "4872dabf-8dc1-44ae-9ad6-7250aaafb7d0",
+      "category": "tent",
+      "external_id": "pole-40x40",
+      "visual_model_id": "pole-40x40",
+      "name": "40x40 Pole Tent",
+      "price_per_day": "1500.00",
+      "active": true
+    },
+    {
+      "id": "27145eca-5162-43e7-a6db-ac24ab924759",
+      "category": "tent",
+      "external_id": "pole-40x60",
+      "visual_model_id": "pole-40x60",
+      "name": "40x60 Pole Tent",
+      "price_per_day": "850.00",
+      "active": true
+    },
+    {
+      "id": "33cf2636-19bc-47df-9f91-c5a984874975",
+      "category": "tent",
+      "external_id": "pole-40x80",
+      "visual_model_id": "pole-40x80",
+      "name": "40x80 Pole Tent",
+      "price_per_day": "1850.00",
+      "active": true
+    },
+    {
+      "id": "acea5e2a-a990-43e4-84d6-053e490e9c7c",
+      "category": "tent",
+      "external_id": "pole-40x100",
+      "visual_model_id": "pole-40x100",
+      "name": "40x100 Pole Tent",
+      "price_per_day": "1950.00",
+      "active": true
+    },
+    {
+      "id": "3dd72293-fbdc-4933-b792-69a5e91dda40",
+      "category": "tent",
+      "external_id": "frame-20x20",
+      "visual_model_id": "frame-20x20",
+      "name": "20x20 Frame Tent",
+      "price_per_day": "400.00",
+      "active": true
+    },
+    {
+      "id": "ef995d82-7b52-41c9-b502-05e3516cbe6d",
+      "category": "tent",
+      "external_id": "frame-20x30",
+      "visual_model_id": "frame-20x30",
+      "name": "20x30 Frame Tent",
+      "price_per_day": "475.00",
+      "active": true
+    },
+    {
+      "id": "b69c39c0-c860-4410-819c-5ba5f338b4e6",
+      "category": "tent",
+      "external_id": "frame-20x40",
+      "visual_model_id": "frame-20x40",
+      "name": "20x40 Frame Tent",
+      "price_per_day": "550.00",
+      "active": true
+    },
+    {
+      "id": "3e3d56db-7752-488d-99c3-c9216fba2c66",
+      "category": "tent",
+      "external_id": "frame-30x40",
+      "visual_model_id": "frame-30x40",
+      "name": "30x40 Frame Tent",
+      "price_per_day": "700.00",
+      "active": true
+    },
+    {
+      "id": "b1ad4996-f6a7-47e5-8f5b-8d65a5c28b9b",
+      "category": "tent",
+      "external_id": "canopy-10x10",
+      "visual_model_id": "canopy-10x10",
+      "name": "10x10 Pop-Up Canopy",
+      "price_per_day": "100.00",
+      "active": true
+    },
+    {
+      "id": "a8a53604-c39c-4db3-abbe-57414d9925b6",
+      "category": "tent",
+      "external_id": "canopy-10x20",
+      "visual_model_id": "canopy-10x20",
+      "name": "10x20 Pop-Up Canopy",
+      "price_per_day": "175.00",
+      "active": true
+    }
+  ]
+}

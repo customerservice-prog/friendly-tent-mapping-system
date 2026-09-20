@@ -9,6 +9,7 @@ export function startIntake() {
   bridge.state.tentId = tent.id;
   bridge.state.guestCount = 0;
   bridge.customizeFromScratch();
+  if (new URLSearchParams(location.search).get('demo') === '1' && !bridge.getScene().objects.length) bridge.buildPartyScene();
   window.dispatchEvent(new CustomEvent('rentsketch:designStarted', { detail: { tentId: tent.id, productId: tent.productId } }));
   return true;
 }

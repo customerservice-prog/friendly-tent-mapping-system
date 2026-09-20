@@ -11,7 +11,12 @@ export function partyLayout(tent,{tables=[],chairs=[],linens=[],danceAvailable=f
   if(danceAvailable)objects.push(...dancePositions(tent,6).map(p=>({id:'party-'+(++next),kind:'dance',widthFt:3,depthFt:3,...p})));
   const linenFor=t=>linens.find(l=>l.active!==false&&l.fitsTableIds?.includes(t.id)&&!['linen-napkins','linen-runner-9ft'].includes(l.id));
   const add=(t,p,seats)=>objects.push({id:'party-'+(++next),kind:'table',tableId:t.id,shape:t.shape,widthFt:t.diameterFt||t.widthFt,depthFt:t.diameterFt||t.depthFt,...p,seatCount:seats,chairId:chair.id,linenId:linenFor(t)?.id||null,linenColor:'White'});
-  tablePositions(tent,dining,chair,objects).slice(0,2).forEach(p=>add(dining,p,dining.seatsDefault));
+  let positions=tablePositions(tent,dining,chair,objects);
+  // Small canopies need seating before a dance floor; never return an empty
+  // party starter just because the optional floor consumed the usable space.
+  if(!positions.length&&objects.length){objects.length=0;positions=tablePositions(tent,dining,chair,objects);}
+  const count=Math.max(1,Math.min(12,Math.floor(tent.widthFt*tent.lengthFt/180)));
+  positions.slice(0,count).forEach(p=>add(dining,p,dining.seatsDefault));
   if(!objects.some(o=>o.kind==='table'))return [];
   const cocktail=tables.find(t=>t.silhouette==='cocktail-pedestal');
   if(cocktail){
