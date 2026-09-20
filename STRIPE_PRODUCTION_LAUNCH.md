@@ -14,7 +14,7 @@ This document outlines how to safely migrate RentSketch billing from Stripe TEST
 
 - [x] Environment variables deployed (TEST keys + TEST price IDs)
   - `STRIPE_SECRET_KEY` (TEST key, starts with `sk_test_`)
-  - `STRIPE_WEBHOOK_SECRET` (TEST webhook secret, starts with `whsec_test_`)
+  - `STRIPE_WEBHOOK_SECRET` (TEST webhook secret, starts with `whsec_`; use the sandbox endpoint’s own secret)
   - `STRIPE_PRICE_STARTER_MONTHLY` through `STRIPE_PRICE_COMMERCE_ANNUAL`
 
 - [x] Code refactored to use permanent Stripe Price IDs
@@ -63,7 +63,7 @@ In your Stripe LIVE dashboard:
    - **Business / Annual**: Product name "RentSketch Business", Price $1990/year
 
 3. Copy the **Price IDs** (not product IDs) from the LIVE dashboard.
-   - LIVE price IDs start with `price_` (not `price_1...`) and have no `test` in the name.
+   - Both test and live Price IDs use `price_`; verify the Price object’s `livemode`, amount, currency and interval. The ID prefix does not identify the environment.
 
 ### Step 2: Update Railway Environment Variables
 
@@ -71,7 +71,7 @@ In Railway dashboard for the `rentsketch-api` service in the **production** envi
 
 1. Add/update the LIVE Stripe keys:
    - `STRIPE_SECRET_KEY` → LIVE secret key (starts with `sk_live_`)
-   - `STRIPE_WEBHOOK_SECRET` → LIVE webhook secret (starts with `whsec_live_`)
+   - `STRIPE_WEBHOOK_SECRET` → LIVE webhook secret (starts with `whsec_`; use the live endpoint’s own secret)
 
 2. Add/update the 6 permanent Price IDs from Step 1:
    - `STRIPE_PRICE_STARTER_MONTHLY` → LIVE Starter Monthly price ID
@@ -81,7 +81,7 @@ In Railway dashboard for the `rentsketch-api` service in the **production** envi
    - `STRIPE_PRICE_COMMERCE_MONTHLY` → LIVE Business Monthly price ID
    - `STRIPE_PRICE_COMMERCE_ANNUAL` → LIVE Business Annual price ID
 
-**Important:** Do NOT change the code or redeploy. The existing deployment will automatically use the new LIVE keys and price IDs on next request.
+**Important:** Environment changes must be applied to the running Railway deployment. Do not assume a running process has reloaded updated values; verify the new deployment and payment readiness.
 
 ### Step 3: Configure Stripe Webhook (LIVE)
 
@@ -94,19 +94,16 @@ In your Stripe LIVE dashboard:
    - `customer.subscription.created`
    - `customer.subscription.updated`
    - `customer.subscription.deleted`
-4. Copy the **Signing Secret** (starts with `whsec_live_`)
+4. Copy the **Signing Secret** (starts with `whsec_`; use the live endpoint’s own secret)
 5. Update Railway's `STRIPE_WEBHOOK_SECRET` with this value (Step 2 above)
 
-### Step 4: Test LIVE Mode (Low-Risk Manual Test)
+### Step 4: Verify safely
 
-1. Log in to RentSketch as a test business user (not Friendly)
-2. Navigate to /dashboard and click "Billing"
-3. **Do NOT proceed past plan selection without explicit approval**
-4. Select "Starter" and "Monthly" (safest choice)
-5. Click "Upgrade"
-6. In Stripe Checkout, use Stripe test card `4242 4242 4242 4242` (yes, test cards still work in LIVE mode for testing webhooks)
-7. Confirm payment processes and subscription appears in `/api/business/:slug/billing/status`
-8. **Cancel the subscription immediately** in the Stripe billing portal to avoid real charges
+1. Confirm live account readiness and the configured price amounts before exposing Checkout.
+2. A live Checkout page can be inspected without submitting a payment.
+3. Run payment success, failure, authentication and webhook simulations in a separate Stripe sandbox using test API keys. Never enter test cards into live Checkout.
+4. Do not use real card details for payment testing in live mode. Follow [Stripe testing guidance](https://docs.stripe.com/testing).
+5. A code test or an open live Checkout page is not evidence of a completed customer purchase. Report verification levels separately.
 
 ### Step 5: Monitor Webhook Delivery
 
@@ -136,7 +133,7 @@ If LIVE migration must be aborted:
 
 1. In Railway, revert `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` to TEST keys
 2. Update the 6 price IDs back to TEST environment values
-3. No code changes required; existing deployment will revert automatically on next request
+3. Apply the Railway variable changes with a deployment and verify readiness. Production rejects test-mode purchases.
 4. Remove LIVE webhook endpoint from Stripe dashboard
 
 ## Architecture Notes
@@ -158,5 +155,5 @@ If LIVE migration must be aborted:
 ---
 
 **Last Updated**: 2026-09-16  
-**Status**: Ready for production launch (TEST mode verified, human approval required for LIVE keys)
+**Status**: Historical launch checklist. Use current deployment evidence; this document is not proof that a real payment or receipt delivery succeeded.
 
