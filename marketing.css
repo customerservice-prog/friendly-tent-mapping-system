@@ -39,3 +39,17 @@
 @media(max-width:900px){.hero-grid,.example-grid{grid-template-columns:1fr}.hero h1{font-size:58px}.example-figure{max-width:680px;width:100%;margin:auto}.use-case-grid{grid-template-columns:1fr}.use-case-grid article{padding:28px}.use-case-grid h3{font-size:26px}.case-number{margin-bottom:15px}.hero-grid{gap:32px}.tour-view{height:auto;aspect-ratio:1.44}}
 @media(max-width:640px){.hero h1{font-size:46px}.hero .lead{font-size:16px}.example-grid{gap:28px}.figure-label{padding:15px 13px;font-size:9px}.example-figure figcaption{padding:15px 13px;font-size:10px}.example-figure figcaption b{font-size:17px}.studio-bar .example{white-space:nowrap}.tour-status{font-size:10px;left:8px;right:8px;bottom:8px}.tour-note{font-size:9px}.tour-view,.demo-studio .tour-view{height:auto;aspect-ratio:1.3}.tour-poster{object-position:50% 50%}.studio-controls{flex-wrap:wrap;gap:8px}.studio-controls>span{flex:1 0 170px}}
 @media(max-width:360px){.hero h1{font-size:39px}.studio-bar .example{display:none}}
+
+/* Keep the 3D product example near the first phone viewport. */
+@media(max-width:640px){
+.homepage-hero .hero-grid{display:flex;flex-direction:column;gap:0}
+.homepage-hero .hero-copy{display:contents}
+.homepage-hero .eyebrow{order:0;margin-bottom:17px}
+.homepage-hero h1{order:1;font-size:41px;margin-bottom:22px}
+.homepage-hero .actions{order:2;margin:0 0 14px}
+.homepage-hero .inline-proof{order:3;margin-bottom:24px}
+.homepage-hero .studio{order:4;margin-bottom:24px}
+.homepage-hero .lead{order:5;margin-bottom:0}
+.homepage-hero .single-event{order:6;margin-top:14px;margin-bottom:0}
+}
+@media(max-width:360px){.homepage-hero h1{font-size:36px;letter-spacing:-1.6px}}
