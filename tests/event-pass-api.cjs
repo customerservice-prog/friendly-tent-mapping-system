@@ -63,7 +63,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/011_event_pass_access_email.sql'), 'utf8'));
   await pg.query('INSERT INTO tenants VALUES($1,$2),($3,$4)', [tenant, 'friendly', other, 'lakeside']);
   server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); base = 'http://127.0.0.1:' + server.address().port;
-  let r = await request('/api/consumer/event-pass/offer?tenant=friendly'); assert.equal(r.body.priceCents, 999); assert.equal(r.body.durationDays, 300); assert.equal(r.body.required, true); assert.equal(r.body.paymentMode, 'test');
+  let r = await request('/api/consumer/event-pass/offer?tenant=friendly'); assert.equal(r.body.priceCents, 999); assert.equal(r.body.durationDays, 30); assert.equal(r.body.required, true); assert.equal(r.body.paymentMode, 'test');
   env.EVENT_PASS_ENABLED = 'false'; assert.equal((await request('/api/consumer/event-pass/offer?tenant=friendly')).body.required, false); env.EVENT_PASS_ENABLED = 'true';
   assert.equal((await request('/api/consumer/event-pass/offer?tenant=lakeside')).body.required, false);
   const preview = { tentId: 'pole-20x20', objects: [], guestCount: 0, lightingId: 'lighting-none' }, furnished = { ...preview, objects: [{ id: 't1', kind: 'table', tableId: 'round-5ft' }] };
@@ -107,7 +107,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal((await buy(d)).body.active, true, 'already paid never charged again'); assert.equal(creates, 1);
   assert.equal((await request('/api/consumer/event-pass/resume', { designId: d.id, anonymousSessionId: 'wrong' })).status, 404);
   assert.equal(r.body.customerEmail, 'paid@example.invalid', 'email follows the verified Stripe checkout');
-  assert.ok(Math.abs(Date.parse(r.body.expiresAt) - Date.now() - 300*86400000) < 10000, 'new purchase grants exactly 300 days');
+  assert.ok(Math.abs(Date.parse(r.body.expiresAt) - Date.now() - 30*86400000) < 10000, 'new purchase grants exactly 30 days');
   assert.equal((await pg.query('SELECT * FROM event_pass_emails')).rows.length, 1, 'duplicate fulfillment queues one receipt');
   const privateLink = new URL(r.body.accessUrl), recoveryToken = new URLSearchParams(privateLink.hash.slice(1)).get('recoveryToken');
   assert.equal((await request('/api/consumer/event-pass/restore', { recoveryToken })).body.id, d.id, 'emailed link restores the same event on a new device');

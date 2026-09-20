@@ -8,7 +8,7 @@ const products = [
   { id: 'fpr-table', category: 'table', visual_model_id: 'round-5ft', name: "5' Round Table", price_per_day: 12 },
   { id: 'fpr-chair', category: 'chair', visual_model_id: 'resin-white', name: 'White Resin Chair', price_per_day: 4 },
 ];
-const offer = { required: true, available: true, priceCents: 999, durationDays: 300, renewalPriceCents: 499, renewalDurationDays: 30, recurring: false };
+const offer = { required: true, available: true, priceCents: 999, durationDays: 30, renewalPriceCents: 499, renewalDurationDays: 30, recurring: false };
 async function setup(query, options = {}) {
   const dom = new JSDOM(html, { url: 'https://rentsketch.com/designer/' + query, runScripts: 'outside-only', pretendToBeVisual: true }), w = dom.window, calls = [];
   w.AbortController = AbortController; w.ResizeObserver = class { observe() {} disconnect() {} }; w.confirm = () => { throw Error('No surprise restore dialog'); }; w.alert = () => {};
@@ -55,7 +55,7 @@ async function setup(query, options = {}) {
   assert.equal(b.loadScene({tentId:'pole-20x20',objects:[{id:'t',kind:'table',tableId:'round-5ft'}]}),false,'unpaid import cannot bypass access');
   d.querySelector('.pass-recover').click(); d.querySelector('#recoverEmail').value='paid@example.invalid'; d.querySelector('.paywall-modal form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})); await wait(20); assert.equal(t.calls.filter(c=>c.url.endsWith('/designs/recovery-link')).length,1); assert.match(d.querySelector('.paywall-error').textContent,/If a paid event matches/); d.querySelector('.pass-close').click();
   d.getElementById('designMyEvent').click(); await wait(10);
-  assert.match(d.querySelector('.paywall-modal').textContent, /\$9.99/); assert.match(d.querySelector('.paywall-modal').textContent, /No subscription/); assert.match(d.querySelector('.paywall-modal').textContent, /300 days/);
+  assert.match(d.querySelector('.paywall-modal').textContent, /\$9.99/); assert.match(d.querySelector('.paywall-modal').textContent, /No subscription/); assert.match(d.querySelector('.paywall-modal').textContent, /30 days/);
   d.querySelector('[data-terms]').click();assert.match(d.querySelector('.rs-modal').textContent,/Event Pass/);assert.doesNotMatch(d.querySelector('.rs-modal').textContent,/Early Access/);d.querySelector('.rs-modal [data-close]').click();assert.equal(d.querySelector('.rs-entry'),null);assert.equal(d.querySelector('.rs-beta'),null);
   d.querySelector('.pass-back:not([data-recover])').click(); assert.equal(JSON.stringify(b.getScene()), sceneBefore); assert.equal(w.RENTSKETCH_TENT_PREVIEW, true);
   d.getElementById('designMyEvent').click(); await wait(10); d.querySelector('#passEmail').value = 'buyer@example.invalid';
@@ -65,7 +65,7 @@ async function setup(query, options = {}) {
   assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 1, 'checkout reuses one autosaved draft');
   assert.equal(t.calls.find(c => c.url.endsWith('/event-pass/checkout-session')).body.priceCents, undefined);
   t.dom.window.close();
-  const emptyFrame = { id: 'draft-owned', tenant: 'friendly', scene: { tentId: 'frame-20x20', objects: [], surfaceType: 'concrete', lightingId: 'lighting-none' }, anonymousSessionId: 'restored-owner', active: true, renewable: true, expiresAt: new Date(Date.now() + 300 * 86400000).toISOString(), customerEmail: 'paid@example.invalid', accessUrl: 'https://rentsketch.com/designer/?tenant=friendly#recoveryToken=fixture.private.token', emailDelivery: 'sent' };
+  const emptyFrame = { id: 'draft-owned', tenant: 'friendly', scene: { tentId: 'frame-20x20', objects: [], surfaceType: 'concrete', lightingId: 'lighting-none' }, anonymousSessionId: 'restored-owner', active: true, renewable: true, expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), customerEmail: 'paid@example.invalid', accessUrl: 'https://rentsketch.com/designer/?tenant=friendly#recoveryToken=fixture.private.token', emailDelivery: 'sent' };
   t = await setup('?tenant=friendly&payment=success&checkout_session_id=cs_live_fixturecheckout', { restored: emptyFrame });
   w = t.w; d = w.document; b = w.FriendlyBridge;
   assert.equal(b.getScene().tentId, 'frame-20x20', 'paid empty frame replaces the initial pole tent'); assert.equal(b.getScene().surfaceType, 'concrete'); assert.equal(b.getScene().objects.length, 0);

@@ -1,6 +1,6 @@
 # Event Pass launch
 
-Launch offer: **$9.99 once for one event and 300 days**. An optional renewal of
+Launch offer: **$9.99 once for one event and 30 days**. An optional renewal of
 the same paid event is **$4.99 for 30 more days**. Neither purchase is a
 subscription. Prices come from `server/src/pricing.js`; the preview and
 Checkout read the same server offer. Rental equipment and its delivery/tax
@@ -63,7 +63,7 @@ access. These controls do not prevent screenshots or copying public renderer
 assets. Other tenants retain their existing policy.
 
 Migration `011_event_pass_access_email.sql` snapshots each new purchase’s term.
-New initial passes receive 300 days; existing checkouts without a stored term
+New initial passes receive 30 days; existing checkouts without a stored term
 retain the 30 days sold when they were opened. Renewal remains an optional
 $4.99 for 30 additional days, with no automatic charge.
 

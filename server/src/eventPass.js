@@ -78,8 +78,8 @@ async function fulfillEventPass(session) {
       const current = (await client.query("SELECT expires_at FROM entitlements WHERE design_id=$1 AND status='active' ORDER BY expires_at DESC NULLS LAST LIMIT 1", [design.id])).rows[0];
       if (current?.expires_at) base = Math.max(base, new Date(current.expires_at).getTime());
     }
-    // A payment buys the term saved at Checkout creation, including old
-    // 30-day purchases opened before the new 300-day offer was released.
+    // A payment buys the term saved at Checkout creation. Legacy purchases
+    // without a stored term use the original 30-day access period.
     const days = payment.duration_days || 30;
     const paidEmail = String(session.customer_details?.email || payment.customer_email).trim().toLowerCase();
     const expiresAt = new Date(base + days * 86400000);
