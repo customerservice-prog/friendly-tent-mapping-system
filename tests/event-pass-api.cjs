@@ -36,7 +36,8 @@ const auth = { signToken: (p, o) => jwt.sign(p, 'isolated-test-secret', o), veri
 const email = load('server/src/eventPassEmail.js', { crypto: require('crypto'), './db': db, './auth': auth, './outboundWebhook': { validateWebhookUrl: () => ({ ok: false }) }, './mailer': { getMailer: () => ({ send: async (to, subject, text) => { if (failEmail) throw Error('isolated SMTP outage'); deliveries.push({ to, subject, text }); return {}; } }) } });
 // Keep worker ticks explicit so simulated Postgres transactions cannot interleave
 // through the single PGlite connection. Production uses distinct pooled clients.
-const mailQueue = { ...email, processEmails: async () => {} };
+let smtpReady = true;
+const mailQueue = { ...email, emailReadiness: async () => smtpReady && email.emailReadiness(), processEmails: async () => {} };
 const bookedOrders = new Map(); let orderLookupFails = false;
 const orderAccess = load('server/src/friendlyOrderAccess.js', { crypto: require('crypto'), './db': db, './eventPassEmail': { relay: async (type, input) => {
   if (orderLookupFails) throw Error('isolated order service outage');
@@ -168,18 +169,25 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   bookedOrders.set(booked.id, booked);
   const claim = body => request('/api/consumer/order-access/request', body);
   assert.equal((await request('/api/consumer/order-access/status')).body.available, true);
-  assert.equal((await claim({ orderNumber: '9126', firstName: 'Wrong' })).status, 200);
+  const mailRowsBeforeBooking = (await pg.query('SELECT count(*)::int AS n FROM event_pass_emails')).rows[0].n;
+  smtpReady = false;
+  const declined = await claim({ orderNumber: '9126', firstName: 'Wrong' });
+  assert.equal(declined.status, 403); assert.match(declined.body.error, /No active confirmed Friendly booking/); assert.equal(declined.body.accessUrl, undefined);
+  assert.equal((await claim({ orderNumber: 'missing', firstName: 'Booked' })).status, 403);
+  assert.equal((await claim({ orderNumber: '9126', email: booked.customerEmail })).status, 400, 'the public form requires name and order, never email');
   assert.equal((await pg.query("SELECT count(*)::int AS n FROM entitlements WHERE source='friendly_order'")).rows[0].n, 0, 'a guessed booking cannot unlock a design');
   const claimResult = await claim({ orderNumber: '#9126', firstName: ' BOOKED ', email:'attacker@example.invalid', anonymousSessionId: 'attacker-chosen' });
-  assert.deepEqual(claimResult.body, { ok: true }, 'request never returns an owner token or a design ID');
-  await claim({ orderNumber: '9126', email: booked.customerEmail });
+  assert.equal(claimResult.status, 200, 'booking opens even when SMTP is unavailable');
+  assert.equal(claimResult.body.ok, true); assert.match(claimResult.body.accessUrl, /^https:\/\/rentsketch\.com\/designer\/\?tenant=friendly#recoveryToken=/);
+  assert.equal(claimResult.body.anonymousSessionId, undefined, 'use the existing signed restore path');
+  const repeatClaim = await claim({ orderNumber: '9126', firstName: 'Booked' });
+  assert.equal(repeatClaim.status, 200);
   const included = (await pg.query("SELECT d.* FROM designs d JOIN entitlements e ON e.design_id=d.id WHERE e.source='friendly_order'")).rows;
   assert.equal(included.length, 1, 'repeated requests reuse one booking design'); assert.notEqual(included[0].anonymous_session_id, 'attacker-chosen');
   assert.equal(included[0].scene.orderStart.items[0].slug, '20x20-pole-tent');
-  await email.processEmails();
-  const bookingDelivery = deliveries.find(m => m.to === booked.customerEmail); assert.ok(bookingDelivery, 'included access uses the same real outbox worker');
-  assert.equal(deliveries.some(m=>m.to==='attacker@example.invalid'),false,'name matching always sends to the email on the booking');
-  const bookingToken = new URLSearchParams(new URL(bookingDelivery.text.match(/https:\/\/rentsketch\.com\/designer\/\?\S+/)[0]).hash.slice(1)).get('recoveryToken');
+  assert.equal((await pg.query('SELECT count(*)::int AS n FROM event_pass_emails')).rows[0].n, mailRowsBeforeBooking, 'booking login never queues an email');
+  assert.equal(deliveries.some(m=>m.to===booked.customerEmail||m.to==='attacker@example.invalid'), false, 'booking login never sends an email');
+  const bookingToken = new URLSearchParams(new URL(claimResult.body.accessUrl).hash.slice(1)).get('recoveryToken');
   const opened = await request('/api/consumer/event-pass/restore', { recoveryToken: bookingToken });
   assert.equal(opened.status, 200); assert.equal(opened.body.active, true); assert.equal(opened.body.includedWithOrder, true); assert.equal(opened.body.renewable, false); assert.equal(opened.body.orderNumber, '9126');
   const beforeCharges = creates;
@@ -187,13 +195,16 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal((await request('/api/tenants/friendly/designs/' + included[0].id, { scene: furnished, anonymousSessionId: opened.body.anonymousSessionId }, null, 'PATCH')).status, 200);
   assert.equal((await request('/api/tenants/lakeside/designs/' + included[0].id, { scene: furnished, anonymousSessionId: opened.body.anonymousSessionId }, null, 'PATCH')).status, 404);
   orderLookupFails = true;
+  assert.equal((await claim({ orderNumber: '9126', firstName: 'Booked' })).status, 503, 'outage is retryable, not a false decline');
   assert.equal((await request('/api/consumer/event-pass/restore', { recoveryToken: bookingToken })).status, 500); assert.equal(creates, beforeCharges);
   orderLookupFails = false; booked.eligible = false;
   assert.equal((await request('/api/consumer/event-pass/restore', { recoveryToken: bookingToken })).body.active, false, 'cancellation is checked against Friendly on reopen');
   assert.equal((await request('/api/tenants/friendly/designs/' + included[0].id, { scene: furnished, anonymousSessionId: opened.body.anonymousSessionId }, null, 'PATCH')).status, 402, 'canceled booking cannot keep saving');
   assert.equal((await request('/api/tenants/friendly/designs/' + included[0].id, { scene: preview, anonymousSessionId: opened.body.anonymousSessionId }, null, 'PATCH')).status, 402, 'canceled booking cannot erase the saved scene with a bare preview');
-  await claim({ orderNumber: '9126', email: booked.customerEmail });
+  assert.equal((await claim({ orderNumber: '9126', firstName: 'Booked' })).status, 403, 'canceled booking is declined immediately');
+  bookedOrders.set('expired-fixture', { ...booked, id: 'expired-fixture', orderNumber: 'EXPIRED', eligible: true, expiresAt: new Date(Date.now()-1000).toISOString() });
+  assert.equal((await claim({ orderNumber: 'EXPIRED', firstName: 'Booked' })).status, 403);
   assert.equal((await pg.query("SELECT count(*)::int AS n FROM entitlements WHERE source='friendly_order'")).rows[0].n, 1);
-  console.log('PASS included order access: private email proof, one layout per booking, real SQL/outbox, no browser-chosen owner, no second charge, tenant isolation, cancellation and order-service failure. Isolated fixtures only.');
+  console.log('PASS included order access: immediate signed access after name/order match, clear declines, zero queued/sent emails, SMTP-independent access, one layout per booking, server-owned session, no second charge, tenant isolation, cancellation and order-service failure. Isolated fixtures only.');
   console.log('PASS Event Pass API: real SQL/rollback, Friendly and direct $9.99 checkout, tenant isolation, ownership, open-session reuse, cancel restore, unpaid rejection, duplicate/racing fulfillment, delayed payment, $4.99 renewal, exact empty-tent recovery. Fake Stripe only; no production writes.');
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => { if (server) await new Promise(r => server.close(r)); await pg.close(); });

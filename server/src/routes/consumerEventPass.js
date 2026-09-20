@@ -86,11 +86,10 @@ router.get('/order-access/status', wrap(async (req, res) => {
 
 const orderBuckets = new Map();
 router.post('/order-access/request', wrap(async (req, res) => {
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    res.setHeader('Cache-Control', 'no-store');
     const firstName = typeof req.body?.firstName === 'string' ? req.body.firstName.trim().replace(/\s+/g, ' ') : '';
     const orderNumber = typeof req.body?.orderNumber === 'string' ? req.body.orderNumber.trim().replace(/^#\s*/, '') : '';
-    // Older receipt pages may still send email while their cached assets update.
-    const validIdentity = firstName ? firstName.length <= 100 && !/[\u0000-\u001f]/.test(firstName) : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+    const validIdentity = firstName && firstName.length <= 100 && !/[\u0000-\u001f]/.test(firstName);
     if (!validIdentity || !/^[a-zA-Z0-9-]{1,80}$/.test(orderNumber)) return res.status(400).json({ error: 'Enter your first name and Friendly order number.' });
     const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
     const now = Date.now();
@@ -98,21 +97,20 @@ router.post('/order-access/request', wrap(async (req, res) => {
     for (const key of ['ip:' + ip, 'order:' + orderNumber.toLowerCase()]) {
         const bucket = orderBuckets.get(key) || { count: 0, until: now + 15 * 60000 };
         bucket.count++; orderBuckets.set(key, bucket);
-        if (bucket.count > (key.startsWith('ip:') ? 20 : 5)) return res.status(429).json({ error: 'Please wait a few minutes before requesting another order link.' });
+        if (bucket.count > (key.startsWith('ip:') ? 20 : 5)) return res.status(429).json({ error: 'Too many booking checks. Please wait a few minutes and try again.' });
     }
-    if (!await emailReadiness()) return res.status(503).json({ error: 'Access email is temporarily unavailable. Please try again shortly.' });
     let order;
-    try { order = await lookupOrder(firstName ? { orderNumber, firstName } : { orderNumber, email }); }
+    try { order = await lookupOrder({ orderNumber, firstName }); }
     catch (_) { return res.status(503).json({ error: 'Friendly order verification is temporarily unavailable. Please try again shortly.' }); }
-    if (order?.eligible && (firstName || order.customerEmail === email)) {
-        const tenant = (await query("SELECT * FROM tenants WHERE slug='friendly'")).rows[0];
-        const design = await claimOrder(order, tenant);
-        if (design) await queueRecovery(order.customerEmail, 'friendly', [design]);
-        processEmails().catch(() => console.error('[order-access] Link queued for retry.'));
-    }
-    // Do not reveal order ownership, its design ID, or the private access token.
-    res.setHeader('Cache-Control', 'no-store');
-    res.json({ ok: true });
+    const declined = 'No active confirmed Friendly booking matched those details. Check your first name and order number, or call 315-884-1498.';
+    if (!order?.eligible || Date.parse(order.expiresAt) <= Date.now()) return res.status(403).json({ error: declined });
+    const tenant = (await query("SELECT * FROM tenants WHERE slug='friendly'")).rows[0];
+    if (!tenant) return res.status(503).json({ error: 'Friendly order verification is temporarily unavailable. Please try again shortly.' });
+    const design = await claimOrder(order, tenant);
+    if (!design) return res.status(403).json({ error: declined });
+    // The first-name/order match authorizes this booking's designer directly.
+    // Reuse the signed restore path without checking SMTP or sending an email.
+    res.json({ ok: true, accessUrl: accessUrl(design, 'friendly', order.customerEmail, order.expiresAt) });
 }));
 
 // Resume an owned draft without depending on email delivery or browser flags.

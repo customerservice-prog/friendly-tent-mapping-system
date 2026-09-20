@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex">
   <title>Open My Event | RentSketch</title>
   <link rel="icon" href="/logo.png">
-  <link rel="stylesheet" href="/my-event/access.css?v=20260920-preview-1">
-  <script src="/my-event/access.js?v=20260920-preview-1" defer></script>
+  <link rel="stylesheet" href="/my-event/access.css?v=20260920-instant-1">
+  <script src="/my-event/access.js?v=20260920-instant-1" defer></script>
 </head>
 <body>
   <header><a class="brand" href="/"><img src="/logo.png" width="34" height="34" alt="">RentSketch</a><a href="/designer/" data-preview>Free preview</a></header>
@@ -23,10 +23,11 @@
         <input id="orderFirstName" name="given-name" autocomplete="given-name" maxlength="100" placeholder="Your first name" required>
         <label for="orderNumber">Friendly order number</label>
         <input id="orderNumber" name="orderNumber" autocomplete="off" maxlength="80" placeholder="Order number from your receipt" required>
-        <button type="submit">Find my booking &amp; send access</button>
+        <button type="submit">Open my event</button>
       </form>
       <p id="orderAccessStatus" role="status" aria-live="polite"></p>
-      <p>We’ll send your private link to the email already on your booking. You don’t need to enter it again.</p>
+      <a id="orderContinue" hidden>Continue to my event</a>
+      <p>Your matching active booking opens the designer immediately. No email or access code needed.</p>
       <p>Your confirmed Friendly booking includes one event layout through seven days after your event. No $9.99 design fee.</p>
       <p>Use the number on your confirmation or receipt. Paid bookings and bookings approved by our office qualify. Unpaid quotes and canceled orders do not. Need help? Call <a href="tel:3158841498">315-884-1498</a>.</p>
       <p>Your layout starts with a matching booked tent or inflatable when available. Layout edits do not change your rental order; send changes to Friendly for review.</p>
@@ -41,7 +42,7 @@
     </section>
     <p id="paidAccessLink" hidden><a href="/my-event/?tenant=friendly">Bought an Event Pass? Recover that event instead</a></p>
     <div class="details"><strong>No password. No code to remember.</strong><p>Open the email on your phone, tablet or computer. Your link brings back the same event and its original access period.</p></div>
-    <details><summary>Can’t find the email?</summary><p>Check your spam folder and use the email from your Event Pass purchase or Friendly booking. You can request a new link here without buying another pass.</p><p>If you haven’t claimed your booking’s included layout yet, use the order number form above. For existing saved events, we’ll include links to your recent events.</p></details>
+    <details id="emailHelp"><summary>Can’t find the email?</summary><p>Check your spam folder and use the email from your Event Pass purchase. You can request a new link here without buying another pass.</p><p>Have a Friendly booking? Use your first name and order number above to open it immediately.</p></details>
     <p class="private">Your event link is private. Share the rental summary from Review when you want someone else to see your plan.</p>
     <a class="back" href="/designer/" data-preview>Back to the free rental preview</a>
   </main>

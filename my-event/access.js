@@ -11,14 +11,18 @@
     document.getElementById('paidAccessLink').hidden = false;
     document.querySelector('h1').textContent = 'Design your booked event.';
     document.querySelector('.eyebrow').textContent = 'Included with Friendly';
-    document.querySelector('.intro').textContent = 'Enter your first name and order number. We’ll find your booking and email your private link. No design fee.';
+    document.querySelector('.intro').textContent = 'Enter your first name and order number to open your included event designer.';
+    document.querySelector('.details strong').textContent = 'Open here. No email or code needed.';
+    document.querySelector('.details p').textContent = 'We check your active booking and open its event layout immediately. Use the same name and order number to return on another device.';
+    document.getElementById('emailHelp').hidden = true;
     document.getElementById('orderNumber').value = (query.get('order') || '').slice(0,80);
   }
   var orderForm = document.getElementById('orderAccessForm');
   orderForm.addEventListener('submit', async function (event) {
     event.preventDefault(); var submit = orderForm.querySelector('button'), message = document.getElementById('orderAccessStatus');
     if (submit.disabled || !orderForm.reportValidity()) return;
-    submit.disabled = true; submit.textContent = 'Checking your booking…'; message.textContent = '';
+    submit.disabled = true; submit.textContent = 'Checking your booking…'; message.textContent = ''; message.className = '';
+    var continueLink = document.getElementById('orderContinue'); continueLink.hidden = true;
     var controller = new AbortController(), timer = setTimeout(function () { controller.abort(); }, 45000);
     try {
       var response = await fetch('https://rentsketch-api-production.up.railway.app/api/consumer/order-access/request', {
@@ -26,10 +30,14 @@
         body: JSON.stringify({ orderNumber: document.getElementById('orderNumber').value.trim(), firstName: document.getElementById('orderFirstName').value.trim() }),
       });
       var result = await response.json(); if (!response.ok) throw new Error(result.error || 'Please try again shortly.');
-      message.textContent = 'If these details match a qualifying Friendly booking, we’ll send its private access link to the email already on your order. Check that inbox and spam folder. No payment is needed to request the link.';
-      submit.textContent = 'Link requested';
-      setTimeout(function () { submit.disabled = false; submit.textContent = 'Send my access link again'; }, 60000);
-    } catch (error) { message.textContent = error.name === 'AbortError' ? 'The booking check took too long. Please try again shortly.' : error.message; submit.disabled = false; submit.textContent = 'Find my booking & send access'; }
+      var destination;
+      try { destination = new URL(result.accessUrl); } catch (_) {}
+      if (!destination || destination.origin !== 'https://rentsketch.com' || destination.pathname !== '/designer/' || destination.searchParams.get('tenant') !== 'friendly' || !new URLSearchParams(destination.hash.slice(1)).get('recoveryToken')) throw new Error('Your event could not be opened. Please try again.');
+      message.textContent = 'Booking verified. Opening your event…';
+      submit.textContent = 'Opening your event…';
+      continueLink.href = destination.href; continueLink.hidden = false;
+      location.assign(destination.href);
+    } catch (error) { message.className = 'error'; message.textContent = error.name === 'AbortError' ? 'The booking check took too long. Please try again shortly.' : error.message; submit.disabled = false; submit.textContent = 'Open my event'; }
     finally { clearTimeout(timer); }
   });
   document.querySelectorAll('[data-preview]').forEach(function (link) { link.href = '/designer/' + (tenant ? '?tenant=' + encodeURIComponent(tenant) : ''); });

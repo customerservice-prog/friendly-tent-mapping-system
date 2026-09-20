@@ -2,3 +2,4 @@
 
 #orderAccess{margin:0 0 24px;padding:18px;border:1px solid #c4d9c9;border-radius:12px;background:#f6faf5}#orderAccess summary{line-height:1.5}#orderAccess form{margin-top:20px}input+label{margin-top:18px}#orderAccessStatus{font-size:14px;color:#315f3b;overflow-wrap:anywhere}#orderAccess p:last-child{margin-bottom:0}[hidden]{display:none!important}
 .order-access-page #orderAccess{padding:0;border:0;background:transparent}.order-access-page #orderAccess summary{display:none}.order-access-page #orderAccess form{margin-top:0}.order-access-page .intro{margin-bottom:22px}
+#orderAccessStatus.error{color:#963b26}

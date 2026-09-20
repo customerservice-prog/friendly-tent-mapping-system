@@ -30,8 +30,8 @@ async function claimOrder(order, tenant) {
         eventName: 'Friendly order #' + order.orderNumber, customer: { name: order.customerName, email: order.customerEmail, date: order.eventDate },
         deliveryZip: order.deliveryZip, surfaceType: order.surfaceType,
         orderStart: { items: (order.items || []).slice(0,200) } };
-      // Never accept a browser-supplied session here. Only the emailed private
-      // link reveals this new owner's credential, after email ownership proof.
+      // Create ownership on the server after Friendly verifies the booking.
+      // Never let a submitted browser session choose the saved design's owner.
       id = (await client.query(`INSERT INTO designs(tenant_id,anonymous_session_id,schema_version,scene)
         VALUES($1,$2,1,$3) RETURNING id`, [tenant.id, crypto.randomBytes(32).toString('hex'), scene])).rows[0].id;
       await client.query(`INSERT INTO entitlements(tenant_id,design_id,customer_email,source,status,expires_at,source_reference)

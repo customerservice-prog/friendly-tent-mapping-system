@@ -125,10 +125,15 @@ async function setup(query, options = {}) {
   [...t.w.document.querySelectorAll('#eventPassBar button')].find(button => button.textContent === 'Continue my saved event').click();
   assert.equal(t.w.FriendlyBridge.getScene().tentId, 'frame-20x20'); assert.equal(t.w.RENTSKETCH_TENT_PREVIEW, false); assert.equal(t.w.document.querySelector('.tent-preview-actions'), null); assert.match(t.w.document.getElementById('toolbarEventTitle').textContent, /Frame/); assert.equal(t.w.document.getElementById('customerName').value, 'Sam Event'); assert.equal(t.checkouts, 0);
   t.dom.window.close();
-  t = await setup('?tenant=friendly#recoveryToken=fixture.booking.token', { restored: { ...emptyFrame, includedWithOrder: true, renewable: false, orderNumber: '9126', scene: { tentId: null, objects: [], eventName: 'Friendly order #9126', guestCount: 0, customer: { name: 'Booked Customer', email: 'booked@example.invalid', date: '2027-06-01' }, orderStart: { items: [{ slug: '20x20-pole-tent', quantity: 1 }] } } } });
+  t = await setup('?tenant=friendly#recoveryToken=fixture.booking.token', { previewDeadline: Date.now()-1000, restored: { ...emptyFrame, includedWithOrder: true, renewable: false, orderNumber: '9126', scene: { tentId: null, objects: [], eventName: 'Friendly order #9126', guestCount: 0, customer: { name: 'Booked Customer', email: 'booked@example.invalid', date: '2027-06-01' }, orderStart: { items: [{ slug: '20x20-pole-tent', quantity: 1 }] } } } });
   w=t.w;d=w.document;b=w.FriendlyBridge;
   assert.equal(b.getScene().tentId,'pole-20x20','included order opens the booked tent from the live catalog');assert.equal(b.getScene().orderStart,undefined,'future saves retain edits rather than rebuilding the starter');
   assert.match(d.getElementById('eventPassBar').textContent,/Included with Friendly order #9126/);assert.equal(w.RentSketchEventPass.canEdit(),true);assert.equal(d.getElementById('friendlyBooking').hidden,true,'existing bookings cannot accidentally create a duplicate order');
+  assert.equal(d.querySelector('.preview-limit-screen'),null,'included booking opens even after free preview expired');
+  d.querySelector('#eventPassBar button').click();
+  assert.match(d.querySelector('[data-email-status]').textContent,/Reopen it with your first name and order number/);
+  assert.doesNotMatch(d.querySelector('.paywall-modal').textContent,/email is queued|Email my link again|Keep this email/);
+  assert.match(d.querySelector('[data-resend]').textContent,/name and order number/);d.querySelector('.pass-close').click();
   d.getElementById('btnBookRentals').click();assert.equal(t.checkouts,0);
   d.getElementById('btnToReview').click();await wait(10);assert.equal(d.getElementById('btnEmailQuote').textContent,'Send layout to Friendly');assert.match(d.getElementById('quoteDisclaimer').textContent,/does not change booked items/);
   d.getElementById('btnEmailQuote').click();await wait(20);const bookedQuote=t.calls.find(c=>c.url.endsWith('/quote-requests')).body;assert.match(bookedQuote.notes,/Friendly order #9126/);assert.equal(bookedQuote.designId,'draft-owned');assert.equal(t.checkouts,0);

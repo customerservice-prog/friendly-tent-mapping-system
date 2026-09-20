@@ -18,10 +18,12 @@ Paid design/save/quote access still requires its server-verified entitlement.
 
 Customers with a Friendly booking enter their first name and order number at
 `/my-event/?tenant=friendly&mode=order`. The signed integration matches the name
-on that exact order, allowing case, spacing and accent differences, then sends
-the private access link to the email already on the booking. The public response
-never reveals the booking email or access credential. Unpaid quotes and canceled
-orders do not qualify. Repeated claims reuse the same layout (migration `012`).
+on that exact order, allowing case, spacing and accent differences, then returns
+a signed access URL to open that booking's designer immediately in the same tab.
+This form does not require, check, queue or send email. The first-name/order match
+is the booking-access credential; preserve the request limits and live order
+eligibility checks. Unmatched, unpaid, canceled or expired bookings receive a
+clear decline. Repeated matches reopen the same layout (migration `012`).
 
 Choosing **Design My Event** shows the price and included features. Before
 Checkout opens, the current scene is saved using the existing autosave ID.

@@ -139,7 +139,7 @@
     window.dispatchEvent(new CustomEvent('rentsketch:accessChanged'));
   }
   function showRecovery() {
-    var view = openModal('Open your saved event', '<p>Use the email for your Event Pass or claimed Friendly booking. We’ll email your private link so you can continue on this phone or any other device.</p><form><label class="paywall-label" for="recoverEmail">Event email</label><input id="recoverEmail" class="paywall-email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button type="submit" class="btn-primary">Email my event link</button></form><p class="paywall-error" role="status" aria-live="polite"></p><p class="pass-fine">No password or code to remember. Your access keeps its original expiration date.</p>');
+    var view = openModal('Open your saved event', '<p><a href="https://rentsketch.com/my-event/?tenant=friendly&mode=order" target="_blank" rel="noopener">Have a Friendly booking? Open with your first name and order number.</a></p><p>For a purchased Event Pass, use your checkout email to receive a private link on this phone or any other device.</p><form><label class="paywall-label" for="recoverEmail">Event Pass email</label><input id="recoverEmail" class="paywall-email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button type="submit" class="btn-primary">Email my event link</button></form><p class="paywall-error" role="status" aria-live="polite"></p><p class="pass-fine">No password or code to remember. Your access keeps its original expiration date.</p>');
     if (verified && verified.customerEmail) view.querySelector('input').value = verified.customerEmail;
     view.querySelector('input').focus();
     view.querySelector('form').onsubmit = async function (event) {
@@ -157,9 +157,15 @@
     var link = verified && verified.accessUrl;
     var email = verified && verified.customerEmail;
     var delivery = verified && verified.emailDelivery;
-    view.querySelector('[data-email-status]').textContent = email ? (delivery === 'sent' ? 'Your access email was sent to ' : delivery === 'failed' ? 'Email delivery needs another try for ' : 'Your access email is queued for ') + email + '.' : 'Keep your private access link to return later.';
+    var included = verified && verified.includedWithOrder;
+    view.querySelector('[data-email-status]').textContent = included ? 'Your Friendly booking includes this event. Reopen it with your first name and order number.' : email ? (delivery === 'sent' ? 'Your access email was sent to ' : delivery === 'failed' ? 'Email delivery needs another try for ' : 'Your access email is queued for ') + email + '.' : 'Keep your private access link to return later.';
     view.querySelector('[data-access-expiry]').textContent = verified.expiresAt ? 'Editing access until ' + new Date(verified.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + '.' : '';
     view.querySelector('[data-resend]').onclick = showRecovery;
+    if (included) {
+      view.querySelector('[data-resend]').textContent = 'Open with my name and order number';
+      view.querySelector('[data-resend]').onclick = function () { location.assign('https://rentsketch.com/my-event/?tenant=friendly&mode=order&order=' + encodeURIComponent(verified.orderNumber || '')); };
+      view.querySelector('.pass-fine').textContent = 'Use your name and order number to return, or keep this private link. Anyone with the link can open your event.';
+    }
     if (!link) { view.querySelector('textarea').hidden = true; view.querySelector('[data-copy-link]').hidden = true; return; }
     view.querySelector('textarea').value = link;
     view.querySelector('[data-copy-link]').onclick = async function () {
