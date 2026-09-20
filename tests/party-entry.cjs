@@ -15,7 +15,7 @@ function moduleFor(file){if(cache.has(file))return cache.get(file);const m=new v
  for(const id of ['linen-round-120','linen-cocktail-cover']){const l=linens.find(l=>l.id===id);l.productId='test-'+id;l.pricePerDay=id==='linen-round-120'?12:10;}
  const floor=(await load(path.join(root,'js/data/danceFloor.js'))).namespace.DANCE_SECTION;floor.productId='test-floor';floor.pricePerDay=35;
  w.eval(fs.readFileSync(path.join(root,'js/ui/tent-preview-entry.js'),'utf8'));
- const party=d.getElementById('previewParty');assert.ok(!party.disabled);party.click();assert.ok(party.disabled);
+ const party=d.getElementById('previewParty');assert.ok(!party.disabled);party.click();assert.ok(party.disabled&&party.hidden);
  const before=JSON.stringify(b.getScene().objects);assert.equal(b.getScene().objects.length,7);assert.equal(b.getScene().objects.reduce((n,o)=>n+(o.seatCount||0),0),16);
  assert.equal(b.getScene().tentId,'pole-20x20');assert.equal(b.getScene().lightingId,'lighting-none','starter does not silently add lighting');
  d.getElementById('designMyEvent').click();assert.equal(JSON.stringify(b.getScene().objects),before,'preview to designer preserves every rental item');

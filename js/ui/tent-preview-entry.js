@@ -41,7 +41,7 @@
   document.querySelector('.designer-shell').appendChild(actions);
   var design = document.getElementById('designMyEvent');
   var party = document.getElementById('previewParty');
-  party.addEventListener('click',function(){if(bridge?.buildPartyScene?.()){party.textContent='Party Setup Added';party.disabled=true;}});
+  party.addEventListener('click',function(){if(bridge?.buildPartyScene?.()){party.textContent='Party Setup Added';party.disabled=true;party.hidden=true;actions.querySelector('p').textContent='Your party setup is ready. Make it yours.';}});
 
   function continueDesigning() {
     if (!tent) return;
