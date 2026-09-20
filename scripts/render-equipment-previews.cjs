@@ -8,7 +8,8 @@ global.document=dom.window.document;
  const threePath=require.resolve('three').replace('/build/three.cjs','/build/three.module.js'),THREE=await import(require('node:url').pathToFileURL(threePath));
  const context=vm.createContext({console,document:{createElement(tag){if(tag==='canvas')return{width:0,height:0,getContext:()=>new Proxy({},{get:()=>()=>{},set:()=>true})};return dom.window.document.createElement(tag);}}}),cache=new Map();
  const three=new vm.SyntheticModule(Object.keys(THREE),function(){for(const key of Object.keys(THREE))this.setExport(key,THREE[key]);},{context});
- async function load(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,m);await m.link((s,ref)=>s==='three'?three:load(s.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',s.slice(13)):path.resolve(path.dirname(ref.identifier),s)));return m;}
+ function moduleFor(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,m);return m;}
+ async function load(file){const m=moduleFor(file);if(m.status==='unlinked')await m.link((s,ref)=>s==='three'?three:moduleFor(s.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',s.slice(13)):path.resolve(path.dirname(ref.identifier),s)));return m;}
  const equipment=await load(path.join(root,'js/ui/equipment3d.js'));await equipment.evaluate();
  const chairDefs=(await load(path.join(root,'js/data/chairs.js'))).namespace.CHAIRS,tableDefs=(await load(path.join(root,'js/data/tables.js'))).namespace.TABLES;
  const view=await load(path.join(root,'js/ui/view3d.js'));await view.evaluate();

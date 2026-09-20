@@ -1,7 +1,7 @@
 {
   "private": true,
   "scripts": {
-    "test": "node --test *.test.mjs && node --experimental-vm-modules designer-dom-smoke.cjs && node embed-integration.cjs && node --experimental-vm-modules tenant-customer-flow.cjs && node --experimental-vm-modules scene-environment.cjs && node --experimental-vm-modules direct-entry.cjs && node --experimental-vm-modules equipment-editing.cjs && node --experimental-vm-modules table-details.cjs && node --experimental-vm-modules placement.cjs && node --experimental-vm-modules scene-interaction.cjs"
+    "test": "node --test *.test.mjs && node --experimental-vm-modules designer-dom-smoke.cjs && node embed-integration.cjs && node --experimental-vm-modules tenant-customer-flow.cjs && node --experimental-vm-modules scene-environment.cjs && node --experimental-vm-modules direct-entry.cjs && node --experimental-vm-modules equipment-editing.cjs && node --experimental-vm-modules table-details.cjs && node --experimental-vm-modules placement.cjs && node --experimental-vm-modules scene-interaction.cjs && node --experimental-vm-modules party-entry.cjs"
   },
   "devDependencies": {
     "jsdom": "30.1.0",

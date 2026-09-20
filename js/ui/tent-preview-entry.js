@@ -37,9 +37,11 @@
   meta.textContent = 'Explore your tent, then make it your event.';
   var actions = document.createElement('div');
   actions.className = 'tent-preview-actions';
-  actions.innerHTML = '<p>Add tables, chairs and extras to this exact tent.</p><button type="button" class="btn-primary" id="designMyEvent" disabled>Design My Event</button>';
+  actions.innerHTML = '<p>Add your own items, or try an editable party setup.</p><button type="button" class="btn-secondary" id="previewParty" disabled>Try a Party Setup</button><button type="button" class="btn-primary" id="designMyEvent" disabled>Design My Event</button>';
   document.querySelector('.designer-shell').appendChild(actions);
   var design = document.getElementById('designMyEvent');
+  var party = document.getElementById('previewParty');
+  party.addEventListener('click',function(){if(bridge?.buildPartyScene?.()){party.textContent='Party Setup Added';party.disabled=true;}});
 
   function continueDesigning() {
     if (!tent) return;
@@ -64,7 +66,7 @@
     if (readySent) return;
     readySent = true;
     status.hidden = true;
-    design.disabled = false;
+    design.disabled = false;party.disabled=false;
     try { parent.postMessage({ type: 'rentsketch.ready', mode: 'tent-preview', tenant: tenantSlug, productId: tent.productId || null, externalId: tent.externalId || null, tentId: tent.id, tentName: tent.name, renderer: renderer }, '*'); } catch (_) {}
   }
   function fail(reason) {
@@ -76,7 +78,7 @@
       bridge.setViewMode('plan');
       status.hidden = false;
       status.textContent = '3D is unavailable right now. Your tent is ready in 2D.';
-      design.disabled = false;
+      design.disabled = false;party.disabled=false;
       ready('2d');
       status.hidden = false;
     } else {

@@ -5,6 +5,7 @@ import { makeTable as table, makeDanceFloor as dance, mergeParts } from './equip
 import { createEnvironment, disposeGroup } from './scene-environment.js';
 import { createWeather } from './scene-weather.js';
 import { createGuests } from './scene-guests.js';
+import { createPartyStyling } from './party-styling.js';
 import { sceneSetting } from './scene-setting.js';
 import { byId as lightingById } from '../data/lighting.js';
 import { fitTentCamera } from './view3d-framing.js';
@@ -81,6 +82,7 @@ export function init(container,callbacks={}) {
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
   const furniture=new THREE.Group(),structure=new THREE.Group();scene.add(structure,furniture);
   const rendered=new Map(),pointers=new Set();let state=null,night=false,raf=0,drag=null,danceMesh=null,environment=null,lightGroup=null;
+  let styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let environmentKey='',structureKey='',furnitureKey='',lightingKey='',dirty=true,destroyed=false,animationFrame=0;
@@ -94,7 +96,7 @@ export function init(container,callbacks={}) {
   function invalidate(){dirty=true;}
   controls.addEventListener('change',invalidate);
   function shadows(t){const radius=Math.max(t.widthFt,t.lengthFt)/2+18;sun.shadow.camera.left=-radius;sun.shadow.camera.right=radius;sun.shadow.camera.top=radius;sun.shadow.camera.bottom=-radius;sun.shadow.camera.far=radius*4+120;sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;}
-  function frame(t){const p=structuralProfile(t.type,t.widthFt,t.lengthFt),anchor=state?.anchoringMethod||(t.type==='pole'?'stake':'ballast'),f=fitTentCamera(t,p.peakHeightFt,camera.aspect,camera.fov,anchor==='stake'?(t.installationClearanceFt||5):2);camera.position.set(...f.position);controls.target.set(...f.target);controls.update();invalidate();}
+  function frame(t){if(cameraMode==='inside'){camera.fov=50;camera.updateProjectionMatrix();const f=fitTentCamera(t,7,camera.aspect,camera.fov,0);camera.position.set(f.position[0],5.6,f.position[2]);controls.target.set(0,3.5,0);controls.update();invalidate();return;}camera.fov=36;camera.updateProjectionMatrix();const p=structuralProfile(t.type,t.widthFt,t.lengthFt),anchor=state?.anchoringMethod||(t.type==='pole'?'stake':'ballast'),f=fitTentCamera(t,p.peakHeightFt,camera.aspect,camera.fov,anchor==='stake'?(t.installationClearanceFt||5):2);camera.position.set(...f.position);controls.target.set(...f.target);controls.update();invalidate();}
   function rebuild(data){
     if(!data?.tent||destroyed)return;
     const previous=state?.tent,changed=!previous||previous.id!==data.tent.id||previous.widthFt!==data.tent.widthFt||previous.lengthFt!==data.tent.lengthFt;
@@ -110,6 +112,8 @@ export function init(container,callbacks={}) {
       for(const o of state.objects){if(o.kind==='dance'){df.push(o);continue;}if(o.kind!=='table')continue;const q=table(o);q.position.set(o.x+o.widthFt/2-t.widthFt/2,0,o.y+o.depthFt/2-t.lengthFt/2);furniture.add(q);rendered.set(o.id,q);}
       danceMesh=dance(df,t);if(danceMesh)furniture.add(danceMesh);furnitureKey=nextFurniture;renderer.shadowMap.needsUpdate=true;
     }
+    if(stylingKey!==nextFurniture){if(styling){scene.remove(styling);disposeGroup(styling);}styling=createPartyStyling(t,state.objects);scene.add(styling);stylingKey=nextFurniture;}
+    if(styling)styling.visible=showStyling&&!drag;
     const nextGuests=nextFurniture;
     if(nextGuests!==guestKey){if(guests){scene.remove(guests);disposeGroup(guests);}guests=createGuests(t,state.objects,{mobile});guests.visible=showGuests;scene.add(guests);guestKey=nextGuests;}
     if(guests)guests.visible=showGuests&&!drag;
@@ -148,7 +152,7 @@ export function init(container,callbacks={}) {
     if(state.selectedId!==id){callbacks.onSelect?.(id);return;}
     if(u.kind==='danceGroup')drag={kind:'dance',ids:u.itemIds,start:point.clone(),orig:state.objects.filter(o=>u.itemIds.includes(o.id)).map(o=>({...o})),mesh:danceMesh.position.clone()};
     else{const o=state.objects.find(x=>x.id===id);if(!o)return;drag={kind:'item',id,start:point.clone(),orig:{...o}};}
-    if(guests)guests.visible=false;controls.enableRotate=false;renderer.domElement.setPointerCapture?.(e.pointerId);
+    if(guests)guests.visible=false;if(styling)styling.visible=false;controls.enableRotate=false;renderer.domElement.setPointerCapture?.(e.pointerId);
   }
   function move(e){
     if(state?.placement&&pointers.size<2&&(e.pointerType==='mouse'||placementPointer)){const p=groundPoint(e);if(p)callbacks.onPlacementMove?.(p.x+state.tent.widthFt/2,p.z+state.tent.lengthFt/2);return;}
@@ -164,7 +168,7 @@ export function init(container,callbacks={}) {
     renderer.shadowMap.needsUpdate=true;invalidate();
   }
   function up(e){
-    pointers.delete(e.pointerId);if(placementPointer?.id===e.pointerId){placementPointer=null;if(e.type!=='pointercancel'){const p=groundPoint(e);if(p){callbacks.onPlacementMove?.(p.x+state.tent.widthFt/2,p.z+state.tent.lengthFt/2);callbacks.onPlace?.();}}return;}if(!drag)return;const finished=drag;drag=null;if(guests)guests.visible=showGuests;controls.enableRotate=true;
+    pointers.delete(e.pointerId);if(placementPointer?.id===e.pointerId){placementPointer=null;if(e.type!=='pointercancel'){const p=groundPoint(e);if(p){callbacks.onPlacementMove?.(p.x+state.tent.widthFt/2,p.z+state.tent.lengthFt/2);callbacks.onPlace?.();}}return;}if(!drag)return;const finished=drag;drag=null;if(guests)guests.visible=showGuests;if(styling)styling.visible=showStyling;controls.enableRotate=true;
     if(e.type==='pointercancel'){const originals=finished.kind==='item'?[finished.orig]:finished.orig;state.objects=state.objects.map(o=>({...o,...originals.find(a=>a.id===o.id)}));furnitureKey='';rebuild(state);return;}
     if(finished.kind==='item'){const o=state.objects.find(x=>x.id===finished.id);if(o)callbacks.onMove?.(o.id,o.x,o.y);}
     else{const updates=state.objects.filter(o=>finished.ids.includes(o.id)).map(o=>({id:o.id,x:o.x,y:o.y}));const first=updates[0];if(first)callbacks.onMove?.(first.id,first.x,first.y);}
@@ -176,13 +180,15 @@ export function init(container,callbacks={}) {
   loop();document.addEventListener('visibilitychange',invalidate);
   function setNight(value){night=!!value;scene.background?.dispose?.();scene.background=sky(night,weatherMode==='rain');scene.fog.color.set(night?0x203044:weatherMode==='rain'?0x9eafb5:0xdde8df);scene.fog.density=weatherMode==='rain'?.004:.002;hemi.intensity=night?.7:weatherMode==='rain'?1.25:1.65;sun.intensity=night?.25:weatherMode==='rain'?.65:3.2;fill.intensity=night?.4:.7;renderer.toneMappingExposure=night?1.18:1.05;weather?.userData.setNight(night);environment?.userData.setNight(night);lightGroup?.userData.setNight?.(night);renderer.shadowMap.needsUpdate=true;invalidate();}
   function setScene(options={}){
+    showStyling=options.styling!==false;if(styling)styling.visible=showStyling;
     weatherMode=options.weather==='rain'?'rain':'clear';showGuests=!!options.guests;motion=options.motion!==false;
     weather?.userData.setWeather(weatherMode);if(guests)guests.visible=showGuests;
     setNight(!!options.night);invalidate();
   }
-  function fitCamera(){if(state?.tent){frame(state.tent);return true;}return false;}
+  function inside(){if(state?.tent){cameraMode='inside';frame(state.tent);}}
+  function fitCamera(){if(state?.tent){cameraMode='outside';frame(state.tent);return true;}return false;}
   function playTimelapse(){cancelAnimationFrame(animationFrame);const start=performance.now();function tick(now){if(destroyed)return;const k=Math.min(1,(now-start)/2200);structure.scale.y=Math.max(.02,1-Math.pow(1-k,3));renderer.shadowMap.needsUpdate=true;invalidate();if(k<1)animationFrame=requestAnimationFrame(tick);}animationFrame=requestAnimationFrame(tick);}
-  const api={setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
+  const api={inside,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
   active=api;return api;
 }
 export function update(s){active?.rebuild(s);}

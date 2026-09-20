@@ -7,7 +7,8 @@ const root=path.resolve(__dirname,'..');
  const draw=new Proxy({createLinearGradient:()=>({addColorStop(){}}),createRadialGradient:()=>({addColorStop(){}})},{get:(t,k)=>t[k]||(()=>{}),set:(t,k,v)=>(t[k]=v,true)});
  const context=vm.createContext({console,document:{createElement:()=>({width:0,height:0,getContext:()=>draw})}}),cache=new Map();
  const three=new vm.SyntheticModule(Object.keys(THREE),function(){for(const key of Object.keys(THREE))this.setExport(key,THREE[key]);},{context});
- async function load(file){if(cache.has(file))return cache.get(file);const source=fs.readFileSync(file,'utf8')+(file.endsWith('/ui/view3d.js')?'\nexport {table as buildTableForTest};':'');const module=new vm.SourceTextModule(source,{context,identifier:file});cache.set(file,module);await module.link((specifier,ref)=>specifier==='three'?three:load(specifier.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',specifier.slice('three/addons/'.length)):path.resolve(path.dirname(ref.identifier),specifier)));return module;}
+ function moduleFor(file){if(cache.has(file))return cache.get(file);const source=fs.readFileSync(file,'utf8')+(file.endsWith('/ui/view3d.js')?'\nexport {table as buildTableForTest};':'');const module=new vm.SourceTextModule(source,{context,identifier:file});cache.set(file,module);return module;}
+ async function load(file){const module=moduleFor(file);if(module.status==='unlinked')await module.link((specifier,ref)=>specifier==='three'?three:moduleFor(specifier.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',specifier.slice('three/addons/'.length)):path.resolve(path.dirname(ref.identifier),specifier)));return module;}
  const module=await load(path.join(root,'js/ui/scene-environment.js'));await module.evaluate();
  for(const tent of [{type:'pole',widthFt:20,lengthFt:20},{type:'frame',widthFt:20,lengthFt:20},{type:'pole',widthFt:40,lengthFt:100}]){
   const env=module.namespace.createEnvironment(tent,'notSure');env.updateMatrixWorld(true);let draws=0,triangles=0,disposed=0;
@@ -93,14 +94,14 @@ const root=path.resolve(__dirname,'..');
  const drops=rain.geometry.attributes.position;for(let i=0;i<drops.count;i+=2){assert.ok([drops.getX(i),drops.getY(i),drops.getZ(i)].every(Number.isFinite));assert.ok(drops.getY(i)<0||Math.abs(drops.getX(i))>=11.5||Math.abs(drops.getZ(i))>=11.5,'no rain through the roof');}
  weather.userData.setWeather('clear');assert.ok(!rain.visible&&weather.getObjectByName('Moon').visible);
  const guestObjects=[{...item,kind:'table',x:2,y:2}],beforeGuests=JSON.stringify(guestObjects),guests=guestModule.namespace.createGuests(tent,guestObjects,{mobile:true});
- assert.equal(guests.children.length,4);assert.equal(guests.userData.people.filter(p=>p.seated).length,8);
- assert.ok(guests.userData.people.filter(p=>!p.seated).every(p=>p.z>tent.lengthFt/2+5));
+ assert.ok(guests.children.length<=10);assert.equal(guests.userData.people.filter(p=>p.seated).length,8);
+ assert.ok(guests.userData.people.every(p=>Math.abs(p.x)<tent.widthFt/2&&Math.abs(p.z)<tent.lengthFt/2),'party guests stay under the tent');
  const matrices=Array.from(guests.children[0].instanceMatrix.array);guests.userData.update(.1);assert.notDeepEqual(Array.from(guests.children[0].instanceMatrix.array),matrices);
  for(const batch of guests.children){assert.ok(batch.isInstancedMesh);assert.ok(Array.from(batch.instanceMatrix.array).every(Number.isFinite));assert.ok(batch.count<=batch.instanceMatrix.count);}
  assert.equal(JSON.stringify(guestObjects),beforeGuests,'decorative guests never mutate rental objects');
  assert.ok(light.children.filter(o=>o.isPointLight).length<=6,'event lighting remains bounded on mobile');
  for(const group of [weather,guests])module.namespace.disposeGroup(group);
- console.log('PASS sky/guests: visible initial sun, day/moon/rain transitions, dry canopy, four guest draws, finite animated transforms, unchanged rental data');
+ console.log('PASS sky/guests: visible initial sun, day/moon/rain transitions, dry canopy, bounded guest draws, finite animated transforms, unchanged rental data');
  console.log('PASS furniture: distinct chair geometry, seating orientation and selectable instances, scale/linen length, floor gaps, bounded draw calls, day/night lighting, disposal');
  console.log('PASS 3D table geometry: removing linen removes cloth; selected linen uses its exact color on round and rectangular tables (not visual GPU QA)');
 

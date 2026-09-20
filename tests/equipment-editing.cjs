@@ -5,7 +5,8 @@ const w=dom.window,d=w.document;
 w.ResizeObserver=class{observe(){}disconnect(){}};w.ACTIVE_TENANT={slug:'friendly',name:'Friendly Party Rental'};
 w.fetch=()=>{throw new Error('No network calls permitted');};
 const context=dom.getInternalVMContext(),cache=new Map();
-async function load(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file,initializeImportMeta(meta){meta.url=require('node:url').pathToFileURL(file).href;}});cache.set(file,m);await m.link((spec,ref)=>load(path.resolve(path.dirname(ref.identifier),spec)));return m;}
+function moduleFor(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file,initializeImportMeta(meta){meta.url=require('node:url').pathToFileURL(file).href;}});cache.set(file,m);return m;}
+ async function load(file){const m=moduleFor(file);if(m.status==='unlinked')await m.link((spec,ref)=>moduleFor(path.resolve(path.dirname(ref.identifier),spec)));return m;}
 const click=selector=>{const el=d.querySelector(selector);assert.ok(el,selector);el.focus();el.click();};
 const change=(role,value)=>{const el=d.querySelector(`[data-role="${role}"]`);el.focus();el.value=value;el.dispatchEvent(new w.Event('change',{bubbles:true}));};
 (async()=>{
