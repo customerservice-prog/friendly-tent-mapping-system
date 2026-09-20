@@ -13,6 +13,8 @@ async function setup(query, options = {}) {
   const dom = new JSDOM(html, { url: 'https://rentsketch.com/designer/' + query, runScripts: 'outside-only', pretendToBeVisual: true }), w = dom.window, calls = [];
   w.AbortController = AbortController; w.ResizeObserver = class { observe() {} disconnect() {} }; w.confirm = () => { throw Error('No surprise restore dialog'); }; w.alert = () => {};
   if (options.embedded) Object.defineProperty(w, 'parent', { value: { postMessage() {} } });
+  w.localStorage.setItem('rentsketch-anon-session', 'existing-browser-owner');
+  if (options.saved) w.localStorage.setItem('rentsketch-autosave:friendly', JSON.stringify(options.saved));
   let draft, checkouts = 0;
   w.fetch = async (url, request = {}) => {
     const body = request.body && JSON.parse(request.body); calls.push({ url, body, method: request.method || 'GET' });
@@ -21,7 +23,7 @@ async function setup(query, options = {}) {
     else if (url.endsWith('/products')) data = { products };
     else if (url.includes('/event-pass/offer?')) data = { ...offer, ...options.offer };
     else if (url.endsWith('/event-pass/restore')) data = options.restored;
-    else if (url.endsWith('/event-pass/resume')) data = options.resumed || draft;
+    else if (url.endsWith('/event-pass/resume')) { if (options.failResume) throw Error('Connection unavailable'); data = options.resumed || draft; }
     else if (url.endsWith('/event-pass/checkout-session') || url.endsWith('/event-pass/renewal-checkout-session')) { checkouts++; data = { url: 'https://checkout.stripe.com/c/pay/cs_live_fixturecheckout' }; }
     else if (/\/designs(?:\/draft-owned)?$/.test(url)) { draft = { id: 'draft-owned', scene: body.scene, tenant: 'friendly', anonymousSessionId: body.anonymousSessionId, active: false }; data = { id: draft.id }; }
     else throw Error('Unexpected API request ' + url);
@@ -63,6 +65,8 @@ async function setup(query, options = {}) {
   w = t.w; d = w.document; b = w.FriendlyBridge;
   assert.equal(b.getScene().tentId, 'frame-20x20', 'paid empty frame replaces the initial pole tent'); assert.equal(b.getScene().surfaceType, 'concrete'); assert.equal(b.getScene().objects.length, 0);
   assert.equal(w.RentSketchAutosave.getDesignId(), 'draft-owned'); assert.equal(w.RentSketchAutosave.getSessionId(), 'restored-owner');
+  assert.equal(w.localStorage.getItem('rentsketch-anon-session'), 'existing-browser-owner', 'recovering one paid event does not change ownership of other drafts');
+  assert.equal(JSON.parse(w.localStorage.getItem('rentsketch-autosave:friendly')).anonymousSessionId, 'restored-owner');
   assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 0, 'return never saves the initial blank/default scene over the paid design');
   assert.match(d.querySelector('#eventPassBar').textContent, /Event Pass active/); assert.ok(d.querySelector('.pass-access-link').value.includes('#eventPass=cs_live_fixturecheckout'));
   assert.equal(w.location.search.includes('checkout_session_id'), false, 'private credential removed from address after restore');
@@ -84,6 +88,12 @@ async function setup(query, options = {}) {
   t.dom.window.close();
   t = await setup('?tenant=friendly', { offer: { required: false } });
   assert.equal(t.w.document.body.classList.contains('rs-pass-preview'), false); assert.equal(t.w.document.getElementById('eventPassBar').hidden, true);
+  t.dom.window.close();
+  t = await setup('?tenant=friendly', { saved: emptyFrame, failResume: true });
+  assert.match(t.w.document.querySelector('.paywall-modal').textContent, /could not be opened/);
+  t.w.dispatchEvent(new t.w.Event('pagehide'));
+  assert.equal(JSON.parse(t.w.localStorage.getItem('rentsketch-autosave:friendly')).id, 'draft-owned', 'failed recovery plus page exit does not overwrite the original draft');
+  assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 0);
   t.dom.window.close();
   console.log('PASS Event Pass UI: real entry/store/autosave, free exact preview, clear $9.99 offer, cancel preserves scene, duplicate click guard, iframe checkout link, same empty-frame return, private recovery link, forged success cannot unlock, $4.99 renewal and launch-off behavior. DOM checks only; no GPU or payment/network writes.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

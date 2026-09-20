@@ -232,15 +232,22 @@
         view.querySelector('[data-check]').onclick = function () { checkReturn().catch(function (err) { view.querySelector('.paywall-error').textContent = err.message; }); };
         try { await checkReturn(); } catch (err) { view.querySelector('.paywall-error').textContent = err.message; view.querySelector('[data-check]').hidden = false; }
       } else if (saved && saved.id) {
-        var sid; try { sid = localStorage.getItem('rentsketch-anon-session'); } catch (_) {}
+        var sid; try { sid = saved.anonymousSessionId || localStorage.getItem('rentsketch-anon-session'); } catch (_) {}
         if (sid) {
           var data = await api('/event-pass/resume', { designId: saved.id, anonymousSessionId: sid });
           if (productPreview) { if (data.active) savedPaidEvent = data; }
           else restoreScene(data);
         }
       }
-    } catch (err) { console.warn('[RentSketch] Event Pass:', err.message); }
-    finally { ready = true; window.RENTSKETCH_PASS_RESTORING = false; render(); }
+    } catch (err) {
+      console.warn('[RentSketch] Event Pass:', err.message);
+      if (returning) {
+        var failed = openModal('Your saved event could not be opened', '<p class="paywall-error" role="status"></p><p>Your saved layout has not been replaced. Retry the connection or open your private access link.</p><button type="button" class="btn-primary" data-reload>Retry opening my event</button>');
+        failed.querySelector('.paywall-error').textContent = err.message;
+        failed.querySelector('[data-reload]').onclick = function () { location.reload(); };
+      }
+    }
+    finally { ready = true; window.RENTSKETCH_PASS_RESTORING = returning && !verified; render(); }
   }
   boot();
 })();
