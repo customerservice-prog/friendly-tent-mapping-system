@@ -25,9 +25,9 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
   }
   tables.forEach((qty,id) => add(find(catalog.tables,id),qty,'table','Table — confirm selection'));
   chairs.forEach((qty,id) => add(find(catalog.chairs,id),qty,'chair','Chairs — confirm selection'));
-  linens.forEach((qty,key) => {const [id,color]=JSON.parse(key),linen=find(catalog.linens,id);add(linen,qty,'linen','Linen',color+' '+(linen ? linen.name : 'Linen'));});
+  linens.forEach((qty,key) => {const [id,color]=JSON.parse(key),linen=find(catalog.linens,id);add(linen,qty,'linen','Linen',color+' '+(linen ? linen.name : 'Linen'));lines[lines.length-1].selectedColor=color;});
   const tabletop=new Map();for(const object of objects.filter(o=>o.kind==='table'))for(const entry of object.tabletop||[]){const key=JSON.stringify([entry.productId,entry.color||null]);tabletop.set(key,(tabletop.get(key)||0)+tabletopQuantity(entry,object));}
-  tabletop.forEach((qty,key)=>{const [id,color]=JSON.parse(key),product=find(catalog.tabletop||TABLETOP,id);add(product,qty,'tabletop','Tabletop rental — confirm selection',product?(color?color+' ':'')+product.name:null);});
+  tabletop.forEach((qty,key)=>{const [id,color]=JSON.parse(key),product=find(catalog.tabletop||TABLETOP,id);add(product,qty,'tabletop','Tabletop rental — confirm selection',product?(color?color+' ':'')+product.name:null);if(color&&qty)lines[lines.length-1].selectedColor=color;});
   const sections = objects.filter(o=>o.kind === 'dance');
   add(catalog.danceSection,sections.length,'dance_floor','3×3 Dance Floor Section');
   if(scene.lightingId && scene.lightingId !== 'lighting-none') {
