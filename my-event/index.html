@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex">
   <title>Open My Event | RentSketch</title>
   <link rel="icon" href="/logo.png">
-  <link rel="stylesheet" href="/my-event/access.css?v=20260920-orders-2">
-  <script src="/my-event/access.js?v=20260920-orders-2" defer></script>
+  <link rel="stylesheet" href="/my-event/access.css?v=20260920-preview-1">
+  <script src="/my-event/access.js?v=20260920-preview-1" defer></script>
 </head>
 <body>
   <header><a class="brand" href="/"><img src="/logo.png" width="34" height="34" alt="">RentSketch</a><a href="/designer/" data-preview>Free preview</a></header>
@@ -19,13 +19,14 @@
     <details id="orderAccess">
       <summary>Already booked with Friendly? Design for free</summary>
       <form id="orderAccessForm">
+        <label for="orderFirstName">First name on your booking</label>
+        <input id="orderFirstName" name="given-name" autocomplete="given-name" maxlength="100" placeholder="Your first name" required>
         <label for="orderNumber">Friendly order number</label>
         <input id="orderNumber" name="orderNumber" autocomplete="off" maxlength="80" placeholder="Order number from your receipt" required>
-        <label for="orderEmail">Email on your booking</label>
-        <input id="orderEmail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="you@example.com" required>
-        <button type="submit">Email my access link</button>
+        <button type="submit">Find my booking &amp; send access</button>
       </form>
       <p id="orderAccessStatus" role="status" aria-live="polite"></p>
+      <p>We’ll send your private link to the email already on your booking. You don’t need to enter it again.</p>
       <p>Your confirmed Friendly booking includes one event layout through seven days after your event. No $9.99 design fee.</p>
       <p>Use the number on your confirmation or receipt. Paid bookings and bookings approved by our office qualify. Unpaid quotes and canceled orders do not. Need help? Call <a href="tel:3158841498">315-884-1498</a>.</p>
       <p>Your layout starts with a matching booked tent or inflatable when available. Layout edits do not change your rental order; send changes to Friendly for review.</p>

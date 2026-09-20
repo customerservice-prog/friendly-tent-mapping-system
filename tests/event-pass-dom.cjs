@@ -14,6 +14,7 @@ async function setup(query, options = {}) {
   w.AbortController = AbortController; w.ResizeObserver = class { observe() {} disconnect() {} }; w.confirm = () => { throw Error('No surprise restore dialog'); }; w.alert = () => {};
   if (options.embedded) Object.defineProperty(w, 'parent', { value: { postMessage() {} } });
   w.localStorage.setItem('rentsketch-anon-session', 'existing-browser-owner');
+  if (options.previewDeadline) w.localStorage.setItem('rentsketch-preview-deadline:v1', String(options.previewDeadline));
   if (options.saved) w.localStorage.setItem('rentsketch-autosave:friendly', JSON.stringify(options.saved));
   let draft, checkouts = 0;
   w.fetch = async (url, request = {}) => {
@@ -22,6 +23,7 @@ async function setup(query, options = {}) {
     if (url.endsWith('/api/tenants/friendly')) data = { slug: 'friendly', name: 'Friendly Party Rental', showPrices: true };
     else if (url.endsWith('/products')) data = { products };
     else if (url.includes('/event-pass/offer?')) data = { ...offer, ...options.offer };
+    else if (url.endsWith('/event-pass/preview')) { if(options.failPreview)throw Error('Preview service unavailable');data={limited:true,remainingSeconds:options.previewSeconds ?? 300}; }
     else if (url.endsWith('/designs/recovery-link')) data = { ok: true };
     else if (url.endsWith('/event-pass/restore')) data = options.restored;
     else if (url.endsWith('/event-pass/resume')) { if (options.failResume) throw Error('Connection unavailable'); data = options.resumed || draft; }
@@ -43,7 +45,7 @@ async function setup(query, options = {}) {
   await (await load(path.join(root, 'designer/index.html'), bootstrap)).evaluate();
   await (await load(path.join(root, 'script.js'))).evaluate();
   await (await load(path.join(root, 'js/ui/booking-handoff.js'))).evaluate();
-  evalScript('js/ui/paywall.js'); evalScript('js/ui/autosave.js');
+  evalScript('js/ui/preview-limit.js'); evalScript('js/ui/paywall.js'); evalScript('js/ui/autosave.js');
   if (query.includes('autoplace=1')) evalScript('js/ui/tent-preview-entry.js'); else await (await load(path.join(root, 'js/ui/intake.js'))).evaluate();
   await wait(150); evalScript('js/ui/customer-entry.js'); evalScript('js/ui/review-actions.js');
   return { dom, w, calls, get draft() { return draft; }, get checkouts() { return checkouts; } };
@@ -156,5 +158,26 @@ async function setup(query, options = {}) {
   assert.equal(JSON.parse(t.w.localStorage.getItem('rentsketch-autosave:friendly')).id, 'draft-owned', 'failed recovery plus page exit does not overwrite the original draft');
   assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 0);
   t.dom.window.close();
+  t = await setup('?tenant=friendly&focus=tent&autoplace=1&view=2d&productId=fpr-pole', { previewSeconds: 0.1 });
+  assert.match(t.w.document.getElementById('eventPreviewMark').textContent, /Free preview/);
+  await wait(1100);
+  assert.ok(t.w.document.querySelector('.preview-limit-screen'), 'the preview ends when the server deadline runs out');
+  assert.ok(t.w.document.getElementById('designerApp').hasAttribute('inert'), 'expired preview cannot receive keyboard or pointer input');
+  assert.equal(t.w.FriendlyBridge.getScene().tentId, 'pole-20x20', 'expiry preserves the exact rental');
+  t.w.document.querySelector('[data-preview-buy]').click(); await wait(20);
+  assert.ok(t.w.document.querySelector('.paywall-modal'), 'checkout is still reachable after expiry');
+  t.w.document.querySelector('.pass-close').click();
+  assert.ok(t.w.document.querySelector('.preview-limit-screen'), 'closing checkout does not restart free preview');
+  t.w.document.querySelector('[data-preview-recover]').click();
+  assert.ok(t.w.document.getElementById('recoverEmail'), 'paid customers can recover from the expired screen');
+  t.dom.window.close();
+  t = await setup('?tenant=friendly&focus=tent&autoplace=1&view=2d&productId=fpr-frame', { failPreview: true, previewDeadline: Date.now() - 1000 });
+  assert.ok(t.w.document.querySelector('.preview-limit-screen'), 'reload, another product and API outage cannot reset an expired preview');
+  t.dom.window.close();
+  t = await setup('?tenant=friendly#recoveryToken=fixture.private.token', { restored: emptyFrame, previewSeconds: 0, previewDeadline: Date.now() - 1000 });
+  assert.equal(t.w.document.querySelector('.preview-limit-screen'), null, 'verified access overrides preview expiry');
+  assert.equal(t.calls.filter(c => c.url.endsWith('/event-pass/preview')).length, 0, 'paid event does not consume a preview');
+  t.dom.window.close();
+  console.log('PASS preview limit: visible countdown, timed expiry, exact scene retained, inert controls, checkout/recovery, reload/product persistence, outage bounds and paid access override.');
   console.log('PASS Event Pass UI: free exact preview, $9.99 / 30-day offer, iframe checkout, paid save/reopen with contact details, delivery ZIP and scene preferences, fresh review prices, same paid design for isolated quote, other-product resume, private recovery, forged success rejection, $4.99 renewal and launch-off behavior. DOM checks only; no GPU or payment/network writes.');
 })().catch(e => { console.error(e); process.exitCode = 1; });

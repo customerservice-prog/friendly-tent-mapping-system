@@ -11,7 +11,7 @@
     document.getElementById('paidAccessLink').hidden = false;
     document.querySelector('h1').textContent = 'Design your booked event.';
     document.querySelector('.eyebrow').textContent = 'Included with Friendly';
-    document.querySelector('.intro').textContent = 'Enter your order number and booking email. We’ll send your private link. No design fee.';
+    document.querySelector('.intro').textContent = 'Enter your first name and order number. We’ll find your booking and email your private link. No design fee.';
     document.getElementById('orderNumber').value = (query.get('order') || '').slice(0,80);
   }
   var orderForm = document.getElementById('orderAccessForm');
@@ -23,13 +23,13 @@
     try {
       var response = await fetch('https://rentsketch-api-production.up.railway.app/api/consumer/order-access/request', {
         method: 'POST', headers: { 'Content-Type':'application/json' }, signal: controller.signal,
-        body: JSON.stringify({ orderNumber: document.getElementById('orderNumber').value.trim(), email: document.getElementById('orderEmail').value.trim() }),
+        body: JSON.stringify({ orderNumber: document.getElementById('orderNumber').value.trim(), firstName: document.getElementById('orderFirstName').value.trim() }),
       });
       var result = await response.json(); if (!response.ok) throw new Error(result.error || 'Please try again shortly.');
-      message.textContent = 'If these details match a qualifying Friendly booking, we’ll email its private access link. Check your inbox and spam folder. No payment is needed to request the link.';
+      message.textContent = 'If these details match a qualifying Friendly booking, we’ll send its private access link to the email already on your order. Check that inbox and spam folder. No payment is needed to request the link.';
       submit.textContent = 'Link requested';
-      setTimeout(function () { submit.disabled = false; submit.textContent = 'Email my access link again'; }, 60000);
-    } catch (error) { message.textContent = error.name === 'AbortError' ? 'The booking check took too long. Please try again shortly.' : error.message; submit.disabled = false; submit.textContent = 'Email my access link'; }
+      setTimeout(function () { submit.disabled = false; submit.textContent = 'Send my access link again'; }, 60000);
+    } catch (error) { message.textContent = error.name === 'AbortError' ? 'The booking check took too long. Please try again shortly.' : error.message; submit.disabled = false; submit.textContent = 'Find my booking & send access'; }
     finally { clearTimeout(timer); }
   });
   document.querySelectorAll('[data-preview]').forEach(function (link) { link.href = '/designer/' + (tenant ? '?tenant=' + encodeURIComponent(tenant) : ''); });

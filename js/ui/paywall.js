@@ -10,7 +10,7 @@
   var draftToken = fragment.get('draft');
   var recoveryToken = params.get('recoveryToken') || fragment.get('recoveryToken');
   var productPreview = ['tent', 'inflatable'].includes(params.get('focus')) && params.get('autoplace') === '1';
-  var offer, verified, savedPaidEvent, modal, offerPromise, ready = false, busy = false;
+  var offer, verified, savedPaidEvent, modal, offerPromise, previewLimit, ready = false, busy = false;
   var saved = read('rentsketch-autosave:' + slug);
   var returning = !!(checkoutId || draftToken || recoveryToken || (!productPreview && saved && saved.id));
   window.RENTSKETCH_PASS_RESTORING = returning;
@@ -54,7 +54,7 @@
     window.dispatchEvent(new CustomEvent('rentsketch:' + event, { detail: data }));
     if (typeof window.gtag === 'function') window.gtag('event', event, data);
   }
-  function closeModal() { if (modal) { var focus = modal._returnFocus; modal.remove(); modal = null; if (focus && focus.isConnected) focus.focus(); } }
+  function closeModal() { if (modal) { var focus = modal._returnFocus; modal.remove(); modal = null; if (focus && focus.isConnected) focus.focus(); } previewLimit?.focusIfLocked(); }
   function openModal(title, html) {
     closeModal();
     var focus = document.activeElement;
@@ -76,6 +76,7 @@
     return modal;
   }
   function render() {
+    previewLimit?.updateAccess();
     document.body.classList.toggle('rs-pass-checking', !offer);
     document.body.classList.toggle('rs-pass-preview', !!(offer && offer.required && !active()));
     var watermark = document.getElementById('eventPreviewMark');
@@ -118,6 +119,7 @@
     if (previewButton && !active()) previewButton.textContent = 'Design My Event · ' + money(offer.priceCents);
     // Product previews already have a primary CTA. Keep only its clear price line.
     bar.classList.toggle('event-pass-product', !!window.RENTSKETCH_TENT_PREVIEW && !active());
+    previewLimit?.updateAccess();
   }
   function continueProduct() {
     var button = document.getElementById('designMyEvent');
@@ -298,7 +300,18 @@
         failed.querySelector('[data-reload]').onclick = function () { location.reload(); };
       }
     }
-    finally { ready = true; window.RENTSKETCH_PASS_RESTORING = returning && !verified; render(); }
+    finally {
+      ready = true; window.RENTSKETCH_PASS_RESTORING = returning && !verified;
+      if (offer?.required && window.RentSketchStartPreviewLimit) previewLimit = window.RentSketchStartPreviewLimit({
+        hasAccess: function () { return canEdit() || !!(verified && (verified.renewable || verified.includedWithOrder)); },
+        duration: function () { return offer.previewDurationSeconds || 300; },
+        price: function () { return money(offer.priceCents); }, days: function () { return offer.durationDays; },
+        request: function () { return api('/event-pass/preview', { tenant: slug, anonymousSessionId: autosave().getSessionId() }); },
+        purchase: function () { requestAccess(); }, recover: showRecovery,
+        resume: savedPaidEvent ? function () { restoreScene(savedPaidEvent); continueProduct(); } : null,
+      });
+      render();
+    }
   }
   boot();
 })();

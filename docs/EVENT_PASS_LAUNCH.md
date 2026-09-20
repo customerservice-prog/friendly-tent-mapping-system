@@ -4,9 +4,25 @@ Launch offer: **$9.99 once for one event and 30 days**. An optional renewal of
 the same paid event is **$4.99 for 30 more days**. Neither purchase is a
 subscription. Prices come from `server/src/pricing.js`; the preview and
 Checkout read the same server offer. Rental equipment and its delivery/tax
-are separate. No rental credit or included-order benefit is advertised.
+are separate. Confirmed Friendly bookings include one layout through seven
+days after the event, without a design fee.
 
-Friendly and direct RentSketch customers see the exact product for free.
+Friendly and direct RentSketch customers see the exact product in a five-minute
+free preview. A visible countdown shares one deadline across products and
+reloads, backed by `consumer_previews` (migration `013_preview_limit.sql`).
+Expiry retains the scene and offers purchase, included booking access and
+saved-event recovery. Paid and included saved events keep their verified access.
+The anonymous browser identifier is not proof of a person's identity: clearing
+all site storage or using a different browser can create another preview.
+Paid design/save/quote access still requires its server-verified entitlement.
+
+Customers with a Friendly booking enter their first name and order number at
+`/my-event/?tenant=friendly&mode=order`. The signed integration matches the name
+on that exact order, allowing case, spacing and accent differences, then sends
+the private access link to the email already on the booking. The public response
+never reveals the booking email or access credential. Unpaid quotes and canceled
+orders do not qualify. Repeated claims reuse the same layout (migration `012`).
+
 Choosing **Design My Event** shows the price and included features. Before
 Checkout opens, the current scene is saved using the existing autosave ID.
 Hosted Checkout opens outside the Friendly iframe. Both payment and cancel
@@ -38,7 +54,7 @@ Review → Share. Editing always checks the saved entitlement and expiration;
 requesting another email does not buy or restart an access period.
 
 `/my-event/` and **Already paid? Open my event** request recovery using the email
-confirmed by Stripe. Only successful paid purchases qualify; pending checkouts
+confirmed by Stripe or on an already claimed qualifying Friendly booking. Pending checkouts
 and unknown email addresses receive the same generic response. Email delivery
 uses a transactional `event_pass_emails` queue, one receipt row per payment,
 bounded retries, a worker lease, and per-recipient recovery limits. A receipt is
@@ -73,7 +89,9 @@ $4.99 for 30 additional days, with no automatic charge.
 jsdom and the actual API routes with a temporary PGlite database and fake
 Stripe. It covers exact previews, duplicate clicks, iframe checkout, cancellation,
 empty-tent restoration, unpaid/forged success, ownership, rollback, duplicate
-fulfillment, delayed payments, term preservation, expiry, unpaid save/quote bypasses, recovery, email failure/retry and renewal. It creates no production records.
+fulfillment, delayed payments, term preservation, expiry, unpaid save/quote bypasses,
+recovery, email failure/retry, renewal, included booking access, and preview
+countdown/expiry without reload resets. It creates no production records.
 
 These checks do not establish GPU/mobile appearance or a completed real card
 payment. Report those separately from code, API and deployment checks.

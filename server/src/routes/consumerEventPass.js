@@ -18,6 +18,7 @@ const { lookupOrder, claimOrder, refreshOrderAccess, orderAccessReady } = requir
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 
 const router = express.Router();
+const PREVIEW_SECONDS = 5 * 60;
 
 // safeOrigin: strict allowlisting for rentsketch.com subdomains with APP_URL fallback.
 // Never concatenates arbitrary/undefined origins into Stripe return URLs.
@@ -54,7 +55,22 @@ router.get('/event-pass/offer', wrap(async (req, res) => {
     const tenant = slug === 'generic' ? null : (await query('SELECT * FROM tenants WHERE slug=$1', [slug])).rows[0];
     if (slug !== 'generic' && !tenant) return res.status(404).json({ error: 'Rental company not found' });
     res.setHeader('Cache-Control', 'no-store');
-    res.json({ ...passOffer(tenant), ...(await paymentReadiness()) });
+    res.json({ ...passOffer(tenant), previewDurationSeconds: PREVIEW_SECONDS, ...(await paymentReadiness()) });
+}));
+
+router.post('/event-pass/preview', wrap(async (req, res) => {
+    const sid = req.body?.anonymousSessionId, slug = req.body?.tenant || 'generic';
+    if (typeof sid !== 'string' || !/^[a-zA-Z0-9_:-]{16,160}$/.test(sid)) return res.status(400).json({ error: 'A valid preview session is required.' });
+    const tenant = slug === 'generic' ? null : (await query('SELECT * FROM tenants WHERE slug=$1', [slug])).rows[0];
+    if (slug !== 'generic' && !tenant) return res.status(404).json({ error: 'Rental company not found' });
+    res.setHeader('Cache-Control', 'no-store');
+    if (!isPassEnabled(tenant)) return res.json({ limited: false });
+    const hash = createHash('sha256').update('preview:' + sid).digest('hex');
+    const row = (await query(`INSERT INTO consumer_previews(session_hash,expires_at)
+      VALUES($1,now()+$2*interval '1 second')
+      ON CONFLICT(session_hash) DO UPDATE SET session_hash=EXCLUDED.session_hash
+      RETURNING expires_at,GREATEST(0,EXTRACT(EPOCH FROM expires_at-now())) AS remaining_seconds`, [hash,PREVIEW_SECONDS])).rows[0];
+    res.json({ limited: true, durationSeconds: PREVIEW_SECONDS, expiresAt: row.expires_at, remainingSeconds: Number(row.remaining_seconds) });
 }));
 
 // This verifies SMTP without sending any message or exposing credentials.
@@ -71,24 +87,27 @@ router.get('/order-access/status', wrap(async (req, res) => {
 const orderBuckets = new Map();
 router.post('/order-access/request', wrap(async (req, res) => {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const firstName = typeof req.body?.firstName === 'string' ? req.body.firstName.trim().replace(/\s+/g, ' ') : '';
     const orderNumber = typeof req.body?.orderNumber === 'string' ? req.body.orderNumber.trim().replace(/^#\s*/, '') : '';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || !/^[a-zA-Z0-9-]{1,80}$/.test(orderNumber)) return res.status(400).json({ error: 'Enter your order number and the email on your Friendly booking.' });
+    // Older receipt pages may still send email while their cached assets update.
+    const validIdentity = firstName ? firstName.length <= 100 && !/[\u0000-\u001f]/.test(firstName) : /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 254;
+    if (!validIdentity || !/^[a-zA-Z0-9-]{1,80}$/.test(orderNumber)) return res.status(400).json({ error: 'Enter your first name and Friendly order number.' });
     const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
     const now = Date.now();
     for (const [key, bucket] of orderBuckets) if (bucket.until < now) orderBuckets.delete(key);
-    for (const key of ['ip:' + ip, 'email:' + email]) {
+    for (const key of ['ip:' + ip, 'order:' + orderNumber.toLowerCase()]) {
         const bucket = orderBuckets.get(key) || { count: 0, until: now + 15 * 60000 };
         bucket.count++; orderBuckets.set(key, bucket);
         if (bucket.count > (key.startsWith('ip:') ? 20 : 5)) return res.status(429).json({ error: 'Please wait a few minutes before requesting another order link.' });
     }
     if (!await emailReadiness()) return res.status(503).json({ error: 'Access email is temporarily unavailable. Please try again shortly.' });
     let order;
-    try { order = await lookupOrder({ orderNumber, email }); }
+    try { order = await lookupOrder(firstName ? { orderNumber, firstName } : { orderNumber, email }); }
     catch (_) { return res.status(503).json({ error: 'Friendly order verification is temporarily unavailable. Please try again shortly.' }); }
-    if (order?.eligible && order.customerEmail === email) {
+    if (order?.eligible && (firstName || order.customerEmail === email)) {
         const tenant = (await query("SELECT * FROM tenants WHERE slug='friendly'")).rows[0];
         const design = await claimOrder(order, tenant);
-        if (design) await queueRecovery(email, 'friendly', [design]);
+        if (design) await queueRecovery(order.customerEmail, 'friendly', [design]);
         processEmails().catch(() => console.error('[order-access] Link queued for retry.'));
     }
     // Do not reveal order ownership, its design ID, or the private access token.

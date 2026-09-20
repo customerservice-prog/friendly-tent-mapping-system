@@ -40,7 +40,7 @@ const mailQueue = { ...email, processEmails: async () => {} };
 const bookedOrders = new Map(); let orderLookupFails = false;
 const orderAccess = load('server/src/friendlyOrderAccess.js', { crypto: require('crypto'), './db': db, './eventPassEmail': { relay: async (type, input) => {
   if (orderLookupFails) throw Error('isolated order service outage');
-  return { orderAccessVersion: 1, order: [...bookedOrders.values()].find(o => (input.orderId ? o.id === input.orderId : o.orderNumber === input.orderNumber) && o.customerEmail === input.email) || null };
+  return { orderAccessVersion: 1, order: [...bookedOrders.values()].find(o => (input.orderId ? o.id === input.orderId : o.orderNumber === input.orderNumber) && (input.firstName ? input.firstName.toLowerCase() === o.firstName.toLowerCase() : o.customerEmail === input.email)) || null };
 } } });
 const pass = load('server/src/eventPass.js', { './db': db, './pricing': pricing, './eventPassEmail': mailQueue, stripe: Stripe });
 const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass, './friendlyOrderAccess': orderAccess });
@@ -67,11 +67,22 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/004_entitlements.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/011_event_pass_access_email.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/012_friendly_order_access.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/013_preview_limit.sql'), 'utf8'));
   await pg.query('INSERT INTO tenants VALUES($1,$2),($3,$4)', [tenant, 'friendly', other, 'lakeside']);
   server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); base = 'http://127.0.0.1:' + server.address().port;
   let r = await request('/api/consumer/event-pass/offer?tenant=friendly'); assert.equal(r.body.priceCents, 999); assert.equal(r.body.durationDays, 30); assert.equal(r.body.required, true); assert.equal(r.body.paymentMode, 'test');
   env.EVENT_PASS_ENABLED = 'false'; assert.equal((await request('/api/consumer/event-pass/offer?tenant=friendly')).body.required, false); env.EVENT_PASS_ENABLED = 'true';
   assert.equal((await request('/api/consumer/event-pass/offer?tenant=lakeside')).body.required, false);
+  const previewSession = { tenant: 'friendly', anonymousSessionId: 'isolated-preview-session' };
+  const previewLease = await request('/api/consumer/event-pass/preview', previewSession);
+  assert.equal(previewLease.status,200);assert.equal(previewLease.body.durationSeconds,300);assert.ok(previewLease.body.remainingSeconds<=300);
+  const sameLease = await request('/api/consumer/event-pass/preview',{...previewSession,tenant:'generic',durationSeconds:999999});
+  assert.equal(sameLease.body.expiresAt,previewLease.body.expiresAt,'product, tenant and requested duration cannot reset the deadline');
+  assert.equal((await pg.query('SELECT count(*)::int AS n FROM consumer_previews')).rows[0].n,1);
+  await pg.query("UPDATE consumer_previews SET expires_at=now()-interval '1 second'");
+  assert.equal((await request('/api/consumer/event-pass/preview',previewSession)).body.remainingSeconds,0,'expired preview cannot restart');
+  assert.equal((await request('/api/consumer/event-pass/preview',{...previewSession,tenant:'lakeside'})).body.limited,false);
+  assert.equal((await request('/api/consumer/event-pass/preview',{...previewSession,anonymousSessionId:'bad'})).status,400);
   const preview = { tentId: 'pole-20x20', objects: [], guestCount: 0, lightingId: 'lighting-none' }, furnished = { ...preview, objects: [{ id: 't1', kind: 'table', tableId: 'round-5ft' }] };
   for (const route of ['/api/consumer/designs', '/api/tenants/friendly/designs']) {
     assert.equal((await request(route, { scene: furnished, anonymousSessionId: 'owner-private-token' })).status, 402, 'a new free draft cannot save furniture');
@@ -153,13 +164,13 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   const legacy = await restore(g.id); assert.ok(Math.abs(Date.parse(legacy.body.expiresAt) - Date.now() - 30*86400000) < 10000);
   const expiredToken = auth.signToken({ kind: 'consumer_design_recovery', designId: d.id, email: 'paid@example.invalid' }, { expiresIn: -1 });
   assert.equal((await request('/api/consumer/event-pass/restore', { recoveryToken: expiredToken })).status, 400);
-  const booked = { id: 'friendly-order-fixture', orderNumber: '9126', eligible: true, customerEmail: 'booked@example.invalid', customerName: 'Booked Customer', eventDate: '2027-06-01', expiresAt: '2027-06-08T00:00:00Z', deliveryZip: '13090', surfaceType: 'grass', items: [{ slug: '20x20-pole-tent', name: '20x20 Pole Tent', quantity: 1 }] };
+  const booked = { id: 'friendly-order-fixture', orderNumber: '9126', firstName:'Booked', eligible: true, customerEmail: 'booked@example.invalid', customerName: 'Booked Customer', eventDate: '2027-06-01', expiresAt: '2027-06-08T00:00:00Z', deliveryZip: '13090', surfaceType: 'grass', items: [{ slug: '20x20-pole-tent', name: '20x20 Pole Tent', quantity: 1 }] };
   bookedOrders.set(booked.id, booked);
   const claim = body => request('/api/consumer/order-access/request', body);
   assert.equal((await request('/api/consumer/order-access/status')).body.available, true);
-  assert.equal((await claim({ orderNumber: '9126', email: 'wrong@example.invalid' })).status, 200);
+  assert.equal((await claim({ orderNumber: '9126', firstName: 'Wrong' })).status, 200);
   assert.equal((await pg.query("SELECT count(*)::int AS n FROM entitlements WHERE source='friendly_order'")).rows[0].n, 0, 'a guessed booking cannot unlock a design');
-  const claimResult = await claim({ orderNumber: '#9126', email: booked.customerEmail, anonymousSessionId: 'attacker-chosen' });
+  const claimResult = await claim({ orderNumber: '#9126', firstName: ' BOOKED ', email:'attacker@example.invalid', anonymousSessionId: 'attacker-chosen' });
   assert.deepEqual(claimResult.body, { ok: true }, 'request never returns an owner token or a design ID');
   await claim({ orderNumber: '9126', email: booked.customerEmail });
   const included = (await pg.query("SELECT d.* FROM designs d JOIN entitlements e ON e.design_id=d.id WHERE e.source='friendly_order'")).rows;
@@ -167,6 +178,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal(included[0].scene.orderStart.items[0].slug, '20x20-pole-tent');
   await email.processEmails();
   const bookingDelivery = deliveries.find(m => m.to === booked.customerEmail); assert.ok(bookingDelivery, 'included access uses the same real outbox worker');
+  assert.equal(deliveries.some(m=>m.to==='attacker@example.invalid'),false,'name matching always sends to the email on the booking');
   const bookingToken = new URLSearchParams(new URL(bookingDelivery.text.match(/https:\/\/rentsketch\.com\/designer\/\?\S+/)[0]).hash.slice(1)).get('recoveryToken');
   const opened = await request('/api/consumer/event-pass/restore', { recoveryToken: bookingToken });
   assert.equal(opened.status, 200); assert.equal(opened.body.active, true); assert.equal(opened.body.includedWithOrder, true); assert.equal(opened.body.renewable, false); assert.equal(opened.body.orderNumber, '9126');
