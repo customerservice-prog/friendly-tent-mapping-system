@@ -54,6 +54,26 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
    assert.ok(scene.getObjectByName('Party table styling'));
   }
  }
+ const inflatableModule=await load(path.join(root,'js/data/inflatables.js'));await inflatableModule.evaluate();
+ const inflatable3d=await load(path.join(root,'js/ui/inflatable3d.js'));await inflatable3d.evaluate();
+ const {products}=JSON.parse(fs.readFileSync(path.join(root,'tests/fixtures/friendly-inflatables-20260920.json'),'utf8'));
+ const inflated=inflatableModule.namespace.inflatableCatalog(products,true);inflatableModule.namespace.INFLATABLES.push(...inflated);
+ for(const width of [320,1280]){
+  viewportWidth=width;viewportHeight=width===320?640:760;resizeScene();
+  for(const p of inflated)for(const rotation of [0,90]){
+   const object=inflatableModule.namespace.inflatableItem(p,'inflatable-test',8,8);object.rotationDeg=rotation;if(rotation){object.widthFt=p.depthFt;object.depthFt=p.widthFt;}
+   const site={id:'outdoor-space',type:'outdoor',isSite:true,widthFt:object.widthFt+16,lengthFt:object.depthFt+16,centerPoles:[]};
+   view.rebuild({tent:site,objects:[object],surfaceType:'notSure',lightingId:'lighting-none'});view.setScene({guests:true,motion:true});view.fitCamera();
+   let tentMeshes=0;scene.traverse(o=>{if(o.userData.kind==='tent')tentMeshes++;});assert.equal(tentMeshes,0,p.name+' has no tent geometry');
+   const model=scene.getObjectByName(p.name);assert.ok(model,p.name+' rendered');model.updateWorldMatrix(true,true);const box=new THREE.Box3().setFromObject(model);
+   assert.ok(!box.isEmpty());for(const x of [box.min.x,box.max.x])for(const y of [box.min.y,box.max.y])for(const z of [box.min.z,box.max.z]){const pt=new THREE.Vector3(x,y,z).project(renderer.camera);assert.ok(Math.abs(pt.x)<1&&Math.abs(pt.y)<1,p.name+' fits '+width+' at '+rotation);}
+   const children=scene.getObjectByName('Children playing · illustrative activity');assert.ok(children.userData.activityCount>=2);assert.ok(children.visible);
+   const before=children.children[0].children[0].position.clone();children.userData.update(.5);const after=children.children[0].children[0].position;assert.ok(before.distanceTo(after)>.001,p.name+' child moves');
+   view.setScene({guests:false,motion:false});assert.equal(children.visible,false);
+  }
+ }
+ const jump={x:0,z:0,w:10,d:10,floor:1.35};for(let t=0;t<12;t+=.1){const pose=inflatable3d.namespace.childPose(jump,'jump',0,t);assert.ok(pose.y+pose.jump>=jump.floor);assert.ok(Math.abs(pose.x)<jump.w/2&&Math.abs(pose.z)<jump.d/2);}
+ console.log('PASS all 11 inflatable models: no tent geometry, camera fits both rotations at phone/desktop sizes, child motion and visibility controls.');
  view.destroy();assert.equal(container.children.length,0);assert.ok(renderer.disposed);assert.equal(frames.size,0);
  console.log('PASS 3D controller: all 16 tent sizes at phone/desktop dimensions, actual scene assembly, day/night/rain/guest preferences survive edits, placement/cancel/pinch gestures, cleanup (renderer stub, not GPU QA)');w.close();
 })().catch(e=>{console.error(e);process.exitCode=1;});

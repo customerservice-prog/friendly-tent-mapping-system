@@ -51,7 +51,7 @@ export function createWeather(tent,{mobile=false}={}) {
       const y=((s.phase*ceiling-time*22)%ceiling+ceiling)%ceiling;
       // Exclude the entire canopy footprint, including windward streak length.
       // Decorative rain must never appear to fall through the roof or tables.
-      const under=Math.abs(s.x)<tent.widthFt/2+1.5&&Math.abs(s.z)<tent.lengthFt/2+1.5;
+      const under=!tent.isSite&&Math.abs(s.x)<tent.widthFt/2+1.5&&Math.abs(s.z)<tent.lengthFt/2+1.5;
       const yy=under?-10:y,j=i*6;positions.set([s.x,yy,s.z,s.x-.15,yy+1.25,s.z+.06],j);
     });geometry.attributes.position.needsUpdate=true;
   }

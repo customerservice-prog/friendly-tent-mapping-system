@@ -19,11 +19,12 @@ w.fetch=async(url,options={})=>{
  throw new Error('Unexpected request: '+url);
 };
 const context=dom.getInternalVMContext(),cache=new Map();
-async function load(file,source){
+function moduleFor(file,source){
  file=file.split('?')[0];if(cache.has(file))return cache.get(file);
  const m=new vm.SourceTextModule(source??fs.readFileSync(file,'utf8'),{context,identifier:file,initializeImportMeta(meta){meta.url=require('node:url').pathToFileURL(file).href;}});cache.set(file,m);
- await m.link((spec,ref)=>load(path.resolve(path.dirname(ref.identifier),spec)));return m;
+ return m;
 }
+async function load(file,source){const m=moduleFor(file,source);if(m.status==='unlinked')await m.link((spec,ref)=>moduleFor(path.resolve(path.dirname(ref.identifier),spec)));return m;}
 const evalScript=filename=>w.eval(fs.readFileSync(path.join(root,filename),'utf8'));
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 (async()=>{

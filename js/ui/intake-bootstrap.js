@@ -4,7 +4,7 @@
   'use strict';
   var params = new URLSearchParams(location.search);
   // Product entry owns its preview; the questionnaire must never race it.
-  if (params.get('focus') === 'tent' && params.get('autoplace') === '1') return;
+  if (['tent','inflatable'].includes(params.get('focus')) && params.get('autoplace') === '1') return;
   var started = false;
   var timeout = null;
   function showCatalogFailure(message) {
@@ -18,8 +18,8 @@
     if (started) return;
     started = true;
     if (timeout) clearTimeout(timeout);
-    if (params.get('tenant') && params.get('tenant') !== 'generic' && !((window.ACTIVE_TENANT || {}).tents || []).length) {
-      showCatalogFailure('This rental company has no tent previews available yet.');
+    if (params.get('tenant') && params.get('tenant') !== 'generic' && !((window.ACTIVE_TENANT || {}).tents || []).length && !((window.ACTIVE_TENANT || {}).inflatables || []).length) {
+      showCatalogFailure('This rental company has no product previews available yet.');
       return;
     }
     import('./intake.js').then(function () {

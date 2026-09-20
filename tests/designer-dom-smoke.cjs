@@ -19,13 +19,13 @@ window.RENTSKETCH_CATALOG_READY=true;
 window.ACTIVE_TENANT={name:'Friendly Party Rental',slug:'friendly'};
 window.fetch=()=>{throw new Error('Production writes are prohibited in this test');};
 const context=dom.getInternalVMContext(),cache=new Map();
-async function moduleAt(file){
+function moduleFor(file){
   if(cache.has(file))return cache.get(file);
   const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file,initializeImportMeta(meta){meta.url=require('node:url').pathToFileURL(file).href;}});
   cache.set(file,m);
-  await m.link((specifier,ref)=>moduleAt(path.resolve(path.dirname(ref.identifier),specifier)));
   return m;
 }
+async function moduleAt(file){const m=moduleFor(file);if(m.status==='unlinked')await m.link((spec,ref)=>moduleFor(path.resolve(path.dirname(ref.identifier),spec)));return m;}
 (async()=>{
   const script=await moduleAt(path.join(root,'script.js'));await script.evaluate();
   window.eval(fs.readFileSync(path.join(root,'js/ui/autosave.js'),'utf8'));

@@ -19,12 +19,12 @@ export function tablePositions(tent, table, chair = {}, obstacles = []) {
   return positions;
 }
 
-export function dancePositions(tent, sideFt, sectionFt = 3) {
+export function dancePositions(tent, sideFt, sectionFt = 3, obstacles = []) {
   const side = Math.ceil(sideFt / sectionFt) * sectionFt;
   if (side > tent.widthFt - 2 || side > tent.lengthFt - 2) return [];
   // Try corners; keep center poles out of the dance floor.
   const corners = [[tent.widthFt-side-1,tent.lengthFt-side-1],[1,tent.lengthFt-side-1],[tent.widthFt-side-1,1],[1,1]];
-  const origin = corners.find(([x,y]) => !(tent.centerPoles || []).some(p => p.x >= x-.5 && p.x <= x+side+.5 && p.y >= y-.5 && p.y <= y+side+.5));
+  const origin = corners.find(([x,y]) => !obstacles.some(o=>x<o.x+o.widthFt+2&&x+side>o.x-2&&y<o.y+o.depthFt+2&&y+side>o.y-2) && !(tent.centerPoles || []).some(p => p.x >= x-.5 && p.x <= x+side+.5 && p.y >= y-.5 && p.y <= y+side+.5));
   if (!origin) return [];
   const positions = [];
   for (let y=0;y<side;y+=sectionFt) for (let x=0;x<side;x+=sectionFt) positions.push({ x:origin[0]+x, y:origin[1]+y });

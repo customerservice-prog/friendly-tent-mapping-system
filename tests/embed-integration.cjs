@@ -2,8 +2,8 @@ const {JSDOM}=require('jsdom');
 const fs=require('node:fs'),assert=require('node:assert/strict');
 const source=fs.readFileSync(require('node:path').join(__dirname,'../embed/v1.js'),'utf8');
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
-async function setup({tenant='lakeside',productId='lake-tent',mode='button',valid=true,showPrices=true}={}){
- const dom=new JSDOM(`<div id="rentsketch-embed"></div><script data-tenant="${tenant}" data-embed-key="${tenant}-key" data-mode="${mode}" ${productId?`data-product-id="${productId}" data-tent-name="Lakeside 20×20 Tent"`:''}></script>`,{url:`https://${tenant}.example/rentals`,runScripts:'outside-only'});
+async function setup({tenant='lakeside',productType='tent',productId='lake-tent',mode='button',valid=true,showPrices=true}={}){
+ const dom=new JSDOM(`<div id="rentsketch-embed"></div><script data-tenant="${tenant}" data-product-type="${productType}" data-embed-key="${tenant}-key" data-mode="${mode}" ${productId?`data-product-id="${productId}" data-tent-name="Lakeside 20×20 Tent"`:''}></script>`,{url:`https://${tenant}.example/rentals`,runScripts:'outside-only'});
  const w=dom.window,timers=new Map(),requests=[],events=[];let id=0;
  w.AbortController=AbortController;w.setTimeout=(fn,ms)=>{timers.set(++id,{fn,ms});return id;};w.clearTimeout=id=>timers.delete(id);
  w.fetch=async(url,opts={})=>{requests.push({url,body:opts.body&&JSON.parse(opts.body)});return{ok:valid,json:async()=>url.endsWith('/validate')?{ok:valid,error:'Invalid embed key'}:url.endsWith('/products')?{products:[{id:'table',name:'Lakeside Round Table',category:'table',price_per_day:19}]}:{name:'Lakeside Events',showPrices}};};
@@ -33,6 +33,7 @@ async function setup({tenant='lakeside',productId='lake-tent',mode='button',vali
  launch.click();frame=w.document.querySelector('iframe');
  send({type:'rentsketch.ready',tenant:'lakeside',mode:'tent-preview',productId:'lake-tent'},oldWindow);assert.equal(x.events.length,1);
  x.dom.window.close();
+ const inflatable=await setup({productType:'inflatable',productId:'lake-slide'});inflatable.w.document.querySelector('button').click();const inflatableFrame=inflatable.w.document.querySelector('iframe');assert.equal(new URL(inflatableFrame.src).searchParams.get('focus'),'inflatable');inflatable.w.dispatchEvent(new inflatable.w.MessageEvent('message',{origin:'https://rentsketch.com',source:inflatableFrame.contentWindow,data:{type:'rentsketch.ready',tenant:'lakeside',mode:'inflatable-preview',productId:'lake-slide'}}));assert.equal(inflatable.events.length,1);inflatable.w.close();
  const hidden=await setup({mode:'inline',productId:'',showPrices:false});assert.match(hidden.w.document.body.textContent,/Lakeside Round Table/);assert.doesNotMatch(hidden.w.document.body.textContent,/\$19/);hidden.dom.window.close();
  const denied=await setup({valid:false});assert.equal(denied.w.document.querySelector('iframe'),null);assert.match(denied.w.document.body.textContent,/Invalid embed key/);denied.dom.window.close();
  console.log('PASS: second-tenant product embed, trusted frame/tenant/product readiness, bounded loading, exact-product 2D retry, close/reopen cleanup, hidden pricing, invalid-key rejection');

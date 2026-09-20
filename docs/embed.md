@@ -63,6 +63,37 @@ The iframe URL equivalent is:
 https://rentsketch.com/designer/?tenant=YOUR_SLUG&embed=1&focus=tent&autoplace=1&view=3d&productId=YOUR_RENTSKETCH_PRODUCT_ID&v=20260919-integration
 ```
 
+## Bounce houses and waterslides
+
+Use the same loader with `data-product-type="inflatable"`. Product identity and
+pricing still come from the selected tenant's live catalog:
+
+```html
+<div id="rentsketch-inflatable"></div>
+<script src="https://rentsketch.com/embed/v1.js?v=20260920-inflatables-1"
+  data-tenant="YOUR_SLUG"
+  data-embed-key="YOUR_EMBED_KEY"
+  data-target="rentsketch-inflatable"
+  data-mode="button"
+  data-product-type="inflatable"
+  data-product-id="YOUR_RENTSKETCH_PRODUCT_ID"
+  data-product-name="Your Bounce House"
+  data-label="See This Bounce House in a Layout"
+  defer></script>
+```
+
+For storefronts using exact catalog slugs, use `data-product-slug` instead of
+`data-product-id`. The iframe equivalent uses `focus=inflatable`, `autoplace=1`,
+and `productId` (or `productSlug`). An explicit ID never falls back to a different
+product. The ready message uses `mode: "inflatable-preview"` and `tentId: null`.
+
+The preview starts outdoors with the selected inflatable and no tent. Continue
+with **Design My Event** to add seating and other rentals. Children are decorative
+animations, excluded from quantities and pricing. Model dimensions are marked
+illustrative unless the tenant provides both `width_ft` and `length_ft`; confirm
+installation space with the rental company. Optional model height is read from
+`metadata.heightFt`. Package products are not treated as individual inflatables.
+
 ## Where to find YOUR_SLUG and YOUR_EMBED_KEY
 
 Both are shown on the Install page of your RentSketch business dashboard, at https://rentsketch.com/dashboard/#/install, after you log in. The embed key is a public identifier only. It is safe to include in your site's front-end code and is not a secret credential.

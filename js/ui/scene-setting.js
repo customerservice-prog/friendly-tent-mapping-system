@@ -1,7 +1,7 @@
 // A visual setting is not an installation-surface answer. Unknown site details
 // stay unknown in the layout and quote until the customer/provider confirms them.
 export function sceneSetting(tent, surface) {
-  if (tent.type === 'pole') return 'backyard';
+  if (tent.isSite || tent.type === 'pole') return 'backyard';
   if (surface === 'grass' || surface === 'dirt') return 'backyard';
   return 'driveway';
 }

@@ -9,7 +9,8 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
     lines.push({label:label || item && item.name || fallback,qty,unitPrice,amount:unitPrice == null ? null : unitPrice * qty,productId:item && item.productId || null,category});
   }
   const tent = find(catalog.tents,scene.tentId);
-  if(includeTent) add(tent,1,'tent','Tent — confirm selection');
+  if(includeTent && scene.tentId) add(tent,1,'tent','Tent — confirm selection');
+  const inflatables=new Map();for(const o of objects)if(o.kind==='inflatable')inflatables.set(o.inflatableId,(inflatables.get(o.inflatableId)||0)+1);inflatables.forEach((qty,id)=>add(find(catalog.inflatables,id),qty,'inflatable','Inflatable — confirm selection'));
   const tables = new Map(), chairs = new Map(), linens = new Map();
   for(const object of objects) {
     if(object.kind !== 'table') continue;

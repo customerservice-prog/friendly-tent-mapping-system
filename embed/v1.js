@@ -1,11 +1,12 @@
 // RentSketch Embed Loader — validated, responsive, tenant catalog + designer.
 (function () {
   'use strict';
-  var RENTSKETCH_ORIGIN='https://rentsketch.com', API_ORIGIN='https://rentsketch-api-production.up.railway.app', VERSION='20260919-integration';
+  var RENTSKETCH_ORIGIN='https://rentsketch.com', API_ORIGIN='https://rentsketch-api-production.up.railway.app', VERSION='20260920-inflatables-1';
   var script=document.currentScript||document.scripts[document.scripts.length-1];
   function attr(name,fallback){var v=script.getAttribute(name);return v==null||v===''?fallback:v;}
   var tenant=attr('data-tenant',null),embedKey=attr('data-embed-key',''),targetId=attr('data-target','rentsketch-embed'),fixedHeight=attr('data-height',null),mode=attr('data-mode','inline'),orderId=attr('data-order-id',''),customerToken=attr('data-customer-token',''),showCatalog=attr('data-show-catalog','true')!=='false',modalOverlay=null,modalCleanup=null,returnFocus=null;
-  var productId=attr('data-product-id',''),tentSlug=attr('data-tent-slug',''),tentName=attr('data-tent-name',''),preview=!!(productId||tentSlug||tentName),initialView=attr('data-view','3d')==='2d'?'2d':'3d';
+  var productType=attr('data-product-type','tent')==='inflatable'?'inflatable':'tent';
+  var productId=attr('data-product-id',''),tentSlug=attr('data-product-slug',attr('data-tent-slug','')),tentName=attr('data-product-name',attr('data-tent-name','')),preview=!!(productId||tentSlug||tentName),initialView=attr('data-view','3d')==='2d'?'2d':'3d';
   function target(){return document.getElementById(targetId);}
   function emit(el,name,detail){var host=target(),separate=el.tagName==='IFRAME'&&host&&!host.contains(el);el.dispatchEvent(new CustomEvent(name,{detail:detail||{},bubbles:!separate}));if(separate)host.dispatchEvent(new CustomEvent(name,{detail:detail||{},bubbles:true}));}
   function money(v){if(v===null||v===undefined||v==='')return'Ask for pricing';var n=Number(v);return Number.isFinite(n)?('$'+n.toFixed(2)+'/day'):'Ask for pricing';}
@@ -16,10 +17,10 @@
     if(embedKey)p.set('embedKey',embedKey);
     if(orderId)p.set('orderId',orderId);
     if(customerToken)p.set('customerToken',customerToken);
-    if(preview){p.set('focus','tent');p.set('autoplace','1');p.set('view',view||initialView);}
+    if(preview){p.set('focus',productType);p.set('autoplace','1');p.set('view',view||initialView);}
     if(productId)p.set('productId',productId);
-    if(tentSlug)p.set('tentSlug',tentSlug);
-    if(tentName)p.set('tent',tentName);
+    if(tentSlug)p.set(productType==='inflatable'?'productSlug':'tentSlug',tentSlug);
+    if(tentName)p.set(productType==='inflatable'?'product':'tent',tentName);
     if(attempt)p.set('retry',String(attempt));
     return RENTSKETCH_ORIGIN+'/designer/?'+p.toString();
   }
@@ -43,7 +44,7 @@
     var full=document.createElement('a');full.textContent='Open Full Screen';full.target='_blank';full.rel='noopener';full.style.cssText='display:inline-block;margin:12px;color:#245c36';recovery.appendChild(full);
     function failure(reason){clearTimeout(timer);status.hidden=true;message.textContent=reason||'The designer is taking longer than expected. Please retry or open it full screen.';recovery.hidden=false;emit(frame,'rentsketch:error',{tenant:tenant,reason:message.textContent});}
     function load(nextView){
-      if(disposed)return;view=nextView;clearTimeout(timer);recovery.hidden=true;status.hidden=false;status.textContent=preview?'Loading your tent…':'Loading your event designer…';
+      if(disposed)return;view=nextView;clearTimeout(timer);recovery.hidden=true;status.hidden=false;status.textContent=preview?'Loading your '+(productType==='inflatable'?'inflatable':'tent')+'…':'Loading your event designer…';
       var src=buildSrc(view,++attempt);full.href=src;frame.src=src;
       timer=setTimeout(function(){failure();},25000);
     }
@@ -51,7 +52,7 @@
       if(disposed||event.origin!==RENTSKETCH_ORIGIN||event.source!==frame.contentWindow)return;
       var msg=event.data||{};if(msg.tenant&&msg.tenant!==tenant)return;
       if(msg.type==='rentsketch.ready'){
-        if(preview&&(msg.mode!=='tent-preview'||(productId&&msg.productId!==productId)))return;
+        if(preview&&(msg.mode!==(productType==='inflatable'?'inflatable-preview':'tent-preview')||(productId&&msg.productId!==productId)))return;
         clearTimeout(timer);status.hidden=true;recovery.hidden=true;emit(frame,'rentsketch:ready',msg);
       }else if(msg.type==='rentsketch.error')failure('We could not load this event preview. Please try again.');
       else if(msg.type==='rentsketch.resize'&&!fixed&&!inModal){var h=Number(msg.height);if(Number.isFinite(h))shell.style.height=Math.max(400,Math.min(1800,h))+'px';}
@@ -88,7 +89,7 @@
     if(showCatalog&&!preview)getProducts().then(function(products){if(products.length)catalog.appendChild(catalogShell(products));}).catch(function(e){console.warn('[RentSketch catalog]',e.message);});
   }
   function renderButton(el){
-    el.innerHTML='';var btn=document.createElement('button');btn.type='button';btn.textContent=attr('data-label',el.getAttribute('data-label')||(preview?'See This Tent in a Layout':'Design My Event'));btn.style.cssText='background:#266238;color:#fff;border:0;padding:13px 20px;border-radius:10px;font:700 15px system-ui;cursor:pointer;min-height:44px';
+    el.innerHTML='';var btn=document.createElement('button');btn.type='button';btn.textContent=attr('data-label',el.getAttribute('data-label')||(preview?(productType==='inflatable'?'See This Inflatable in a Layout':'See This Tent in a Layout'):'Design My Event'));btn.style.cssText='background:#266238;color:#fff;border:0;padding:13px 20px;border-radius:10px;font:700 15px system-ui;cursor:pointer;min-height:44px';
     btn.addEventListener('click',function(){
       closeModal();returnFocus=btn;modalOverlay=document.createElement('div');modalOverlay.setAttribute('role','dialog');modalOverlay.setAttribute('aria-modal','true');modalOverlay.setAttribute('aria-label',tentName||'RentSketch Event Designer');modalOverlay.style.cssText='position:fixed;inset:0;background:#fff;z-index:2147483000;display:flex;flex-direction:column;font-family:system-ui';
       var bar=document.createElement('div');bar.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:52px;padding:0 16px;border-bottom:1px solid #dce4de;flex-shrink:0';var title=document.createElement('strong');title.textContent=tentName||'Design Your Event';bar.appendChild(title);

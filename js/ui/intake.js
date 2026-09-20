@@ -5,7 +5,7 @@ export function startIntake() {
   if (!bridge) return false;
   if (document.getElementById('step-designer')?.classList.contains('active')) return true;
   const tent = bridge.TENTS.find(t => t.type === 'pole' && t.widthFt === 20 && t.lengthFt === 20) || bridge.TENTS[0];
-  if (!tent) return false;
+  if (!tent) {const inflatable=bridge.INFLATABLES?.[0];if(!inflatable)return false;bridge.openInflatablePreview(inflatable);window.dispatchEvent(new CustomEvent('rentsketch:designStarted',{detail:{productId:inflatable.productId}}));return true;}
   bridge.state.tentId = tent.id;
   bridge.state.guestCount = 0;
   bridge.customizeFromScratch();

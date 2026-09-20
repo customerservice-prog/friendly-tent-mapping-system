@@ -1,3 +1,4 @@
+import { createInflatable, createInflatableActivity } from './inflatable3d.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -82,7 +83,7 @@ export function init(container,callbacks={}) {
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
   const furniture=new THREE.Group(),structure=new THREE.Group();scene.add(structure,furniture);
   const rendered=new Map(),pointers=new Set();let state=null,night=false,raf=0,drag=null,danceMesh=null,environment=null,lightGroup=null;
-  let styling=null,showStyling=true,stylingKey='',cameraMode='outside';
+  let inflatableActivity=null,styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let environmentKey='',structureKey='',furnitureKey='',lightingKey='',dirty=true,destroyed=false,animationFrame=0;
@@ -96,7 +97,7 @@ export function init(container,callbacks={}) {
   function invalidate(){dirty=true;}
   controls.addEventListener('change',invalidate);
   function shadows(t){const radius=Math.max(t.widthFt,t.lengthFt)/2+18;sun.shadow.camera.left=-radius;sun.shadow.camera.right=radius;sun.shadow.camera.top=radius;sun.shadow.camera.bottom=-radius;sun.shadow.camera.far=radius*4+120;sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;}
-  function frame(t){if(cameraMode==='inside'){camera.fov=50;camera.updateProjectionMatrix();const f=fitTentCamera(t,7,camera.aspect,camera.fov,0);camera.position.set(f.position[0],5.6,f.position[2]);controls.target.set(0,3.5,0);controls.update();invalidate();return;}camera.fov=36;camera.updateProjectionMatrix();const p=structuralProfile(t.type,t.widthFt,t.lengthFt),anchor=state?.anchoringMethod||(t.type==='pole'?'stake':'ballast'),f=fitTentCamera(t,p.peakHeightFt,camera.aspect,camera.fov,anchor==='stake'?(t.installationClearanceFt||5):2);camera.position.set(...f.position);controls.target.set(...f.target);controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*1.8);controls.update();invalidate();}
+  function frame(t){if(t.isSite){camera.fov=42;camera.updateProjectionMatrix();const box=new THREE.Box3().setFromObject(furniture);const center=box.isEmpty()?new THREE.Vector3(0,3,0):box.getCenter(new THREE.Vector3()),size=box.isEmpty()?new THREE.Vector3(t.widthFt,10,t.lengthFt):box.getSize(new THREE.Vector3());const fit=fitTentCamera({widthFt:Math.max(8,size.x),lengthFt:Math.max(8,size.z)},Math.max(6,size.y),camera.aspect,camera.fov,2);const shift=center.clone().sub(new THREE.Vector3(...fit.target));camera.position.set(...fit.position).add(shift);controls.target.copy(center);controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*1.8);controls.update();invalidate();return;}if(cameraMode==='inside'){camera.fov=50;camera.updateProjectionMatrix();const f=fitTentCamera(t,7,camera.aspect,camera.fov,0);camera.position.set(f.position[0],5.6,f.position[2]);controls.target.set(0,3.5,0);controls.update();invalidate();return;}camera.fov=36;camera.updateProjectionMatrix();const p=structuralProfile(t.type,t.widthFt,t.lengthFt),anchor=state?.anchoringMethod||(t.type==='pole'?'stake':'ballast'),f=fitTentCamera(t,p.peakHeightFt,camera.aspect,camera.fov,anchor==='stake'?(t.installationClearanceFt||5):2);camera.position.set(...f.position);controls.target.set(...f.target);controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*1.8);controls.update();invalidate();}
   function rebuild(data){
     if(!data?.tent||destroyed)return;
     const previous=state?.tent,changed=!previous||previous.id!==data.tent.id||previous.widthFt!==data.tent.widthFt||previous.lengthFt!==data.tent.lengthFt;
@@ -105,24 +106,24 @@ export function init(container,callbacks={}) {
     if(nextEnvironment!==environmentKey){if(environment){scene.remove(environment);disposeGroup(environment);}environment=createEnvironment(t,state.surfaceType);environment.userData.setNight(night);scene.add(environment);environmentKey=nextEnvironment;if(weather){scene.remove(weather);disposeGroup(weather);}weather=createWeather(t,{mobile});weather.userData.setNight(night);weather.userData.setWeather(weatherMode);scene.add(weather);}
     const anchor=state.anchoringMethod||(t.type==='pole'?'stake':setting==='driveway'?'ballast':'stake');
     const nextStructure=JSON.stringify([t.id,t.type,t.widthFt,t.lengthFt,t.centerPoles,anchor]);
-    if(nextStructure!==structureKey){disposeGroup(structure);structure.add(makeTent(t,anchor));structureKey=nextStructure;shadows(t);}
+    if(nextStructure!==structureKey){disposeGroup(structure);if(!t.isSite)structure.add(makeTent(t,anchor));structureKey=nextStructure;shadows(t);}
     const nextFurniture=JSON.stringify([t.widthFt,t.lengthFt,state.objects]);
     if(nextFurniture!==furnitureKey){
       disposeGroup(furniture);rendered.clear();const df=[];
-      for(const o of state.objects){if(o.kind==='dance'){df.push(o);continue;}if(o.kind!=='table')continue;const q=table(o);q.position.set(o.x+o.widthFt/2-t.widthFt/2,0,o.y+o.depthFt/2-t.lengthFt/2);furniture.add(q);rendered.set(o.id,q);}
+      for(const o of state.objects){if(o.kind==='dance'){df.push(o);continue;}if(!['table','inflatable'].includes(o.kind))continue;const q=o.kind==='inflatable'?createInflatable(o):table(o);q.position.set(o.x+o.widthFt/2-t.widthFt/2,0,o.y+o.depthFt/2-t.lengthFt/2);furniture.add(q);rendered.set(o.id,q);}
       danceMesh=dance(df,t);if(danceMesh)furniture.add(danceMesh);furnitureKey=nextFurniture;renderer.shadowMap.needsUpdate=true;
     }
     if(stylingKey!==nextFurniture){if(styling){scene.remove(styling);disposeGroup(styling);}styling=createPartyStyling(t,state.objects);scene.add(styling);stylingKey=nextFurniture;}
     if(styling)styling.visible=showStyling&&!drag;
     const nextGuests=nextFurniture;
-    if(nextGuests!==guestKey){if(guests){scene.remove(guests);disposeGroup(guests);}guests=createGuests(t,state.objects,{mobile});guests.visible=showGuests;scene.add(guests);guestKey=nextGuests;}
-    if(guests)guests.visible=showGuests&&!drag;
+    if(nextGuests!==guestKey){if(guests){scene.remove(guests);disposeGroup(guests);}guests=createGuests(t,state.objects,{mobile});guests.visible=showGuests;scene.add(guests);guestKey=nextGuests;if(inflatableActivity){scene.remove(inflatableActivity);disposeGroup(inflatableActivity);}inflatableActivity=createInflatableActivity(t,state.objects,{mobile});scene.add(inflatableActivity);}
+    if(guests)guests.visible=showGuests&&!drag;if(inflatableActivity)inflatableActivity.visible=showGuests&&!drag&&!state.placement;
     const nextGhost=JSON.stringify(data.placement?.objects?.map(({x,y,...rest})=>rest)||[]);
     if(nextGhost!==ghostKey){
       disposeGroup(ghost);
       if(data.placement){
         const items=data.placement.objects;
-        if(items[0]?.kind==='table')ghost.add(table({...items[0],x:0,y:0}));
+        if(items[0]?.kind==='inflatable')ghost.add(createInflatable(items[0]));else if(items[0]?.kind==='table')ghost.add(table({...items[0],x:0,y:0}));
         else{const q=dance(items.map(o=>({...o,x:o.x-data.placement.x,y:o.y-data.placement.y})),{widthFt:data.placement.widthFt,lengthFt:data.placement.depthFt});if(q)ghost.add(q);}
         ghost.traverse(o=>{if(o.material){o.material.transparent=true;o.material.opacity=.64;o.material.depthWrite=false;}o.castShadow=false;});
       }ghostKey=nextGhost;
@@ -168,7 +169,7 @@ export function init(container,callbacks={}) {
     renderer.shadowMap.needsUpdate=true;invalidate();
   }
   function up(e){
-    pointers.delete(e.pointerId);if(placementPointer?.id===e.pointerId){placementPointer=null;if(e.type!=='pointercancel'){const p=groundPoint(e);if(p){callbacks.onPlacementMove?.(p.x+state.tent.widthFt/2,p.z+state.tent.lengthFt/2);callbacks.onPlace?.();}}return;}if(!drag)return;const finished=drag;drag=null;if(guests)guests.visible=showGuests;if(styling)styling.visible=showStyling;controls.enableRotate=true;
+    pointers.delete(e.pointerId);if(placementPointer?.id===e.pointerId){placementPointer=null;if(e.type!=='pointercancel'){const p=groundPoint(e);if(p){callbacks.onPlacementMove?.(p.x+state.tent.widthFt/2,p.z+state.tent.lengthFt/2);callbacks.onPlace?.();}}return;}if(!drag)return;const finished=drag;drag=null;if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;if(styling)styling.visible=showStyling;controls.enableRotate=true;
     if(e.type==='pointercancel'){const originals=finished.kind==='item'?[finished.orig]:finished.orig;state.objects=state.objects.map(o=>({...o,...originals.find(a=>a.id===o.id)}));furnitureKey='';rebuild(state);return;}
     if(finished.kind==='item'){const o=state.objects.find(x=>x.id===finished.id);if(o)callbacks.onMove?.(o.id,o.x,o.y);}
     else{const updates=state.objects.filter(o=>finished.ids.includes(o.id)).map(o=>({id:o.id,x:o.x,y:o.y}));const first=updates[0];if(first)callbacks.onMove?.(first.id,first.x,first.y);}
@@ -176,19 +177,19 @@ export function init(container,callbacks={}) {
   }
   renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',up);
   const ro=new ResizeObserver(resize);ro.observe(container);resize();
-  function loop(now=0){if(destroyed)return;raf=requestAnimationFrame(loop);const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;controls.update();if(container.clientWidth&&container.clientHeight&&!document.hidden){if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){weather?.userData.update(animationTime);if(showGuests){guests?.userData.update(animationTime);renderer.shadowMap.needsUpdate=true;}animationTime=0;dirty=true;}if(dirty){renderer.render(scene,camera);dirty=false;}}}
+  function loop(now=0){if(destroyed)return;raf=requestAnimationFrame(loop);const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;controls.update();if(container.clientWidth&&container.clientHeight&&!document.hidden){if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){weather?.userData.update(animationTime);if(showGuests){guests?.userData.update(animationTime);inflatableActivity?.userData.update(animationTime);renderer.shadowMap.needsUpdate=true;}animationTime=0;dirty=true;}if(dirty){renderer.render(scene,camera);dirty=false;}}}
   loop();document.addEventListener('visibilitychange',invalidate);
   function setNight(value){night=!!value;scene.background?.dispose?.();scene.background=sky(night,weatherMode==='rain');scene.fog.color.set(night?0x203044:weatherMode==='rain'?0x9eafb5:0xdde8df);scene.fog.density=weatherMode==='rain'?.004:.002;hemi.intensity=night?.7:weatherMode==='rain'?1.25:1.65;sun.intensity=night?.25:weatherMode==='rain'?.65:3.2;fill.intensity=night?.4:.7;renderer.toneMappingExposure=night?1.18:1.05;weather?.userData.setNight(night);environment?.userData.setNight(night);lightGroup?.userData.setNight?.(night);renderer.shadowMap.needsUpdate=true;invalidate();}
   function setScene(options={}){
     showStyling=options.styling!==false;if(styling)styling.visible=showStyling;
     weatherMode=options.weather==='rain'?'rain':'clear';showGuests=!!options.guests;motion=options.motion!==false;
-    weather?.userData.setWeather(weatherMode);if(guests)guests.visible=showGuests;
+    weather?.userData.setWeather(weatherMode);if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;
     setNight(!!options.night);invalidate();
   }
   function inside(){if(state?.tent){cameraMode='inside';frame(state.tent);}}
   function fitCamera(){if(state?.tent){cameraMode='outside';frame(state.tent);return true;}return false;}
   function playTimelapse(){cancelAnimationFrame(animationFrame);const start=performance.now();function tick(now){if(destroyed)return;const k=Math.min(1,(now-start)/2200);structure.scale.y=Math.max(.02,1-Math.pow(1-k,3));renderer.shadowMap.needsUpdate=true;invalidate();if(k<1)animationFrame=requestAnimationFrame(tick);}animationFrame=requestAnimationFrame(tick);}
-  const api={inside,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
+  const api={inside,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
   active=api;return api;
 }
 export function update(s){active?.rebuild(s);}

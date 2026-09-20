@@ -33,7 +33,8 @@ function validateScene(scene) {
     if (scene[key] !== undefined && !Array.isArray(scene[key])) return `${key} must be an array`;
     if (Array.isArray(scene[key]) && scene[key].length > MAX_OBJECTS) return `Too many ${key} in this design`;
   }
-  if (scene.tentId !== undefined && typeof scene.tentId !== 'string') return 'Invalid tentId';
+  // Outdoor inflatable layouts intentionally have no tent selection.
+  if (scene.tentId != null && typeof scene.tentId !== 'string') return 'Invalid tentId';
   return null;
 }
 function normalizedBody(body) {

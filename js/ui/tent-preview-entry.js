@@ -3,16 +3,18 @@
 (function () {
   'use strict';
   var q = new URLSearchParams(location.search);
-  if (!(q.get('focus') === 'tent' && q.get('autoplace') === '1')) return;
+  var inflatable = q.get('focus') === 'inflatable';
+  if (!((q.get('focus') === 'tent' || inflatable) && q.get('autoplace') === '1')) return;
   window.RENTSKETCH_TENT_PREVIEW = true;
+  var noun=inflatable?'inflatable':'tent',previewMode=inflatable?'inflatable-preview':'tent-preview';
   var tenantSlug = q.get('tenant') || 'generic';
   var requestedProductId = q.get('productId') || '';
-  var requestedSlug = q.get('tentSlug') || '';
-  var requestedName = q.get('tent') || '';
+  var requestedSlug = q.get(inflatable?'productSlug':'tentSlug') || '';
+  var requestedName = q.get(inflatable?'product':'tent') || '';
   var readySent = false, failed = false, tent = null, startedAt = Date.now();
   var want3d = q.get('view') !== '2d';
   var bridge;
-  document.body.classList.add('tent-preview');
+  document.body.classList.add('tent-preview');if(inflatable)document.body.classList.add('inflatable-preview');
 
   function normalize(value) {
     return String(value || '').toLowerCase().replace(/×/g, 'x').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
@@ -29,24 +31,24 @@
   var status = document.createElement('div');
   status.id = 'tentPreviewStatus';
   status.setAttribute('role', 'status');
-  status.textContent = 'Loading your tent…';
+  status.textContent = 'Loading your '+noun+'…';
   document.querySelector('.canvas-viewport').appendChild(status);
   var title = document.getElementById('toolbarEventTitle');
-  title.textContent = 'Your ' + (requestedName || 'tent');
+  title.textContent = 'Your ' + (requestedName || noun);
   var meta = document.getElementById('toolbarEventMeta');
-  meta.textContent = 'Explore your tent, then make it your event.';
+  meta.textContent = 'Explore your '+noun+', then make it your event.';
   var actions = document.createElement('div');
   actions.className = 'tent-preview-actions';
   actions.innerHTML = '<p>Add your own items, or try an editable party setup.</p><button type="button" class="btn-secondary" id="previewParty" disabled>Try a Party Setup</button><button type="button" class="btn-primary" id="designMyEvent" disabled>Design My Event</button>';
   document.querySelector('.designer-shell').appendChild(actions);
   var design = document.getElementById('designMyEvent');
-  var party = document.getElementById('previewParty');
+  var party = document.getElementById('previewParty');if(inflatable){party.hidden=true;actions.querySelector('p').textContent='Preview the action, then arrange your outdoor event.';}
   party.addEventListener('click',function(){if(bridge?.buildPartyScene?.()){party.textContent='Party Setup Added';party.disabled=true;party.hidden=true;actions.querySelector('p').textContent='Your party setup is ready. Make it yours.';}});
 
   function continueDesigning() {
     if (!tent) return;
     window.RENTSKETCH_TENT_PREVIEW = false;
-    document.body.classList.remove('tent-preview');
+    document.body.classList.remove('tent-preview','inflatable-preview');
     document.body.classList.add('product-designer');
     actions.remove();
     status.remove();
@@ -54,7 +56,7 @@
     // or view mode. The preview and full designer use this same live scene.
     bridge.refreshAll();
     window.dispatchEvent(new Event('resize'));
-    window.dispatchEvent(new CustomEvent('rentsketch:designStarted', { detail: { tentId: tent.id, productId: tent.productId } }));
+    window.dispatchEvent(new CustomEvent('rentsketch:designStarted', { detail: { tentId: inflatable?null:tent.id, productId: tent.productId } }));
   }
   design.addEventListener('click', function () {
     var entry = window.RentSketchCustomerEntry;
@@ -67,7 +69,7 @@
     readySent = true;
     status.hidden = true;
     design.disabled = false;party.disabled=false;
-    try { parent.postMessage({ type: 'rentsketch.ready', mode: 'tent-preview', tenant: tenantSlug, productId: tent.productId || null, externalId: tent.externalId || null, tentId: tent.id, tentName: tent.name, renderer: renderer }, '*'); } catch (_) {}
+    try { parent.postMessage({ type: 'rentsketch.ready', mode: previewMode, tenant: tenantSlug, productId: tent.productId || null, externalId: tent.externalId || null, tentId: inflatable?null:tent.id, tentName: inflatable?null:tent.name, productName: tent.name, renderer: renderer }, '*'); } catch (_) {}
   }
   function fail(reason) {
     if (failed) return;
@@ -77,14 +79,14 @@
       want3d = false;
       bridge.setViewMode('plan');
       status.hidden = false;
-      status.textContent = '3D is unavailable right now. Your tent is ready in 2D.';
+      status.textContent = '3D is unavailable right now. Your '+noun+' is ready in 2D.';
       design.disabled = false;party.disabled=false;
       ready('2d');
       status.hidden = false;
     } else {
       status.hidden = false;
-      status.textContent = 'We couldn’t load this exact tent. Please close the preview and try again.';
-      try { parent.postMessage({ type: 'rentsketch.error', mode: 'tent-preview', tenant: tenantSlug, productId: requestedProductId || null, reason: String(reason) }, '*'); } catch (_) {}
+      status.textContent = 'We couldn’t load this exact '+noun+'. Please close the preview and try again.';
+      try { parent.postMessage({ type: 'rentsketch.error', mode: previewMode, tenant: tenantSlug, productId: requestedProductId || null, reason: String(reason) }, '*'); } catch (_) {}
     }
   }
   function waitFor3d() {
@@ -107,13 +109,14 @@
       if (Date.now() - startedAt > 15000) return fail('Tenant catalog or designer did not become ready');
       return setTimeout(boot, 50);
     }
-    tent = findTent(bridge.TENTS || []);
-    if (!tent) return fail('Requested tent not found in the live tenant catalog');
+    tent = findTent((inflatable?bridge.INFLATABLES:bridge.TENTS) || []);
+    if (!tent) return fail('Requested '+noun+' not found in the live tenant catalog');
     title.textContent = 'Your ' + tent.name;
-    meta.textContent = tent.widthFt + ' × ' + tent.lengthFt + ' ft · ' + (window.ACTIVE_TENANT.name || 'RentSketch');
-    bridge.state.tentId = tent.id;
+    meta.textContent = (inflatable?(tent.dimensionsConfirmed?tent.widthFt+' × '+tent.depthFt+' ft':'Illustrative model · confirm dimensions'):tent.widthFt+' × '+tent.lengthFt+' ft')+' · '+(window.ACTIVE_TENANT.name||'RentSketch');
+    if(inflatable){bridge.openInflatablePreview(tent);var ref=document.createElement('div');ref.className='product-reference';if(tent.photoUrl){var img=document.createElement('img');img.src=tent.photoUrl;img.alt=tent.name+' rental photo';ref.appendChild(img);}var caption=document.createElement('span');caption.textContent='Your rental photo · The model and children illustrate the setup. Confirm dimensions and clear space with your rental company.';ref.appendChild(caption);actions.prepend(ref);}
+    else {bridge.state.tentId = tent.id;
     bridge.state.guestCount = 0;
-    bridge.customizeFromScratch();
+    bridge.customizeFromScratch();}
     // Paint the exact 2D footprint while WebGL initializes, rather than exposing
     // an empty canvas or a questionnaire. It remains available if 3D fails.
     if (want3d) {

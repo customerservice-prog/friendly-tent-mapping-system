@@ -117,7 +117,7 @@ export function checkTentEdgeConflicts(objects, tent) {
   objects.forEach(function (obj) {
     var rect = rectFromObject(obj);
     if (!rectContains(tentRect, rect)) {
-      results.push(conflict(CONFLICT_TYPES.TENT_EDGE_CONFLICT, SEVERITY.ERROR, [obj.id], 'This item extends beyond the tent boundary.'));
+      results.push(conflict(CONFLICT_TYPES.TENT_EDGE_CONFLICT, SEVERITY.ERROR, [obj.id], tent.isSite?'This item extends beyond your outdoor planning area.':'This item extends beyond the tent boundary.'));
     }
   });
   return results;

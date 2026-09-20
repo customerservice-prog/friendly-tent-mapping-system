@@ -2,6 +2,7 @@ import { escapeHtml } from './equipment-controls.js';
 import { dancePositions } from '../core/suggested-layout.js';
 
 export function setupPanel(state, tent, hasObjects) {
+  if(tent.isSite)return `<div class="quick-setup"><h3>Your outdoor space</h3><p class="equipment-note">Set your planning area. Inflatable model dimensions are illustrative unless confirmed by your rental company.</p><div class="outdoor-size"><label class="equipment-field">Width (ft)<input id="siteWidth" type="number" min="20" max="200" value="${state.siteWidthFt}"></label><label class="equipment-field">Length (ft)<input id="siteLength" type="number" min="20" max="200" value="${state.siteLengthFt}"></label></div><form id="quickSetupForm"><label class="equipment-field">How many seats?<input name="guests" type="number" min="1" max="1000" value="${state.guestCount||16}" required></label><input type="hidden" name="dance" value="0"><p class="equipment-note">Your inflatables stay in place. Suggested seating replaces the other items; Undo brings them back.</p><button class="btn-primary">Suggest Seating Around My Inflatables</button></form></div>`;
   const floors = [6,9,12,15,18,21,24].filter(ft => dancePositions(tent, ft).length);
   return `<form id="quickSetupForm" class="quick-setup">
     <p class="setup-tent">${escapeHtml(tent.name)} stays selected.</p>
@@ -20,6 +21,7 @@ export function setupPanel(state, tent, hasObjects) {
 }
 
 export const railIcons = {
+  inflatables: '<path d="M3 21V8h18v13M3 8V3l3 3M21 8V3l-3 3M7 21v-9h10v9M1 21h22"/>',
   tent: '<path d="M3 19V10l9-7 9 7v9M3 10h18M12 3v16M1 21h22"/>',
   tables: '<ellipse cx="12" cy="9" rx="9" ry="4"/><path d="M5 12v8m14-8v8M12 13v8"/>',
   chairs: '<path d="M6 13V4h12v9M4 13h16v4H4zM6 17v4m12-4v4"/>',

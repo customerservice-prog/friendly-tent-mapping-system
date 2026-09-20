@@ -8,11 +8,12 @@ w.fetch=()=>{throw new Error('No network calls permitted');};
 if(!w.HTMLDialogElement.prototype.showModal)w.HTMLDialogElement.prototype.showModal=function(){this.open=true;};
 if(!w.HTMLDialogElement.prototype.close)w.HTMLDialogElement.prototype.close=function(){this.open=false;this.dispatchEvent(new w.Event('close'));};
 const context=dom.getInternalVMContext(),cache=new Map();
-async function load(file){
+function moduleFor(file){
  if(cache.has(file))return cache.get(file);
  const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file,initializeImportMeta(meta){meta.url=require('node:url').pathToFileURL(file).href;},importModuleDynamically:async(spec,ref)=>{const dep=await load(path.resolve(path.dirname(ref.identifier),spec));if(dep.status!=='evaluated')await dep.evaluate();return dep;}});
- cache.set(file,m);await m.link((spec,ref)=>load(path.resolve(path.dirname(ref.identifier),spec)));return m;
+ cache.set(file,m);return m;
 }
+async function load(file){const m=moduleFor(file);if(m.status==='unlinked')await m.link((spec,ref)=>moduleFor(path.resolve(path.dirname(ref.identifier),spec)));return m;}
 const settle=()=>new Promise(resolve=>setImmediate(resolve));
 const click=selector=>{const el=d.querySelector(selector);assert.ok(el,selector);el.focus();el.click();};
 const change=(role,value)=>{const el=d.querySelector(`.ts-dialog [data-role="${role}"]`);el.focus();el.value=value;el.dispatchEvent(new w.Event('change',{bubbles:true}));};

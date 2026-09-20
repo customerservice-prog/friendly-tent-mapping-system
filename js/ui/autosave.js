@@ -22,6 +22,6 @@ function bind(){var b=bridge();if(!b.getScene){setTimeout(bind,100);return;}if(!
 bind();
 }
 window.addEventListener('rentsketch:designStarted',function(){start(true);},{once:true});
-function boot(){if(params.get('focus')==='tent'&&params.get('autoplace')==='1')return;if(!window.RENTSKETCH_CATALOG_READY){window.addEventListener('rentsketch:catalogReady',function(){start(false);},{once:true});return;}start(false);}
+function boot(){if(['tent','inflatable'].includes(params.get('focus'))&&params.get('autoplace')==='1')return;if(!window.RENTSKETCH_CATALOG_READY){window.addEventListener('rentsketch:catalogReady',function(){start(false);},{once:true});return;}start(false);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();

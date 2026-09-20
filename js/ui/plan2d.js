@@ -4,6 +4,8 @@
 // default editing surface: it is easier to scan and arrange a layout from
 // directly above than in a 3D perspective view.
 
+import { byId as inflatableById } from '../data/inflatables.js';
+import { inflatablePlanSvg } from './inflatable-controls.js';
 import { chairPlanSvg } from './equipment-symbols.js';
 import { chairPositions } from '../core/seating.js';
 import { byId as chairById } from '../data/chairs.js';
@@ -248,6 +250,7 @@ function render(data) {
   stageEl.style.width = size.w + 'px';
   stageEl.style.height = size.h + 'px';
   stageEl.style.setProperty('--plan-grid-size',pxPerFt+'px');
+  stageEl.classList.toggle('is-outdoor',!!tent.isSite);
   stageEl.dataset.dimensions = tent.widthFt+' × '+tent.lengthFt+' ft';
   stageEl.setAttribute('role','group');
   stageEl.setAttribute('aria-label',tent.name+' floor plan');
@@ -315,12 +318,14 @@ renderLighting(data, tent);
   displayObjects.forEach(function (item) {
   const wrap = document.createElement('div');
   const isDance = item.kind === 'dance';
+  const inflatable = item.kind==='inflatable'?inflatableById(item.inflatableId):null;
   const tableDef = (!isDance && item.kind === 'table') ? tableById(item.tableId) : null;
   const silhouette = tableDef ? tableDef.silhouette : null;
   const shapeClass = isDance ? 'rect dance' : (item.shape === 'round' ? 'round' : 'rect');
   const silhouetteClass = silhouette ? ' plan2d-table--' + silhouette : '';
   var linenClass = linenVisual(item.linenId) ? ' plan2d-linen--' + linenVisual(item.linenId) : '';
   wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + linenClass + ' ' + severityClass(data, item.id) + ((selectedDanceGroup ? item.kind === 'dance' : data.selectedId === item.id) ? ' selected' : '');
+  if(inflatable)wrap.classList.add('inflatable');
   if(item.preview)wrap.classList.add('placement-ghost');
   const disp = toDispXY(item.x, item.y);
   const dispSize = toDispWD(item.widthFt, item.depthFt);
@@ -333,12 +338,12 @@ renderLighting(data, tent);
   wrap.tabIndex = item.preview?-1:0;
   if(item.preview)wrap.dataset.preview='true';
   wrap.setAttribute('role','button');
-  wrap.setAttribute('aria-label',(isDance?'Dance floor section':(tableDef?.name||'Table'))+' · '+(item.seatCount||0)+' seats');
+  wrap.setAttribute('aria-label',inflatable?inflatable.name+' · move or edit':(isDance?'Dance floor section':(tableDef?.name||'Table'))+' · '+(item.seatCount||0)+' seats');
   wrap.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();callbacks.onSelect?.(item.id);}});
 
                              const top = document.createElement('div');
   top.className = 'plan2d-table-top';
-  top.innerHTML = isDance ? '<span class="parquet-quadrants"><i></i><i></i><i></i><i></i></span>' : item.linenId ? '' : tableTopDetailHtml(silhouette);
+  top.innerHTML = inflatable ? inflatablePlanSvg(inflatable,rotate90?90-(item.rotationDeg||0):(item.rotationDeg||0)) : isDance ? '<span class="parquet-quadrants"><i></i><i></i><i></i><i></i></span>' : item.linenId ? '' : tableTopDetailHtml(silhouette);
   if(['linen-runner-9ft','linen-napkins'].includes(item.linenId)){
     const accent=document.createElement('span');accent.className=item.linenId==='linen-napkins'?'plan2d-napkin':'plan2d-runner';
     accent.style.background=linenColorHex(item.linenColor);
