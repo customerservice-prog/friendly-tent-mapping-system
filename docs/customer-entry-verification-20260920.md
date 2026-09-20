@@ -14,6 +14,21 @@ Scope: RentSketch customer entry and Friendly Party Rental's tent product → pr
 - Automated: direct, generic and demo entry starts without a rental-catalog request or Friendly seed prices. Demo has furniture; generic review offers sharing instead of a quote to an unconnected rental provider.
 - The full existing frontend test suite passed. After discovering mobile clipping, the 51-case suite passed again with actual 2D stage-size bounds.
 
+## Post-deployment follow-up
+
+Verified against application commit `18abbf43420fadb09a27340e59a3612425d12db9` on 20 September 2026.
+
+| Check | Result and evidence |
+| --- | --- |
+| Final 40 × 100 mobile crop fix | Live pass at a 320 × 640 CSS viewport. Screenshot inspected: the whole tent and all five center poles are visible. The floor plan measures 137.1875 × 343 pixels inside the 320 × 375.421875-pixel preview; all four edges fit. |
+| Direct RentSketch entry | Live pass at 320 pixels wide. The 20 × 20 tent is immediately visible with zero tables/seats and “Confirm pricing,” without the Friendly $250 seed price. |
+| Generic party setup → review | Live pass. “Try a Party Setup” adds 16 seats and three tables; “Review & Share” opens review with the tent, two dining tables, a cocktail table, chairs, linens and four dance-floor sections. All seven rental lines say “Confirm pricing.” Sharing/export controls are visible and the quote-request CTA is absent. Exports were not exercised. |
+| Friendly homepage and landing-page destinations | Live HTTP/source pass. Both pages return 200. The homepage “Design My Event” link and all three landing-page CTAs use `https://rentsketch.com/designer/?tenant=friendly&embed=1&v=20260919-integration`. Navigation links to `/design-your-event`. This does not verify opening the mobile menu or clicking its links. |
+| Final production source | All seven retrieved files return 200 and match repository bytes: `index.html`, `demo/index.html`, `designer/index.html`, `script.js`, `js/ui/customer-entry.js`, `js/ui/tent-preview-entry.js`, and `js/ui/plan2d.js`. |
+| Railway frontend | Deployment `c43bb8ae-1941-4de3-b1d9-6c6fb30a31fb` reports SUCCESS for application commit `18abbf4`. This is deployment evidence only. |
+
+The demo was selected in the responsive fixture, but the browser disconnected before its rendered result could be inspected. It is not counted as a live pass. Its redirect and furnished-entry behavior remain covered by the previously passing source/automated checks.
+
 ## Fixed during this pass
 
 1. Imported 40 × 100 Pole Tent did not open from Friendly because its visual mapping was missing. Supported tent dimensions/type can now resolve the existing model without changing the requested product's identity.
@@ -47,6 +62,6 @@ Scope: RentSketch customer entry and Friendly Party Rental's tent product → pr
 
 ## Remaining verification limits
 
-The browser has WebGL disabled. Live checks used the automatic 2D recovery or the explicit 2D mobile entry. Renderer/controller tests use real geometry with a stub renderer; they do not verify GPU shading or appearance. CSS phone viewports do not emulate physical phone touch hardware.
+The earlier browser had WebGL disabled. Live tent checks used the automatic 2D recovery or the explicit 2D mobile entry. Renderer/controller tests use real geometry with a stub renderer; they do not verify GPU shading or appearance. The replacement browser disconnected before WebGL could be checked again. CSS phone viewports do not emulate physical phone touch hardware.
 
-The browser/workspace environment disconnected after the tent matrix. The final 2D crop fix had passed the bounded-size tests but has not been visually rechecked after deployment. Post-fix live generic/demo entry and Friendly's mobile homepage/navigation still need browser checks. A successful deployment does not clear those remaining checks.
+The final crop fix and generic direct entry have now passed live checks, as recorded above. The remaining browser checks are the post-fix demo, RentSketch's mobile homepage entry buttons, and Friendly's mobile homepage/menu/landing-page interactions. The browser connection continued to time out after reconnection attempts, so these remain open. A successful deployment or a correct link destination does not clear them.
