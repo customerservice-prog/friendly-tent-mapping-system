@@ -9,7 +9,7 @@
     "jsdom": "30.1.0",
     "three": "0.160.0",
     "@electric-sql/pglite": "0.5.8",
-    "express": "4.19.2",
+    "express": "4.22.3",
     "jsonwebtoken": "9.0.2"
   }
 }
