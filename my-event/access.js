@@ -5,11 +5,13 @@
   var query = new URLSearchParams(location.search);
   var orderPanel = document.getElementById('orderAccess');
   if (query.get('mode') === 'order') {
+    document.body.classList.add('order-access-page');
     orderPanel.open = true;
     document.getElementById('paidAccess').hidden = true;
     document.getElementById('paidAccessLink').hidden = false;
     document.querySelector('h1').textContent = 'Design your booked event.';
-    document.querySelector('.intro').textContent = 'Already booked with Friendly Party Rental? Get the layout access included with your confirmed order.';
+    document.querySelector('.eyebrow').textContent = 'Included with Friendly';
+    document.querySelector('.intro').textContent = 'Enter your order number and booking email. We’ll send your private link. No design fee.';
     document.getElementById('orderNumber').value = (query.get('order') || '').slice(0,80);
   }
   var orderForm = document.getElementById('orderAccessForm');
@@ -26,8 +28,8 @@
       var result = await response.json(); if (!response.ok) throw new Error(result.error || 'Please try again shortly.');
       message.textContent = 'If these details match a qualifying Friendly booking, we’ll email its private access link. Check your inbox and spam folder. No payment is needed to request the link.';
       submit.textContent = 'Link requested';
-      setTimeout(function () { submit.disabled = false; submit.textContent = 'Email my included access link again'; }, 60000);
-    } catch (error) { message.textContent = error.name === 'AbortError' ? 'The booking check took too long. Please try again shortly.' : error.message; submit.disabled = false; submit.textContent = 'Email my included access link'; }
+      setTimeout(function () { submit.disabled = false; submit.textContent = 'Email my access link again'; }, 60000);
+    } catch (error) { message.textContent = error.name === 'AbortError' ? 'The booking check took too long. Please try again shortly.' : error.message; submit.disabled = false; submit.textContent = 'Email my access link'; }
     finally { clearTimeout(timer); }
   });
   document.querySelectorAll('[data-preview]').forEach(function (link) { link.href = '/designer/' + (tenant ? '?tenant=' + encodeURIComponent(tenant) : ''); });
