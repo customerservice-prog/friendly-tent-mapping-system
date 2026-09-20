@@ -1,0 +1,9 @@
+// Exercise quote serialization with an in-memory DB. No outbound notifications.
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
+let handler;const writes=[];
+const router={post:(p,f)=>handler=f,get(){},patch(){}};
+const db={query:async(sql,args)=>{if(sql.startsWith('SELECT * FROM tenants'))return {rows:[{id:'fixture-tenant',slug:'friendly'}]};writes.push(args);return {rows:[{id:'fixture-quote'}]};}};
+const dependencies={express:{Router:()=>router},'../db':db,'../mailer':{getMailer:()=>null},'../middleware/requireAuth':{requireTenantRole:()=>()=>{}},'../orderProviders/quoteRequestOrderProvider':{},'../outboundWebhook':{}};
+vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../server/src/routes/quoteRequests.js'),'utf8'),{console,module:{exports:{}},require:id=>id==='crypto'?require(id):dependencies[id],fetch:()=>{throw Error('No outbound calls allowed');}});
+async function send(total,amount){let status;await handler({params:{slug:'friendly'},headers:{},socket:{remoteAddress:'isolated'},body:{customerName:'Isolated test',customerEmail:'test@example.invalid',estimateTotal:total,lineItems:[{label:'Delivery',qty:1,unitPrice:amount,amount,category:'delivery'}]}},{status:n=>{status=n;return {json(){}};}});assert.equal(status,201);}
+(async()=>{await send(null,null);assert.equal(writes[0][9],null);assert.equal(JSON.parse(writes[0][8])[0].amount,null);assert.equal(JSON.parse(writes[0][8])[0].unitPrice,null);await send(361.79,49.99);assert.equal(writes[1][9],361.79);await send(0,0);assert.equal(writes[2][9],0);assert.equal(JSON.parse(writes[2][8])[0].amount,0);console.log('PASS quote pricing: unknown costs stay null, complete estimates and real zero costs survive storage; isolated DB, no emails or webhooks.');})().catch(e=>{console.error(e);process.exitCode=1;});

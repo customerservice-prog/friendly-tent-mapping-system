@@ -20,30 +20,39 @@ export const LIGHTING_OPTIONS = [
 ];
 export function byId(id){return LIGHTING_OPTIONS.find(l=>l.id===id);}
 
+const LIGHTING_LABELS=new Map(LIGHTING_OPTIONS.map(o=>[o.id,o.name]));
+export const LIGHTING_PRODUCTS_BY_SIZE=new Map();
+let liveCatalogLoaded=false;
+export function lightingForTent(id,tent){
+ const option=byId(id);if(!option)return null;if(id==='lighting-none')return option;
+ const sized=LIGHTING_PRODUCTS_BY_SIZE.get(id),key=tent?tent.widthFt+'x'+tent.lengthFt:'';
+ const exact=sized?.get(key)||sized?.get(tent?.lengthFt+'x'+tent?.widthFt);
+ if(exact)return {...option,...exact,id:option.id,available:true,dynamic:false};
+ if(sized?.size)return {...option,productId:null,pricePerDay:null,available:false};
+ return {...option,available:!liveCatalogLoaded||!!option.productId,pricePerDay:option.dynamic?tentLightingPriceFor(tent):option.pricePerDay};
+}
 function resetLivePricing(){
+  LIGHTING_PRODUCTS_BY_SIZE.clear();
   Object.keys(TENT_LIGHTING_PRICE_BY_SIZE).forEach(k=>{TENT_LIGHTING_PRICE_BY_SIZE[k]=null;});
-  LIGHTING_OPTIONS.forEach(o=>{if(o.id!=='lighting-none'){o.pricePerDay=null;delete o.productId;}});
+  LIGHTING_OPTIONS.forEach(o=>{if(o.id!=='lighting-none'){o.pricePerDay=null;o.name=LIGHTING_LABELS.get(o.id);delete o.productId;delete o.photoUrl;}});
 }
 function numericPrice(p){if(!p||p.price_per_day==null||p.price_per_day==='')return null;const n=Number(p.price_per_day);return Number.isFinite(n)?n:null;}
 function applyTenantLighting(detail){
   resetLivePricing();
   const tenant=detail&&detail.tenant||window.ACTIVE_TENANT||{};
-  if(tenant.slug==='generic'||tenant.showPrices===false)return;
+  liveCatalogLoaded=tenant.slug!=='generic';
+  const showPrices=tenant.slug!=='generic'&&tenant.showPrices!==false;
   const products=Array.isArray(detail&&detail.products)?detail.products:[];
   products.filter(p=>p&&p.active!==false&&String(p.category||'').toLowerCase()==='lighting').forEach(p=>{
-    const price=numericPrice(p);if(price==null)return;
-    const visual=p.visual_model_id;
-    if(visual==='lighting-tent'){
-      const w=Number(p.width_ft),l=Number(p.length_ft);
-      if(Number.isFinite(w)&&Number.isFinite(l)){
-        const direct=w+'x'+l,reverse=l+'x'+w;
-        if(Object.prototype.hasOwnProperty.call(TENT_LIGHTING_PRICE_BY_SIZE,direct))TENT_LIGHTING_PRICE_BY_SIZE[direct]=price;
-        else if(Object.prototype.hasOwnProperty.call(TENT_LIGHTING_PRICE_BY_SIZE,reverse))TENT_LIGHTING_PRICE_BY_SIZE[reverse]=price;
-      }
-      return;
-    }
-    const option=LIGHTING_OPTIONS.find(o=>o.id===visual&&!o.dynamic);
-    if(option){option.pricePerDay=price;option.productId=p.id;if(p.name)option.name=p.name;}
+    const visual=p.visual_model_id,option=byId(visual);if(!option)return;
+    const value={name:p.name||option.name,pricePerDay:showPrices?numericPrice(p):null,productId:p.id,photoUrl:/^https?:\/\//i.test(p.photo_url||'')?p.photo_url:null};
+    const w=Number(p.width_ft),l=Number(p.length_ft);
+    if(w>0&&l>0){
+      if(!LIGHTING_PRODUCTS_BY_SIZE.has(visual))LIGHTING_PRODUCTS_BY_SIZE.set(visual,new Map());
+      LIGHTING_PRODUCTS_BY_SIZE.get(visual).set(w+'x'+l,value);
+      if(visual==='lighting-tent')TENT_LIGHTING_PRICE_BY_SIZE[w+'x'+l]=value.pricePerDay;
+    }else Object.assign(option,value);
   });
 }
+
 if(typeof window!=='undefined')window.addEventListener('rentsketch:catalogReady',e=>applyTenantLighting(e.detail||{}));

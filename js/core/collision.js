@@ -172,8 +172,8 @@ export function checkSurfaceAnchoringConflicts(tent, surfaceType) {
   var results = [];
   if (!tent || !surfaceType || surfaceType === 'notSure') return results;
   var method = resolveAnchoringMethod(tent.type, surfaceType);
-  if (method === 'ballast' && tent.type === 'pole') {
-    results.push(conflict(CONFLICT_TYPES.SURFACE_ANCHOR_CONFLICT, SEVERITY.WARNING, [], 'This tent normally anchors with ground stakes, but a hard surface was selected. Confirm a ballasted (weighted) installation with the rental company before booking.'));
+  if (['concrete','asphalt','deck'].includes(surfaceType) && tent.type === 'pole') {
+    results.push(conflict(CONFLICT_TYPES.SURFACE_ANCHOR_CONFLICT, SEVERITY.WARNING, [], 'This pole tent needs a suitable staking surface. Choose a frame tent for pavement, or confirm a different site with your rental company.'));
   }
   return results;
 }

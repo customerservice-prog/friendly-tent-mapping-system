@@ -93,5 +93,6 @@ export function structuralProfile(type, widthFt, lengthFt) {
 export function installationClearanceFt(type) { return type === 'pole' ? 5 : 2; }
 export function resolveAnchoringMethod(tentType, surfaceType) {
   if (!surfaceType || surfaceType === 'notSure') return null;
+  if(tentType==='pole' && HARD_SURFACES.includes(surfaceType))return null;
   return HARD_SURFACES.indexOf(surfaceType) !== -1 ? 'ballast' : 'stake';
 }

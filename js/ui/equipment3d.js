@@ -49,17 +49,56 @@ export function makeChair(def={}) {
     for(const x of [-w*.23,0,w*.23])rod(g,[x,2.02,-d*.42],[x,h-.09,-d*.42],.023,frame);
     rod(g,[-w*.43,.48,d*.4],[w*.43,.48,d*.4],.024,frame);
   } else if(def.silhouette==='throne') {
-    const backH=h-seatY-.1;
-    panel(g,w*.92,backH,.18,frame,0,seatY+backH/2,-d*.43,{bend:.12});
-    panel(g,w*.76,backH-.28,.19,cushion,0,seatY+backH/2,-d*.39,{bend:.07});
-    for(const x of [-w*.25,0,w*.25])for(const y of [seatY+.5,seatY+1.1,seatY+1.7])if(y<h-.2)add(g,new THREE.SphereGeometry(.035,7,5),frame,x,y,-d*.28);
-    for(const x of [-w*.46,w*.46]){
-      rod(g,[x,0,d*.34],[x,seatY+.55,d*.34],.075,frame);
-      rod(g,[x,.05,-d*.36],[x,h-.12,-d*.4],.065,frame);
-      box(g,.16,.14,d*.83,frame,x,seatY+.6,0,.06);
-      add(g,new THREE.SphereGeometry(.13,10,6),frame,x,h-.04,-d*.4);
+    const king=def.id==='throne-king',backH=h-seatY-.25,bw=w*(king?.59:.90),bz=-d*.38;
+    // Both Friendly references have ivory upholstery and carved gold frames.
+    // King: a narrow arched back with posts. Queen: a broad, flared scalloped back.
+    const outline=(width,height)=>{
+      const sh=new THREE.Shape(),hw=width/2;
+      sh.moveTo(-hw*.78,0);sh.bezierCurveTo(-hw*.72,height*.30,-hw*1.03,height*.63,-hw,height*.78);
+      sh.bezierCurveTo(-hw*1.12,height*.97,-hw*.64,height*1.04,0,height);
+      sh.bezierCurveTo(hw*.64,height*1.04,hw*1.12,height*.97,hw,height*.78);
+      sh.bezierCurveTo(hw*1.03,height*.63,hw*.72,height*.30,hw*.78,0);sh.closePath();return sh;
+    };
+    const relief=(shape,depth,m,x,y,z)=>add(g,new THREE.ExtrudeGeometry(shape,{depth,bevelEnabled:true,bevelSegments:3,steps:1,bevelSize:.035,bevelThickness:.03,curveSegments:12}),m,x,y,z);
+    relief(outline(bw+.28,backH),.15,frame,0,seatY,bz-.12);
+    relief(outline(bw,backH-.15),.13,cushion,0,seatY+.08,bz+.025);
+    const edge=outline(bw+.14,backH-.07).getPoints(70).map(p=>new THREE.Vector3(p.x,seatY+p.y+.025,bz+.14));
+    add(g,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(edge,true),100,.032,6,true),frame);
+    const seam=cushion;
+    const rowH=.46,cols=king?3:5;
+    for(let row=0;row<Math.floor((backH-.35)/rowH);row++){
+      const y=seatY+.27+row*rowH,count=row%2?cols-1:cols;
+      for(let j=0;j<count;j++){
+        const x=(j-(count-1)/2)*bw/(cols+.4);
+        add(g,new THREE.SphereGeometry(.033,8,6),frame,x,y,bz+.18);
+        if(row<Math.floor((backH-.35)/rowH)-1)for(const sign of [-1,1]){
+          const nx=x+sign*bw/(cols+.4)/2;if(Math.abs(nx)<bw*.41)rod(g,[x,y,bz+.165],[nx,y+rowH,bz+.165],.008,seam,5);
+        }
+      }
     }
-    add(g,new THREE.SphereGeometry(.16,10,6),frame,0,h-.02,-d*.4);
+    const scroll=(x,y,z,r,sign=1)=>{
+      const points=[];for(let i=0;i<=36;i++){const f=i/36,a=f*Math.PI*3.1,rr=r*(1-f*.77);points.push(new THREE.Vector3(x+Math.cos(a)*rr*sign,y+Math.sin(a)*rr,z));}
+      add(g,new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points),36,.026,6,false),frame);
+    };
+    for(const side of [-1,1]){
+      const x=side*w*.45;
+      rod(g,[x*.95,.10,d*.36],[x,seatY+.64,d*.34],.075,frame,12);
+      rod(g,[x*.9,.10,-d*.32],[x,seatY+.65,-d*.36],.063,frame,12);
+      box(g,.25,.22,d*.8,cushion,x,seatY+.53,0,.09);
+      if(!king){rod(g,[x,seatY+.55,-d*.26],[x,seatY+.55,d*.32],.20,cushion,16);box(g,.17,.57,d*.66,cushion,x,seatY+.22,.01,.07);}
+      if(king)for(let i=0;i<4;i++)scroll(x,seatY-.1+i*.22,d*.43,.105,side);
+      rod(g,[x,seatY+.48,-d*.33],[x,seatY+.48,d*.40],.056,frame,12);
+      scroll(x,seatY+.50,d*.44,.14,side);
+      for(const y of [.20,.38,seatY-.25,seatY+.23])add(g,new THREE.SphereGeometry(.105,10,8),frame,x,y,d*.36);
+      for(let i=0;i<5;i++)scroll(side*(bw/2+.17),seatY+.32+i*(backH-.5)/5,bz+.16,.16,side);
+      if(king){rod(g,[x,seatY,-d*.4],[x,h-.28,-d*.4],.065,frame,12);for(const y of [seatY+.8,h-1,h-.38])add(g,new THREE.SphereGeometry(.105,10,8),frame,x,y,-d*.4);add(g,new THREE.ConeGeometry(.085,.3,12),frame,x,h-.15,-d*.4);}
+    }
+    box(g,w*.88,.24,d*.9,cushion,0,seatY+.10,.03,.1);
+    box(g,w,.12,.17,frame,0,seatY-.11,d*.48,.04);
+    for(const side of [-1,1]){scroll(side*w*.2,seatY-.27,d*.5,.23,side);scroll(side*bw*.25,h-.04,bz+.13,.20,side);}
+    for(const side of [-1,1])for(let i=0;i<5;i++){const leaf=add(g,new THREE.SphereGeometry(.095,8,6),frame,side*(.13+i*.10),h-.09+Math.sin(i*.65)*.14,bz+.12);leaf.scale.set(.65,1.8,.5);leaf.rotation.z=side*(.3+i*.25);}
+    const crest=add(g,new THREE.SphereGeometry(.13,12,8),frame,0,h+.035,bz+.13);crest.scale.y=1.35;
+    for(let i=0;i<15;i++)add(g,new THREE.SphereGeometry(.024,6,4),frame,-w*.42+i*w*.84/14,seatY+.21,d*.46);
   } else {
     const resin=def.silhouette==='resin',legR=resin?.047:.035;
     // True crossing folding supports, hinge hardware and a curved back panel.
@@ -192,4 +231,11 @@ export function makeDanceFloor(items,tent) {
   }
   mergeParts(g);g.position.set(cx-tent.widthFt/2,0,cz-tent.lengthFt/2);g.name='Parquet dance floor';
   g.userData={kind:'danceGroup',itemIds:items.map(o=>o.id)};g.traverse(q=>{q.userData.kind='danceGroup';q.userData.itemIds=g.userData.itemIds;});return g;
+}
+
+export function makeStandaloneChair(item){
+  const chair=makeChair(chairById(item.chairId)||{});
+  chair.rotation.y=-(item.rotationDeg||0)*Math.PI/180;
+  chair.userData={itemId:item.id,kind:'chair'};
+  chair.traverse(part=>{part.userData.itemId=item.id;});return chair;
 }

@@ -39,11 +39,11 @@
   meta.textContent = 'Explore your '+noun+', then make it your event.';
   var actions = document.createElement('div');
   actions.className = 'tent-preview-actions';
-  actions.innerHTML = '<p>Add your own items, or try an editable party setup.</p><button type="button" class="btn-secondary" id="previewParty" disabled>Try a Party Setup</button><button type="button" class="btn-primary" id="designMyEvent" disabled>Design My Event</button>';
+  actions.innerHTML = '<p><span class="preview-instructions">Add your own items, or try an editable party setup.</span> <button type="button" class="btn-tertiary" data-open-help>Help</button></p><button type="button" class="btn-secondary" id="previewParty" disabled>Try a Party Setup</button><button type="button" class="btn-primary" id="designMyEvent" disabled>Design My Event</button>';
   document.querySelector('.designer-shell').appendChild(actions);
   var design = document.getElementById('designMyEvent');
-  var party = document.getElementById('previewParty');if(inflatable){party.hidden=true;actions.querySelector('p').textContent='Preview the action, then arrange your outdoor event.';}
-  party.addEventListener('click',function(){if(bridge?.buildPartyScene?.()){party.textContent='Party Setup Added';party.disabled=true;party.hidden=true;actions.querySelector('p').textContent='Your party setup is ready. Make it yours.';}});
+  var party = document.getElementById('previewParty');if(inflatable){party.hidden=true;actions.querySelector('.preview-instructions').textContent='Preview the action, then arrange your outdoor event.';}
+  party.addEventListener('click',function(){if(bridge?.buildPartyScene?.()){party.textContent='Party Setup Added';party.disabled=true;party.hidden=true;actions.querySelector('.preview-instructions').textContent='Your party setup is ready. Make it yours.';}});
 
   function continueDesigning() {
     if (!tent) return;

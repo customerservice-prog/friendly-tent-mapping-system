@@ -30,6 +30,7 @@ app.use('/api/auth',authRoutes);
 app.use('/api/embed',embedRoutes);
 app.use('/api/tenants',tenantsRoutes);
 app.use('/api/tenants',productsRoutes);
+app.use('/api/tenants',require('./routes/reviewPricing'));
 app.use('/api/tenants',designsRoutes);
 app.use('/api/tenants',quoteRequestsRoutes);
 app.use('/api/tenants',feedbackRoutes);

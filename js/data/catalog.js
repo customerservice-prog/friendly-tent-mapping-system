@@ -30,6 +30,6 @@ export function liveCatalog(category, renderer, products, showPrices, requestedP
   }
   return selected.map(product=>{
     const raw=product.price_per_day,price=raw==null || raw==='' ? null : Number(raw);
-    return {...models.get(product.visual_model_id),id:product.catalogId,visualModelId:product.visual_model_id,productId:product.id,externalId:product.external_id || null,name:product.name || models.get(product.visual_model_id).name,pricePerDay:showPrices && price!=null && Number.isFinite(price) ? price : null};
+    return {...models.get(product.visual_model_id),id:product.catalogId,visualModelId:product.visual_model_id,productId:product.id,externalId:product.external_id || null,photoUrl:/^https?:\/\//i.test(product.photo_url||'')?product.photo_url:null,name:product.name || models.get(product.visual_model_id).name,pricePerDay:showPrices && price!=null && Number.isFinite(price) ? price : null};
   });
 }

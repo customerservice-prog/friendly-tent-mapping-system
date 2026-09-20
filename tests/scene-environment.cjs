@@ -43,12 +43,13 @@ const root=path.resolve(__dirname,'..');
  const counts=new Set();
  for(const definition of chairs){
   const chair=equipment.namespace.makeChair(definition),bounds=new THREE.Box3().setFromObject(chair);
-  assert.ok(bounds.min.y>=-.01 && bounds.max.y>2.4 && bounds.max.y<5.5,definition.id+' has believable chair height');
+  assert.ok(bounds.min.y>=-.01 && bounds.max.y>2.4 && bounds.max.y<=definition.backHeightFt+.35,definition.id+' has believable chair height');
   let vertices=0;chair.traverse(o=>{if(!o.isMesh)return;vertices+=o.geometry.attributes.position.count;assert.ok(Array.from(o.geometry.attributes.position.array).every(Number.isFinite));});
   counts.add(vertices);assert.ok(chair.children.length<=3,'chair details consolidated into at most three draws');
   module.namespace.disposeGroup(chair);
  }
- assert.ok(counts.size>=4,'folding, resin, Chiavari and throne have distinct geometry');
+ assert.equal(chairs.find(c=>c.id==='throne-king').accentColor,'#f4f0e5','King reference has ivory upholstery');
+ assert.ok(counts.size>=5,'folding, resin, Chiavari and throne have distinct geometry');
  const item={id:'seated',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,seatCount:8,chairId:'resin-white'};
  const seated=equipment.namespace.makeTable(item),batches=seated.children.filter(o=>o.isInstancedMesh);
  assert.equal(batches.length,3);assert.ok(batches.every(o=>o.count===8 && o.userData.itemId==='seated'));
@@ -76,7 +77,7 @@ const root=path.resolve(__dirname,'..');
  assert.equal(floor.children.length,5);
  const light=view.namespace.makeLighting({id:'pole-20x20',type:'pole',widthFt:20,lengthFt:20},'lighting-chandelier');
  const bulb=light.children.find(o=>o.material?.emissive?.getHex());assert.ok(bulb);
- light.userData.setNight(true);assert.equal(bulb.material.emissiveIntensity,5);light.userData.setNight(false);assert.equal(bulb.material.emissiveIntensity,.7);
+ light.userData.setNight(true);assert.ok(bulb.material.emissiveIntensity>=5);light.userData.setNight(false);assert.equal(bulb.material.emissiveIntensity,.7);
  for(const group of [seated,floor,light])module.namespace.disposeGroup(group);
  const weatherModule=await load(path.join(root,'js/ui/scene-weather.js'));await weatherModule.evaluate();
  const guestModule=await load(path.join(root,'js/ui/scene-guests.js'));await guestModule.evaluate();

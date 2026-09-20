@@ -40,6 +40,7 @@ export function equipmentPreview(id, className='equipment-model') {
   return `<img class="${escapeHtml(className)}" src="/assets/equipment/${id}.png?v=20260919-furniture" width="480" height="360" alt="" aria-hidden="true" decoding="async" loading="lazy">`;
 }
 export function chairVisual(chair) {
+  if(chair.photoUrl)return `<img class="chair-visual equipment-model" src="${escapeHtml(chair.photoUrl)}" alt="" decoding="async" loading="lazy">`;
   const preview=equipmentPreview(chair.id,'chair-visual equipment-model');
   if(preview)return preview;
   const frame=escapeHtml(chair.frameColor || '#f2f1ec'),accent=escapeHtml(chair.accentColor || '#f2f1ec');
@@ -55,13 +56,13 @@ export function chairsDrawer(chairs, defaultId, objects) {
   const tables=objects.filter(o=>o.kind==='table' && o.seatCount>0);
   const total=tables.reduce((n,o)=>n+Number(o.seatCount),0);
   const note=tables.length ? `Choose a style for all ${tables.length} seated ${tables.length===1?'table':'tables'} (${total} chairs). To change just one table, select it on the plan.` : 'Choose the chairs to include when you add tables.';
-  return `<p class="equipment-note">${note}</p><div class="item-card-grid">${orderEquipment(chairs).map(chair=>{
+  return `<p class="equipment-note">${note}</p><div class="item-card-grid">${orderEquipment(chairs.filter(c=>!c.isThrone)).map(chair=>{
     const quantity=tables.filter(o=>o.chairId===chair.id).reduce((n,o)=>n+Number(o.seatCount),0);
     const selected=tables.length ? tables.every(o=>o.chairId===chair.id) : chair.id===defaultId;
     const price=chair.pricePerDay==null ? 'Confirm pricing' : '$'+Number(chair.pricePerDay).toFixed(2)+' / chair / day';
     const action=tables.length ? `Use for ${total} chairs` : 'Use with new tables';
     return `<button type="button" class="item-card equipment-card${selected?' selected':''}" data-role="chair-card" data-id="${escapeHtml(chair.id)}" aria-pressed="${selected}" aria-label="${escapeHtml(chair.name)}: ${action}">${selected?'<span class="item-card-check" aria-hidden="true">✓</span>':''}${chairVisual(chair)}<span class="item-card-name">${escapeHtml(chair.name)}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${quantity?quantity+' in your layout':chair.isThrone?'Statement chair':'Dining chair'}</span><span class="equipment-add">${selected?'✓ Selected':action}</span></button>`;
-  }).join('')}</div>`;
+  }).join('')}</div>${chairs.some(c=>c.isThrone)?`<h3>Throne &amp; accent chairs</h3><p class="equipment-note">Place these individually for a guest of honor, sweetheart area or photo spot.</p><div class="item-card-grid">${chairs.filter(c=>c.isThrone).map(c=>`<button type="button" class="item-card equipment-card" data-role="accent-chair" data-id="${escapeHtml(c.id)}">${chairVisual(c)}<span class="item-card-name">${escapeHtml(c.name)}</span><span class="item-card-price">${c.pricePerDay==null?'Confirm pricing':'$'+Number(c.pricePerDay).toFixed(2)+'/each/day'}</span><span class="equipment-add">+ Place one chair</span></button>`).join('')}</div>`:''}`;
 }
 let previewSequence=0;
 export function tableVisual(table, chair = {}, placed) {
@@ -81,9 +82,10 @@ export function tableCard(table, chair, quantity) {
   const seats=table.seatsDefault || 0;
   const price=table.pricePerDay == null || seats && chair?.pricePerDay==null ? 'Confirm pricing' : '$'+(Number(table.pricePerDay)+seats*Number(chair?.pricePerDay || 0)).toFixed(2)+'/day';
   const included=seats ? `Table + ${seats} chairs` : 'Table only';
-  return `<div class="table-choice"><button class="item-card equipment-card" data-role="table-card" data-id="${escapeHtml(table.id)}" aria-label="Add ${escapeHtml(table.name)}">${equipmentPreview(table.id) || tableVisual(table,chair)}<span class="item-card-name">${escapeHtml(table.name)}</span><span class="item-card-desc">${table.seatsDefault ? table.seatsDefault+' seats' : 'Standing / service'}${quantity ? ' · '+quantity+' in layout' : ''}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${included}</span><span class="equipment-add">+ Add table</span></button><button type="button" class="table-style-link" data-role="table-style" data-id="${escapeHtml(table.id)}">Style a table first ↗</button></div>`;
+  return `<div class="table-choice"><button class="item-card equipment-card" data-role="table-card" data-id="${escapeHtml(table.id)}" aria-label="Add ${escapeHtml(table.name)}">${table.photoUrl?`<img class="equipment-model" src="${escapeHtml(table.photoUrl)}" alt="" loading="lazy" decoding="async">`:equipmentPreview(table.id) || tableVisual(table,chair)}<span class="item-card-name">${escapeHtml(table.name)}</span><span class="item-card-desc">${table.seatsDefault ? table.seatsDefault+' seats' : 'Standing / service'}${quantity ? ' · '+quantity+' in layout' : ''}</span><span class="item-card-price">${price}</span><span class="item-card-desc">${included}</span><span class="equipment-add">+ Add table</span></button><button type="button" class="table-style-link" data-role="table-style" data-id="${escapeHtml(table.id)}">Style a table first ↗</button></div>`;
 }
 export function tableControls(item, table, chairs, linens, matchingCount=1) {
+  chairs=chairs.filter(c=>!c.isThrone);
   const esc=escapeHtml,max=Math.max(0,...(table.seatsOptions||[12]));
   const options=(list,current)=>list.map(x=>`<option value="${esc(x.id)}"${x.id===current?' selected':''}>${esc(x.name)}</option>`).join('');
   const linen=linens.find(l=>l.id===item.linenId),color=item.linenColor || 'White';

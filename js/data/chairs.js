@@ -82,15 +82,15 @@ export const CHAIRS = [
   buildChair('throne-king', 'King Throne Chair', CHAIR_CATEGORIES.SPECIALTY, 120.00, {
     footprintFt: 2.5, isThrone: true,
     silhouette: CHAIR_SILHOUETTES.THRONE,
-    frameColor: '#d4af37', accentColor: '#7a1020',
-    seatWidthFt: 2.6, seatDepthFt: 2.4, backHeightFt: 4.4,
+    frameColor: '#b99450', accentColor: '#f4f0e5',
+    seatWidthFt: 2.6, seatDepthFt: 2.4, backHeightFt: 5.5,
     catalogImage: 'king-throne-chair',
   }),
   buildChair('throne-queen-tiffany', 'Queen Tiffany Throne Chair', CHAIR_CATEGORIES.SPECIALTY, 125.00, {
     footprintFt: 2.5, isThrone: true,
     silhouette: CHAIR_SILHOUETTES.THRONE,
     frameColor: '#d4af37', accentColor: '#f7f5f0',
-    seatWidthFt: 2.5, seatDepthFt: 2.3, backHeightFt: 4.6,
+    seatWidthFt: 2.5, seatDepthFt: 2.3, backHeightFt: 5.2,
     catalogImage: 'queen-tiffany-throne-chair',
   }),
 ];

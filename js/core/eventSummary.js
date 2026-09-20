@@ -7,13 +7,14 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
   function add(item, qty, category, fallback, label, override) {
     if (!qty) return;
     const unitPrice = price(override !== undefined ? override : item && item.pricePerDay);
-    lines.push({label:label || item && item.name || fallback,qty,unitPrice,amount:unitPrice == null ? null : unitPrice * qty,productId:item && item.productId || null,category});
+    lines.push({label:label || item && item.name || fallback,qty,unitPrice,amount:unitPrice == null ? null : Math.round(unitPrice * qty * 100) / 100,productId:item && item.productId || null,category});
   }
   const tent = find(catalog.tents,scene.tentId);
   if(includeTent && scene.tentId) add(tent,1,'tent','Tent — confirm selection');
   const inflatables=new Map();for(const o of objects)if(o.kind==='inflatable')inflatables.set(o.inflatableId,(inflatables.get(o.inflatableId)||0)+1);inflatables.forEach((qty,id)=>add(find(catalog.inflatables,id),qty,'inflatable','Inflatable — confirm selection'));
   const tables = new Map(), chairs = new Map(), linens = new Map();
   for(const object of objects) {
+    if(object.kind==='chair')chairs.set(object.chairId,(chairs.get(object.chairId)||0)+1);
     if(object.kind !== 'table') continue;
     tables.set(object.tableId,(tables.get(object.tableId) || 0) + 1);
     if(object.seatCount > 0) chairs.set(object.chairId,(chairs.get(object.chairId) || 0) + Number(object.seatCount));
@@ -30,9 +31,10 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
   const sections = objects.filter(o=>o.kind === 'dance');
   add(catalog.danceSection,sections.length,'dance_floor','3×3 Dance Floor Section');
   if(scene.lightingId && scene.lightingId !== 'lighting-none') {
-    const lighting=find(catalog.lighting,scene.lightingId);
+    const lighting=catalog.lightingForTent?catalog.lightingForTent(scene.lightingId,tent):find(catalog.lighting,scene.lightingId);
     add(lighting,1,'lighting','Lighting — confirm selection',null,lighting && lighting.dynamic ? catalog.tentLightingPrice(tent) : undefined);
   }
-  const knownSubtotal=lines.reduce((n,line)=>n+(line.amount || 0),0);
+  if(includeTent&&tent?.type!=='pole'&&tent&&!tent.isSite&&['concrete','asphalt','deck'].includes(scene.surfaceType))add(null,1,'installation','Concrete ballast setup — confirm quantity and pricing');
+  const knownSubtotal=lines.reduce((n,line)=>n+Math.round((line.amount || 0)*100),0)/100;
   return {lines,knownSubtotal,total:lines.some(line=>line.amount == null) ? null : knownSubtotal,seats:[...chairs.values()].reduce((a,b)=>a+b,0),tableCount:[...tables.values()].reduce((a,b)=>a+b,0)};
 }
