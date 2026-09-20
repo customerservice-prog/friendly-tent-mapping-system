@@ -94,9 +94,21 @@ function getScene(){
 }
 function loadScene(scene,options){
   if(!canEditEvent()&&!window.RENTSKETCH_PASS_RESTORING)return false;
+  if(scene?.orderStart&&Array.isArray(scene.orderStart.items)){
+    scene=Object.assign({},scene);
+    var booked=scene.orderStart.items;
+    var match=function(product){return booked.some(function(item){return item.slug&&product.externalId==='fpr:'+item.slug;});};
+    var bookedTent=TENTS.find(match),bookedInflatable=!bookedTent&&INFLATABLES.find(match);
+    scene.tentId=bookedTent?bookedTent.id:null;
+    if(bookedInflatable){
+      var span=Math.max(40,Math.ceil(Math.max(bookedInflatable.widthFt,bookedInflatable.depthFt)+16));
+      scene.siteWidthFt=span;scene.siteLengthFt=span;scene.primaryInflatableId=bookedInflatable.id;
+      scene.objects=[inflatableItem(bookedInflatable,newItemId(),(span-bookedInflatable.widthFt)/2,(span-bookedInflatable.depthFt)/2)];
+    }
+  }
   if(!scene||typeof scene!=='object'||!Array.isArray(scene.objects)||(!scene.objects.length&&!Object.prototype.hasOwnProperty.call(scene,'tentId')))return false;
   if(pendingPlacement)cancelPlacement();
-  ['siteWidthFt','siteLengthFt','primaryInflatableId','eventType','guestCount','spaceType','surfaceType','needDance','danceFloorSizeId','customDanceFloorFt','matchedPackageId','tentId','chairId','lightingId','lastTableConfig'].forEach(function(k){if(scene[k]!==undefined&&scene[k]!==null)state[k]=scene[k];});
+  ['eventName','siteWidthFt','siteLengthFt','primaryInflatableId','eventType','guestCount','spaceType','surfaceType','needDance','danceFloorSizeId','customDanceFloorFt','matchedPackageId','tentId','chairId','lightingId','lastTableConfig'].forEach(function(k){if(scene[k]!==undefined&&scene[k]!==null)state[k]=scene[k];});
   ['tentId','primaryInflatableId','customDanceFloorFt','matchedPackageId','lastTableConfig'].forEach(function(k){if(Object.prototype.hasOwnProperty.call(scene,k))state[k]=scene[k];});
   restoreCustomerDetails(scene.customer,options?.customerEmail);
   restoreReviewDeliveryZip(scene.deliveryZip);

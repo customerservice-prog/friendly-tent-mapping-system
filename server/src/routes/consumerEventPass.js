@@ -14,6 +14,7 @@ const { resolveAccess } = require('../access');
 const { getStripe, isPassEnabled, passOffer, paymentReadiness, fulfillEventPass, PASS_KINDS } = require('../eventPass');
 const { savePermission } = require('../eventPassAccess');
 const { accessUrl, emailReadiness, queueRecovery, processEmails } = require('../eventPassEmail');
+const { lookupOrder, claimOrder, refreshOrderAccess, orderAccessReady } = require('../friendlyOrderAccess');
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 
 const router = express.Router();
@@ -33,15 +34,17 @@ async function designTenant(design) {
 
 async function designResponse(design) {
     const tenant = await designTenant(design);
+    const order = await refreshOrderAccess(design.id, true);
+    const booking = (await query("SELECT * FROM entitlements WHERE design_id=$1 AND source='friendly_order' LIMIT 1", [design.id])).rows[0];
     const active = (await query("SELECT * FROM entitlements WHERE design_id=$1 AND status='active' AND (expires_at IS NULL OR expires_at>now()) ORDER BY expires_at DESC NULLS LAST LIMIT 1", [design.id])).rows[0];
     const paid = (await query("SELECT id,customer_email FROM consumer_payments WHERE design_id=$1 AND status='paid' ORDER BY created_at DESC LIMIT 1", [design.id])).rows[0];
     const expiresAt = active?.expires_at || (await query('SELECT expires_at FROM entitlements WHERE design_id=$1 ORDER BY created_at DESC LIMIT 1', [design.id])).rows[0]?.expires_at || null;
-    const email = paid && (await query('SELECT status FROM event_pass_emails WHERE receipt_payment_id=$1', [paid.id])).rows[0];
+    const email = paid ? (await query('SELECT status FROM event_pass_emails WHERE receipt_payment_id=$1', [paid.id])).rows[0] : booking && (await query('SELECT status FROM event_pass_emails WHERE design_ids @> $1::jsonb AND customer_email=$2 ORDER BY created_at DESC LIMIT 1', [JSON.stringify([design.id]),booking.customer_email])).rows[0];
     return { id: design.id, tenant: tenant?.slug || 'generic', scene: design.scene,
         anonymousSessionId: design.anonymous_session_id, active: !!active,
-        expiresAt, renewable: !!paid,
-        customerEmail: paid?.customer_email || null,
-        accessUrl: paid ? accessUrl(design, tenant?.slug || 'generic', paid.customer_email, expiresAt) : null,
+        expiresAt, renewable: !!paid, includedWithOrder: !!booking, orderNumber: order?.orderNumber || null,
+        customerEmail: paid?.customer_email || booking?.customer_email || null,
+        accessUrl: paid || booking ? accessUrl(design, tenant?.slug || 'generic', paid?.customer_email || booking.customer_email, expiresAt) : null,
         emailDelivery: email?.status || (paid ? 'pending' : null) };
 }
 
@@ -58,6 +61,39 @@ router.get('/event-pass/offer', wrap(async (req, res) => {
 router.get('/event-pass/email-status', wrap(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     res.json({ ready: await emailReadiness() });
+}));
+
+router.get('/order-access/status', wrap(async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ available: await orderAccessReady() });
+}));
+
+const orderBuckets = new Map();
+router.post('/order-access/request', wrap(async (req, res) => {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const orderNumber = typeof req.body?.orderNumber === 'string' ? req.body.orderNumber.trim().replace(/^#\s*/, '') : '';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || !/^[a-zA-Z0-9-]{1,80}$/.test(orderNumber)) return res.status(400).json({ error: 'Enter your order number and the email on your Friendly booking.' });
+    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const now = Date.now();
+    for (const [key, bucket] of orderBuckets) if (bucket.until < now) orderBuckets.delete(key);
+    for (const key of ['ip:' + ip, 'email:' + email]) {
+        const bucket = orderBuckets.get(key) || { count: 0, until: now + 15 * 60000 };
+        bucket.count++; orderBuckets.set(key, bucket);
+        if (bucket.count > (key.startsWith('ip:') ? 20 : 5)) return res.status(429).json({ error: 'Please wait a few minutes before requesting another order link.' });
+    }
+    if (!await emailReadiness()) return res.status(503).json({ error: 'Access email is temporarily unavailable. Please try again shortly.' });
+    let order;
+    try { order = await lookupOrder({ orderNumber, email }); }
+    catch (_) { return res.status(503).json({ error: 'Friendly order verification is temporarily unavailable. Please try again shortly.' }); }
+    if (order?.eligible && order.customerEmail === email) {
+        const tenant = (await query("SELECT * FROM tenants WHERE slug='friendly'")).rows[0];
+        const design = await claimOrder(order, tenant);
+        if (design) await queueRecovery(email, 'friendly', [design]);
+        processEmails().catch(() => console.error('[order-access] Link queued for retry.'));
+    }
+    // Do not reveal order ownership, its design ID, or the private access token.
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ ok: true });
 }));
 
 // Resume an owned draft without depending on email delivery or browser flags.
@@ -83,7 +119,8 @@ router.post('/event-pass/restore', wrap(async (req, res) => {
         if (!design) return res.status(404).json({ error: 'Saved draft not found' });
         if (expectedKind === 'consumer_design_recovery') {
             const paid = await query("SELECT id FROM consumer_payments WHERE design_id=$1 AND status='paid' AND lower(customer_email)=$2 LIMIT 1", [design.id, String(payload.email || '').trim().toLowerCase()]);
-            if (!paid.rows.length) return res.status(404).json({ error: 'Paid event not found for this access link' });
+            const booking = await query("SELECT id FROM entitlements WHERE design_id=$1 AND source='friendly_order' AND lower(customer_email)=$2 LIMIT 1", [design.id, String(payload.email || '').trim().toLowerCase()]);
+            if (!paid.rows.length && !booking.rows.length) return res.status(404).json({ error: 'Event not found for this access link' });
         }
         res.setHeader('Cache-Control', 'no-store');
         return res.json(await designResponse(design));
@@ -200,10 +237,11 @@ router.post('/designs/recovery-link', wrap(async (req, res) => {
     if (bucket.count > 30) return res.status(429).json({ error: 'Please wait a few minutes before requesting another access email.' });
     if (!await emailReadiness()) return res.status(503).json({ error: 'Access email is temporarily unavailable. Your paid event is safe. Please try again shortly.' });
     const matches = await query(`SELECT d.id FROM designs d LEFT JOIN tenants t ON t.id=d.tenant_id
-      JOIN consumer_payments p ON p.design_id=d.id AND p.status='paid'
-      WHERE lower(p.customer_email)=$1 AND COALESCE(t.slug,'generic') IN ('friendly','generic')
+      WHERE (EXISTS(SELECT 1 FROM consumer_payments p WHERE p.design_id=d.id AND p.status='paid' AND lower(p.customer_email)=$1)
+      OR EXISTS(SELECT 1 FROM entitlements e WHERE e.design_id=d.id AND e.source='friendly_order' AND e.status='active' AND e.expires_at>now() AND lower(e.customer_email)=$1))
+      AND COALESCE(t.slug,'generic') IN ('friendly','generic')
       AND ($2::text IS NULL OR COALESCE(t.slug,'generic')=$2)
-      GROUP BY d.id ORDER BY max(p.created_at) DESC LIMIT 10`, [email, tenant]);
+      ORDER BY d.created_at DESC LIMIT 10`, [email, tenant]);
     await queueRecovery(email, tenant || '*', matches.rows);
     processEmails().catch(() => console.error('[event-pass-email] Recovery queued for retry.'));
     res.setHeader('Cache-Control', 'no-store');

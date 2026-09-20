@@ -4,12 +4,13 @@ let products=[],busy=false;
 const params=new URLSearchParams(location.search);
 const section=document.getElementById('friendlyBooking'),button=document.getElementById('btnBookRentals'),status=document.getElementById('bookingStatus');
 function tenant(){return window.ACTIVE_TENANT?.slug||window.RENTSKETCH_TENANT_SLUG;}
-function show(){if(section)section.hidden=tenant()!=='friendly';}
+function show(){if(section)section.hidden=tenant()!=='friendly'||window.RentSketchEventPass?.includedWithOrder?.()===true;}
 window.addEventListener('rentsketch:catalogReady',event=>{products=event.detail?.products||[];show();});
 window.addEventListener('rentsketch:tenantReady',show);
+window.addEventListener('rentsketch:accessChanged',show);
 show();
 button?.addEventListener('click',async()=>{
-  if(busy||tenant()!=='friendly')return;
+  if(busy||tenant()!=='friendly'||window.RentSketchEventPass?.includedWithOrder?.())return;
   if(window.RentSketchEventPass?.canEdit()!==true){window.RentSketchEventPass?.requestAccess();return;}
   busy=true;button.disabled=true;status.textContent='Preparing your rentals…';
   try {

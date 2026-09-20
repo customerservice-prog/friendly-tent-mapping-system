@@ -42,6 +42,7 @@ async function setup(query, options = {}) {
   const bootstrap = html.match(/<script type="module">([\s\S]*?)<\/script>/)[1];
   await (await load(path.join(root, 'designer/index.html'), bootstrap)).evaluate();
   await (await load(path.join(root, 'script.js'))).evaluate();
+  await (await load(path.join(root, 'js/ui/booking-handoff.js'))).evaluate();
   evalScript('js/ui/paywall.js'); evalScript('js/ui/autosave.js');
   if (query.includes('autoplace=1')) evalScript('js/ui/tent-preview-entry.js'); else await (await load(path.join(root, 'js/ui/intake.js'))).evaluate();
   await wait(150); evalScript('js/ui/customer-entry.js'); evalScript('js/ui/review-actions.js');
@@ -55,7 +56,7 @@ async function setup(query, options = {}) {
   const sceneBefore = JSON.stringify(b.getScene());
   b.buildPartyScene(); await wait(10); assert.equal(b.getScene().objects.length, 0, 'direct party builder cannot bypass free preview'); d.querySelector('.pass-close').click();
   assert.equal(b.loadScene({tentId:'pole-20x20',objects:[{id:'t',kind:'table',tableId:'round-5ft'}]}),false,'unpaid import cannot bypass access');
-  d.querySelector('.pass-recover').click(); d.querySelector('#recoverEmail').value='paid@example.invalid'; d.querySelector('.paywall-modal form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})); await wait(20); assert.equal(t.calls.filter(c=>c.url.endsWith('/designs/recovery-link')).length,1); assert.match(d.querySelector('.paywall-error').textContent,/If a paid event matches/); d.querySelector('.pass-close').click();
+  d.querySelector('.pass-recover').click(); d.querySelector('#recoverEmail').value='paid@example.invalid'; d.querySelector('.paywall-modal form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true})); await wait(20); assert.equal(t.calls.filter(c=>c.url.endsWith('/designs/recovery-link')).length,1); assert.match(d.querySelector('.paywall-error').textContent,/If a saved event matches/); d.querySelector('.pass-close').click();
   d.getElementById('designMyEvent').click(); await wait(10);
   assert.match(d.querySelector('.paywall-modal').textContent, /\$9.99/); assert.match(d.querySelector('.paywall-modal').textContent, /No subscription/); assert.match(d.querySelector('.paywall-modal').textContent, /30 days/);
   d.querySelector('[data-terms]').click();assert.match(d.querySelector('.rs-modal').textContent,/Event Pass/);assert.doesNotMatch(d.querySelector('.rs-modal').textContent,/Early Access/);d.querySelector('.rs-modal [data-close]').click();assert.equal(d.querySelector('.rs-entry'),null);assert.equal(d.querySelector('.rs-beta'),null);
@@ -119,8 +120,16 @@ async function setup(query, options = {}) {
   t.dom.window.close();
   t = await setup('?tenant=friendly&embed=1&focus=tent&autoplace=1&view=2d&productId=fpr-pole', { embedded: true, saved: savedEvent, resumed: savedEvent });
   assert.equal(t.w.FriendlyBridge.getScene().tentId, 'pole-20x20', 'a different product still opens its exact free preview');
-  [...t.w.document.querySelectorAll('#eventPassBar button')].find(button => button.textContent === 'Continue my paid event').click();
+  [...t.w.document.querySelectorAll('#eventPassBar button')].find(button => button.textContent === 'Continue my saved event').click();
   assert.equal(t.w.FriendlyBridge.getScene().tentId, 'frame-20x20'); assert.equal(t.w.RENTSKETCH_TENT_PREVIEW, false); assert.equal(t.w.document.querySelector('.tent-preview-actions'), null); assert.match(t.w.document.getElementById('toolbarEventTitle').textContent, /Frame/); assert.equal(t.w.document.getElementById('customerName').value, 'Sam Event'); assert.equal(t.checkouts, 0);
+  t.dom.window.close();
+  t = await setup('?tenant=friendly#recoveryToken=fixture.booking.token', { restored: { ...emptyFrame, includedWithOrder: true, renewable: false, orderNumber: '9126', scene: { tentId: null, objects: [], eventName: 'Friendly order #9126', guestCount: 0, customer: { name: 'Booked Customer', email: 'booked@example.invalid', date: '2027-06-01' }, orderStart: { items: [{ slug: '20x20-pole-tent', quantity: 1 }] } } } });
+  w=t.w;d=w.document;b=w.FriendlyBridge;
+  assert.equal(b.getScene().tentId,'pole-20x20','included order opens the booked tent from the live catalog');assert.equal(b.getScene().orderStart,undefined,'future saves retain edits rather than rebuilding the starter');
+  assert.match(d.getElementById('eventPassBar').textContent,/Included with Friendly order #9126/);assert.equal(w.RentSketchEventPass.canEdit(),true);assert.equal(d.getElementById('friendlyBooking').hidden,true,'existing bookings cannot accidentally create a duplicate order');
+  d.getElementById('btnBookRentals').click();assert.equal(t.checkouts,0);
+  d.getElementById('btnToReview').click();await wait(10);assert.equal(d.getElementById('btnEmailQuote').textContent,'Send layout to Friendly');assert.match(d.getElementById('quoteDisclaimer').textContent,/does not change booked items/);
+  d.getElementById('btnEmailQuote').click();await wait(20);const bookedQuote=t.calls.find(c=>c.url.endsWith('/quote-requests')).body;assert.match(bookedQuote.notes,/Friendly order #9126/);assert.equal(bookedQuote.designId,'draft-owned');assert.equal(t.checkouts,0);
   t.dom.window.close();
   t = await setup('?tenant=friendly&payment=cancelled#draft=fixturetoken', { restored: { ...emptyFrame, active: false, renewable: false } });
   assert.equal(t.w.FriendlyBridge.getScene().tentId, 'frame-20x20'); assert.equal(t.w.document.body.classList.contains('rs-pass-preview'), true); assert.equal(t.w.document.querySelector('.paywall-overlay'), null);

@@ -91,6 +91,7 @@
     bar.hidden = false;
     if (active()) {
       bar.innerHTML = '<span><strong>Event Pass active</strong><small></small></span><button type="button" class="btn-secondary">Keep my access link</button>';
+      if (verified.includedWithOrder) bar.querySelector('strong').textContent = 'Included with Friendly order' + (verified.orderNumber ? ' #' + verified.orderNumber : '');
       bar.querySelector('small').textContent = verified.expiresAt ? 'Editing until ' + new Date(verified.expiresAt).toLocaleDateString() : 'Your event is ready to edit';
       bar.querySelector('button').onclick = showAccessLink;
     } else {
@@ -100,12 +101,18 @@
       bar.querySelector('small').textContent = (renew ? money(offer.renewalPriceCents) : money(offer.priceCents)) + ' · one event · ' + (renew ? offer.renewalDurationDays : offer.durationDays) + ' days · no subscription';
       bar.querySelector('[data-buy-pass]').textContent = renew ? 'Renew Event Pass' : 'Design My Event';
       bar.querySelector('[data-buy-pass]').onclick = function () { requestAccess(); };
-      var recovery = document.createElement('button'); recovery.type = 'button'; recovery.className = 'pass-recover'; recovery.textContent = 'Already paid? Open my event'; recovery.onclick = showRecovery; bar.appendChild(recovery);
+      var recovery = document.createElement('button'); recovery.type = 'button'; recovery.className = 'pass-recover'; recovery.textContent = 'Open my saved event'; recovery.onclick = showRecovery; bar.appendChild(recovery);
       if (savedPaidEvent) {
-        var resume = document.createElement('button'); resume.type = 'button'; resume.className = 'btn-secondary'; resume.textContent = 'Continue my paid event';
+        var resume = document.createElement('button'); resume.type = 'button'; resume.className = 'btn-secondary'; resume.textContent = 'Continue my saved event';
         resume.onclick = function () { restoreScene(savedPaidEvent); continueProduct(); };
         bar.appendChild(resume);
       }
+    }
+    var quote = document.getElementById('btnEmailQuote');
+    if (quote && verified?.includedWithOrder && !quote.hasAttribute('data-sent')) quote.textContent = 'Send layout to Friendly';
+    if (verified?.includedWithOrder && document.getElementById('quoteDisclaimer')) document.getElementById('quoteDisclaimer').textContent = 'This sends your layout for review alongside your existing Friendly order. It does not change booked items, prices, delivery, or payments. Friendly will confirm any changes with you.';
+    if (!active() && ['friendly', 'generic'].includes(slug) && !bar.querySelector('[data-order-access]')) {
+      var orderLink = document.createElement('a'); orderLink.dataset.orderAccess = ''; orderLink.className = 'pass-recover'; orderLink.href = 'https://rentsketch.com/my-event/?tenant=friendly&mode=order'; orderLink.target = '_blank'; orderLink.rel = 'noopener'; orderLink.textContent = 'Already booked with Friendly? Design for free'; bar.appendChild(orderLink);
     }
     var previewButton = document.getElementById('designMyEvent');
     if (previewButton && !active()) previewButton.textContent = 'Design My Event · ' + money(offer.priceCents);
@@ -127,9 +134,10 @@
       verified = data;
     } finally { window.RENTSKETCH_PASS_RESTORING = false; }
     render();
+    window.dispatchEvent(new CustomEvent('rentsketch:accessChanged'));
   }
   function showRecovery() {
-    var view = openModal('Open your paid event', '<p>Enter the email address used at checkout. We’ll email your private link so you can continue on this phone or any other device.</p><form><label class="paywall-label" for="recoverEmail">Checkout email</label><input id="recoverEmail" class="paywall-email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button type="submit" class="btn-primary">Email my event link</button></form><p class="paywall-error" role="status" aria-live="polite"></p><p class="pass-fine">No password or code to remember. Your access keeps its original expiration date.</p>');
+    var view = openModal('Open your saved event', '<p>Use the email for your Event Pass or claimed Friendly booking. We’ll email your private link so you can continue on this phone or any other device.</p><form><label class="paywall-label" for="recoverEmail">Event email</label><input id="recoverEmail" class="paywall-email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button type="submit" class="btn-primary">Email my event link</button></form><p class="paywall-error" role="status" aria-live="polite"></p><p class="pass-fine">No password or code to remember. Your access keeps its original expiration date.</p>');
     if (verified && verified.customerEmail) view.querySelector('input').value = verified.customerEmail;
     view.querySelector('input').focus();
     view.querySelector('form').onsubmit = async function (event) {
@@ -137,7 +145,7 @@
       button.disabled = true; button.textContent = 'Requesting your link…';
       try {
         await api('/designs/recovery-link', { email: view.querySelector('input').value.trim(), tenant: slug });
-        view.querySelector('.paywall-error').textContent = 'If a paid event matches this email, its private link will arrive shortly. Check your inbox and spam folder.';
+        view.querySelector('.paywall-error').textContent = 'If a saved event matches this email, its private link will arrive shortly. Check your inbox and spam folder.';
         button.textContent = 'Link requested';
       } catch (error) { view.querySelector('.paywall-error').textContent = error.message; button.disabled = false; button.textContent = 'Email my event link'; }
     };
@@ -161,6 +169,7 @@
     var renewal = !!(verified && verified.renewable), amount = renewal ? offer.renewalPriceCents : offer.priceCents;
     var days = renewal ? offer.renewalDurationDays : offer.durationDays;
     var view = openModal(renewal ? 'More time for your event' : 'Your event, arranged your way',
+      (['friendly', 'generic'].includes(slug) ? '<p><a class="pass-recover" href="https://rentsketch.com/my-event/?tenant=friendly&mode=order" target="_blank" rel="noopener">Already booked with Friendly? Get included access</a></p>' : '') +
       '<div class="paywall-price">' + money(amount) + '<small>one-time payment</small></div>' +
       '<p>One event design. ' + days + ' days of access. No subscription or automatic renewal.</p>' +
       '<ul class="pass-benefits"><li>Arrange tables, chairs and event rentals in 2D and 3D</li><li>Style your setup, save changes and return later</li><li>Print, download and share your event plan</li></ul>' +
@@ -220,7 +229,7 @@
       return false;
     }
   }
-  window.RentSketchEventPass = { requestAccess: requestAccess, canEdit: canEdit, hasPaidEvent: function () { return !!(verified && verified.renewable); }, showRecovery: showRecovery };
+  window.RentSketchEventPass = { requestAccess: requestAccess, canEdit: canEdit, hasPaidEvent: function () { return !!(verified && (verified.renewable || verified.includedWithOrder)); }, includedWithOrder: function () { return !!verified?.includedWithOrder; }, showRecovery: showRecovery };
   // Current entry points call the existing designer directly; wrapping only
   // the old recommendation bridge misses these controls completely.
   document.addEventListener('click', function (event) {

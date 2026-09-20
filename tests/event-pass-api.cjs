@@ -37,9 +37,14 @@ const email = load('server/src/eventPassEmail.js', { crypto: require('crypto'), 
 // Keep worker ticks explicit so simulated Postgres transactions cannot interleave
 // through the single PGlite connection. Production uses distinct pooled clients.
 const mailQueue = { ...email, processEmails: async () => {} };
+const bookedOrders = new Map(); let orderLookupFails = false;
+const orderAccess = load('server/src/friendlyOrderAccess.js', { crypto: require('crypto'), './db': db, './eventPassEmail': { relay: async (type, input) => {
+  if (orderLookupFails) throw Error('isolated order service outage');
+  return { orderAccessVersion: 1, order: [...bookedOrders.values()].find(o => (input.orderId ? o.id === input.orderId : o.orderNumber === input.orderNumber) && o.customerEmail === input.email) || null };
+} } });
 const pass = load('server/src/eventPass.js', { './db': db, './pricing': pricing, './eventPassEmail': mailQueue, stripe: Stripe });
-const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass });
-const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../access': { resolveAccess: async () => ({}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue });
+const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass, './friendlyOrderAccess': orderAccess });
+const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../access': { resolveAccess: async () => ({}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
 const designs = load('server/src/routes/designs.js', { express, '../db': db, '../middleware/requireAuth': { requireTenantAccess: (req,res,next) => next() }, '../eventPassAccess': access });
 const quotes = load('server/src/routes/quoteRequests.js', { express, crypto: require('crypto'), '../db': db, '../mailer': { getMailer: () => null }, '../middleware/requireAuth': { requireTenantRole: () => (req,res,next) => next() }, '../orderProviders/quoteRequestOrderProvider': {}, '../outboundWebhook': {}, '../eventPass': pass, '../eventPassAccess': access });
 const webhook = load('server/src/routes/stripeWebhook.js', { express, '../db': db, '../pricing': pricing, stripe: Stripe, '../eventPass': pass, '../orderProviders/quoteRequestOrderProvider': {} });
@@ -61,6 +66,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY);`);
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/004_entitlements.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/011_event_pass_access_email.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/012_friendly_order_access.sql'), 'utf8'));
   await pg.query('INSERT INTO tenants VALUES($1,$2),($3,$4)', [tenant, 'friendly', other, 'lakeside']);
   server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); base = 'http://127.0.0.1:' + server.address().port;
   let r = await request('/api/consumer/event-pass/offer?tenant=friendly'); assert.equal(r.body.priceCents, 999); assert.equal(r.body.durationDays, 30); assert.equal(r.body.required, true); assert.equal(r.body.paymentMode, 'test');
@@ -147,5 +153,35 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   const legacy = await restore(g.id); assert.ok(Math.abs(Date.parse(legacy.body.expiresAt) - Date.now() - 30*86400000) < 10000);
   const expiredToken = auth.signToken({ kind: 'consumer_design_recovery', designId: d.id, email: 'paid@example.invalid' }, { expiresIn: -1 });
   assert.equal((await request('/api/consumer/event-pass/restore', { recoveryToken: expiredToken })).status, 400);
+  const booked = { id: 'friendly-order-fixture', orderNumber: '9126', eligible: true, customerEmail: 'booked@example.invalid', customerName: 'Booked Customer', eventDate: '2027-06-01', expiresAt: '2027-06-08T00:00:00Z', deliveryZip: '13090', surfaceType: 'grass', items: [{ slug: '20x20-pole-tent', name: '20x20 Pole Tent', quantity: 1 }] };
+  bookedOrders.set(booked.id, booked);
+  const claim = body => request('/api/consumer/order-access/request', body);
+  assert.equal((await request('/api/consumer/order-access/status')).body.available, true);
+  assert.equal((await claim({ orderNumber: '9126', email: 'wrong@example.invalid' })).status, 200);
+  assert.equal((await pg.query("SELECT count(*)::int AS n FROM entitlements WHERE source='friendly_order'")).rows[0].n, 0, 'a guessed booking cannot unlock a design');
+  const claimResult = await claim({ orderNumber: '#9126', email: booked.customerEmail, anonymousSessionId: 'attacker-chosen' });
+  assert.deepEqual(claimResult.body, { ok: true }, 'request never returns an owner token or a design ID');
+  await claim({ orderNumber: '9126', email: booked.customerEmail });
+  const included = (await pg.query("SELECT d.* FROM designs d JOIN entitlements e ON e.design_id=d.id WHERE e.source='friendly_order'")).rows;
+  assert.equal(included.length, 1, 'repeated requests reuse one booking design'); assert.notEqual(included[0].anonymous_session_id, 'attacker-chosen');
+  assert.equal(included[0].scene.orderStart.items[0].slug, '20x20-pole-tent');
+  await email.processEmails();
+  const bookingDelivery = deliveries.find(m => m.to === booked.customerEmail); assert.ok(bookingDelivery, 'included access uses the same real outbox worker');
+  const bookingToken = new URLSearchParams(new URL(bookingDelivery.text.match(/https:\/\/rentsketch\.com\/designer\/\?\S+/)[0]).hash.slice(1)).get('recoveryToken');
+  const opened = await request('/api/consumer/event-pass/restore', { recoveryToken: bookingToken });
+  assert.equal(opened.status, 200); assert.equal(opened.body.active, true); assert.equal(opened.body.includedWithOrder, true); assert.equal(opened.body.renewable, false); assert.equal(opened.body.orderNumber, '9126');
+  const beforeCharges = creates;
+  assert.equal((await buy(included[0], { anonymousSessionId: opened.body.anonymousSessionId })).body.active, true); assert.equal(creates, beforeCharges, 'a booked customer never enters paid checkout');
+  assert.equal((await request('/api/tenants/friendly/designs/' + included[0].id, { scene: furnished, anonymousSessionId: opened.body.anonymousSessionId }, null, 'PATCH')).status, 200);
+  assert.equal((await request('/api/tenants/lakeside/designs/' + included[0].id, { scene: furnished, anonymousSessionId: opened.body.anonymousSessionId }, null, 'PATCH')).status, 404);
+  orderLookupFails = true;
+  assert.equal((await request('/api/consumer/event-pass/restore', { recoveryToken: bookingToken })).status, 500); assert.equal(creates, beforeCharges);
+  orderLookupFails = false; booked.eligible = false;
+  assert.equal((await request('/api/consumer/event-pass/restore', { recoveryToken: bookingToken })).body.active, false, 'cancellation is checked against Friendly on reopen');
+  assert.equal((await request('/api/tenants/friendly/designs/' + included[0].id, { scene: furnished, anonymousSessionId: opened.body.anonymousSessionId }, null, 'PATCH')).status, 402, 'canceled booking cannot keep saving');
+  assert.equal((await request('/api/tenants/friendly/designs/' + included[0].id, { scene: preview, anonymousSessionId: opened.body.anonymousSessionId }, null, 'PATCH')).status, 402, 'canceled booking cannot erase the saved scene with a bare preview');
+  await claim({ orderNumber: '9126', email: booked.customerEmail });
+  assert.equal((await pg.query("SELECT count(*)::int AS n FROM entitlements WHERE source='friendly_order'")).rows[0].n, 1);
+  console.log('PASS included order access: private email proof, one layout per booking, real SQL/outbox, no browser-chosen owner, no second charge, tenant isolation, cancellation and order-service failure. Isolated fixtures only.');
   console.log('PASS Event Pass API: real SQL/rollback, Friendly and direct $9.99 checkout, tenant isolation, ownership, open-session reuse, cancel restore, unpaid rejection, duplicate/racing fulfillment, delayed payment, $4.99 renewal, exact empty-tent recovery. Fake Stripe only; no production writes.');
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => { if (server) await new Promise(r => server.close(r)); await pg.close(); });

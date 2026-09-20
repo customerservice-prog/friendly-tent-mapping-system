@@ -18,6 +18,7 @@ function isPreviewScene(scene) {
 }
 
 async function activePass(designId) {
+  await require('./friendlyOrderAccess').refreshOrderAccess(designId);
   return (await db.query("SELECT id,expires_at FROM entitlements WHERE design_id=$1 AND status='active' AND (expires_at IS NULL OR expires_at>now()) LIMIT 1", [designId])).rows[0] || null;
 }
 
@@ -25,7 +26,9 @@ async function savePermission(tenant, design, scene) {
   if (!isPassEnabled(tenant)) return null;
   if (design && await activePass(design.id)) return null;
   const paid = design && (await db.query("SELECT id FROM consumer_payments WHERE design_id=$1 AND status='paid' LIMIT 1", [design.id])).rows.length;
-  if (!paid && isPreviewScene(scene)) return null;
+  const booked = design && (await db.query("SELECT id FROM entitlements WHERE design_id=$1 AND source='friendly_order' LIMIT 1", [design.id])).rows.length;
+  if (!paid && !booked && isPreviewScene(scene)) return null;
+  if (booked && !paid) return { error: 'This booking’s included design access is no longer active. Contact Friendly about your booking or choose an Event Pass.', code: 'event_pass_required' };
   return { error: paid ? 'Your Event Pass has expired. Renew to keep editing this event.' : 'Choose an Event Pass to arrange and save your event. The rental preview is free.', code: paid ? 'event_pass_expired' : 'event_pass_required' };
 }
 

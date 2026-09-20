@@ -53,7 +53,7 @@ async function queueReceipt(client, payment, tenantSlug) {
 }
 
 async function queueRecovery(email, tenantSlug, designs) {
-  // A real purchase is required before a recovery email can be queued.
+  // Callers verify a real purchase or included booking before queuing a link.
   if (!designs.length) return;
   const recent = await db.query("SELECT count(*)::int AS count FROM event_pass_emails WHERE customer_email=$1 AND kind='recovery' AND created_at>now()-interval '15 minutes'", [email]);
   if (recent.rows[0].count >= 3) return;
@@ -65,7 +65,8 @@ async function eventsForEmail(message) {
   const rows = (await db.query(`SELECT d.*,COALESCE(t.slug,'generic') AS tenant_slug,
     (SELECT max(e.expires_at) FROM entitlements e WHERE e.design_id=d.id AND e.status='active') AS access_expires_at
     FROM designs d LEFT JOIN tenants t ON t.id=d.tenant_id
-    WHERE d.id=ANY($1::uuid[]) AND EXISTS(SELECT 1 FROM consumer_payments p WHERE p.design_id=d.id AND p.status='paid' AND lower(p.customer_email)=$2)
+    WHERE d.id=ANY($1::uuid[]) AND (EXISTS(SELECT 1 FROM consumer_payments p WHERE p.design_id=d.id AND p.status='paid' AND lower(p.customer_email)=$2)
+      OR EXISTS(SELECT 1 FROM entitlements e WHERE e.design_id=d.id AND e.source='friendly_order' AND e.status='active' AND e.expires_at>now() AND lower(e.customer_email)=$2))
     ORDER BY d.created_at DESC LIMIT 10`, [message.design_ids, message.customer_email])).rows;
   return rows.filter(d => ['friendly', 'generic'].includes(d.tenant_slug)).map(design => ({
     designId: design.id, tenant: design.tenant_slug,
@@ -117,4 +118,4 @@ function startEmailWorker() {
   return timer;
 }
 
-module.exports = { accessUrl, emailReadiness, queueReceipt, queueRecovery, processEmails, startEmailWorker };
+module.exports = { accessUrl, emailReadiness, queueReceipt, queueRecovery, processEmails, startEmailWorker, relay };
