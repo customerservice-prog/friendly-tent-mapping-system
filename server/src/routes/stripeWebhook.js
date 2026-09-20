@@ -1,6 +1,6 @@
 const express = require('express');
 const { query } = require('../db');
-const { EVENT_PASS_DURATION_DAYS, EVENT_PASS_RENEWAL_DURATION_DAYS } = require('../pricing');
+const { fulfillEventPass, PASS_KINDS } = require('../eventPass');
 const { syncOrderEntitlement } = require('../orderProviders/quoteRequestOrderProvider');
 
 const router = express.Router();
@@ -57,6 +57,19 @@ router.post('/', async (req, res) => {
     return res.status(400).send('Invalid signature');
   }
 
+  // Event Pass fulfillment is idempotent by Checkout Session, not event ID.
+  // Process it before the legacy event marker, which cannot roll back failures.
+  if (['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(event.type)
+      && PASS_KINDS.includes(event.data.object.metadata?.kind)) {
+    try {
+      await fulfillEventPass(event.data.object);
+      return res.json({ received: true });
+    } catch (err) {
+      console.error('[stripe webhook] Event Pass fulfillment failed', event.id, err.message);
+      return res.status(500).send('Event Pass fulfillment failed');
+    }
+  }
+
   // Idempotency: attempt to record this event as processed. If it already
   // exists, return success immediately without reprocessing.
   const idem = await query('INSERT INTO processed_stripe_events(id,event_type) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id', [
@@ -76,33 +89,7 @@ router.post('/', async (req, res) => {
       const s = event.data.object;
       const m = s.metadata || {};
 
-      if (m.kind === 'consumer_event_pass') {
-        const expiresAt = new Date(Date.now() + EVENT_PASS_DURATION_DAYS * 86400000);
-        const e = await query(
-          `INSERT INTO entitlements(design_id,customer_email,source,status,starts_at,expires_at,payment_reference) VALUES($1,$2,'consumer_purchase','active',now(),$3,$4) RETURNING id`,
-          [m.designId, m.customerEmail, expiresAt, s.payment_intent]
-        );
-        await query(`UPDATE consumer_payments SET status='paid',stripe_payment_intent_id=$1,entitlement_id=$2 WHERE stripe_checkout_session_id=$3`, [
-          s.payment_intent,
-          e.rows[0].id,
-          s.id,
-        ]);
-      } else if (m.kind === 'consumer_event_pass_renewal') {
-        const cur = await query(
-          `SELECT expires_at FROM entitlements WHERE design_id=$1 AND status='active' AND (expires_at IS NULL OR expires_at>now()) ORDER BY expires_at DESC NULLS LAST LIMIT 1`,
-          [m.designId]
-        );
-        const base = Math.max(Date.now(), cur.rows[0]?.expires_at ? new Date(cur.rows[0].expires_at).getTime() : 0);
-        const expiresAt = new Date(base + EVENT_PASS_RENEWAL_DURATION_DAYS * 86400000);
-        const e = await query(
-          `INSERT INTO entitlements(design_id,customer_email,source,status,starts_at,expires_at,payment_reference) VALUES($1,$2,'consumer_renewal','active',now(),$3,$4) RETURNING id`,
-          [m.designId, m.customerEmail, expiresAt, s.payment_intent]
-        );
-        await query(
-          `UPDATE consumer_payments SET status='paid',stripe_payment_intent_id=$1,entitlement_id=$2 WHERE stripe_checkout_session_id=$3`,
-          [s.payment_intent, e.rows[0].id, s.id]
-        );
-      } else if (m.kind === 'business_subscription' && s.subscription) {
+      if (m.kind === 'business_subscription' && s.subscription) {
         // For business subscriptions, retrieve the full subscription object from Stripe
         // to ensure we have complete data (status, current_period_end, etc.).
         const sub = await stripe.subscriptions.retrieve(s.subscription);
