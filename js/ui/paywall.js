@@ -59,7 +59,7 @@
     closeModal();
     var focus = document.activeElement;
     modal = document.createElement('div'); modal.className = 'paywall-overlay'; modal._returnFocus = focus;
-    modal.innerHTML = '<section class="paywall-modal" role="dialog" aria-modal="true" aria-labelledby="eventPassTitle"><button class="pass-close" type="button" aria-label="Back to preview">×</button><div class="pass-eyebrow">RentSketch Event Pass</div><h2 id="eventPassTitle"></h2>' + html + '</section>';
+    modal.innerHTML = '<section class="paywall-modal" role="dialog" aria-modal="true" aria-labelledby="eventPassTitle"><button class="pass-close" type="button" aria-label="Close access dialog">×</button><div class="pass-eyebrow">RentSketch Event Pass</div><h2 id="eventPassTitle"></h2>' + html + '</section>';
     modal.querySelector('h2').textContent = title;
     document.body.appendChild(modal);
     modal.querySelector('.pass-close').onclick = closeModal;
@@ -178,7 +178,7 @@
       '<form><label class="paywall-label" for="passEmail">Email for your access link</label><input id="passEmail" class="paywall-email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button class="btn-primary paywall-submit" type="submit">Continue to checkout · ' + money(amount) + '</button></form>' +
       '<a class="btn-primary pass-checkout-link" target="_blank" rel="noopener" hidden>Open secure checkout</a><p class="paywall-error" role="status" aria-live="polite"></p>' +
       '<p class="pass-fine">After payment, we’ll email a private link to this exact event. Keep it to return on any device.</p><button type="button" class="pass-back" data-recover>Already paid? Open my event</button>' +
-      '<p class="pass-fine">This pays for RentSketch design access. Rental equipment, delivery and tax on rentals are separate. ' + money(offer.renewalPriceCents) + ' adds ' + offer.renewalDurationDays + ' days when you choose to renew.</p><p class="pass-fine">By purchasing, you agree to our <button type="button" class="pass-legal" data-terms>Terms of Use</button> and acknowledge our <button type="button" class="pass-legal" data-privacy>Privacy Policy</button>.</p><button type="button" class="pass-back">Keep previewing for free</button>');
+      '<p class="pass-fine">This pays for RentSketch design access. Rental equipment, delivery and tax on rentals are separate. ' + money(offer.renewalPriceCents) + ' adds ' + offer.renewalDurationDays + ' days when you choose to renew.</p><p class="pass-fine">By purchasing, you agree to our <button type="button" class="pass-legal" data-terms>Terms of Use</button> and acknowledge our <button type="button" class="pass-legal" data-privacy>Privacy Policy</button>.</p><button type="button" class="pass-back">Back</button>');
     view.querySelector('.pass-back:not([data-recover])').onclick = closeModal;
     view.querySelector('[data-recover]').onclick = showRecovery;
     view.querySelector('[data-terms]').onclick = function () { window.RentSketchCustomerEntry?.terms(); };
