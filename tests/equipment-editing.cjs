@@ -1,6 +1,8 @@
 // Real customer controls, isolated DOM and no production API writes.
 const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),dom=new JSDOM(fs.readFileSync(path.join(root,'designer/index.html'),'utf8'),{url:'https://rentsketch.com/designer/?tenant=friendly',runScripts:'outside-only',pretendToBeVisual:true});
+// Isolated paid-event context; no real payment or entitlement is created.
+dom.window.RentSketchEventPass={canEdit:()=>true,hasPaidEvent:()=>false};
 const w=dom.window,d=w.document;
 w.ResizeObserver=class{observe(){}disconnect(){}};w.ACTIVE_TENANT={slug:'friendly',name:'Friendly Party Rental'};
 w.fetch=()=>{throw new Error('No network calls permitted');};

@@ -11,7 +11,7 @@ function emptyState() {
   return { tentId: null, objects: [], zones: [], aisles: [] };
 }
 
-export function createLayoutStore(initialState) {
+export function createLayoutStore(initialState, options = {}) {
   let state = initialState ? cloneState(initialState) : emptyState();
   let past = [];
   let future = [];
@@ -32,16 +32,18 @@ function subscribe(fn) {
   };
 }
 
-function commit(nextState) {
+function commit(nextState, action = 'edit') {
+  if (options.canMutate && !options.canMutate(action, nextState, state)) return false;
   past.push(cloneState(state));
   if (past.length > 100) past.shift();
   future = [];
   state = nextState;
   notify();
+  return true;
 }
 
 function undo() {
-  if (!past.length) return false;
+  if (!past.length || (options.canMutate && !options.canMutate('undo', past[past.length-1], state))) return false;
   future.push(cloneState(state));
   state = past.pop();
   notify();
@@ -49,7 +51,7 @@ function undo() {
 }
 
 function redo() {
-  if (!future.length) return false;
+  if (!future.length || (options.canMutate && !options.canMutate('redo', future[future.length-1], state))) return false;
   past.push(cloneState(state));
   state = future.pop();
   notify();
@@ -62,7 +64,7 @@ function canUndo() { return past.length > 0; }
 function setTent(tentId) {
   const next = cloneState(state);
   next.tentId = tentId;
-  commit(next);
+  return commit(next, 'setTent');
 }
 
 function addObject(obj) {
@@ -124,9 +126,10 @@ function addAisle(aisle) {
 }
 
 function reset(newState) {
-  commit(newState ? cloneState(newState) : emptyState());
+  if (!commit(newState ? cloneState(newState) : emptyState(), 'reset')) return false;
   past = [];
   future = [];
+  return true;
 }
 
 return {

@@ -22,6 +22,7 @@
   function bridge() { return window.FriendlyBridge; }
   function money(cents) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100); }
   function active() { return !!(verified && verified.active && (!verified.expiresAt || Date.parse(verified.expiresAt) > Date.now())); }
+  function canEdit() { return !!(offer && (!offer.required || active())); }
   function api(path, body) {
     var controller = new AbortController(), timer = setTimeout(function () { controller.abort(); }, 12000);
     return fetch((window.RENTSKETCH_API_URL || '') + '/api/consumer' + path, {
@@ -77,6 +78,9 @@
   function render() {
     document.body.classList.toggle('rs-pass-checking', !offer);
     document.body.classList.toggle('rs-pass-preview', !!(offer && offer.required && !active()));
+    var watermark = document.getElementById('eventPreviewMark');
+    if (!watermark && document.querySelector('.canvas-viewport')) { watermark = document.createElement('div'); watermark.id = 'eventPreviewMark'; watermark.className = 'event-preview-mark'; document.querySelector('.canvas-viewport').appendChild(watermark); }
+    if (watermark) { watermark.hidden = canEdit(); watermark.textContent = verified && verified.renewable ? 'Read-only event · Renew to edit and share' : 'Free rental preview · Event Pass unlocks designing'; }
     var bar = document.getElementById('eventPassBar');
     if (!bar) {
       bar = document.createElement('div'); bar.id = 'eventPassBar'; bar.className = 'event-pass-bar';
@@ -96,6 +100,7 @@
       bar.querySelector('small').textContent = (renew ? money(offer.renewalPriceCents) : money(offer.priceCents)) + ' · one event · ' + (renew ? offer.renewalDurationDays : offer.durationDays) + ' days · no subscription';
       bar.querySelector('[data-buy-pass]').textContent = renew ? 'Renew Event Pass' : 'Design My Event';
       bar.querySelector('[data-buy-pass]').onclick = function () { requestAccess(); };
+      var recovery = document.createElement('button'); recovery.type = 'button'; recovery.className = 'pass-recover'; recovery.textContent = 'Already paid? Open my event'; recovery.onclick = showRecovery; bar.appendChild(recovery);
       if (savedPaidEvent) {
         var resume = document.createElement('button'); resume.type = 'button'; resume.className = 'btn-secondary'; resume.textContent = 'Continue my paid event';
         resume.onclick = function () { restoreScene(savedPaidEvent); continueProduct(); };
@@ -123,11 +128,29 @@
     } finally { window.RENTSKETCH_PASS_RESTORING = false; }
     render();
   }
+  function showRecovery() {
+    var view = openModal('Open your paid event', '<p>Enter the email address used at checkout. We’ll email your private link so you can continue on this phone or any other device.</p><form><label class="paywall-label" for="recoverEmail">Checkout email</label><input id="recoverEmail" class="paywall-email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button type="submit" class="btn-primary">Email my event link</button></form><p class="paywall-error" role="status" aria-live="polite"></p><p class="pass-fine">No password or code to remember. Your access keeps its original expiration date.</p>');
+    if (verified && verified.customerEmail) view.querySelector('input').value = verified.customerEmail;
+    view.querySelector('input').focus();
+    view.querySelector('form').onsubmit = async function (event) {
+      event.preventDefault(); var button = view.querySelector('[type="submit"]'); if (button.disabled) return;
+      button.disabled = true; button.textContent = 'Requesting your link…';
+      try {
+        await api('/designs/recovery-link', { email: view.querySelector('input').value.trim(), tenant: slug });
+        view.querySelector('.paywall-error').textContent = 'If a paid event matches this email, its private link will arrive shortly. Check your inbox and spam folder.';
+        button.textContent = 'Link requested';
+      } catch (error) { view.querySelector('.paywall-error').textContent = error.message; button.disabled = false; button.textContent = 'Email my event link'; }
+    };
+  }
   function showAccessLink() {
-    var reference = checkoutId || (read('rentsketch-pass:' + slug) || {}).checkoutId;
-    var view = openModal('Come back to this event', '<p>Your Event Pass is a one-time purchase. Keep your private edit link to open this design on another device.</p><textarea class="pass-access-link" rows="3" readonly aria-label="Private event access link"></textarea><button type="button" class="btn-primary" data-copy-link>Copy my private link</button><p class="paywall-error" role="status"></p><p class="pass-fine">Anyone with this private link can edit your event. Use Review → Share for a rental summary.</p>');
-    if (!reference) { view.querySelector('textarea').hidden = true; view.querySelector('[data-copy-link]').hidden = true; view.querySelector('.paywall-error').textContent = 'Your event is saved in this browser. Keep the return link from your original checkout to open it elsewhere.'; return; }
-    var link = location.origin + '/designer/?tenant=' + encodeURIComponent(slug) + '#eventPass=' + encodeURIComponent(reference);
+    var view = openModal('Your event is ready', '<p data-email-status></p><p data-access-expiry></p><textarea class="pass-access-link" rows="3" readonly aria-label="Private event access link"></textarea><button type="button" class="btn-primary" data-copy-link>Copy my private link</button><button type="button" class="pass-back" data-resend>Email my link again</button><p class="paywall-error" role="status"></p><p class="pass-fine">Keep this email or private link to reopen your event on another device. Anyone with it can access your event. No subscription or automatic renewal.</p>');
+    var link = verified && verified.accessUrl;
+    var email = verified && verified.customerEmail;
+    var delivery = verified && verified.emailDelivery;
+    view.querySelector('[data-email-status]').textContent = email ? (delivery === 'sent' ? 'Your access email was sent to ' : delivery === 'failed' ? 'Email delivery needs another try for ' : 'Your access email is queued for ') + email + '.' : 'Keep your private access link to return later.';
+    view.querySelector('[data-access-expiry]').textContent = verified.expiresAt ? 'Editing access until ' + new Date(verified.expiresAt).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) + '.' : '';
+    view.querySelector('[data-resend]').onclick = showRecovery;
+    if (!link) { view.querySelector('textarea').hidden = true; view.querySelector('[data-copy-link]').hidden = true; return; }
     view.querySelector('textarea').value = link;
     view.querySelector('[data-copy-link]').onclick = async function () {
       try { await navigator.clipboard.writeText(link); view.querySelector('.paywall-error').textContent = 'Private link copied. Keep it somewhere you can find later.'; }
@@ -141,10 +164,15 @@
       '<div class="paywall-price">' + money(amount) + '<small>one-time payment</small></div>' +
       '<p>One event design. ' + days + ' days of access. No subscription or automatic renewal.</p>' +
       '<ul class="pass-benefits"><li>Arrange tables, chairs and event rentals in 2D and 3D</li><li>Style your setup, save changes and return later</li><li>Print, download and share your event plan</li></ul>' +
-      '<form><label class="paywall-label" for="passEmail">Email for checkout</label><input id="passEmail" class="paywall-email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button class="btn-primary paywall-submit" type="submit">Continue to checkout · ' + money(amount) + '</button></form>' +
+      '<form><label class="paywall-label" for="passEmail">Email for your access link</label><input id="passEmail" class="paywall-email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button class="btn-primary paywall-submit" type="submit">Continue to checkout · ' + money(amount) + '</button></form>' +
       '<a class="btn-primary pass-checkout-link" target="_blank" rel="noopener" hidden>Open secure checkout</a><p class="paywall-error" role="status" aria-live="polite"></p>' +
-      '<p class="pass-fine">This pays for RentSketch design access. Rental equipment, delivery and tax on rentals are separate. ' + money(offer.renewalPriceCents) + ' adds ' + offer.renewalDurationDays + ' days when you choose to renew.</p><button type="button" class="pass-back">Keep previewing for free</button>');
-    view.querySelector('.pass-back').onclick = closeModal;
+      '<p class="pass-fine">After payment, we’ll email a private link to this exact event. Keep it to return on any device.</p><button type="button" class="pass-back" data-recover>Already paid? Open my event</button>' +
+      '<p class="pass-fine">This pays for RentSketch design access. Rental equipment, delivery and tax on rentals are separate. ' + money(offer.renewalPriceCents) + ' adds ' + offer.renewalDurationDays + ' days when you choose to renew.</p><p class="pass-fine">By purchasing, you agree to our <button type="button" class="pass-legal" data-terms>Terms of Use</button> and acknowledge our <button type="button" class="pass-legal" data-privacy>Privacy Policy</button>.</p><button type="button" class="pass-back">Keep previewing for free</button>');
+    view.querySelector('.pass-back:not([data-recover])').onclick = closeModal;
+    view.querySelector('[data-recover]').onclick = showRecovery;
+    view.querySelector('[data-terms]').onclick = function () { window.RentSketchCustomerEntry?.terms(); };
+    view.querySelector('[data-privacy]').onclick = function () { window.RentSketchCustomerEntry?.privacy(); };
+    if (verified && verified.customerEmail) view.querySelector('#passEmail').value = verified.customerEmail;
     view.querySelector('#passEmail').focus();
     track('event_pass_offer', { value: amount / 100 });
     view.querySelector('form').onsubmit = async function (event) {
@@ -192,12 +220,12 @@
       return false;
     }
   }
-  window.RentSketchEventPass = { requestAccess: requestAccess };
+  window.RentSketchEventPass = { requestAccess: requestAccess, canEdit: canEdit, hasPaidEvent: function () { return !!(verified && verified.renewable); }, showRecovery: showRecovery };
   // Current entry points call the existing designer directly; wrapping only
   // the old recommendation bridge misses these controls completely.
   document.addEventListener('click', function (event) {
     if (active() || (offer && !offer.required) || event.target.closest('.paywall-overlay,#eventPassBar')) return;
-    var control = event.target.closest('#designMyEvent,.rail-btn,#btnToReview,#btnBackToRecommend,#btnUndo,#btnRedo,#emptyStateOverlay button,#inspectorPanel button,#inspectorPanel input,#drawer button,#btnPrint,#btnShare,#btnDownload');
+    var control = event.target.closest('#designMyEvent,.rail-btn,#btnToReview,#btnBackToRecommend,#btnUndo,#btnRedo,#emptyStateOverlay button,#inspectorPanel button,#inspectorPanel input,#drawer button,#btnPrint,#btnShare,#btnDownload,#btnEmailQuote,#btnBookRentals,#sceneSettingLabel,#placementBar button,#partySceneButton,#btnPartyScene');
     if (!control || control.disabled || control.matches('[data-open-help]')) return;
     event.preventDefault(); event.stopImmediatePropagation(); requestAccess();
   }, true);
@@ -205,6 +233,18 @@
     if (active() || (offer && !offer.required)) return;
     if (event.target.closest('#plan2d [data-item-id],#inspectorPanel,#drawer')) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
+  document.addEventListener('change', function (event) {
+    if (canEdit() || !event.target.closest('#drawer,#inspectorPanel,#step-review')) return;
+    event.preventDefault(); event.stopImmediatePropagation(); requestAccess();
+  }, true);
+  document.addEventListener('keydown', function (event) {
+    if (canEdit() || event.target.closest('input,textarea,.paywall-overlay,.rs-modal,.designer-help')) return;
+    if (['Delete','Backspace'].includes(event.key) || ((event.ctrlKey || event.metaKey) && ['z','y','p'].includes(event.key.toLowerCase()))) {
+      event.preventDefault(); event.stopImmediatePropagation(); requestAccess();
+    }
+  }, true);
+  window.addEventListener('rentsketch:accessRequired', function () { if (verified) verified.active = false; render(); requestAccess(); });
+  setInterval(function () { if (verified && verified.active && !active()) { verified.active = false; render(); } }, 15000);
   window.addEventListener('rentsketch:designStarted', render);
   window.addEventListener('rentsketch:intakeReady', render);
   async function boot() {
@@ -212,7 +252,7 @@
     try {
       await getOffer();
       if (checkoutId || draftToken || recoveryToken) {
-        var view = openModal('Opening your saved event', '<p class="paywall-error" role="status">Checking your access and restoring your layout…</p><button type="button" class="btn-primary" data-check hidden>Check again</button>');
+        var view = openModal('Opening your saved event', '<p class="paywall-error" role="status">Checking your access and restoring your layout…</p><button type="button" class="btn-primary" data-check hidden>Check again</button><button type="button" class="pass-back" data-recover>Email me my access link</button>');
         async function checkReturn() {
           var result = await api('/event-pass/restore', checkoutId ? { checkoutSessionId: checkoutId } : (draftToken ? { draftToken: draftToken } : { recoveryToken: recoveryToken }));
           if (result.pending) {
@@ -229,6 +269,7 @@
           if (result.active && checkoutId) showAccessLink();
           ready = true;
         }
+        view.querySelector('[data-recover]').onclick = showRecovery;
         view.querySelector('[data-check]').onclick = function () { checkReturn().catch(function (err) { view.querySelector('.paywall-error').textContent = err.message; }); };
         try { await checkReturn(); } catch (err) { view.querySelector('.paywall-error').textContent = err.message; view.querySelector('[data-check]').hidden = false; }
       } else if (saved && saved.id) {
@@ -242,8 +283,9 @@
     } catch (err) {
       console.warn('[RentSketch] Event Pass:', err.message);
       if (returning) {
-        var failed = openModal('Your saved event could not be opened', '<p class="paywall-error" role="status"></p><p>Your saved layout has not been replaced. Retry the connection or open your private access link.</p><button type="button" class="btn-primary" data-reload>Retry opening my event</button>');
+        var failed = openModal('Your saved event could not be opened', '<p class="paywall-error" role="status"></p><p>Your saved layout has not been replaced. Retry the connection or open your private access link.</p><button type="button" class="btn-primary" data-reload>Retry opening my event</button><button type="button" class="pass-back" data-recover>Email me my access link</button>');
         failed.querySelector('.paywall-error').textContent = err.message;
+        failed.querySelector('[data-recover]').onclick = showRecovery;
         failed.querySelector('[data-reload]').onclick = function () { location.reload(); };
       }
     }

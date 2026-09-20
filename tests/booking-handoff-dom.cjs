@@ -5,6 +5,8 @@ const w=dom.window,d=w.document,context=dom.getInternalVMContext(),messages=[];
 Object.defineProperty(w,'parent',{value:{postMessage:(data,origin)=>messages.push({data,origin})}});
 w.ACTIVE_TENANT={slug:'friendly'};w.RENTSKETCH_TENANT_SLUG='friendly';
 let saves=0,lines=[{productId:'tent-id',label:'Pole tent',qty:1,amount:250,category:'tent'}];
+// Isolated paid-event context; no real payment or entitlement is created.
+w.RentSketchEventPass={canEdit:()=>true,hasPaidEvent:()=>false};
 w.FriendlyBridge={computeLineItems:()=>lines,getScene:()=>({surfaceType:'grass'})};w.RentSketchAutosave={flush:async()=>{saves++;return'00000000-0000-4000-8000-000000000001';}};
 w.fetch=async()=>{throw Error('Unexpected network request');};
 const cache=new Map();function moduleFor(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,m);return m;}

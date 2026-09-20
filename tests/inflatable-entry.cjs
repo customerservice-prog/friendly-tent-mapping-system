@@ -7,7 +7,9 @@ const products=base.concat(inflatables);
 const tents=products.filter(p=>p.category==='tent'&&p.external_id.startsWith('fpr:'));
 async function setup(query,tenant='friendly',tenantProducts=products){
  const dom=new JSDOM(html,{url:'https://rentsketch.com/designer/?'+query,runScripts:'outside-only',pretendToBeVisual:true}),w=dom.window;
- w.AbortController=AbortController;w.ResizeObserver=class{observe(){}disconnect(){}};
+ w.AbortController=AbortController;// Isolated paid-event context; no real payment or entitlement is created.
+w.RentSketchEventPass={canEdit:()=>true,hasPaidEvent:()=>false};
+w.ResizeObserver=class{observe(){}disconnect(){}};
  const viewport=query.includes('productId=')?[320,377]:query.includes('tentSlug=')?[390,560]:[1280,700];
  Object.defineProperties(w.document.getElementById('plan2d'),{clientWidth:{value:viewport[0]},clientHeight:{value:viewport[1]}});
  const reads=[];w.fetch=async(url,options={})=>{assert.ok(!options.method||options.method==='GET','no network mutations');reads.push(url);if(!query.includes('tenant='+tenant))throw Error('generic must not fetch a rental catalog');return {ok:true,json:async()=>url.endsWith('/products')?{products:tenantProducts}:{slug:tenant,name:tenant==='friendly'?'Friendly Party Rental':'Lakeside Play',showPrices:true}};};

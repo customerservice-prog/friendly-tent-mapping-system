@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta name="robots" content="noindex">
+  <title>Open My Event | RentSketch</title>
+  <link rel="icon" href="/logo.png">
+  <link rel="stylesheet" href="/my-event/access.css?v=20260920-access-3">
+  <script src="/my-event/access.js?v=20260920-access-3" defer></script>
+</head>
+<body>
+  <header><a class="brand" href="/"><img src="/logo.png" width="34" height="34" alt="">RentSketch</a><a href="/designer/" data-preview>Free preview</a></header>
+  <main>
+    <div class="eyebrow">Welcome back</div>
+    <h1>Your event.<br>Your way back in.</h1>
+    <p class="intro">Already bought an Event Pass? We’ll email your private link to pick up where you left off.</p>
+    <form id="accessForm">
+      <label for="accessEmail">Email used at checkout</label>
+      <input id="accessEmail" name="email" type="email" autocomplete="email" inputmode="email" maxlength="254" placeholder="you@example.com" required>
+      <button type="submit">Email my event link</button>
+    </form>
+    <p id="accessStatus" role="status" aria-live="polite"></p>
+    <div class="details"><strong>No password. No code to remember.</strong><p>Open the email on your phone, tablet or computer. Your link brings back the same event and its original access period.</p></div>
+    <details><summary>Can’t find the email?</summary><p>Check your spam folder and make sure you used the address from Stripe checkout. You can request a new link here without buying another pass.</p><p>If you bought more than one Event Pass with that email, we’ll include links to your recent events.</p></details>
+    <p class="private">Your event link is private. Share the rental summary from Review when you want someone else to see your plan.</p>
+    <a class="back" href="/designer/" data-preview>Back to the free rental preview</a>
+  </main>
+</body>
+</html>

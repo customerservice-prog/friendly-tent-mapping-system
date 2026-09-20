@@ -10,6 +10,7 @@ window.addEventListener('rentsketch:tenantReady',show);
 show();
 button?.addEventListener('click',async()=>{
   if(busy||tenant()!=='friendly')return;
+  if(window.RentSketchEventPass?.canEdit()!==true){window.RentSketchEventPass?.requestAccess();return;}
   busy=true;button.disabled=true;status.textContent='Preparing your rentals…';
   try {
     if(!products.length) {

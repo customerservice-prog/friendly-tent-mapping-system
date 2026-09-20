@@ -11,6 +11,8 @@ const dom=new JSDOM(fs.readFileSync(path.join(root,'designer/index.html'),'utf8'
   runScripts:'outside-only',pretendToBeVisual:true
 });
 const {window}=dom;
+// Isolated paid-event context; no real payment or entitlement is created.
+window.RentSketchEventPass={canEdit:()=>true,hasPaidEvent:()=>false};
 window.ResizeObserver=class{observe(){} disconnect(){}};
 window.alert=message=>{throw new Error('Unexpected alert: '+message);};
 window.RENTSKETCH_API_URL='https://test.invalid';

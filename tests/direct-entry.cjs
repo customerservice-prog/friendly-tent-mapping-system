@@ -1,5 +1,7 @@
 const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),dom=new JSDOM(fs.readFileSync(path.join(root,'designer/index.html'),'utf8'),{url:'https://rentsketch.com/designer/?tenant=friendly',runScripts:'outside-only',pretendToBeVisual:true});
+// Isolated paid-event context; no real payment or entitlement is created.
+dom.window.RentSketchEventPass={canEdit:()=>true,hasPaidEvent:()=>false};
 dom.window.ResizeObserver=class{observe(){}disconnect(){}};dom.window.ACTIVE_TENANT={name:'Friendly Party Rental',slug:'friendly'};dom.window.fetch=()=>{throw new Error('No live API calls permitted');};
 const context=dom.getInternalVMContext(),cache=new Map();
 function moduleFor(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file,initializeImportMeta(meta){meta.url=require('node:url').pathToFileURL(file).href;}});cache.set(file,m);return m;}

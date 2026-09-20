@@ -1,6 +1,7 @@
 const app = require('./app');
 const bootstrapPlatformAdmin = require('./bootstrapPlatformAdmin');
 const syncFriendlyCatalog = require('./friendlyCatalogSync');
+const { startEmailWorker } = require('./eventPassEmail');
 
 const port = process.env.PORT || 4000;
 
@@ -12,6 +13,7 @@ const port = process.env.PORT || 4000;
       // Keep startup/health checks fast. Catalog sync is non-fatal and runs
       // after the API is listening. It is idempotent and refreshes prices/photos.
       syncFriendlyCatalog().catch(err => console.error('[catalog-sync] failed:', err.message));
+      startEmailWorker();
     });
   } catch (err) {
     console.error('[startup] Failed to initialize RentSketch:', err);

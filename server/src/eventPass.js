@@ -2,6 +2,7 @@
 // Uses the existing designs, consumer_payments and entitlements tables.
 const db = require('./db');
 const pricing = require('./pricing');
+const { queueReceipt, processEmails } = require('./eventPassEmail');
 
 function getStripe() {
   if (!process.env.STRIPE_SECRET_KEY) return null;
@@ -38,7 +39,7 @@ async function paymentReadiness() {
     const account = await getStripe().accounts.retrieve();
     // Confirm the deployed key belongs to the intended RentSketch account.
     available = !!account.charges_enabled && (!process.env.EVENT_PASS_STRIPE_ACCOUNT_ID || account.id === process.env.EVENT_PASS_STRIPE_ACCOUNT_ID);
-    await db.query('SELECT e.capabilities,p.entitlement_id FROM entitlements e LEFT JOIN consumer_payments p ON p.entitlement_id=e.id LIMIT 0');
+    await db.query('SELECT e.capabilities,p.entitlement_id,p.duration_days FROM entitlements e LEFT JOIN consumer_payments p ON p.entitlement_id=e.id LIMIT 0');
   } catch (_) { available = false; }
   const value = { available, paymentMode: mode };
   readinessCache = { until: Date.now() + (available ? 60000 : 5000), value };
@@ -50,6 +51,7 @@ const PASS_KINDS = ['consumer_event_pass', 'consumer_event_pass_renewal'];
 async function fulfillEventPass(session) {
   if (!PASS_KINDS.includes(session.metadata?.kind) || session.payment_status !== 'paid') return false;
   const client = await db.pool.connect();
+  let queued = false;
   try {
     await client.query('BEGIN');
     // The ledger row is the lock, so webhook retries and the customer's return
@@ -58,6 +60,8 @@ async function fulfillEventPass(session) {
     const payment = result.rows[0];
     if (!payment) throw new Error('Event Pass payment record not found');
     if (payment.status === 'paid' && payment.entitlement_id) {
+      await queueReceipt(client, payment, session.metadata.tenant || 'generic');
+      queued = true;
       await client.query('COMMIT');
       return true;
     }
@@ -74,25 +78,33 @@ async function fulfillEventPass(session) {
       const current = (await client.query("SELECT expires_at FROM entitlements WHERE design_id=$1 AND status='active' ORDER BY expires_at DESC NULLS LAST LIMIT 1", [design.id])).rows[0];
       if (current?.expires_at) base = Math.max(base, new Date(current.expires_at).getTime());
     }
-    const days = renewal ? pricing.EVENT_PASS_RENEWAL_DURATION_DAYS : pricing.EVENT_PASS_DURATION_DAYS;
+    // A payment buys the term saved at Checkout creation, including old
+    // 30-day purchases opened before the new 300-day offer was released.
+    const days = payment.duration_days || 30;
+    const paidEmail = String(session.customer_details?.email || payment.customer_email).trim().toLowerCase();
     const expiresAt = new Date(base + days * 86400000);
     const entitlement = await client.query(
       `INSERT INTO entitlements(tenant_id,design_id,customer_email,anonymous_session_id,source,status,starts_at,expires_at,payment_reference)
        VALUES($1,$2,$3,$4,$5,'active',now(),$6,$7) RETURNING id`,
-      [design.tenant_id, design.id, payment.customer_email, design.anonymous_session_id,
+      [design.tenant_id, design.id, paidEmail, design.anonymous_session_id,
         renewal ? 'consumer_renewal' : (design.tenant_id ? 'tenant_paid_pass' : 'consumer_purchase'), expiresAt,
         typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id]
     );
-    await client.query("UPDATE consumer_payments SET status='paid',stripe_payment_intent_id=$1,entitlement_id=$2 WHERE id=$3", [
+    await client.query("UPDATE consumer_payments SET status='paid',stripe_payment_intent_id=$1,entitlement_id=$2,customer_email=$4 WHERE id=$3", [
       typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id,
-      entitlement.rows[0].id, payment.id,
+      entitlement.rows[0].id, payment.id, paidEmail,
     ]);
+    await queueReceipt(client, { ...payment, customer_email: paidEmail }, session.metadata.tenant || 'generic');
+    queued = true;
     await client.query('COMMIT');
     return true;
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
-  } finally { client.release(); }
+  } finally {
+    client.release();
+    if (queued) processEmails().catch(() => console.error('[event-pass-email] Receipt queued for retry.'));
+  }
 }
 
 module.exports = { getStripe, isPassEnabled, passOffer, paymentReadiness, fulfillEventPass, PASS_KINDS };

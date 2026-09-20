@@ -33,3 +33,13 @@
 .pass-back { width:100%; min-height:44px; border:0; background:none; text-decoration:underline; font:inherit; font-size:14px; color:#526171; cursor:pointer; }
 .paywall-modal :focus-visible { outline:3px solid #1766b1; outline-offset:3px; }
 @media(max-width:600px) { .event-pass-bar { flex-wrap:wrap; padding:10px 14px calc(10px + env(safe-area-inset-bottom)); }.event-pass-bar > span { flex:1 1 100%; }.event-pass-bar button { flex:1 1 auto; }.paywall-modal { padding:23px 20px; border-radius:18px; }.paywall-modal h2 { font-size:24px; }.event-pass-product { padding:6px 12px; } }
+
+.rs-pass-checking #drawer,.rs-pass-preview #drawer,
+.rs-pass-checking #placementBar,.rs-pass-preview #placementBar,
+.rs-pass-checking .inspector-panel { display:none!important; }
+.event-preview-mark { position:absolute;left:50%;bottom:48px;transform:translateX(-50%);z-index:12;max-width:calc(100% - 32px);padding:7px 12px;border-radius:8px;border:1px solid #dce4df;background:#fffffff0;color:#40514a;box-shadow:0 2px 10px #0001;font:600 11px/1.4 system-ui;text-align:center;pointer-events:none; }
+.event-preview-mark[hidden] { display:none; }
+.pass-recover,.pass-legal { border:0;background:none;color:#1766b1;text-decoration:underline;font:inherit;cursor:pointer; }
+.pass-recover { min-height:44px;font-size:13px;padding:8px; }
+.pass-legal { padding:0; }
+@media print { .rs-pass-preview #step-review,.rs-pass-checking #step-review { display:none!important; }.rs-pass-preview .event-preview-mark,.rs-pass-checking .event-preview-mark { display:block!important;position:fixed;bottom:20px; }.paywall-overlay,.rs-help,.event-pass-bar { display:none!important; } }

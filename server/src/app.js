@@ -22,7 +22,7 @@ if(production&&!allowedOrigins.length)console.error('[security] ALLOWED_ORIGINS 
 function corsOrigin(origin,cb){if(!origin)return cb(null,true);const normalized=origin.replace(/\/$/,'');if(allowedOrigins.includes(normalized))return cb(null,true);if(!production&&!allowedOrigins.length)return cb(null,true);return cb(new Error('CORS origin denied'));}
 app.disable('x-powered-by');
 app.use((req,res,next)=>{res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Referrer-Policy','strict-origin-when-cross-origin');res.setHeader('Permissions-Policy','camera=(), microphone=(), geolocation=()');res.setHeader('Cross-Origin-Resource-Policy','cross-origin');next();});
-app.use(cors({origin:corsOrigin,methods:['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'],allowedHeaders:['Content-Type','Authorization','X-Embed-Token','X-RentSketch-Signature'],maxAge:86400}));
+app.use(cors({origin:corsOrigin,methods:['GET','HEAD','POST','PUT','PATCH','DELETE','OPTIONS'],allowedHeaders:['Content-Type','Authorization','X-Embed-Token','X-RentSketch-Signature','X-RentSketch-Session'],maxAge:86400}));
 app.use('/api/stripe/webhook',express.raw({type:'application/json',limit:'256kb'}),stripeWebhookRoutes);
 app.use(express.json({limit:'256kb'}));
 app.get('/health',(req,res)=>res.json({ok:true}));
