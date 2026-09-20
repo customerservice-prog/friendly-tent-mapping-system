@@ -68,7 +68,9 @@ function computeStageSize(tent) {
   const scaleRotated = Math.min(availW / tent.lengthFt, availH / tent.widthFt);
   rotate90 = scaleRotated > scaleNormal;
   const scale = rotate90 ? scaleRotated : scaleNormal;
-  pxPerFt = Math.max(4, scale);
+  // Large tents must fit short phone canvases too. A four-pixel minimum per
+  // foot made a 100-foot tent taller than the entire visible preview.
+  pxPerFt = scale;
   const effW = rotate90 ? tent.lengthFt : tent.widthFt;
   const effH = rotate90 ? tent.widthFt : tent.lengthFt;
   return { w: effW * pxPerFt, h: effH * pxPerFt };
