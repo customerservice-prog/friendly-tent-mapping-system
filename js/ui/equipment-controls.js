@@ -14,15 +14,18 @@ export function orderEquipment(items) {
 // Refresh controls without losing the customer's place during repeated edits.
 export function renderEquipmentContent(panel, html) {
   const active=panel.ownerDocument.activeElement;
-  const focused=panel.contains(active) && active.dataset.role ? {...active.dataset} : null;
+  const focused=panel.contains(active) && (active.dataset.role || active.dataset.ts) ? {...active.dataset} : null;
+  const selection=focused && typeof active.selectionStart==='number' ? [active.selectionStart,active.selectionEnd,active.selectionDirection] : null;
   const scrollTop=panel.scrollTop;
   const horizontal=[...panel.querySelectorAll('[data-scroll-key]')].map(el=>[el.dataset.scrollKey,el.scrollLeft]);
   panel.innerHTML=html;
   if(focused) {
-    const controls=[...panel.querySelectorAll('[data-role]')];
+    const family=focused.role ? 'role' : 'ts';
+    const controls=[...panel.querySelectorAll('[data-'+family+']')];
     const replacement=controls.find(el=>!el.disabled && Object.entries(focused).every(([k,v])=>el.dataset[k]===v))
-      || controls.find(el=>!el.disabled && el.dataset.role===focused.role && el.dataset.id===focused.id);
+      || controls.find(el=>!el.disabled && el.dataset[family]===focused[family] && ['id','product','category'].every(k=>el.dataset[k]===focused[k]));
     replacement?.focus({preventScroll:true});
+    if(replacement && selection && typeof replacement.selectionStart==='number')replacement.setSelectionRange(...selection);
   }
   panel.scrollTop=scrollTop;
   for(const [key,left] of horizontal) {
