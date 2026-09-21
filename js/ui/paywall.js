@@ -12,6 +12,16 @@
   var purchaseRequested = params.get('purchase') === '1';
   var productPreview = ['tent', 'inflatable'].includes(params.get('focus')) && params.get('autoplace') === '1';
   var offer, verified, savedPaidEvent, modal, offerPromise, previewLimit, ready = false, busy = false;
+  var guidedAutoAttempted = false;
+  function showGuidedPreview() {
+    if (!offer?.required || active() || savedPaidEvent || (returning && !verified) || verified?.renewable || verified?.includedWithOrder || document.body.classList.contains('rs-preview-expired')) return;
+    window.RentSketchGuidedPreview?.open({
+      hasAccess: function () { return canEdit(); },
+      price: function () { return money(offer.priceCents); }, days: function () { return offer.durationDays; },
+      remaining: function () { return previewLimit?.remainingSeconds(); },
+      purchase: requestAccess,
+    });
+  }
   var saved = read('rentsketch-autosave:' + slug);
   var returning = !!(checkoutId || draftToken || recoveryToken || (!productPreview && saved && saved.id));
   window.RENTSKETCH_PASS_RESTORING = returning;
@@ -145,6 +155,9 @@
     if (!active() && ['friendly', 'generic'].includes(slug) && !bar.querySelector('[data-order-access]')) {
       var orderLink = document.createElement('a'); orderLink.dataset.orderAccess = ''; orderLink.className = 'pass-recover'; orderLink.href = 'https://rentsketch.com/my-event/?tenant=friendly&mode=order'; orderLink.target = '_blank'; orderLink.rel = 'noopener'; orderLink.textContent = 'Booked? Design for free'; orderLink.setAttribute('aria-label', 'Already booked with Friendly? Design for free'); bar.appendChild(orderLink);
     }
+    if (!active() && !savedPaidEvent && !verified?.renewable && !verified?.includedWithOrder && !bar.querySelector('[data-guided-preview]')) {
+      var guide = document.createElement('button'); guide.type = 'button'; guide.className = 'pass-recover'; guide.dataset.guidedPreview = ''; guide.textContent = 'Watch how it works'; guide.onclick = showGuidedPreview; bar.appendChild(guide);
+    }
     var previewButton = document.getElementById('designMyEvent');
     if (previewButton && !active()) previewButton.textContent = 'Design My Event · ' + money(offer.priceCents);
     // Product previews already have a primary CTA. Keep only its clear price line.
@@ -254,6 +267,7 @@
     };
   }
   async function requestAccess(continuation) {
+    window.RentSketchGuidedPreview?.close();
     try {
       await getOffer();
       if (!offer.required || active()) { if (continuation) continuation(); return true; }
@@ -347,6 +361,12 @@
         resume: savedPaidEvent ? function () { restoreScene(savedPaidEvent); continueProduct(); } : null,
       });
       render();
+      // Only free new previews get the public sample. Restore/buy entry and
+      // already-paid/booked designs retain their existing flow. No demo scene
+      // is ever loaded into the real editor or autosave.
+      if (!guidedAutoAttempted && !purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !modal) {
+        guidedAutoAttempted = true; showGuidedPreview();
+      }
       // A priced purchase link opens the offer, never a charge. Restore
       // existing access first so returning customers are not sold twice.
       if (purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !(returning && !verified)) {

@@ -20,6 +20,7 @@
     function expire() {
       if (screen) return;
       document.body.classList.add('rs-preview-expired');
+      window.dispatchEvent(new CustomEvent('rentsketch:previewExpired'));
       document.getElementById('designerApp')?.setAttribute('inert', '');
       screen = document.createElement('section'); screen.className = 'preview-limit-screen'; screen.setAttribute('aria-label', 'Free preview ended');
       screen.innerHTML = '<div class="preview-limit-card"><p class="pass-eyebrow">Your preview is complete</p><h2 tabindex="-1">Ready to make it your event?</h2><p>Your five-minute free preview has ended. Keep this exact rental and unlock your event design.</p><button type="button" class="btn-primary" data-preview-buy></button><p class="pass-fine" data-preview-price></p><a class="btn-secondary" href="https://rentsketch.com/my-event/?tenant=friendly&mode=order" target="_blank" rel="noopener">Booked with Friendly? Get included access</a><button type="button" class="pass-back" data-preview-resume hidden>Continue my saved event</button><button type="button" class="pass-back" data-preview-recover>Open my saved event</button><p class="pass-fine">No subscription. Rental equipment is separate.</p></div>';
@@ -60,6 +61,6 @@
         if (shorter < remaining()) { setDeadline(shorter); tick(); }
       }
     });
-    return { updateAccess: function () { if (options.hasAccess()) unlockView(); else if (!started) begin(); else tick(); }, focusIfLocked: focusIfLocked };
+    return { updateAccess: function () { if (options.hasAccess()) unlockView(); else if (!started) begin(); else tick(); }, focusIfLocked: focusIfLocked, remainingSeconds: function () { return Math.ceil(remaining() / 1000); } };
   };
 })();

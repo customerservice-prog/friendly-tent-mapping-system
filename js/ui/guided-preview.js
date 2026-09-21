@@ -157,7 +157,7 @@
     var resize = typeof ResizeObserver === 'function' ? new ResizeObserver(function () { lastRender = ''; render(); }) : null;
     resize?.observe(q('.gp-stage'));
     var guard = setInterval(function () { if (!canContinue()) close(); }, 250);
-    document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', close); window.addEventListener('rentsketch:accessChanged', accessChanged); window.addEventListener('rentssketch:previewExpired', close);
+    document.addEventListener('visibilitychange', visibility); window.addEventListener('pagehide', close); window.addEventListener('rentsketch:accessChanged', accessChanged); window.addEventListener('rentsketch:previewExpired', close);
     updatePlayer(); render();
     import('/js/data/marketing-reception.js').then(function (data) { if (closed) return; sample = data.marketingReception(); render(); }).catch(function () { if (!closed) { paused = true; q('.gp-caption').textContent = 'The sample could not load. Close this walkthrough and try again. Your design has not been changed.'; updatePlayer(); } });
     current = { close: close }; raf = requestAnimationFrame(tick); return current;
