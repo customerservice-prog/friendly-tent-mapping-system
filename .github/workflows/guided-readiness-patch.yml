@@ -1,0 +1,43 @@
+name: Integrate guided preview readiness
+on:
+  push:
+    branches: [feat/watch-only-guided-preview]
+    paths: [.github/workflows/guided-readiness-patch.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/watch-only-guided-preview
+      - shell: python
+        run: |
+          from pathlib import Path
+          def replace(path,old,new):
+              p=Path(path);s=p.read_text();assert s.count(old)==1,(path,s.count(old),old[:80]);p.write_text(s.replace(old,new))
+          replace('js/ui/tent-preview-entry.js','    readySent = true;','    readySent = true;\n    window.RENTSKETCH_PRODUCT_PREVIEW_READY = true;')
+          replace('js/ui/tent-preview-entry.js',"renderer: renderer }, '*'); } catch (_) {}", "renderer: renderer }, '*'); } catch (_) {}\n    window.dispatchEvent(new CustomEvent('rentsketch:productPreviewReady'));")
+          replace('js/ui/paywall.js','    var guidedAutoAttempted = false;', '''    var guidedAutoAttempted = false;
+              function maybeStartGuidedPreview() {
+                if (guidedAutoAttempted || !ready || purchaseRequested || checkoutId || draftToken || recoveryToken || modal) return;
+                if (productPreview && !window.RENTSKETCH_PRODUCT_PREVIEW_READY) return;
+                guidedAutoAttempted = true; showGuidedPreview();
+              }
+              window.addEventListener('rentsketch:productPreviewReady', maybeStartGuidedPreview);''')
+          replace('js/ui/paywall.js', '            guidedAutoAttempted = true; showGuidedPreview();', '            maybeStartGuidedPreview();')
+          replace('js/ui/paywall.js','    function showGuidedPreview() {','    function showGuidedPreview() {\n      if (productPreview && !window.RENTSKETCH_PRODUCT_PREVIEW_READY) return;')
+          replace('designer/index.html','../js/ui/tent-preview-entry.js?v=20260920-orders-1','../js/ui/tent-preview-entry.js?v=20260921-guided-1')
+          # Screenshot before geometry assertions so any failure has visual evidence.
+          replace('tests/guided-preview-browser.cjs', "   for(const sel of ['.gp-close'", "   await p.screenshot({path:path.join(out,`guided-initial-${width}x${height}.png`)});\n   for(const sel of ['.gp-close'")
+      - run: |
+          node --check js/ui/paywall.js
+          node --check js/ui/tent-preview-entry.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add js/ui/paywall.js js/ui/tent-preview-entry.js designer/index.html tests/guided-preview-browser.cjs
+          git diff --cached --check
+          git commit -m 'Wait for exact rental readiness before opening the watch-only walkthrough'
+          git push origin HEAD:feat/watch-only-guided-preview
