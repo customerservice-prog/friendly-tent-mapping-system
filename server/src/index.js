@@ -2,6 +2,7 @@ const app = require('./app');
 const bootstrapPlatformAdmin = require('./bootstrapPlatformAdmin');
 const syncFriendlyCatalog = require('./friendlyCatalogSync');
 const { startEmailWorker } = require('./eventPassEmail');
+const runOneTimeEventPassQa = require('./oneTimeEventPassQa');
 
 const port = process.env.PORT || 4000;
 
@@ -14,6 +15,7 @@ const port = process.env.PORT || 4000;
       // after the API is listening. It is idempotent and refreshes prices/photos.
       syncFriendlyCatalog().catch(err => console.error('[catalog-sync] failed:', err.message));
       startEmailWorker();
+      runOneTimeEventPassQa().catch(err => console.error('[event-pass-qa] failed:', err.message));
     });
   } catch (err) {
     console.error('[startup] Failed to initialize RentSketch:', err);
