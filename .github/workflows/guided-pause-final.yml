@@ -1,0 +1,31 @@
+name: Synchronize guided pause display
+on:
+  push:
+    branches: [feat/watch-only-guided-preview]
+    paths: [.github/workflows/guided-pause-final.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/watch-only-guided-preview
+      - shell: python
+        run: |
+          from pathlib import Path
+          p = Path('js/ui/guided-preview.js')
+          text = p.read_text()
+          old = "if (paused) stopVoice(); else speak(); updatePlayer(); };"
+          assert text.count(old) == 1
+          p.write_text(text.replace(old, "if (paused) stopVoice(); else speak(); updatePlayer(); render(); };"))
+      - run: |
+          node --check js/ui/guided-preview.js
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add js/ui/guided-preview.js
+          git diff --cached --check
+          git commit -m 'Flush the current walkthrough frame immediately on pause'
+          git push origin HEAD:feat/watch-only-guided-preview
