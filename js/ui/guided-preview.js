@@ -71,7 +71,7 @@
     q('.gp-booking').onclick = function (event) {
       if (window.parent !== window) { event.currentTarget.target = '_blank'; event.currentTarget.rel = 'noopener'; }
     };
-    q('[data-pause]').onclick = function () { if (elapsed >= duration) return replay(); paused = !paused; last = performance.now(); if (paused) stopVoice(); else speak(); updatePlayer(); };
+    q('[data-pause]').onclick = function () { if (elapsed >= duration) return replay(); paused = !paused; last = performance.now(); if (paused) stopVoice(); else speak(); updatePlayer(); render(); };
     q('[data-replay]').onclick = replay;
     q('[data-narration]').onclick = function () { narration = !narration; updatePlayer(); if (narration) speak(); else stopVoice(); };
     root.addEventListener('keydown', function (event) {
