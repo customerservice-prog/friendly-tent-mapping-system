@@ -280,17 +280,16 @@
       await getOffer();
       if (!offer.required || active()) { continueProduct(); return true; }
       if (returning && !ready) throw new Error('Your saved event is still being restored. Please try again in a moment.');
-      var auto = autosave(), id = await auto.flush();
-      if (!id) throw new Error('Your design could not be saved. Please try again.');
-      var result = await api('/designs/' + encodeURIComponent(id) + '/event-pass/checkout-session', {
-        customerEmail: '', anonymousSessionId: auto.getSessionId(),
+      var auto = autosave();
+      var result = await api('/event-pass/direct-checkout', {
+        tenant: slug, anonymousSessionId: auto.getSessionId(),
       });
-      if (result.active) {
-        var resumed = await api('/event-pass/resume', { designId: id, anonymousSessionId: auto.getSessionId() });
+      if (result.active && result.designId) {
+        var resumed = await api('/event-pass/resume', { designId: result.designId, anonymousSessionId: auto.getSessionId() });
         restoreScene(resumed); continueProduct(); return true;
       }
       if (!result.url || new URL(result.url).origin !== 'https://checkout.stripe.com') throw new Error('Secure checkout did not return a valid link.');
-      track('event_pass_checkout', { value: offer.priceCents / 100, design_id: id, direct: true });
+      track('event_pass_checkout', { value: offer.priceCents / 100, design_id: result.designId, direct: true });
       (window.RentSketchCheckoutNavigate || function (url) { location.assign(url); })(result.url);
       return false;
     } catch (err) {
