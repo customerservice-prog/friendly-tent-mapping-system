@@ -22,13 +22,14 @@ const server=http.createServer((req,res)=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
  const browser=await chromium.launch({args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});const results=[];
  try{
-  for(const [width,height]of [[320,568],[360,640],[390,844],[430,932],[568,320],[844,390],[768,1024],[1440,900]]){
+  for(const [width,height]of [[320,524],[320,568],[360,640],[390,844],[430,932],[568,320],[844,390],[768,1024],[1440,900]]){
    const ctx=await browser.newContext({viewport:{width,height},hasTouch:true}),p=await ctx.newPage();await p.goto(base+'/fixture?tenant=friendly');await p.locator('.gp-plan svg').waitFor();await p.locator('[data-pause]').click();
    assert.equal(await p.evaluate(()=>window.RentSketchEventPass.canEdit()),false);assert.equal(await p.evaluate(()=>window.savedWrites),0);assert.equal(await p.evaluate(()=>window.loadedScenes.length),0);
    assert.equal(await p.locator('.gp-scene').getAttribute('inert'),'');assert.equal(await p.locator('#designerApp').isVisible(),false);
    assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
    await p.screenshot({path:path.join(out,`guided-initial-${width}x${height}.png`)});
-   for(const sel of ['.gp-close','.gp-buy','.gp-booking','[data-pause]']){const r=await p.locator(sel).boundingBox();assert(r&&r.x>=0&&r.y>=0&&r.x+r.width<=width+1&&r.y+r.height<=height+1,sel+' fits '+width+'x'+height);}
+   for(const sel of ['.gp-close','.gp-buy','.gp-booking','[data-pause]','[data-replay]','[data-narration]']){const r=await p.locator(sel).boundingBox();assert(r&&r.x>=0&&r.y>=0&&r.x+r.width<=width+1&&r.y+r.height<=height+1,sel+' fits '+width+'x'+height);}
+   if(width===320)assert((await p.locator('.gp-stage').boundingBox()).height>=130,'Short phone keeps a useful scene size');
    assert.match(await p.locator('.gp-buy').innerText(),/\$9.99.*30 days/);await p.screenshot({path:path.join(out,`guided-${width}x${height}.png`)});
    await p.locator('.gp-close').click();assert.equal(await p.locator('.guided-preview').count(),0);assert.equal(await p.locator('#designerApp').getAttribute('inert'),null);assert.equal(await p.evaluate(()=>document.body.style.overflow),'');
    await p.locator('[data-guided-preview]').click();await p.locator('.gp-plan svg').waitFor();await p.locator('.gp-buy').click();await p.locator('#passEmail').waitFor();assert.equal(await p.locator('.guided-preview').count(),0);assert.equal(await p.evaluate(()=>window.savedWrites),0);

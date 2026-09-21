@@ -63,3 +63,21 @@
  .gp-summary { gap:2px;padding:8px }.gp-summary strong { font-size:18px }.gp-summary p,.gp-summary span { font-size:9px }.gp-summary small { font-size:8px }
 }
 @media(prefers-reduced-motion:reduce) { .gp-pointer { transition:none } }
+
+/* Keep the demonstration useful inside Friendly's 44px mobile frame header. */
+@media(max-width:380px) and (min-height:431px) and (max-height:700px) {
+ .gp-header { padding:8px 12px;min-height:60px }
+ .gp-header h2 { font-size:16px }
+ .gp-eyebrow { font-size:8px;line-height:1.2;letter-spacing:.06em }
+ .gp-tools { padding:3px 5px }
+ .gp-tools span { font-size:8px;padding:5px 2px }
+ .gp-explanation { display:flex;flex-direction:column;max-height:164px;overflow:hidden;padding:8px 12px }
+ .gp-step,.gp-explanation h3,.gp-progress,.gp-player { flex-shrink:0 }
+ .gp-explanation h3 { font-size:17px;line-height:1.15;margin-bottom:4px }
+ .gp-caption { min-height:0;flex-shrink:1;overflow:auto;font-size:11px;line-height:1.4 }
+ .gp-player { display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:4px }
+ .gp-player button { font-size:10px;min-width:0;padding:5px 3px }
+ .gp-time { display:none }
+ .gp-footer { grid-template-columns:1fr 1fr;padding:8px 12px;gap:5px 8px }
+ .gp-footer .gp-buy,.gp-footer .gp-booking { font-size:11px!important;padding:7px!important }
+}
