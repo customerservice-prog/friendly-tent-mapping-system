@@ -1,4 +1,4 @@
-name: Apply reviewed mobile access fixes
+name: Apply reviewed mobile source fixes
 on:
   push:
     branches: [fix/mobile-event-pass-20260921]
@@ -11,201 +11,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: fix/mobile-event-pass-20260921
-      - name: Apply exact reviewed changes
+          fetch-depth: 0
+      - name: Apply the reviewed source patch
         shell: python
         run: |
+          import subprocess, textwrap
           from pathlib import Path
-          import re
-          def replace(path, old, new):
-              p = Path(path); text = p.read_text()
-              assert text.count(old) == 1, f'Expected one match in {path}: {old[:90]}'
-              p.write_text(text.replace(old, new))
-          path = 'js/ui/paywall.js'
-          replace(path, "  var productPreview =", "  var purchaseRequested = params.get('purchase') === '1';\n  var productPreview =")
-          replace(path, "  function closeModal() { if (modal) { var focus = modal._returnFocus; modal.remove(); modal = null; if (focus && focus.isConnected) focus.focus(); } previewLimit?.focusIfLocked(); }", """  function closeModal() {
-              if (modal) {
-                var focus = modal._returnFocus;
-                if (modal._cleanupViewport) modal._cleanupViewport();
-                document.body.style.overflow = modal._previousOverflow;
-                modal.remove(); modal = null;
-                if (focus && focus.isConnected) focus.focus({ preventScroll: true });
-              }
-              previewLimit?.focusIfLocked();
-            }""")
-          replace(path, '<button class="pass-close" type="button" aria-label="Close access dialog">×</button><div class="pass-eyebrow">RentSketch Event Pass</div><h2 id="eventPassTitle"></h2>\' + html + \'</section>', '<div class="paywall-header"><button class="pass-close" type="button" aria-label="Close access dialog">×</button><div class="pass-eyebrow">RentSketch Event Pass</div><h2 id="eventPassTitle" tabindex="-1"></h2></div><div class="paywall-content">\' + html + \'</div></section>')
-          replace(path, "    document.body.appendChild(modal);", """    document.body.appendChild(modal);
-              modal._previousOverflow = document.body.style.overflow;
-              document.body.style.overflow = 'hidden';
-              // Follow the usable viewport when a mobile keyboard opens.
-              var current = modal, viewport = window.visualViewport;
-              if (viewport) {
-                var fitViewport = function () {
-                  current.style.top = viewport.offsetTop + 'px';
-                  current.style.height = viewport.height + 'px';
-                };
-                viewport.addEventListener('resize', fitViewport);
-                viewport.addEventListener('scroll', fitViewport);
-                current._cleanupViewport = function () {
-                  viewport.removeEventListener('resize', fitViewport);
-                  viewport.removeEventListener('scroll', fitViewport);
-                };
-                fitViewport();
-              }""")
-          replace(path, ".filter(function (el) { return !el.hidden; });", ".filter(function (el) { return !el.closest('[hidden],[inert]') && el.getClientRects().length; });\n      if (!controls.length) return;")
-          replace(path, "    modal.querySelector('.pass-close').focus();", "    // Read the offer first; do not summon the keyboard or scroll past pricing.\n    modal.querySelector('h2').focus({ preventScroll: true });")
-          replace(path, "    view.querySelector('input').focus();", "    // The customer chooses when to open the mobile keyboard.")
-          replace(path, "    view.querySelector('#passEmail').focus();", "    // Keep the price and term visible until the customer taps the email field.")
-          replace(path, "      bar.querySelector('[data-buy-pass]').textContent = renew ? 'Renew Event Pass' : 'Design My Event';", "      bar.querySelector('[data-buy-pass]').textContent = renew ? 'Renew Event Pass' : 'Start Designing · ' + money(offer.priceCents) + ' / ' + offer.durationDays + ' days';")
-          replace(path, "      if (err.name === 'AbortError') throw new Error('That took too long. Your preview is safe. Please try again.');", "      if (err.name === 'AbortError') throw new Error('That took too long. Your preview is safe. Please try again.');\n      if (err instanceof TypeError || err instanceof SyntaxError) throw new Error('We couldn’t connect right now. Your design is safe. Please try again.');")
-          replace(path, "      render();\n    }\n  }\n  boot();", """      render();
-                // A priced purchase link opens the offer, never a charge. Restore
-                // existing access first so returning customers are not sold twice.
-                if (purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !(returning && !verified)) {
-                  params.delete('purchase');
-                  history.replaceState(null, '', location.pathname + '?' + params.toString() + location.hash);
-                  if (canEdit()) continueProduct(); else requestAccess();
-                }
-              }
-            }
-            boot();""")
-          css = Path('event-pass.css')
-          css.write_text(css.read_text() + """
-          /* Mobile access: fixed header, independently scrollable offer, usable keyboard viewport. */
-          .paywall-overlay { box-sizing:border-box; bottom:auto; height:100dvh; padding:max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); }
-          .paywall-modal { display:flex; flex-direction:column; min-height:0; max-height:100%; overflow:hidden; padding:0; }
-          .paywall-header { position:relative; flex:0 0 auto; padding:22px 24px 12px; border-bottom:1px solid #e4ebe6; background:#fff; z-index:2; }
-          .paywall-header h2 { margin:10px 30px 0 0; }
-          .paywall-header h2:focus { outline:none; }
-          .paywall-content { min-height:0; overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch; padding:14px 24px 24px; scroll-padding-block:18px; }
-          .paywall-content>:first-child { margin-top:0; }
-          .paywall-content :is(input,button,a) { scroll-margin-block:18px; }
-          .paywall-content .pass-recover { display:inline-flex; align-items:center; }
-          .paywall-content .pass-fine { line-height:1.55; }
-          .paywall-content .paywall-submit { white-space:normal; }
-          @media(max-width:380px), (max-height:420px) {
-            .paywall-header { padding:16px 18px 10px; }
-            .paywall-header h2 { font-size:21px; }
-            .paywall-content { padding:12px 18px 20px; }
-          }
-          """)
-          path = 'my-event/access.js'
-          replace(path, "  var tenant =", """  function connectionMessage(error, fallback) {
-              if (error.name === 'AbortError') return 'The connection took too long. Please try again. Your order has not been changed.';
-              if (error instanceof TypeError || error instanceof SyntaxError) return fallback;
-              return error.message || fallback;
-            }
-            var tenant =""")
-          replace(path, "error.name === 'AbortError' ? 'The booking check took too long. Please try again shortly.' : error.message", "connectionMessage(error, 'We couldn’t check your booking right now. Please try again. Your order has not been changed.')")
-          replace(path, "error.name === 'AbortError' ? 'The request took too long. Please try again shortly.' : error.message", "connectionMessage(error, 'We couldn’t request your link right now. Please try again.')")
-          path = 'my-event/index.html'
-          replace(path, 'name="given-name" autocomplete="given-name"', 'name="given-name" autocomplete="given-name" enterkeyhint="next"')
-          replace(path, 'name="orderNumber" autocomplete="off"', 'name="orderNumber" autocomplete="off" enterkeyhint="go"')
-          p = Path(path); p.write_text(p.read_text().replace('20260920-instant-1','20260921-mobile-access-1'))
-          p = Path('designer/index.html'); text = p.read_text()
-          for asset in ['event-pass.css', 'js/ui/paywall.js']:
-              pattern = r'(' + re.escape(asset) + r')(?:\?v=[^\"\s<>]+)?(?=\")'
-              text, count = re.subn(pattern, r'\1?v=20260921-mobile-access-1', text)
-              assert count >= 1, f'Missing cache reference {asset}'
-          p.write_text(text)
-          Path('.github/workflows/mobile-access.yml').write_text('''name: Mobile Event Pass regression
-          on:
-            pull_request:
-            push:
-              branches: [main]
-          permissions:
-            contents: read
-          jobs:
-            test:
-              runs-on: ubuntu-latest
-              timeout-minutes: 15
-              steps:
-                - uses: actions/checkout@v4
-                - uses: actions/setup-node@v4
-                  with:
-                    node-version: 22
-                - run: npm --prefix tests ci
-                - run: npm --prefix tests run test:event-pass
-                - run: npm install --prefix /tmp/mobile-qa --no-save playwright@1.56.1
-                - run: /tmp/mobile-qa/node_modules/.bin/playwright install --with-deps chromium
-                - run: NODE_PATH=/tmp/mobile-qa/node_modules node tests/mobile-access-browser.cjs
-                - uses: actions/upload-artifact@v4
-                  if: always()
-                  with:
-                    name: mobile-access-evidence
-                    path: qa-mobile-access/
-          '''.replace('\n          ', '\n'))
-          Path('tests/mobile-access-browser.cjs').write_text(r'''const assert = require('node:assert/strict');
-          const fs = require('node:fs');
-          const path = require('node:path');
-          const http = require('node:http');
-          const { chromium } = require('playwright');
-          const root = path.resolve(__dirname, '..');
-          const output = path.join(root, 'qa-mobile-access'); fs.mkdirSync(output, {recursive:true});
-          const offer = {required:true,priceCents:999,durationDays:30,renewalPriceCents:499,renewalDurationDays:30,previewDurationSeconds:300};
-          const fixture = `<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/event-pass.css"><style>body{margin:0}*{box-sizing:border-box}</style><button id="launch">Start</button><main id="designerApp"><div class="designer-shell"><div class="canvas-viewport"></div></div></main><script>window.RENTSKETCH_API_URL=location.origin;window.RENTSKETCH_CATALOG_READY=true;window.FriendlyBridge={loadScene:()=>true};window.RentSketchStartAutosave=()=>({start(){return this},flush:async()=> 'qa-design',getSessionId:()=> 'qa-session',adopt(){}});</script><script src="/js/ui/paywall.js"></script>`;
-          const server = http.createServer((req,res)=>{
-            const url = new URL(req.url,'http://localhost');
-            if(url.pathname==='/fixture'){res.setHeader('Content-Type','text/html');res.end(fixture);return;}
-            if(url.pathname==='/api/consumer/event-pass/offer'){res.setHeader('Content-Type','application/json');res.end(JSON.stringify(offer));return;}
-            const rel = url.pathname==='/' ? 'my-event/index.html' : url.pathname.replace(/^\//,'');
-            const file=path.resolve(root,rel);
-            if(!file.startsWith(root+path.sep)||!fs.existsSync(file)||!fs.statSync(file).isFile()){res.writeHead(404);res.end();return;}
-            res.setHeader('Content-Type',file.endsWith('.js')?'application/javascript':file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':'application/octet-stream');fs.createReadStream(file).pipe(res);
-          });
-          (async()=>{
-            await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
-            const base='http://127.0.0.1:'+server.address().port;
-            const browser=await chromium.launch(); const results=[];
-            try {
-              for(const [width,height] of [[320,568],[360,640],[375,667],[390,844],[412,915],[568,320],[844,390],[768,1024]]){
-                const context=await browser.newContext({viewport:{width,height},hasTouch:true});const page=await context.newPage();
-                await page.goto(base+'/fixture?tenant=friendly&purchase=1');
-                await page.locator('#passEmail').waitFor();
-                assert.equal(await page.locator('#passEmail').evaluate(el=>el===document.activeElement),false,'No keyboard-triggering autofocus');
-                assert.equal(await page.locator('.paywall-content').evaluate(el=>el.scrollTop),0,'Offer starts at top');
-                const initial=await page.locator('.paywall-price').boundingBox();assert(initial&&initial.y>=0&&initial.y+initial.height<=height,'Price visible initially');
-                assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'No horizontal page overflow');
-                assert.equal(await page.locator('.paywall-content').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'No horizontal dialog overflow');
-                await page.screenshot({path:path.join(output,`purchase-${width}x${height}.png`)});
-                await page.locator('.paywall-content').evaluate(el=>el.scrollTop=el.scrollHeight);
-                const close=await page.locator('.pass-close').boundingBox();assert(close&&close.y>=0&&close.y+close.height<=height,'Close remains accessible');
-                await page.locator('.pass-close').click();assert.equal(await page.locator('.paywall-overlay').count(),0);
-                assert.equal(await page.evaluate(()=>document.body.style.overflow),'','Scroll lock restored');
-                await page.goto(base+'/my-event/index.html?tenant=friendly&mode=order');
-                assert.equal(await page.locator('#accessEmail').isVisible(),false);
-                assert.equal(await page.locator('#orderAccessForm input').count(),2);
-                assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
-                await page.screenshot({path:path.join(output,`booking-${width}x${height}.png`),fullPage:true});
-                results.push({width,height,priceVisible:true,closeAccessible:true,bookingNoEmail:true,overflow:false});await context.close();
-              }
-              const context=await browser.newContext({viewport:{width:390,height:844},hasTouch:true});const page=await context.newPage();let calls=0;let mode='network';
-              await page.route('https://rentsketch-api-production.up.railway.app/**',async route=>{
-                calls++;const body=route.request().postDataJSON();assert.deepEqual(Object.keys(body).sort(),['firstName','orderNumber']);
-                if(mode==='network')return route.abort('failed');
-                if(mode==='decline')return route.fulfill({status:403,contentType:'application/json',body:JSON.stringify({error:'No active booking matches those details.'})});
-                if(mode==='invalid')return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({accessUrl:'https://example.org/not-your-event'})});
-                await new Promise(r=>setTimeout(r,200));return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({accessUrl:'https://rentsketch.com/designer/?tenant=friendly#recoveryToken=qa-fixture-only'})});
-              });
-              await page.route('https://rentsketch.com/designer/**',route=>route.fulfill({contentType:'text/html',body:'<h1>Verified fixture event</h1>'}));
-              await page.goto(base+'/my-event/index.html?tenant=friendly&mode=order');await page.fill('#orderFirstName','QA');await page.fill('#orderNumber','TEST-ONLY');
-              await page.click('#orderAccessForm button');await page.waitForFunction(()=>document.querySelector('#orderAccessStatus').textContent.includes('couldn’t check'));
-              assert.equal(await page.inputValue('#orderNumber'),'TEST-ONLY');
-              mode='decline';await page.click('#orderAccessForm button');await page.waitForFunction(()=>document.querySelector('#orderAccessStatus').textContent.includes('No active booking'));
-              mode='invalid';await page.click('#orderAccessForm button');await page.waitForFunction(()=>document.querySelector('#orderAccessStatus').textContent.includes('could not be opened'));
-              mode='success';const before=calls;await page.evaluate(()=>{const form=document.querySelector('#orderAccessForm');form.requestSubmit();form.requestSubmit();});
-              await page.waitForURL('https://rentsketch.com/designer/**');assert.equal(calls-before,1,'Duplicate submits blocked');
-              results.push({simulatedBookingSuccess:true,networkErrorFriendly:true,decline:true,unsafeLinkRejected:true,duplicateSubmitBlocked:true,productionCustomerAccess:false});
-              await context.close();
-              fs.writeFileSync(path.join(output,'results.json'),JSON.stringify(results,null,2));console.log(JSON.stringify(results,null,2));
-            } finally {await browser.close();await new Promise(resolve=>server.close(resolve));}
-          })().catch(err=>{console.error(err);server.close();process.exitCode=1;});
-          '''.replace('\n          ', '\n'))
-      - name: Commit only reviewed source and tests
+          if "var purchaseRequested =" not in Path('js/ui/paywall.js').read_text():
+              original = subprocess.check_output(['git','show','af3ca1a6010caf6aae5d4d5972a445371f47fb34:.github/workflows/apply-mobile-access-fix.yml'], text=True)
+              script = original.split('        run: |\n',1)[1].split('      - name: Commit only reviewed source and tests',1)[0]
+              exec(compile(textwrap.dedent(script), '<reviewed-patch>', 'exec'))
+      - name: Commit source only
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          rm .github/workflows/apply-mobile-access-fix.yml
-          git add js/ui/paywall.js event-pass.css my-event/access.js my-event/index.html designer/index.html tests/mobile-access-browser.cjs .github/workflows
+          git add js/ui/paywall.js event-pass.css my-event/access.js my-event/index.html designer/index.html tests/mobile-access-browser.cjs
           git diff --cached --check
-          git commit -m "Fix mobile purchase dialog, direct paid entry, and booking connection errors"
-          git push origin HEAD:fix/mobile-event-pass-20260921
+          if ! git diff --cached --quiet; then
+            git commit -m "Fix mobile purchase dialog, direct paid entry, and booking connection errors"
+            git push origin HEAD:fix/mobile-event-pass-20260921
+          fi
