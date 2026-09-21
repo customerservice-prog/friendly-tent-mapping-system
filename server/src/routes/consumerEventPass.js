@@ -163,7 +163,7 @@ router.post('/event-pass/restore', wrap(async (req, res) => {
 function checkout(renewal) {
     return wrap(async (req, res) => {
         const body = req.body || {}, customerEmail = String(body.customerEmail || '').trim().toLowerCase();
-        if (customerEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+        if (customerEmail && (customerEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail))) {
             return res.status(400).json({ error: 'Please enter a valid email address' });
         }
         const design = (await query('SELECT * FROM designs WHERE id=$1', [req.params.designId])).rows[0];
@@ -188,13 +188,13 @@ function checkout(renewal) {
                 await fulfillEventPass(previous);
                 return res.json({ active: true, ...(await designResponse(design)) });
             }
-            if (previous.status === 'open' && previous.url && pending.customer_email === customerEmail) return res.json({ url: previous.url });
+            if (previous.status === 'open' && previous.url && (!customerEmail || !pending.customer_email || pending.customer_email === customerEmail)) return res.json({ url: previous.url });
         }
         const origin = safeOrigin(req), slug = tenant?.slug || 'generic';
         const returnPath = `${origin}/designer/?tenant=${encodeURIComponent(slug)}&design=${design.id}`;
         const session = await stripe.checkout.sessions.create({
             mode: 'payment',
-            customer_email: customerEmail,
+            ...(customerEmail ? { customer_email: customerEmail } : {}),
             line_items: [{ price_data: { currency: 'usd', unit_amount: amount, product_data: {
                 name: renewal ? 'RentSketch Event Pass Renewal' : 'RentSketch Event Pass',
                 description: `${days} days to edit, save, print and share one event design. One-time payment; rental equipment is separate.`,
@@ -202,7 +202,7 @@ function checkout(renewal) {
             metadata: { kind, designId: design.id, tenant: slug, durationDays: String(days) },
             success_url: returnPath + '&payment=success&checkout_session_id={CHECKOUT_SESSION_ID}',
             cancel_url: returnPath + '&payment=cancelled#draft=' + encodeURIComponent(signToken({ kind: 'event_pass_draft', designId: design.id }, { expiresIn: '24h' })),
-        }, { idempotencyKey: `event-pass:${design.id}:${kind}:${days}:${createHash('sha256').update(customerEmail).digest('hex').slice(0,24)}:${Math.floor(Date.now() / 1800000)}` });
+        }, { idempotencyKey: `event-pass:${design.id}:${kind}:${days}:${createHash('sha256').update(customerEmail || 'stripe-collected-email').digest('hex').slice(0,24)}:${Math.floor(Date.now() / 1800000)}` });
         await query(`INSERT INTO consumer_payments(design_id,customer_email,payment_type,amount_cents,status,stripe_checkout_session_id,duration_days)
             VALUES($1,$2,$3,$4,'pending',$5,$6) ON CONFLICT(stripe_checkout_session_id) DO NOTHING`,
             [design.id, customerEmail, renewal ? 'event_pass_extension' : kind, amount, session.id, days]);

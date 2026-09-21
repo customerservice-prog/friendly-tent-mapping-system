@@ -273,6 +273,34 @@
       finally { busy = false; button.disabled = false; button.textContent = 'Continue to checkout · ' + money(amount); }
     };
   }
+  async function directStripeCheckout() {
+    if (busy) return false;
+    busy = true;
+    try {
+      await getOffer();
+      if (!offer.required || active()) { continueProduct(); return true; }
+      if (returning && !ready) throw new Error('Your saved event is still being restored. Please try again in a moment.');
+      var auto = autosave(), id = await auto.flush();
+      if (!id) throw new Error('Your design could not be saved. Please try again.');
+      var result = await api('/designs/' + encodeURIComponent(id) + '/event-pass/checkout-session', {
+        customerEmail: '', anonymousSessionId: auto.getSessionId(),
+      });
+      if (result.active) {
+        var resumed = await api('/event-pass/resume', { designId: id, anonymousSessionId: auto.getSessionId() });
+        restoreScene(resumed); continueProduct(); return true;
+      }
+      if (!result.url || new URL(result.url).origin !== 'https://checkout.stripe.com') throw new Error('Secure checkout did not return a valid link.');
+      track('event_pass_checkout', { value: offer.priceCents / 100, design_id: id, direct: true });
+      (window.RentSketchCheckoutNavigate || function (url) { location.assign(url); })(result.url);
+      return false;
+    } catch (err) {
+      var view = openModal('Secure checkout could not open', '<p class="paywall-error" role="status"></p><button class="btn-primary" type="button" data-retry>Try secure checkout again</button><button type="button" class="pass-back" data-offer>Review Event Pass details</button>');
+      view.querySelector('.paywall-error').textContent = err.message;
+      view.querySelector('[data-retry]').onclick = function () { closeModal(); directStripeCheckout(); };
+      view.querySelector('[data-offer]').onclick = function () { closeModal(); showPurchase(); };
+      return false;
+    } finally { busy = false; }
+  }
   async function requestAccess(continuation) {
     window.RentSketchGuidedPreview?.close();
     try {
@@ -379,7 +407,7 @@
       if (purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !(returning && !verified)) {
         params.delete('purchase');
         history.replaceState(null, '', location.pathname + '?' + params.toString() + location.hash);
-        if (canEdit()) continueProduct(); else requestAccess();
+        if (canEdit()) continueProduct(); else directStripeCheckout();
       }
     }
   }
