@@ -1,0 +1,83 @@
+/* Scoped watch-only demonstration, separate from the editable layout. */
+.rs-guided-open #designerApp { display:none!important }
+.guided-preview { position:fixed;inset:0;z-index:2147483599;display:grid;place-items:center;padding:16px;background:#102c24f5;color:#193b31;font:15px/1.5 system-ui,-apple-system,sans-serif;overflow:auto;box-sizing:border-box }
+.guided-preview * { box-sizing:border-box }
+.guided-preview [hidden] { display:none!important }
+.gp-shell { width:min(1120px,100%);max-height:calc(100dvh - 32px);display:grid;grid-template-columns:minmax(0,1fr) 310px;grid-template-rows:auto minmax(160px,1fr) auto;background:#f5f7f3;border:1px solid #cbdccf;border-radius:22px;overflow:hidden;box-shadow:0 25px 70px #0005 }
+.gp-header { grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 24px;background:#14382d;color:#fafcf8 }
+.gp-eyebrow { margin:0 0 4px;color:#e5be71;font-size:11px;letter-spacing:.1em;text-transform:uppercase;font-weight:750 }
+.gp-header h2 { margin:0;font-size:23px;line-height:1.2 }
+.gp-header h2:focus { outline:none }
+.guided-preview button,.gp-booking { min-height:44px;font:700 13px/1.4 system-ui;border:1px solid #c9d8cc;border-radius:9px;padding:10px 13px;cursor:pointer;color:#193b31;background:white;text-align:center }
+.guided-preview button:focus-visible,.gp-booking:focus-visible { outline:3px solid #bc8929;outline-offset:2px }
+.guided-preview .gp-close { width:44px;flex-shrink:0;padding:0;font-size:28px;background:#ffffff14;color:white;border-color:#ffffff3d }
+.gp-workspace { position:relative;display:grid;grid-template-columns:94px minmax(0,1fr);min-width:0;min-height:260px;height:min(57vh,580px);overflow:hidden;background:#eaf0e7 }
+.gp-tools { display:flex;flex-direction:column;gap:5px;padding:12px 9px;border-right:1px solid #d4ded5;background:#fdfefb;user-select:none;pointer-events:none }
+.gp-tools span { padding:10px 5px;border-radius:8px;font-size:12px;font-weight:700;text-align:center;color:#71837b }
+.gp-tools .active { color:#163c2d;background:#e8eddb;box-shadow:inset 0 0 0 1px #c3d1ab }
+.gp-stage { min-width:0;position:relative;overflow:hidden }
+.gp-scene { position:absolute;inset:0;pointer-events:none;user-select:none }
+.gp-plan,.gp-3d { position:absolute;inset:0;pointer-events:none }
+.gp-plan svg { display:block;width:100%;height:100%;padding:12px }
+.gp-plan text { font:2px system-ui;fill:#526c5e }
+.gp-3d canvas { width:100%;height:100%;pointer-events:none!important }
+.gp-example { position:absolute;left:12px;bottom:8px;max-width:calc(100% - 24px);margin:0;padding:5px 8px;background:#fffffff0;border-radius:6px;color:#4f665b;font-size:10px;pointer-events:none }
+.gp-fallback { position:absolute;top:10px;left:10px;right:10px;padding:8px;margin:0;background:#fff6e4;border-radius:6px;font-size:12px }
+.gp-pointer { position:absolute;left:0;top:0;width:26px;z-index:5;pointer-events:none;transition:transform .8s cubic-bezier(.22,.65,.3,1);filter:drop-shadow(0 2px 2px #0004) }
+.gp-pointer svg { display:block;width:25px;height:30px;overflow:visible }
+.gp-pointer path { fill:#dcae58;stroke:#183c2e;stroke-width:2 }
+.gp-pointer span { display:block;background:#173d31;color:white;padding:1px 4px;border-radius:4px;font-size:9px;width:max-content }
+.gp-explanation { padding:24px;background:#fff;min-width:0;overflow:auto;border-left:1px solid #dce4dc }
+.gp-step { margin:0 0 8px;font-size:11px;font-weight:800;color:#67826d;text-transform:uppercase;letter-spacing:.08em }
+.gp-explanation h3 { margin:0 0 12px;font-size:24px;line-height:1.15;letter-spacing:-.02em }
+.gp-caption { margin:0;color:#4d6558;font-size:14px;line-height:1.65;min-height:125px }
+.gp-progress { margin:24px 0 12px;height:4px;background:#e5ebe3;overflow:hidden;border-radius:9px }
+.gp-progress span { height:100%;display:block;background:#ad7d33 }
+.gp-player { display:flex;flex-wrap:wrap;gap:6px;align-items:center }
+.gp-player button { font-size:12px;padding:8px 10px }
+.gp-time { margin-left:auto;color:#657b6f;font-size:11px }
+.gp-footer { grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px 14px;padding:14px 24px 16px;background:#fdfefb;border-top:1px solid #dce4dc }
+.guided-preview .gp-buy { color:#173c2d;background:#e8bd72;border-color:#e8bd72;font-weight:800;white-space:normal }
+.gp-booking { text-decoration:none;display:flex;align-items:center;justify-content:center;background:#edf3e8;border-color:#bacfaf }
+.gp-footer p { grid-column:1/-1;margin:0;text-align:center;color:#667a6d;font-size:11px }
+.gp-summary { position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(310px,calc(100% - 28px));display:flex;flex-direction:column;gap:8px;padding:23px;background:#ffffffed;border:1px solid #bbd1bd;border-radius:14px;box-shadow:0 10px 40px #12332225;pointer-events:none }
+.gp-summary p { margin:0;text-transform:uppercase;font-weight:700;font-size:11px;letter-spacing:.08em }
+.gp-summary strong { font-size:34px;line-height:1.2 }.gp-summary span { font-size:13px }.gp-summary small { font-size:10px;color:#708074 }
+@media(max-width:700px) {
+ .guided-preview { padding:0 }.gp-shell { width:100%;max-height:100dvh;height:100dvh;border:0;border-radius:0;grid-template-columns:1fr;grid-template-rows:auto minmax(80px,1fr) minmax(0,auto) auto }
+ .gp-header { padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top));gap:8px }.gp-header h2 { font-size:18px }.gp-eyebrow { font-size:9px }
+ .gp-workspace { height:auto;min-height:80px;grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) }
+ .gp-tools { flex-direction:row;justify-content:space-between;padding:5px 6px;gap:1px;border-right:0;border-bottom:1px solid #d4ded5 }.gp-tools span { padding:6px 3px;font-size:9px;white-space:nowrap }
+ .gp-explanation { padding:12px 14px 8px;border-left:0;border-top:1px solid #dce4dc;min-height:0;max-height:38dvh;overflow:auto }.gp-step { margin-bottom:3px;font-size:9px }.gp-explanation h3 { font-size:19px;margin-bottom:5px }.gp-caption { min-height:0;font-size:12px;line-height:1.45 }
+ .gp-progress { margin:9px 0 6px }.gp-player { gap:5px }.gp-player button { padding:5px 8px;font-size:11px;min-height:44px }.gp-time { font-size:10px }
+ .gp-footer { grid-template-columns:1fr;gap:6px;padding:8px 14px max(10px,env(safe-area-inset-bottom)) }.gp-footer p { font-size:9px;line-height:1.4 }.gp-buy,.gp-booking { font-size:12px!important;min-height:44px!important;padding:9px!important }
+ .gp-summary { gap:4px;padding:12px;width:220px }.gp-summary strong { font-size:24px }.gp-summary span { font-size:11px }
+ .gp-example { font-size:8px;bottom:5px;left:5px;max-width:calc(100% - 10px) }
+}
+@media(max-height:430px) and (min-width:500px) {
+ .guided-preview { padding:0 }.gp-shell { height:100dvh;max-height:100dvh;width:100%;border:0;border-radius:0;grid-template-columns:minmax(0,1fr) 260px;grid-template-rows:auto minmax(0,1fr) auto }
+ .gp-header { grid-column:1/-1;padding:6px 12px }.gp-header h2 { font-size:16px }.gp-eyebrow { font-size:8px }.gp-close { min-height:44px!important;height:44px!important;width:44px!important }
+ .gp-workspace { grid-template-columns:64px minmax(0,1fr);grid-template-rows:1fr;min-height:0;height:auto }.gp-tools { flex-direction:column;padding:3px;justify-content:space-around;gap:0 }.gp-tools span { padding:3px;font-size:9px }
+ .gp-explanation { padding:8px 12px;max-height:none;overflow:auto;border-top:0 }.gp-explanation h3 { font-size:17px;margin-bottom:5px }.gp-caption { font-size:11px;line-height:1.4;min-height:0 }.gp-step { font-size:8px;margin-bottom:3px }.gp-progress { margin:8px 0 4px }.gp-player button { min-height:44px;padding:5px;font-size:10px }.gp-time { font-size:9px }
+ .gp-footer { grid-column:1/-1;grid-template-columns:1fr 1fr;gap:4px 8px;padding:6px 12px }.gp-footer p { font-size:8px }.gp-footer button,.gp-footer a { min-height:44px!important;font-size:11px!important;padding:6px!important }
+ .gp-summary { gap:2px;padding:8px }.gp-summary strong { font-size:18px }.gp-summary p,.gp-summary span { font-size:9px }.gp-summary small { font-size:8px }
+}
+@media(prefers-reduced-motion:reduce) { .gp-pointer { transition:none } }
+
+/* Keep the demonstration useful inside Friendly's 44px mobile frame header. */
+@media(max-width:380px) and (min-height:431px) and (max-height:700px) {
+ .gp-header { padding:8px 12px;min-height:60px }
+ .gp-header h2 { font-size:16px }
+ .gp-eyebrow { font-size:8px;line-height:1.2;letter-spacing:.06em }
+ .gp-tools { padding:3px 5px }
+ .gp-tools span { font-size:8px;padding:5px 2px }
+ .gp-explanation { display:flex;flex-direction:column;max-height:164px;overflow:hidden;padding:8px 12px }
+ .gp-step,.gp-explanation h3,.gp-progress,.gp-player { flex-shrink:0 }
+ .gp-explanation h3 { font-size:17px;line-height:1.15;margin-bottom:4px }
+ .gp-caption { min-height:0;flex-shrink:1;overflow:auto;font-size:11px;line-height:1.4 }
+ .gp-player { display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:4px }
+ .gp-player button { font-size:10px;min-width:0;padding:5px 3px }
+ .gp-time { display:none }
+ .gp-footer { grid-template-columns:1fr 1fr;padding:8px 12px;gap:5px 8px }
+ .gp-footer .gp-buy,.gp-footer .gp-booking { font-size:11px!important;padding:7px!important }
+}

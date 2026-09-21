@@ -67,9 +67,11 @@
     document.body.classList.remove('tent-preview-loading');
     if (readySent) return;
     readySent = true;
+    window.RENTSKETCH_PRODUCT_PREVIEW_READY = true;
     status.hidden = true;
     design.disabled = false;party.disabled=false;
     try { parent.postMessage({ type: 'rentsketch.ready', mode: previewMode, tenant: tenantSlug, productId: tent.productId || null, externalId: tent.externalId || null, tentId: inflatable?null:tent.id, tentName: inflatable?null:tent.name, productName: tent.name, renderer: renderer }, '*'); } catch (_) {}
+    window.dispatchEvent(new CustomEvent('rentsketch:productPreviewReady'));
   }
   function fail(reason) {
     if (failed) return;

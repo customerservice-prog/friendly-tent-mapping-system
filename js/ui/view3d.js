@@ -192,7 +192,8 @@ export function init(container,callbacks={}) {
   function fitCamera(){if(state?.tent){cameraMode='outside';frame(state.tent);return true;}return false;}
   function playTimelapse(){cancelAnimationFrame(animationFrame);const start=performance.now();function tick(now){if(destroyed)return;const k=Math.min(1,(now-start)/2200);structure.scale.y=Math.max(.02,1-Math.pow(1-k,3));renderer.shadowMap.needsUpdate=true;invalidate();if(k<1)animationFrame=requestAnimationFrame(tick);}animationFrame=requestAnimationFrame(tick);}
   const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
-  active=api;return api;
+  // A watch-only sample must not replace the real designer renderer.
+  if(callbacks.registerActive !== false)active=api;return api;
 }
 export function update(s){active?.rebuild(s);}
 export function rebuild(s){active?.rebuild(s);}
