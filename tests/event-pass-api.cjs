@@ -85,6 +85,17 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal((await request('/api/consumer/event-pass/preview',{...previewSession,tenant:'lakeside'})).body.limited,false);
   assert.equal((await request('/api/consumer/event-pass/preview',{...previewSession,anonymousSessionId:'bad'})).status,400);
   const preview = { tentId: 'pole-20x20', objects: [], guestCount: 0, lightingId: 'lighting-none' }, furnished = { ...preview, objects: [{ id: 't1', kind: 'table', tableId: 'round-5ft' }] };
+  const direct = await request('/api/consumer/event-pass/direct-checkout', { tenant: 'friendly', anonymousSessionId: 'direct-browser-session-12345' });
+  assert.equal(direct.status, 200);
+  assert.match(direct.body.url, /^https:\/\/checkout\.stripe\.com\//);
+  const directPayment = (await pg.query("SELECT p.*,d.scene,d.guest_count FROM consumer_payments p JOIN designs d ON d.id=p.design_id WHERE p.stripe_checkout_session_id=$1", [[...sessions.values()][0].id])).rows[0];
+  assert.equal(directPayment.amount_cents, 999);
+  assert.equal(directPayment.customer_email, '');
+  assert.equal(directPayment.guest_count, 0);
+  assert.equal(directPayment.scene.guestCount, 0);
+  assert.deepEqual(directPayment.scene.objects, []);
+  assert.equal([...sessions.values()][0].args.customer_email, undefined, 'Stripe collects email for direct CTA');
+  assert.equal((await request('/api/consumer/event-pass/direct-checkout', { tenant: 'friendly', anonymousSessionId: 'direct-browser-session-12345' })).body.url, direct.body.url, 'repeat click reuses open direct checkout');
   for (const route of ['/api/consumer/designs', '/api/tenants/friendly/designs']) {
     assert.equal((await request(route, { scene: furnished, anonymousSessionId: 'owner-private-token' })).status, 402, 'a new free draft cannot save furniture');
     const created = await request(route, { scene: preview, anonymousSessionId: 'owner-private-token' }); assert.equal(created.status, 201);
