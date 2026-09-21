@@ -94,8 +94,12 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal(directPayment.guest_count, 0);
   assert.equal(directPayment.scene.guestCount, 0);
   assert.deepEqual(directPayment.scene.objects, []);
-  assert.equal([...sessions.values()][0].args.customer_email, undefined, 'Stripe collects email for direct CTA');
+  const directSession = [...sessions.values()][0];
+  assert.equal(directSession.args.customer_email, undefined, 'Stripe collects email for direct CTA');
   assert.equal((await request('/api/consumer/event-pass/direct-checkout', { tenant: 'friendly', anonymousSessionId: 'direct-browser-session-12345' })).body.url, direct.body.url, 'repeat click reuses open direct checkout');
+  await pg.query('DELETE FROM consumer_payments WHERE stripe_checkout_session_id=$1', [directSession.id]);
+  await pg.query('DELETE FROM designs WHERE id=$1', [direct.body.designId]);
+  sessions.clear(); idempotency.clear(); creates = 0;
   for (const route of ['/api/consumer/designs', '/api/tenants/friendly/designs']) {
     assert.equal((await request(route, { scene: furnished, anonymousSessionId: 'owner-private-token' })).status, 402, 'a new free draft cannot save furniture');
     const created = await request(route, { scene: preview, anonymousSessionId: 'owner-private-token' }); assert.equal(created.status, 201);
