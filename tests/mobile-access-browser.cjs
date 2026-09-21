@@ -24,7 +24,8 @@ const server = http.createServer((req,res)=>{
   try {
     for(const [width,height] of [[320,568],[360,640],[375,667],[390,844],[412,915],[568,320],[844,390],[768,1024]]){
       const context=await browser.newContext({viewport:{width,height},hasTouch:true});const page=await context.newPage();
-      await page.goto(base+'/fixture?tenant=friendly&purchase=1');
+      await page.goto(base+'/fixture?tenant=friendly');
+      await page.locator('[data-buy-pass]').click();
       await page.locator('#passEmail').waitFor();
       assert.equal(await page.locator('.pass-close').textContent(),'×');
       assert.equal(await page.locator('#passEmail').evaluate(el=>el===document.activeElement),false,'No keyboard-triggering autofocus');
@@ -32,7 +33,6 @@ const server = http.createServer((req,res)=>{
       const initial=await page.locator('.paywall-price').boundingBox();assert(initial&&initial.y>=0&&initial.y+initial.height<=height,'Price visible initially');
       assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'No horizontal page overflow');
       assert.equal(await page.locator('.paywall-content').evaluate(el=>el.scrollWidth<=el.clientWidth),true,'No horizontal dialog overflow');
-      assert.equal(new URL(page.url()).searchParams.has('purchase'),false,'Purchase intent consumed once');
       await page.screenshot({path:path.join(output,`purchase-${width}x${height}.png`)});
       await page.locator('.paywall-content').evaluate(el=>el.scrollTop=el.scrollHeight);
       const close=await page.locator('.pass-close').boundingBox();assert(close&&close.y>=0&&close.y+close.height<=height,'Close remains accessible');
