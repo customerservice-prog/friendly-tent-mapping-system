@@ -27,6 +27,7 @@ const server=http.createServer((req,res)=>{
    assert.equal(await p.evaluate(()=>window.RentSketchEventPass.canEdit()),false);assert.equal(await p.evaluate(()=>window.savedWrites),0);assert.equal(await p.evaluate(()=>window.loadedScenes.length),0);
    assert.equal(await p.locator('.gp-scene').getAttribute('inert'),'');assert.equal(await p.locator('#designerApp').isVisible(),false);
    assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+   await p.screenshot({path:path.join(out,`guided-initial-${width}x${height}.png`)});
    for(const sel of ['.gp-close','.gp-buy','.gp-booking','[data-pause]']){const r=await p.locator(sel).boundingBox();assert(r&&r.x>=0&&r.y>=0&&r.x+r.width<=width+1&&r.y+r.height<=height+1,sel+' fits '+width+'x'+height);}
    assert.match(await p.locator('.gp-buy').innerText(),/\$9.99.*30 days/);await p.screenshot({path:path.join(out,`guided-${width}x${height}.png`)});
    await p.locator('.gp-close').click();assert.equal(await p.locator('.guided-preview').count(),0);assert.equal(await p.locator('#designerApp').getAttribute('inert'),null);assert.equal(await p.evaluate(()=>document.body.style.overflow),'');

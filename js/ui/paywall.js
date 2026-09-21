@@ -13,7 +13,14 @@
   var productPreview = ['tent', 'inflatable'].includes(params.get('focus')) && params.get('autoplace') === '1';
   var offer, verified, savedPaidEvent, modal, offerPromise, previewLimit, ready = false, busy = false;
   var guidedAutoAttempted = false;
+  function maybeStartGuidedPreview() {
+    if (guidedAutoAttempted || !ready || purchaseRequested || checkoutId || draftToken || recoveryToken || modal) return;
+    if (productPreview && !window.RENTSKETCH_PRODUCT_PREVIEW_READY) return;
+    guidedAutoAttempted = true; showGuidedPreview();
+  }
+  window.addEventListener('rentsketch:productPreviewReady', maybeStartGuidedPreview);
   function showGuidedPreview() {
+    if (productPreview && !window.RENTSKETCH_PRODUCT_PREVIEW_READY) return;
     if (!offer?.required || active() || savedPaidEvent || (returning && !verified) || verified?.renewable || verified?.includedWithOrder || document.body.classList.contains('rs-preview-expired')) return;
     window.RentSketchGuidedPreview?.open({
       hasAccess: function () { return canEdit(); },
@@ -365,7 +372,7 @@
       // already-paid/booked designs retain their existing flow. No demo scene
       // is ever loaded into the real editor or autosave.
       if (!guidedAutoAttempted && !purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !modal) {
-        guidedAutoAttempted = true; showGuidedPreview();
+        maybeStartGuidedPreview();
       }
       // A priced purchase link opens the offer, never a charge. Restore
       // existing access first so returning customers are not sold twice.
