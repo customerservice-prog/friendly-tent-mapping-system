@@ -12,6 +12,7 @@ const offer = { required: true, available: true, priceCents: 999, durationDays: 
 async function setup(query, options = {}) {
   const dom = new JSDOM(html, { url: 'https://rentsketch.com/designer/' + query, runScripts: 'outside-only', pretendToBeVisual: true }), w = dom.window, calls = [];
   w.AbortController = AbortController; w.ResizeObserver = class { observe() {} disconnect() {} }; w.confirm = () => { throw Error('No surprise restore dialog'); }; w.alert = () => {};
+  if (options.navigations) w.RentSketchCheckoutNavigate = url => options.navigations.push(url);
   if (options.embedded) Object.defineProperty(w, 'parent', { value: { postMessage() {} } });
   w.localStorage.setItem('rentsketch-anon-session', 'existing-browser-owner');
   if (options.previewDeadline) w.localStorage.setItem('rentsketch-preview-deadline:v1', String(options.previewDeadline));
@@ -182,6 +183,16 @@ async function setup(query, options = {}) {
   t = await setup('?tenant=friendly#recoveryToken=fixture.private.token', { restored: emptyFrame, previewSeconds: 0, previewDeadline: Date.now() - 1000 });
   assert.equal(t.w.document.querySelector('.preview-limit-screen'), null, 'verified access overrides preview expiry');
   assert.equal(t.calls.filter(c => c.url.endsWith('/event-pass/preview')).length, 0, 'paid event does not consume a preview');
+  t.dom.window.close();
+  const directNavigations = [];
+  t = await setup('?tenant=friendly&purchase=1&source=home_designer_section', { navigations: directNavigations });
+  await wait(40);
+  assert.equal(t.checkouts, 1, 'priced homepage CTA creates one Event Pass checkout');
+  assert.equal(t.w.document.querySelector('.paywall-overlay'), null, 'priced homepage CTA skips the RentSketch access modal');
+  const directCheckoutCall = t.calls.find(c => c.url.endsWith('/event-pass/checkout-session'));
+  assert.equal(directCheckoutCall.body.customerEmail, '', 'Stripe collects the email on hosted checkout');
+  assert.equal(directNavigations.length, 1);
+  assert.match(directNavigations[0], /^https:\/\/checkout\.stripe\.com\//);
   t.dom.window.close();
   console.log('PASS preview limit: visible countdown, timed expiry, exact scene retained, inert controls, checkout/recovery, reload/product persistence, outage bounds and paid access override.');
   console.log('PASS Event Pass UI: free exact preview, $9.99 / 30-day offer, iframe checkout, paid save/reopen with contact details, delivery ZIP and scene preferences, fresh review prices, same paid design for isolated quote, other-product resume, private recovery, forged success rejection, $4.99 renewal and launch-off behavior. DOM checks only; no GPU or payment/network writes.');
