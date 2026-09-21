@@ -7,8 +7,8 @@
   <meta name="robots" content="noindex">
   <title>Open My Event | RentSketch</title>
   <link rel="icon" href="/logo.png">
-  <link rel="stylesheet" href="/my-event/access.css?v=20260920-instant-1">
-  <script src="/my-event/access.js?v=20260920-instant-1" defer></script>
+  <link rel="stylesheet" href="/my-event/access.css?v=20260921-mobile-access-1">
+  <script src="/my-event/access.js?v=20260921-mobile-access-1" defer></script>
 </head>
 <body>
   <header><a class="brand" href="/"><img src="/logo.png" width="34" height="34" alt="">RentSketch</a><a href="/designer/" data-preview>Free preview</a></header>
@@ -20,9 +20,9 @@
       <summary>Already booked with Friendly? Design for free</summary>
       <form id="orderAccessForm">
         <label for="orderFirstName">First name on your booking</label>
-        <input id="orderFirstName" name="given-name" autocomplete="given-name" maxlength="100" placeholder="Your first name" required>
+        <input id="orderFirstName" name="given-name" autocomplete="given-name" enterkeyhint="next" maxlength="100" placeholder="Your first name" required>
         <label for="orderNumber">Friendly order number</label>
-        <input id="orderNumber" name="orderNumber" autocomplete="off" maxlength="80" placeholder="Order number from your receipt" required>
+        <input id="orderNumber" name="orderNumber" autocomplete="off" enterkeyhint="go" maxlength="80" placeholder="Order number from your receipt" required>
         <button type="submit">Open my event</button>
       </form>
       <p id="orderAccessStatus" role="status" aria-live="polite"></p>

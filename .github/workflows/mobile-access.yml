@@ -1,0 +1,26 @@
+name: Mobile Event Pass regression
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm --prefix tests ci
+      - run: npm --prefix tests run test:event-pass
+      - run: npm install --prefix /tmp/mobile-qa --no-save playwright@1.56.1
+      - run: /tmp/mobile-qa/node_modules/.bin/playwright install --with-deps chromium
+      - run: NODE_PATH=/tmp/mobile-qa/node_modules node tests/mobile-access-browser.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobile-access-evidence
+          path: qa-mobile-access/

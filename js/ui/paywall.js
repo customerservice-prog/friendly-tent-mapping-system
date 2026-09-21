@@ -9,6 +9,7 @@
   var checkoutId = params.get('checkout_session_id') || fragment.get('eventPass');
   var draftToken = fragment.get('draft');
   var recoveryToken = params.get('recoveryToken') || fragment.get('recoveryToken');
+  var purchaseRequested = params.get('purchase') === '1';
   var productPreview = ['tent', 'inflatable'].includes(params.get('focus')) && params.get('autoplace') === '1';
   var offer, verified, savedPaidEvent, modal, offerPromise, previewLimit, ready = false, busy = false;
   var saved = read('rentsketch-autosave:' + slug);
@@ -34,6 +35,7 @@
       return data;
     }).catch(function (err) {
       if (err.name === 'AbortError') throw new Error('That took too long. Your preview is safe. Please try again.');
+      if (err instanceof TypeError || err instanceof SyntaxError) throw new Error('We couldn’t connect right now. Your design is safe. Please try again.');
       throw err;
     }).finally(function () { clearTimeout(timer); });
   }
@@ -54,25 +56,53 @@
     window.dispatchEvent(new CustomEvent('rentsketch:' + event, { detail: data }));
     if (typeof window.gtag === 'function') window.gtag('event', event, data);
   }
-  function closeModal() { if (modal) { var focus = modal._returnFocus; modal.remove(); modal = null; if (focus && focus.isConnected) focus.focus(); } previewLimit?.focusIfLocked(); }
+  function closeModal() {
+    if (modal) {
+      var focus = modal._returnFocus;
+      if (modal._cleanupViewport) modal._cleanupViewport();
+      document.body.style.overflow = modal._previousOverflow;
+      modal.remove(); modal = null;
+      if (focus && focus.isConnected) focus.focus({ preventScroll: true });
+    }
+    previewLimit?.focusIfLocked();
+  }
   function openModal(title, html) {
     closeModal();
     var focus = document.activeElement;
     modal = document.createElement('div'); modal.className = 'paywall-overlay'; modal._returnFocus = focus;
-    modal.innerHTML = '<section class="paywall-modal" role="dialog" aria-modal="true" aria-labelledby="eventPassTitle"><button class="pass-close" type="button" aria-label="Close access dialog">×</button><div class="pass-eyebrow">RentSketch Event Pass</div><h2 id="eventPassTitle"></h2>' + html + '</section>';
+    modal.innerHTML = '<section class="paywall-modal" role="dialog" aria-modal="true" aria-labelledby="eventPassTitle"><div class="paywall-header"><button class="pass-close" type="button" aria-label="Close access dialog">×</button><div class="pass-eyebrow">RentSketch Event Pass</div><h2 id="eventPassTitle" tabindex="-1"></h2></div><div class="paywall-content">' + html + '</div></section>';
     modal.querySelector('h2').textContent = title;
     document.body.appendChild(modal);
+    modal._previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    // Follow the usable viewport when a mobile keyboard opens.
+    var current = modal, viewport = window.visualViewport;
+    if (viewport) {
+      var fitViewport = function () {
+        current.style.top = viewport.offsetTop + 'px';
+        current.style.height = viewport.height + 'px';
+      };
+      viewport.addEventListener('resize', fitViewport);
+      viewport.addEventListener('scroll', fitViewport);
+      current._cleanupViewport = function () {
+        viewport.removeEventListener('resize', fitViewport);
+        viewport.removeEventListener('scroll', fitViewport);
+      };
+      fitViewport();
+    }
     modal.querySelector('.pass-close').onclick = closeModal;
     modal.addEventListener('click', function (event) { if (event.target === modal) closeModal(); });
     modal.addEventListener('keydown', function (event) {
       if (event.key === 'Escape') { event.preventDefault(); closeModal(); return; }
       if (event.key !== 'Tab') return;
-      var controls = Array.from(modal.querySelectorAll('button:not([disabled]),a[href],input,textarea')).filter(function (el) { return !el.hidden; });
+      var controls = Array.from(modal.querySelectorAll('button:not([disabled]),a[href],input,textarea')).filter(function (el) { return !el.closest('[hidden],[inert]') && el.getClientRects().length; });
+      if (!controls.length) return;
       var first = controls[0], last = controls[controls.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
       if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     });
-    modal.querySelector('.pass-close').focus();
+    // Read the offer first; do not summon the keyboard or scroll past pricing.
+    modal.querySelector('h2').focus({ preventScroll: true });
     return modal;
   }
   function render() {
@@ -100,7 +130,7 @@
       bar.innerHTML = '<span><strong></strong><small></small></span><button type="button" class="btn-primary" data-buy-pass>Design My Event</button>';
       bar.querySelector('strong').textContent = renew ? 'Keep working on your event' : 'Make this event yours';
       bar.querySelector('small').textContent = (renew ? money(offer.renewalPriceCents) : money(offer.priceCents)) + ' · one event · ' + (renew ? offer.renewalDurationDays : offer.durationDays) + ' days · no subscription';
-      bar.querySelector('[data-buy-pass]').textContent = renew ? 'Renew Event Pass' : 'Design My Event';
+      bar.querySelector('[data-buy-pass]').textContent = renew ? 'Renew Event Pass' : 'Start Designing · ' + money(offer.priceCents) + ' / ' + offer.durationDays + ' days';
       bar.querySelector('[data-buy-pass]').onclick = function () { requestAccess(); };
       var recovery = document.createElement('button'); recovery.type = 'button'; recovery.className = 'pass-recover'; recovery.textContent = 'Open my event'; recovery.setAttribute('aria-label', 'Open my saved event'); recovery.onclick = showRecovery; bar.appendChild(recovery);
       if (savedPaidEvent) {
@@ -141,7 +171,7 @@
   function showRecovery() {
     var view = openModal('Open your saved event', '<p><a href="https://rentsketch.com/my-event/?tenant=friendly&mode=order" target="_blank" rel="noopener">Have a Friendly booking? Open with your first name and order number.</a></p><p>For a purchased Event Pass, use your checkout email to receive a private link on this phone or any other device.</p><form><label class="paywall-label" for="recoverEmail">Event Pass email</label><input id="recoverEmail" class="paywall-email" type="email" autocomplete="email" maxlength="254" required placeholder="you@example.com"><button type="submit" class="btn-primary">Email my event link</button></form><p class="paywall-error" role="status" aria-live="polite"></p><p class="pass-fine">No password or code to remember. Your access keeps its original expiration date.</p>');
     if (verified && verified.customerEmail) view.querySelector('input').value = verified.customerEmail;
-    view.querySelector('input').focus();
+    // The customer chooses when to open the mobile keyboard.
     view.querySelector('form').onsubmit = async function (event) {
       event.preventDefault(); var button = view.querySelector('[type="submit"]'); if (button.disabled) return;
       button.disabled = true; button.textContent = 'Requesting your link…';
@@ -190,7 +220,7 @@
     view.querySelector('[data-terms]').onclick = function () { window.RentSketchCustomerEntry?.terms(); };
     view.querySelector('[data-privacy]').onclick = function () { window.RentSketchCustomerEntry?.privacy(); };
     if (verified && verified.customerEmail) view.querySelector('#passEmail').value = verified.customerEmail;
-    view.querySelector('#passEmail').focus();
+    // Keep the price and term visible until the customer taps the email field.
     track('event_pass_offer', { value: amount / 100 });
     view.querySelector('form').onsubmit = async function (event) {
       event.preventDefault(); if (busy) return;
@@ -317,6 +347,13 @@
         resume: savedPaidEvent ? function () { restoreScene(savedPaidEvent); continueProduct(); } : null,
       });
       render();
+      // A priced purchase link opens the offer, never a charge. Restore
+      // existing access first so returning customers are not sold twice.
+      if (purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !(returning && !verified)) {
+        params.delete('purchase');
+        history.replaceState(null, '', location.pathname + '?' + params.toString() + location.hash);
+        if (canEdit()) continueProduct(); else requestAccess();
+      }
     }
   }
   boot();
