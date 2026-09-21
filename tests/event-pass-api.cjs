@@ -206,6 +206,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   bookedOrders.set('expired-fixture', { ...booked, id: 'expired-fixture', orderNumber: 'EXPIRED', eligible: true, expiresAt: new Date(Date.now()-1000).toISOString() });
   assert.equal((await claim({ orderNumber: 'EXPIRED', firstName: 'Booked' })).status, 403);
   assert.equal((await pg.query("SELECT count(*)::int AS n FROM entitlements WHERE source='friendly_order'")).rows[0].n, 1);
+  smtpReady = true;
   const directBefore = creates;
   const directResponse = await fetch(base + '/api/consumer/event-pass/direct-checkout?tenant=friendly&source=homepage-test', { redirect: 'manual' });
   assert.equal(directResponse.status, 303, 'direct paid CTA responds with See Other to Stripe');
