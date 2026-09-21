@@ -1,0 +1,50 @@
+name: Compact short-phone walkthrough
+on:
+  push:
+    branches: [feat/watch-only-guided-preview]
+    paths: [.github/workflows/compact-guided-mobile-once.yml]
+permissions:
+  contents: write
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/watch-only-guided-preview
+      - shell: python
+        run: |
+          from pathlib import Path
+          p=Path('guided-preview.css');s=p.read_text();assert '44px mobile frame header' not in s
+          p.write_text(s+'''
+          /* Keep the demonstration useful inside Friendly's 44px mobile frame header. */
+          @media(max-width:380px) and (min-height:431px) and (max-height:700px) {
+           .gp-header { padding:8px 12px;min-height:60px }
+           .gp-header h2 { font-size:16px }
+           .gp-eyebrow { font-size:8px;line-height:1.2;letter-spacing:.06em }
+           .gp-tools { padding:3px 5px }
+           .gp-tools span { font-size:8px;padding:5px 2px }
+           .gp-explanation { display:flex;flex-direction:column;max-height:164px;overflow:hidden;padding:8px 12px }
+           .gp-step,.gp-explanation h3,.gp-progress,.gp-player { flex-shrink:0 }
+           .gp-explanation h3 { font-size:17px;line-height:1.15;margin-bottom:4px }
+           .gp-caption { min-height:0;flex-shrink:1;overflow:auto;font-size:11px;line-height:1.4 }
+           .gp-player { display:grid;grid-template-columns:1fr 1fr 1.2fr;gap:4px }
+           .gp-player button { font-size:10px;min-width:0;padding:5px 3px }
+           .gp-time { display:none }
+           .gp-footer { grid-template-columns:1fr 1fr;padding:8px 12px;gap:5px 8px }
+           .gp-footer .gp-buy,.gp-footer .gp-booking { font-size:11px!important;padding:7px!important }
+          }
+          ''')
+          p=Path('tests/guided-preview-browser.cjs');s=p.read_text();assert s.count('[[320,568]')==1;s=s.replace('[[320,568]','[[320,524],[320,568]')
+          s=s.replace("['.gp-close','.gp-buy','.gp-booking','[data-pause]']","['.gp-close','.gp-buy','.gp-booking','[data-pause]','[data-replay]','[data-narration]']")
+          s=s.replace("   assert.match(await p.locator('.gp-buy')", "   if(width===320)assert((await p.locator('.gp-stage').boundingBox()).height>=130,'Short phone keeps a useful scene size');\n   assert.match(await p.locator('.gp-buy')")
+          p.write_text(s)
+      - run: |
+          node --check tests/guided-preview-browser.cjs
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add guided-preview.css tests/guided-preview-browser.cjs
+          git diff --cached --check
+          git commit -m 'Keep the guided event and every playback control visible on small embedded phones'
+          git push origin HEAD:feat/watch-only-guided-preview
