@@ -15,9 +15,37 @@ jobs:
           node-version: 22
       - run: npm install --prefix /tmp/public-qa --no-save playwright@1.56.1
       - run: /tmp/public-qa/node_modules/.bin/playwright install --with-deps chromium
+      - name: Wait for the published walkthrough release
+        run: |
+          node <<'JS'
+          (async()=>{
+            for(let attempt=0;attempt<30;attempt++){
+              try{
+                const r=await fetch('https://rentsketch.com/js/ui/guided-preview.js?release=6c463ba7',{cache:'no-store',signal:AbortSignal.timeout(10000)});
+                const text=await r.text();
+                if(r.ok&&text.includes('window.RentSketchGuidedPreview')&&text.includes('if (paused) stopVoice(); else speak(); updatePlayer(); render();')){console.log('Published guided-preview release is available.');return;}
+              }catch{}
+              await new Promise(resolve=>setTimeout(resolve,5000));
+            }
+            throw new Error('The expected guided-preview release is not live.');
+          })().catch(e=>{console.error(e);process.exitCode=1;});
+          JS
       - run: NODE_PATH=/tmp/public-qa/node_modules node tests/guided-public-browser.cjs
         env:
-          GUIDED_USE_WORKTREE: '1'
+          GUIDED_USE_WORKTREE: '0'
+      - name: Verify access service readiness without email or payment
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict'),fs=require('node:fs');
+          (async()=>{
+            const base='https://rentsketch-api-production.up.railway.app/api/consumer';
+            const get=async p=>{const r=await fetch(base+p,{signal:AbortSignal.timeout(20000)});assert(r.ok,p);return r.json();};
+            const [offer,email,booking]=await Promise.all([get('/event-pass/offer?tenant=friendly'),get('/event-pass/email-status'),get('/order-access/status')]);
+            const data={priceCents:offer.priceCents,durationDays:offer.durationDays,recurring:offer.recurring,paymentReady:offer.available,paymentMode:offer.paymentMode,emailReady:email.ready,bookingReady:booking.available};
+            assert.equal(data.priceCents,999);assert.equal(data.durationDays,30);assert.equal(data.recurring,false);assert(data.paymentReady&&data.emailReady&&data.bookingReady);assert.equal(data.paymentMode,'live');
+            fs.mkdirSync('qa-guided-live',{recursive:true});fs.writeFileSync('qa-guided-live/readiness.json',JSON.stringify(data,null,2));console.log(JSON.stringify(data,null,2));
+          })().catch(e=>{console.error(e);process.exitCode=1;});
+          JS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
