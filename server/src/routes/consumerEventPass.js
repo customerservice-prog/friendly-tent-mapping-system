@@ -207,6 +207,82 @@ router.get('/event-pass/direct-checkout', wrap(async (req, res) => {
     res.redirect(303, session.url);
 }));
 
+router.post('/event-pass/direct-checkout', wrap(async (req, res) => {
+    const slug = String(req.body?.tenant || 'friendly');
+    const anonymousSessionId = String(req.body?.anonymousSessionId || '').trim();
+    if (!['friendly','generic'].includes(slug)) return res.status(400).json({ error: 'Invalid Event Pass tenant' });
+    if (!/^[a-zA-Z0-9_:-]{16,160}$/.test(anonymousSessionId)) return res.status(400).json({ error: 'A valid browser session is required.' });
+    const tenant = slug === 'generic' ? null : (await query('SELECT * FROM tenants WHERE slug=$1', [slug])).rows[0];
+    if (slug !== 'generic' && !tenant) return res.status(404).json({ error: 'Rental company not found' });
+    const offer = passOffer(tenant);
+    if (!isPassEnabled(tenant)) return res.status(409).json({ error: 'This designer does not require an Event Pass' });
+    const ready = await paymentReadiness();
+    if (!ready.available) return res.status(503).json({ error: 'Checkout is temporarily unavailable. Please try again shortly.' });
+    if (!await emailReadiness()) return res.status(503).json({ error: 'Access email is temporarily unavailable. Please try again shortly; you have not been charged.' });
+    const stripe = getStripe();
+
+    const prior = (await query(`
+      SELECT p.stripe_checkout_session_id,p.design_id
+      FROM consumer_payments p
+      JOIN designs d ON d.id=p.design_id
+      LEFT JOIN tenants t ON t.id=d.tenant_id
+      WHERE p.status='pending'
+        AND p.payment_type='consumer_event_pass'
+        AND p.amount_cents=$1
+        AND COALESCE(p.duration_days,30)=$2
+        AND d.anonymous_session_id=$3
+        AND COALESCE(t.slug,'generic')=$4
+      ORDER BY p.created_at DESC LIMIT 1`,
+      [offer.priceCents,offer.durationDays,anonymousSessionId,slug])).rows[0];
+    if (prior?.stripe_checkout_session_id) {
+      try {
+        const existing = await stripe.checkout.sessions.retrieve(prior.stripe_checkout_session_id);
+        if (existing.payment_status === 'paid') {
+          await fulfillEventPass(existing);
+          return res.json({ active: true, designId: prior.design_id });
+        }
+        if (existing.status === 'open' && existing.url) return res.json({ url: existing.url, designId: prior.design_id });
+      } catch (_) {}
+    }
+
+    const scene = {
+      eventName: 'My Event',
+      eventType: null,
+      guestCount: 0,
+      tentId: null,
+      objects: [],
+      zones: [],
+      aisles: [],
+      surfaceType: 'notSure',
+      lightingId: 'lighting-none',
+      customer: { name: '', email: '', date: '' },
+      deliveryZip: ''
+    };
+    const design = (await query(
+      `INSERT INTO designs(tenant_id,anonymous_session_id,schema_version,event_type,guest_count,scene)
+       VALUES($1,$2,1,NULL,0,$3) RETURNING id`,
+      [tenant?.id || null, anonymousSessionId, scene]
+    )).rows[0];
+
+    const origin = safeOrigin(req);
+    const returnPath = `${origin}/designer/?tenant=${encodeURIComponent(slug)}&design=${design.id}`;
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{ price_data: { currency: 'usd', unit_amount: offer.priceCents, product_data: {
+        name: 'RentSketch Event Pass',
+        description: `${offer.durationDays} days to edit, save, print and share one event design. One-time payment; rental equipment is separate.`,
+      } }, quantity: 1 }],
+      metadata: { kind: 'consumer_event_pass', designId: design.id, tenant: slug, durationDays: String(offer.durationDays), source: 'direct_paid_cta' },
+      success_url: returnPath + '&payment=success&checkout_session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: returnPath + '&payment=cancelled#draft=' + encodeURIComponent(signToken({ kind: 'event_pass_draft', designId: design.id }, { expiresIn: '24h' })),
+    }, { idempotencyKey: `event-pass-direct:${slug}:${anonymousSessionId}:${Math.floor(Date.now()/1800000)}` });
+
+    await query(`INSERT INTO consumer_payments(design_id,customer_email,payment_type,amount_cents,status,stripe_checkout_session_id,duration_days)
+      VALUES($1,'','consumer_event_pass',$2,'pending',$3,$4) ON CONFLICT(stripe_checkout_session_id) DO NOTHING`,
+      [design.id,offer.priceCents,session.id,offer.durationDays]);
+    res.json({ url: session.url, designId: design.id });
+}));
+
 function checkout(renewal) {
     return wrap(async (req, res) => {
         const body = req.body || {}, customerEmail = String(body.customerEmail || '').trim().toLowerCase();
