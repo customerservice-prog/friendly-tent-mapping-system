@@ -160,6 +160,53 @@ router.post('/event-pass/restore', wrap(async (req, res) => {
     res.json(await designResponse(design));
 }));
 
+// GET /api/consumer/event-pass/direct-checkout
+// Server-driven paid entry used by Friendly's explicit $9.99 CTA.
+// No designer JavaScript is required before Stripe Checkout.
+router.get('/event-pass/direct-checkout', wrap(async (req, res) => {
+    const slug = String(req.query.tenant || 'friendly');
+    if (!['friendly','generic'].includes(slug)) return res.status(400).send('Invalid rental company');
+    const tenant = slug === 'generic' ? null : (await query('SELECT * FROM tenants WHERE slug=$1', [slug])).rows[0];
+    if (slug !== 'generic' && !tenant) return res.status(404).send('Rental company not found');
+    if (!isPassEnabled(tenant)) return res.status(409).send('Event Pass is unavailable');
+    const ready = await paymentReadiness();
+    if (!ready.available) return res.status(503).send('Secure checkout is temporarily unavailable. Please try again shortly.');
+    if (!await emailReadiness()) return res.status(503).send('Access email is temporarily unavailable. Please try again shortly.');
+
+    const stripe = getStripe();
+    const offer = passOffer(tenant);
+    const sid = 'direct_' + require('crypto').randomBytes(24).toString('hex');
+    const scene = {
+      tentId: null, objects: [], zones: [], aisles: [], guestCount: 0,
+      lightingId: 'lighting-none', eventName: 'My Event',
+      customer: { name: '', email: '', date: '' }, surfaceType: 'grass'
+    };
+    const design = (await query(
+      'INSERT INTO designs(tenant_id,anonymous_session_id,schema_version,scene) VALUES($1,$2,1,$3) RETURNING *',
+      [tenant?.id || null, sid, scene]
+    )).rows[0];
+    const origin = safeOrigin(req);
+    const returnPath = origin + '/designer/?tenant=' + encodeURIComponent(slug) + '&design=' + encodeURIComponent(design.id);
+    const source = String(req.query.source || 'friendly_paid_cta').slice(0,100);
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      line_items: [{ price_data: { currency: 'usd', unit_amount: offer.priceCents, product_data: {
+        name: 'RentSketch Event Pass',
+        description: offer.durationDays + ' days to edit, save, print and share one event design. One-time payment; rental equipment is separate.',
+      } }, quantity: 1 }],
+      metadata: { kind: 'consumer_event_pass', designId: design.id, tenant: slug, durationDays: String(offer.durationDays), source },
+      success_url: returnPath + '&payment=success&checkout_session_id={CHECKOUT_SESSION_ID}',
+      cancel_url: returnPath + '&payment=cancelled#draft=' + encodeURIComponent(signToken({ kind:'event_pass_draft', designId:design.id }, { expiresIn:'24h' })),
+    }, { idempotencyKey: 'direct-event-pass:' + design.id });
+
+    await query(`INSERT INTO consumer_payments(design_id,customer_email,payment_type,amount_cents,status,stripe_checkout_session_id,duration_days)
+      VALUES($1,'','consumer_event_pass',$2,'pending',$3,$4) ON CONFLICT(stripe_checkout_session_id) DO NOTHING`,
+      [design.id, offer.priceCents, session.id, offer.durationDays]);
+
+    if (!session.url || !session.url.startsWith('https://checkout.stripe.com/')) throw new Error('Stripe did not return a secure Checkout URL');
+    res.redirect(303, session.url);
+}));
+
 function checkout(renewal) {
     return wrap(async (req, res) => {
         const body = req.body || {}, customerEmail = String(body.customerEmail || '').trim().toLowerCase();
