@@ -32,6 +32,7 @@ const server=http.createServer((req,res)=>{
    assert.match(await p.locator('.gp-buy').innerText(),/\$9.99.*30 days/);await p.screenshot({path:path.join(out,`guided-${width}x${height}.png`)});
    await p.locator('.gp-close').click();assert.equal(await p.locator('.guided-preview').count(),0);assert.equal(await p.locator('#designerApp').getAttribute('inert'),null);assert.equal(await p.evaluate(()=>document.body.style.overflow),'');
    await p.locator('[data-guided-preview]').click();await p.locator('.gp-plan svg').waitFor();await p.locator('.gp-buy').click();await p.locator('#passEmail').waitFor();assert.equal(await p.locator('.guided-preview').count(),0);assert.equal(await p.evaluate(()=>window.savedWrites),0);
+   console.log('PASS viewport',width,height);
    results.push({width,height,watchOnly:true,priceVisible:true,noOverflow:true,exitRestoresEditor:true,noSave:true});await ctx.close();
   }
   const ctx=await browser.newContext({viewport:{width:390,height:844},hasTouch:true}),p=await ctx.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));
@@ -43,7 +44,7 @@ const server=http.createServer((req,res)=>{
   await p.screenshot({path:path.join(out,'guided-3d-390x844.png')});await p.clock.runFor(19000);await p.screenshot({path:path.join(out,'guided-night-390x844.png')});await p.clock.runFor(22000);
   assert.equal(await p.locator('.guided-preview').getAttribute('data-step'),'9');assert.match(await p.locator('.gp-summary').innerText(),/64 seats/);assert.equal(await p.evaluate(()=>window.savedWrites),0);assert.equal(await p.evaluate(()=>window.loadedScenes.length),0);assert.equal(await p.evaluate(()=>window.RentSketchEventPass.canEdit()),false);
   const deadline=await p.evaluate(()=>localStorage.getItem('rentsketch-preview-deadline:v1'));await p.locator('[data-replay]').click();await p.clock.runFor(2000);assert.equal(await p.evaluate(()=>localStorage.getItem('rentsketch-preview-deadline:v1')),deadline);
-  await p.clock.runFor(240000);assert.equal(await p.locator('.guided-preview').count(),0);assert.equal(await p.locator('.preview-limit-screen').isVisible(),true);assert.deepEqual(errors,[]);
+  await p.clock.fastForward(240000);assert.equal(await p.locator('.guided-preview').count(),0);assert.equal(await p.locator('.preview-limit-screen').isVisible(),true);assert.deepEqual(errors,[]);
   results.push({fullWalkthrough:true,real3d:canvas,pause:true,pointerMoves:true,noSavedLayoutMutation:true,deadlineEnforced:true,pageErrors:errors});await ctx.close();
   for(const mode of ['purchase','paid','expired','disabled','other-tenant','reduced-motion']){
    const c=await browser.newContext({viewport:{width:390,height:844},...(mode==='reduced-motion'?{reducedMotion:'reduce'}:{})}),page=await c.newPage();
@@ -56,6 +57,11 @@ const server=http.createServer((req,res)=>{
    if(mode==='paid'){assert.equal(await page.evaluate(()=>window.RentSketchEventPass.canEdit()),true);assert.deepEqual(await page.evaluate(()=>window.loadedScenes),[{objects:[{id:'do-not-overwrite'}]}]);}
    results.push({mode,passed:true});await c.close();
   }
+  const waiting=await browser.newContext({viewport:{width:390,height:844}}),wp=await waiting.newPage();
+  await wp.goto(base+'/fixture?tenant=friendly&focus=tent&autoplace=1');await wp.waitForTimeout(500);
+  assert.equal(await wp.locator('.guided-preview').count(),0,'Exact rental must report ready first');
+  await wp.evaluate(()=>{window.RENTSKETCH_PRODUCT_PREVIEW_READY=true;window.dispatchEvent(new CustomEvent('rentsketch:productPreviewReady'));});
+  await wp.locator('.gp-plan svg').waitFor();results.push({waitsForExactRentalReady:true});await waiting.close();
   const fallback=await browser.newContext({viewport:{width:390,height:844}}),fp=await fallback.newPage();await fp.route('**/js/ui/view3d.js',r=>r.abort());await fp.clock.install();await fp.goto(base+'/fixture?tenant=friendly');await fp.locator('.gp-plan svg').waitFor();await fp.clock.runFor(45000);await fp.locator('.gp-fallback').waitFor();assert.equal(await fp.locator('.gp-plan').isVisible(),true);results.push({webglFailureFallsBackTo2d:true});await fallback.close();
   fs.writeFileSync(path.join(out,'results.json'),JSON.stringify(results,null,2));console.log(JSON.stringify(results,null,2));
  }finally{await browser.close();await new Promise(r=>server.close(r));}

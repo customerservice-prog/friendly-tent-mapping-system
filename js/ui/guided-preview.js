@@ -31,7 +31,7 @@
     var q = function (selector) { return root.querySelector(selector); };
     var reduced = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     var paused = reduced, narration = false, closed = false, elapsed = 0, last = performance.now(), raf, sample, view, loading, failure = false;
-    var step = -1, lastRender = '', renderingKey = '', generation = 0, voiceOwned = false;
+    var step = -1, lastRender = '', renderingKey = '', generation = 0, voiceOwned = false, lastPaint = -Infinity;
     var priorFocus = document.activeElement, oldOverflow = document.body.style.overflow;
     var app = document.getElementById('designerApp'), priorInert = app?.hasAttribute('inert');
     if (app) app.setAttribute('inert', '');
@@ -150,7 +150,8 @@
     function tick(now) {
       if (!canContinue()) { close(); return; }
       if (!paused && !document.hidden) elapsed = Math.min(duration, elapsed + Math.max(0, Math.min((now - last) / 1000, .2)));
-      last = now; render();
+      last = now;
+      if (now - lastPaint >= 100) { lastPaint = now; render(); }
       if (elapsed >= duration && !paused) { paused = true; updatePlayer(); }
       raf = requestAnimationFrame(tick);
     }
