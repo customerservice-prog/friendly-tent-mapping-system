@@ -1,5 +1,10 @@
 (function () {
   'use strict';
+  function connectionMessage(error, fallback) {
+    if (error.name === 'AbortError') return 'The connection took too long. Please try again. Your order has not been changed.';
+    if (error instanceof TypeError || error instanceof SyntaxError) return fallback;
+    return error.message || fallback;
+  }
   var tenant = new URLSearchParams(location.search).get('tenant');
   if (!['friendly', 'generic'].includes(tenant)) tenant = null;
   var query = new URLSearchParams(location.search);
@@ -37,7 +42,7 @@
       submit.textContent = 'Opening your event…';
       continueLink.href = destination.href; continueLink.hidden = false;
       location.assign(destination.href);
-    } catch (error) { message.className = 'error'; message.textContent = error.name === 'AbortError' ? 'The booking check took too long. Please try again shortly.' : error.message; submit.disabled = false; submit.textContent = 'Open my event'; }
+    } catch (error) { message.className = 'error'; message.textContent = connectionMessage(error, 'We couldn’t check your booking right now. Please try again. Your order has not been changed.'); submit.disabled = false; submit.textContent = 'Open my event'; }
     finally { clearTimeout(timer); }
   });
   document.querySelectorAll('[data-preview]').forEach(function (link) { link.href = '/designer/' + (tenant ? '?tenant=' + encodeURIComponent(tenant) : ''); });
@@ -57,7 +62,7 @@
       button.textContent = 'Link requested';
       setTimeout(function () { button.disabled = false; button.textContent = 'Email my event link again'; }, 60000);
     } catch (error) {
-      status.className = 'error'; status.textContent = error.name === 'AbortError' ? 'The request took too long. Please try again shortly.' : error.message;
+      status.className = 'error'; status.textContent = connectionMessage(error, 'We couldn’t request your link right now. Please try again.');
       button.disabled = false; button.textContent = 'Email my event link';
     } finally { clearTimeout(timer); }
   });
