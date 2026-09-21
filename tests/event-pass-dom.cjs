@@ -30,6 +30,7 @@ async function setup(query, options = {}) {
     else if (url.endsWith('/event-pass/resume')) { if (options.failResume) throw Error('Connection unavailable'); data = options.resumed || draft; }
     else if (url.includes('/review-pricing')) data = { available: true, zip: new URL(url).searchParams.get('zip'), deliveryFee: new URL(url).searchParams.has('zip') ? 49.99 : null, taxRate: 8, taxDelivery: true };
     else if (url.endsWith('/quote-requests')) data = { id: 'isolated-quote', notificationSent: true };
+    else if (url.endsWith('/event-pass/direct-checkout')) { checkouts++; data = { url: 'https://checkout.stripe.com/c/pay/cs_live_fixturecheckout', designId: 'direct-draft' }; }
     else if (url.endsWith('/event-pass/checkout-session') || url.endsWith('/event-pass/renewal-checkout-session')) { checkouts++; data = { url: 'https://checkout.stripe.com/c/pay/cs_live_fixturecheckout' }; }
     else if (/\/designs(?:\/draft-owned)?$/.test(url)) { draft = { id: 'draft-owned', scene: body.scene, tenant: 'friendly', anonymousSessionId: body.anonymousSessionId, active: false }; data = { id: draft.id }; }
     else throw Error('Unexpected API request ' + url);
@@ -187,10 +188,11 @@ async function setup(query, options = {}) {
   const directNavigations = [];
   t = await setup('?tenant=friendly&purchase=1&source=home_designer_section', { navigations: directNavigations });
   await wait(40);
-  assert.equal(t.checkouts, 1, 'priced homepage CTA creates one Event Pass checkout');
+  assert.equal(t.checkouts, 1, 'priced homepage CTA creates one direct Event Pass checkout');
   assert.equal(t.w.document.querySelector('.paywall-overlay'), null, 'priced homepage CTA skips the RentSketch access modal');
-  const directCheckoutCall = t.calls.find(c => c.url.endsWith('/event-pass/checkout-session'));
-  assert.equal(directCheckoutCall.body.customerEmail, '', 'Stripe collects the email on hosted checkout');
+  const directCheckoutCall = t.calls.find(c => c.url.endsWith('/event-pass/direct-checkout'));
+  assert.equal(directCheckoutCall.body.tenant, 'friendly');
+  assert.equal(typeof directCheckoutCall.body.anonymousSessionId, 'string');
   assert.equal(directNavigations.length, 1);
   assert.match(directNavigations[0], /^https:\/\/checkout\.stripe\.com\//);
   t.dom.window.close();
