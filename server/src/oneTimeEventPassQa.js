@@ -1,8 +1,22 @@
 const crypto = require('crypto');
 const db = require('./db');
 const { fulfillEventPass } = require('./eventPass');
+const { accessUrl } = require('./eventPassEmail');
 
 const RUN_ID = 'qa_event_pass_email_recovery_20260921_v1';
+
+async function request(path, options = {}) {
+  const port = process.env.PORT || 4000;
+  const response = await fetch('http://127.0.0.1:' + port + path, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+    signal: AbortSignal.timeout(12000),
+  });
+  let data = {};
+  try { data = await response.json(); } catch (_) {}
+  if (!response.ok) throw new Error(path + ' failed: ' + response.status + ' ' + (data.error || ''));
+  return { status: response.status, data };
+}
 
 async function runOneTimeEventPassQa() {
   if (process.env.RUN_EVENT_PASS_QA_ONCE !== RUN_ID) return;
@@ -54,6 +68,47 @@ async function runOneTimeEventPassQa() {
 
   await fulfillEventPass(session);
 
+  // Exercise the same authenticated save route a paid customer uses.
+  design = (await db.query('SELECT * FROM designs WHERE id=$1 LIMIT 1',[design.id])).rows[0];
+  const savedScene = {
+    ...design.scene,
+    qaSavedProof: RUN_ID + '_saved_via_http',
+    objects: [
+      ...(Array.isArray(design.scene?.objects) ? design.scene.objects.filter(o => o.id !== 'qa-cocktail-1') : []),
+      { id:'qa-cocktail-1', kind:'cocktail', widthFt:2.5, depthFt:2.5, x:2, y:2, rotationDeg:0 }
+    ]
+  };
+  const saveResult = await request('/api/tenants/friendly/designs/' + design.id, {
+    method: 'PATCH',
+    body: JSON.stringify({
+      scene: savedScene,
+      eventType: 'qa',
+      guestCount: 8,
+      estimateTotal: 9.99,
+      anonymousSessionId: design.anonymous_session_id,
+      schemaVersion: design.schema_version || 1,
+    })
+  });
+
+  const entitlement = (await db.query(
+    "SELECT expires_at FROM entitlements WHERE id=(SELECT entitlement_id FROM consumer_payments WHERE stripe_checkout_session_id=$1)",
+    [RUN_ID]
+  )).rows[0];
+  const privateUrl = accessUrl(design, 'friendly', email, entitlement?.expires_at);
+  const token = new URLSearchParams(new URL(privateUrl).hash.slice(1)).get('recoveryToken');
+  if (!token) throw new Error('Recovery token was not generated');
+
+  // Exercise the same restore route used by the private email link.
+  const restoreResult = await request('/api/consumer/event-pass/restore', {
+    method: 'POST',
+    body: JSON.stringify({ recoveryToken: token })
+  });
+  if (restoreResult.data.id !== design.id || !restoreResult.data.active ||
+      restoreResult.data.scene?.qaSavedProof !== RUN_ID + '_saved_via_http' ||
+      !Array.isArray(restoreResult.data.scene?.objects) || restoreResult.data.scene.objects.length < 2) {
+    throw new Error('Recovery route did not reopen the saved QA scene');
+  }
+
   const verified = (await db.query(`
     SELECT p.status,p.amount_cents,p.duration_days,e.status AS entitlement_status,e.expires_at,d.scene
     FROM consumer_payments p
@@ -72,7 +127,14 @@ async function runOneTimeEventPassQa() {
     entitlementStatus: verified?.entitlement_status,
     expiresAt: verified?.expires_at,
     sceneProof: verified?.scene?.qaProof,
+    savedSceneProof: verified?.scene?.qaSavedProof,
     furnishedObjects: Array.isArray(verified?.scene?.objects) ? verified.scene.objects.length : null,
+    saveHttpStatus: saveResult.status,
+    restoreHttpStatus: restoreResult.status,
+    reopenedActive: restoreResult.data.active,
+    reopenedDesignId: restoreResult.data.id,
+    reopenedSavedSceneProof: restoreResult.data.scene?.qaSavedProof,
+    reopenedObjects: Array.isArray(restoreResult.data.scene?.objects) ? restoreResult.data.scene.objects.length : null,
     emailStatus: mail?.status || 'queued',
     emailAttempts: mail?.attempts || 0
   }));
