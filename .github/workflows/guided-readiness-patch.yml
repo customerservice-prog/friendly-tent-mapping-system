@@ -1,4 +1,4 @@
-name: Integrate guided preview readiness
+name: Finish guided preview regression coverage
 on:
   push:
     branches: [feat/watch-only-guided-preview]
@@ -18,25 +18,22 @@ jobs:
           from pathlib import Path
           def replace(path,old,new):
               p=Path(path);s=p.read_text();assert s.count(old)==1,(path,s.count(old),old[:80]);p.write_text(s.replace(old,new))
-          replace('js/ui/tent-preview-entry.js','    readySent = true;','    readySent = true;\n    window.RENTSKETCH_PRODUCT_PREVIEW_READY = true;')
-          replace('js/ui/tent-preview-entry.js',"renderer: renderer }, '*'); } catch (_) {}", "renderer: renderer }, '*'); } catch (_) {}\n    window.dispatchEvent(new CustomEvent('rentsketch:productPreviewReady'));")
-          replace('js/ui/paywall.js','guidedAutoAttempted = true; showGuidedPreview();','maybeStartGuidedPreview();')
-          replace('js/ui/paywall.js','var guidedAutoAttempted = false;', '''var guidedAutoAttempted = false;
-            function maybeStartGuidedPreview() {
-              if (guidedAutoAttempted || !ready || purchaseRequested || checkoutId || draftToken || recoveryToken || modal) return;
-              if (productPreview && !window.RENTSKETCH_PRODUCT_PREVIEW_READY) return;
-              guidedAutoAttempted = true; showGuidedPreview();
-            }
-            window.addEventListener('rentsketch:productPreviewReady', maybeStartGuidedPreview);''')
-          replace('js/ui/paywall.js','function showGuidedPreview() {','function showGuidedPreview() {\n    if (productPreview && !window.RENTSKETCH_PRODUCT_PREVIEW_READY) return;')
-          replace('designer/index.html','../js/ui/tent-preview-entry.js?v=20260920-orders-1','../js/ui/tent-preview-entry.js?v=20260921-guided-1')
-          replace('tests/guided-preview-browser.cjs', "   for(const sel of ['.gp-close'", "   await p.screenshot({path:path.join(out,`guided-initial-${width}x${height}.png`)});\n   for(const sel of ['.gp-close'")
+          replace('js/ui/guided-preview.js', "var step = -1, lastRender = '', renderingKey = '', generation = 0, voiceOwned = false;", "var step = -1, lastRender = '', renderingKey = '', generation = 0, voiceOwned = false, lastPaint = -Infinity;")
+          replace('js/ui/guided-preview.js','      last = now; render();','      last = now;\n      if (now - lastPaint >= 100) { lastPaint = now; render(); }')
+          replace('tests/guided-preview-browser.cjs','await p.clock.runFor(240000);','await p.clock.fastForward(240000);')
+          replace('tests/guided-preview-browser.cjs','   results.push({width,height,watchOnly:true,',"   console.log('PASS viewport',width,height);\n   results.push({width,height,watchOnly:true,")
+          replace('tests/guided-preview-browser.cjs','  const fallback=await browser.newContext', '''  const waiting=await browser.newContext({viewport:{width:390,height:844}}),wp=await waiting.newPage();
+            await wp.goto(base+'/fixture?tenant=friendly&focus=tent&autoplace=1');await wp.waitForTimeout(500);
+            assert.equal(await wp.locator('.guided-preview').count(),0,'Exact rental must report ready first');
+            await wp.evaluate(()=>{window.RENTSKETCH_PRODUCT_PREVIEW_READY=true;window.dispatchEvent(new CustomEvent('rentsketch:productPreviewReady'));});
+            await wp.locator('.gp-plan svg').waitFor();results.push({waitsForExactRentalReady:true});await waiting.close();
+            const fallback=await browser.newContext''')
       - run: |
-          node --check js/ui/paywall.js
-          node --check js/ui/tent-preview-entry.js
+          node --check js/ui/guided-preview.js
+          node --check tests/guided-preview-browser.cjs
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add js/ui/paywall.js js/ui/tent-preview-entry.js designer/index.html tests/guided-preview-browser.cjs
+          git add js/ui/guided-preview.js tests/guided-preview-browser.cjs
           git diff --cached --check
-          git commit -m 'Wait for exact rental readiness before opening the watch-only walkthrough'
+          git commit -m 'Limit demonstration UI work and verify rental-ready and expiry boundaries'
           git push origin HEAD:feat/watch-only-guided-preview
