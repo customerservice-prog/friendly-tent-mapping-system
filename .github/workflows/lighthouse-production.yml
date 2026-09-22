@@ -5,6 +5,14 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/lighthouse-production.yml'
+      - 'marketing-tour.js'
+      - 'marketing.js'
+      - 'marketing.css'
+      - 'analytics-loader.js'
+      - 'index.html'
+      - 'event-pass/index.html'
+      - 'assets/**'
+      - 'scripts/build-marketing.py'
   workflow_dispatch:
   schedule:
     - cron: '17 12 * * *'

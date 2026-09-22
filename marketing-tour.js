@@ -9,6 +9,7 @@ if(studio){
  const buttons=[...studio.querySelectorAll('[data-view]')];
  let view=null,pendingView=null,loading=null,selected='3d',camera='reception',night=false,failed=false,disposed=false,generation=0;
  const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+ const autoLoad=studio.classList.contains('demo-studio');
  function say(message){status.textContent=message;status.hidden=!message;note.hidden=!!message;}
  function show(){
   const is3D=selected==='3d';
@@ -17,7 +18,7 @@ if(studio){
   target.setAttribute('aria-hidden',String(!is3D||!view));
   actions.hidden=!is3D||!view;
   buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===selected)));
-  note.textContent=is3D?(view?'Drag to explore · scroll or pinch to zoom':'3D reception preview'):'Overhead plan · the same 64-seat layout';
+  note.textContent=is3D?(view?'Drag to explore · scroll or pinch to zoom':(autoLoad?'3D reception preview':'3D preview image · choose 3D view to explore')):'Overhead plan · the same 64-seat layout';
   if(!is3D||view)say('');
   else if(failed)say('Showing the 3D preview image. Interactive 3D is unavailable in this browser.');
  }
@@ -57,11 +58,15 @@ if(studio){
   night=!night;event.currentTarget.setAttribute('aria-pressed',String(night));view?.night(night);
  });
  show();
- // Load automatically near the viewport after the first paint. No start click.
- if('IntersectionObserver' in window){
-  const observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){observer.disconnect();requestAnimationFrame(ensure3D);}},{rootMargin:'220px'});
-  observer.observe(studio);
- }else requestAnimationFrame(ensure3D);
+ // Keep general marketing pages lightweight: the poster is immediate and the
+ // interactive renderer starts only after the visitor explicitly selects 3D.
+ // The dedicated demo page still auto-loads when it nears the viewport.
+ if(autoLoad){
+  if('IntersectionObserver' in window){
+   const observer=new IntersectionObserver(entries=>{if(entries.some(e=>e.isIntersecting)){observer.disconnect();requestAnimationFrame(ensure3D);}},{rootMargin:'220px'});
+   observer.observe(studio);
+  }else requestAnimationFrame(ensure3D);
+ }
  window.addEventListener('pagehide',()=>{disposed=true;generation++;view?.destroy();pendingView?.destroy();view=null;pendingView=null;loading=null;});
- window.addEventListener('pageshow',event=>{if(event.persisted){disposed=false;show();ensure3D();}});
+ window.addEventListener('pageshow',event=>{if(event.persisted){disposed=false;show();if(autoLoad)ensure3D();}});
 }
