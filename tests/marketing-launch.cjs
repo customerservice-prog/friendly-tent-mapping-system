@@ -48,8 +48,10 @@ for(const file of consumerPages){
 }
 const homeHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.match(homeHtml,/Plan one event · \$9\.99/);
-assert.match(homeHtml,/<title>Party Rental Software &amp; 3D Event Planning/);
-assert.match(homeHtml,/<h1>Party rental software<br><span>customers can actually see\.<\/span><\/h1>/);
+assert.match(homeHtml,/<title>RentSketch \| 3D Event Design Software for Rental Companies<\/title>/);
+assert.match(homeHtml,/<h1>RentSketch event design software<br><span>built around rental equipment\.<\/span><\/h1>/);
+assert.doesNotMatch(homeHtml,/<title>Party Rental Software/,'homepage must not compete with the dedicated party-rental-software title');
+assert.match(homeHtml,/href="\/party-rental-software\/">Rental software<\/a>/);
 assert.match(homeHtml,/Start 14-day business trial/);
 assert.match(homeHtml,/"applicationCategory": "BusinessApplication"/);
 assert.ok(sitemap.includes('/tent-rental-software/'),'Tent rental software landing page must be indexable');
@@ -59,12 +61,14 @@ for(const pathName of ['/event-pass/','/demo/','/wedding-layout-planner/','/tent
 assert.equal((eventPlanningSitemap.match(/<loc>/g)||[]).length,5,'focused event planning sitemap should contain exactly five canonical consumer planning pages');
 assert.match(robots,/Sitemap: https:\/\/rentsketch\.com\/sitemap-event-planning\.xml/);
 const partySoftware=fs.readFileSync(path.join(root,'party-rental-software/index.html'),'utf8');
-assert.match(partySoftware,/<title>Party Rental Business Software/);
-for(const phrase of ['party rental business software','party rental inventory software','party rental management software','party and event rental software']) assert.ok(partySoftware.toLowerCase().includes(phrase),phrase+' must appear naturally on party-rental-software');
+assert.match(partySoftware,/<title>Party Rental Software for Visual Event Planning \| RentSketch<\/title>/);
+for(const phrase of ['party rental software','party rental business software','software for party rental','party rental inventory software','party rental management software','party and event rental software']) assert.ok(partySoftware.toLowerCase().includes(phrase),phrase+' must appear naturally on party-rental-software');
 assert.match(partySoftware,/does not replace live stock-count or reservation software/);
 assert.match(partySoftware,/data-software-proof/);
 assert.match(partySoftware,/Built around a live rental workflow/);
 assert.match(partySoftware,/View live installation/);
+assert.match(partySoftware,/software-proof-visual/);
+assert.match(partySoftware,/event-reception-3d\.webp/);
 assert.match(partySoftware,/https:\/\/www\.friendlypartyrental\.com\/design-your-event/);
 assert.match(partySoftware,/Party rental software buying checklist/);
 assert.match(partySoftware,/class="buyer-table"/);
