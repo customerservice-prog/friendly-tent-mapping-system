@@ -107,6 +107,8 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal(session.args.branding_settings.display_name, 'RentSketch');
   assert.equal(session.args.branding_settings.logo.url, 'https://www.friendlypartyrental.com/images/logo.png');
   assert.equal(session.args.branding_settings.button_color, '#0b3d91');
+  assert.match(session.args.custom_text.submit.message, /One-time RentSketch Event Pass through Friendly Party Rental/);
+  assert.match(session.args.custom_text.submit.message, /No subscription or automatic renewal/);
   assert.equal(session.args.line_items[0].price_data.product_data.name, 'RentSketch Event Pass — Friendly Party Rental');
   assert.match(session.args.success_url, /tenant=friendly/); assert.match(session.args.success_url, /checkout_session_id=\{CHECKOUT_SESSION_ID\}/);
   const canceled = new URL(session.args.cancel_url), token = new URLSearchParams(canceled.hash.slice(1)).get('draft');
@@ -229,6 +231,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal(directSession.args.branding_settings.logo.url, 'https://www.friendlypartyrental.com/images/logo.png');
   assert.equal(directSession.args.branding_settings.background_color, '#ffffff');
   assert.equal(directSession.args.branding_settings.button_color, '#0b3d91');
+  assert.match(directSession.args.custom_text.submit.message, /No subscription or automatic renewal/);
   assert.equal(directSession.args.line_items[0].price_data.product_data.name, 'RentSketch Event Pass — Friendly Party Rental');
   const directLedger = (await pg.query('SELECT customer_email,status,amount_cents,duration_days FROM consumer_payments WHERE stripe_checkout_session_id=$1',[directSession.id])).rows[0];
   assert.equal(directLedger.customer_email, '');

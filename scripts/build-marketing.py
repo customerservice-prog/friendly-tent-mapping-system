@@ -5,7 +5,7 @@ import json
 import math
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = '20260922-software-intent-4'
+VERSION = '20260922-software-intent-5'
 URL = 'https://rentsketch.com'
 EVENT_PASS_CHECKOUT = 'https://rentsketch-api-production.up.railway.app/api/consumer/event-pass/direct-checkout?tenant=generic'
 PAGES = []
@@ -14,6 +14,28 @@ def event_pass_url(source):
     return EVENT_PASS_CHECKOUT + '&source=' + source
 
 
+SOFTWARE_FAQS = {
+    '/party-rental-software/': [
+        ('What is party rental software?', 'Party rental software helps rental businesses organize customer requests and operational work. RentSketch focuses on the customer-facing visual-planning step: branded rental catalogs, 2D and 3D layouts, saved designs and quote requests. Keep authoritative availability, reservations, contracts, dispatch and accounting in the system that owns those workflows.'),
+        ('Is RentSketch party rental management software?', 'RentSketch can be part of a party rental management stack, but it is not presented as an all-in-one replacement for reservations, routing, warehouse operations or accounting. It is strongest when a rental business needs a visual customer-planning layer beside its operational system.'),
+        ('Does RentSketch include party rental inventory management?', 'RentSketch can show product names, dimensions, prices, photos and supported visual mappings, but live quantity availability and reservation conflicts remain the responsibility of your inventory or booking system unless a supported integration provides them.'),
+        ('Can RentSketch work with an existing party rental system?', 'Yes. RentSketch is designed to sit beside an existing rental workflow. Customers can create visual plans and quote requests in RentSketch while the rental company continues to confirm availability, contracts, payments, delivery and returns in its operational system.'),
+        ('How much is RentSketch for a rental business?', 'Business workspaces start at $49 per month after a 14-day trial. The trial does not require a credit card and does not automatically become a paid subscription.')
+    ],
+    '/event-rental-software/': [
+        ('What is party and event rental software?', 'Party and event rental software supports the workflow around rental products used for events. Different systems specialize in different jobs such as inventory, reservations, contracts, payments, delivery or customer planning. RentSketch specializes in visual customer layouts, branded catalogs and quote requests.'),
+        ('Does RentSketch replace event rental inventory and booking software?', 'No. RentSketch is a visual-planning layer. Keep live availability, inventory reservations, contracts, dispatch and accounting in the operational system that owns those records.'),
+        ('Can customers plan with the rental company’s actual catalog?', 'Yes. A RentSketch business workspace can configure product names, dimensions, prices, photos and supported visual mappings so the customer-facing designer reflects the catalog the business chooses to publish.'),
+        ('Does RentSketch offer a free business trial?', 'Yes. Rental businesses can start a 14-day trial without a credit card. The trial does not automatically charge when it ends.')
+    ],
+    '/tent-rental-software/': [
+        ('What should tent rental software help with?', 'Operational tent rental software commonly needs inventory, packages or components, quotes, contracts, scheduling, delivery and crew workflows. RentSketch adds the visual side: tent footprints, supported 2D and 3D layouts, customer planning and quote-request context.'),
+        ('Does RentSketch track tent inventory availability?', 'RentSketch does not claim to be the authoritative source for poles, stakes, tops, sidewalls or date availability. Keep those records in the tent rental system that manages inventory and reservations.'),
+        ('Can customers see a tent before requesting a quote?', 'Yes. Rental businesses can publish supported tent visuals and product photos, then use RentSketch layouts to help customers understand footprint and event arrangement before the rental team confirms installation details.'),
+        ('Can RentSketch work with pole tents and frame tents?', 'RentSketch supports visual mappings for selected pole and frame tent models. The rental business should still verify dimensions, anchoring, site conditions and manufacturer installation requirements before booking.')
+    ]
+}
+
 def save(path, text):
     target = ROOT / path
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -21,13 +43,13 @@ def save(path, text):
 
 NAV = '''<a class="skip" href="#main">Skip to content</a>
 <header class="top"><nav class="wrap nav" aria-label="Main navigation">
-<a class="brand" href="/"><img src="/assets/brand-mark.svg" width="34" height="34" alt="">RentSketch</a>
+<a class="brand" href="/"><img src="/assets/brand-mark.svg" width="34" height="34" alt="RentSketch">RentSketch</a>
 <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="navlinks">Menu</button>
 <div class="navlinks" id="navlinks"><a href="/event-pass/">Plan one event</a><a href="/demo/">Live demo</a><a href="/business/">For rental companies</a><a href="/business/pricing.html">Pricing</a><a class="mobile-login" href="/dashboard/">Log in</a><a class="mobile-trial" href="/event-pass/">Event Pass · $9.99</a></div>
 <div class="nav-actions"><a class="btn login" href="/dashboard/">Log in</a><a class="btn primary" href="/business/signup.html">Start free trial <span aria-hidden="true">↗</span></a></div>
 </nav></header>'''
 FOOT = '''<footer class="footer"><div class="wrap"><div class="footer-grid">
-<div class="footer-brand"><a class="brand" href="/"><img src="/assets/brand-mark.svg" width="34" height="34" alt="">RentSketch</a><p>Visual event planning.<br>Built around the equipment you rent.</p></div>
+<div class="footer-brand"><a class="brand" href="/"><img src="/assets/brand-mark.svg" width="34" height="34" alt="RentSketch">RentSketch</a><p>Visual event planning.<br>Built around the equipment you rent.</p></div>
 <div><h3>Explore</h3><a href="/business/">For rental companies</a><a href="/demo/">Product demo</a><a href="/business/pricing.html">Pricing</a><a href="/business/signup.html">Start a free trial</a><a href="/dashboard/">Business log in</a></div>
 <div><h3>Plan an event</h3><a href="/event-pass/">Event Pass · $9.99</a><a href="/demo/">Watch the free demo</a><a href="/my-event/">Open my saved event</a><a href="/wedding-layout-planner/">Wedding layouts</a><a href="/tent-layout-software/">Tent layouts</a><a href="/event-layout-software/">Event floor plans</a></div>
 <div><h3>Rental software</h3><a href="/party-rental-software/">Party rental software</a><a href="/party-rental-management-software/">Party rental management software</a><a href="/party-rental-inventory-software/">Party rental inventory software</a><a href="/event-rental-software/">Party &amp; event rental software</a><a href="/tent-rental-software/">Tent rental software</a><a href="/tent-diagram-software/">Tent diagram software</a><a href="/help/">Help &amp; getting started</a><a href="mailto:hello@rentsketch.com">Contact RentSketch</a><a href="/privacy/">Privacy</a></div>
@@ -43,6 +65,8 @@ def page(path, title, description, body, *, noindex=False, tour=False):
         schema.append({"@context":"https://schema.org","@type":"SoftwareApplication","name":"RentSketch Event Pass","applicationCategory":"DesignApplication","operatingSystem":"Web browser","url":URL+"/event-pass/","description":description,"offers":{"@type":"Offer","name":"One-time Event Pass","price":"9.99","priceCurrency":"USD","url":event_pass_url('schema_event_pass'),"description":"One event for 30 days. No subscription or automatic renewal."}})
     if canonical in {'/party-rental-software/','/event-rental-software/','/tent-rental-software/'}:
         schema.append({"@context":"https://schema.org","@type":"SoftwareApplication","name":"RentSketch","applicationCategory":"BusinessApplication","operatingSystem":"Web browser","url":URL+canonical,"description":description,"featureList":["Branded 2D and 3D event designer","Rental product catalog with names, dimensions and prices","Customer event layouts","Quote requests","Website embed and direct designer links","Business dashboard"],"offers":{"@type":"Offer","name":"Starter business subscription","price":"49.00","priceCurrency":"USD","url":URL+"/business/pricing.html","description":"Starter business plan, billed monthly. A 14-day trial is available without a credit card."}})
+    if canonical in SOFTWARE_FAQS:
+        schema.append({"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":q,"acceptedAnswer":{"@type":"Answer","text":a}} for q,a in SOFTWARE_FAQS[canonical]]})
     if canonical != '/':
         schema.append({"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[{"@type":"ListItem","position":1,"name":"RentSketch","item":URL+"/"},{"@type":"ListItem","position":2,"name":title.split(' | ')[0],"item":URL+canonical}]})
     imports = '<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>' if tour else ''
@@ -78,6 +102,17 @@ def software_intent_links():
 
 def software_proof():
     return '''<section class="section software-proof" data-software-proof><div class="wrap"><div class="section-heading"><div class="eyebrow">Built around a live rental workflow</div><h2>See where RentSketch fits before you change the software that runs your business.</h2><p>RentSketch is used on Friendly Party Rental’s customer website for visual event planning. The operational rental system still owns availability, orders, payments and delivery; RentSketch owns the customer-facing layout and quote-request step.</p></div><div class="software-proof-grid"><article><h3>RentSketch owns</h3><ul><li>Branded 2D + 3D customer layouts</li><li>Rental product names, dimensions, prices and photos</li><li>Saved event designs</li><li>Visual quote requests</li><li>Website links and embeds</li></ul></article><article><h3>Your rental system owns</h3><ul><li>Authoritative date availability</li><li>Reservations and contracts</li><li>Payments and balances</li><li>Delivery and pickup operations</li><li>Warehouse and return workflows</li></ul></article></div><div class="software-proof-actions"><a class="btn primary" href="/business/signup.html">Start 14-day trial ↗</a><a class="btn" href="https://www.friendlypartyrental.com/design-your-event" target="_blank" rel="noopener">View live installation ↗</a></div></div></section>'''
+
+def software_faq_section(slug):
+    canonical = '/' + slug + '/'
+    items = SOFTWARE_FAQS.get(canonical, [])
+    if not items:
+        return ''
+    return '<section class="section tinted software-search-faq"><div class="wrap faq-layout"><div><div class="eyebrow">Straight answers before you choose software</div><h2>'+escape(items[0][0])+'</h2><p>Compare the job you need the software to own, then test the workflow with your real rental catalog.</p></div>'+faq(items)+'</div></section>'
+
+def software_buyer_matrix():
+    return '''<section class="section buyer-matrix"><div class="wrap"><div class="section-heading"><div class="eyebrow">Party rental software buying checklist</div><h2>Know what RentSketch owns—and what your operational system still needs to own.</h2><p>Search results for party rental software often mix inventory, booking, websites, payments and event design into one label. Use the job itself as the comparison.</p></div><div class="buyer-table" role="table" aria-label="Party rental software feature ownership"><div class="buyer-row buyer-head" role="row"><span role="columnheader">Workflow</span><span role="columnheader">RentSketch</span><span role="columnheader">Operational rental system</span></div><div class="buyer-row" role="row"><span>Customer 2D + 3D event layouts</span><strong>Built in</strong><span>Optional</span></div><div class="buyer-row" role="row"><span>Branded customer rental catalog</span><strong>Built in</strong><span>May also own storefront data</span></div><div class="buyer-row" role="row"><span>Saved designs + visual quote requests</span><strong>Built in</strong><span>Continue quote/order workflow</span></div><div class="buyer-row" role="row"><span>Date availability + quantity conflicts</span><span>Not authoritative</span><strong>Should own</strong></div><div class="buyer-row" role="row"><span>Contracts + balances + payments</span><span>Not the core job</span><strong>Should own</strong></div><div class="buyer-row" role="row"><span>Delivery, pickup + warehouse status</span><span>Not the core job</span><strong>Should own</strong></div></div><div class="software-proof-actions"><a class="btn primary" href="/business/signup.html">Test the visual workflow free ↗</a><a class="btn" href="/business/pricing.html">See business pricing</a></div></div></section>'''
+
 
 def event_cta(source):
     return f'''<section class="cta-band"><div class="wrap cta-inner"><div><h2>Plan one event.<br>Keep the layout for 30 days.</h2><p>$9.99 once. Edit, save, print and share one event. No subscription or automatic renewal.</p></div><div class="actions"><a class="btn lime" href="{event_pass_url(source)}">Start my event · $9.99 <span aria-hidden="true">↗</span></a><a class="btn" href="/demo/">Watch the free demo</a></div></div></section>'''
@@ -178,8 +213,8 @@ for slug,title,desc,heading,intro,sections in articles:
         body+=''.join('<h2>'+h+'</h2><p>'+p+'</p>' for h,p in sections)
         body+='</article><aside class="guide-aside"><h3>See it in a real layout.</h3><p>Explore an example with tables, chairs and a dance floor. Switch between the plan and the 3D view.</p><a class="btn primary" href="/demo/">Open the demo ↗</a><a href="/business/">For rental businesses →</a><a href="/party-rental-management-software/">Management software →</a><a href="/party-rental-inventory-software/">Inventory software →</a><a href="/tent-rental-software/">Tent rental software →</a></aside></div></section>'
         if slug == 'party-rental-software':
-            body += software_proof()
-        body += software_intent_links()+cta()
+            body += software_buyer_matrix()+software_proof()
+        body += software_faq_section(slug)+software_intent_links()+cta()
     page(slug+'/index.html',title,desc,body)
 
 page('event-pass/index.html','3D Event Planner | $9.99 One-Time Event Pass | RentSketch','Plan one event in 2D and 3D for $9.99 once. Get 30 days to edit, save, print and share your layout. No subscription or automatic renewal.', f'''<section class="hero"><div class="wrap hero-grid"><div><div class="eyebrow">For weddings, parties and tent events</div><h1>Plan one event.<br><span>See it before setup day.</span></h1><p class="lead">Arrange tents, tables, chairs, dance floors and more in 2D and 3D. Your Event Pass gives you 30 days to edit, save, print and share one event.</p><div class="actions"><a class="btn primary" href="{event_pass_url('rentsketch_event_pass_page_hero')}">Start my event · $9.99 ↗</a><a class="btn" href="/demo/">Watch the free demo</a></div><div class="inline-proof"><span>$9.99 once</span><span>30 days</span><span>No subscription</span></div><p class="micro">Stripe hosts payment. Rental equipment, delivery and venue costs are separate.</p></div>'''+studio()+f'''</div></section><section class="section"><div class="wrap"><div class="section-heading center"><div class="eyebrow">What the Event Pass includes</div><h2>One layout you can keep working on.</h2></div><div class="steps"><article class="step"><span class="number">01</span><h3>Build the layout.</h3><p>Start with the space or tent. Add tables, chairs, a dance floor and other supported event equipment.</p></article><article class="step"><span class="number">02</span><h3>Switch between 2D + 3D.</h3><p>Use the floor plan for placement and the 3D view to help picture the same event.</p></article><article class="step"><span class="number">03</span><h3>Save, print and share.</h3><p>Return through your private access link during the 30-day term and keep refining the same event.</p></article></div></div></section><section class="section tinted"><div class="wrap two-col"><div><div class="eyebrow">Simple pricing</div><h2>$9.99 once.<br>No recurring plan.</h2><p>The Event Pass is software access for one event for 30 days. If you need more time, you can optionally renew the same event for $4.99 for another 30 days.</p><p>No subscription. No automatic renewal. Completing a layout does not reserve rental equipment.</p></div><div class="event-pass"><div><span class="pill">One Event Pass</span><h3 style="margin-top:13px">$9.99 · 30 days</h3><p>Edit · save · print · share · 2D + 3D</p></div><a class="btn primary" href="{event_pass_url('rentsketch_event_pass_page_pricing')}">Start planning · $9.99 ↗</a></div></div></section><section class="section"><div class="wrap faq-layout"><div><h2>Before you pay.</h2><p>Know exactly what the pass does.</p></div>'''+faq([('Does $9.99 include rental equipment?','No. The Event Pass pays only for RentSketch software access. Tents, tables, chairs, delivery, installation and venue costs are separate.'),('Is this a subscription?','No. The $9.99 Event Pass is a one-time payment for 30 days of access to one event. It does not renew automatically.'),('Can I see it before paying?','Yes. Use the free demo to see how 2D and 3D layouts work. The Event Pass is for creating and keeping your own event.'),('What happens after I pay?','Stripe verifies the payment, RentSketch opens your saved event, and an access email is sent with a private link so you can return during the access period.'),('Can I use it for a wedding?','Yes. It is intended for a single event such as a wedding reception, party, tent event or similar layout-planning project.')])+'''</div></section>'''+event_cta('rentsketch_event_pass_page_footer'),tour=True)

@@ -58,6 +58,9 @@ assert.match(partySoftware,/data-software-proof/);
 assert.match(partySoftware,/Built around a live rental workflow/);
 assert.match(partySoftware,/View live installation/);
 assert.match(partySoftware,/https:\/\/www\.friendlypartyrental\.com\/design-your-event/);
+assert.match(partySoftware,/Party rental software buying checklist/);
+assert.match(partySoftware,/class="buyer-table"/);
+assert.match(partySoftware,/What is party rental software\?/);
 const eventSoftware=fs.readFileSync(path.join(root,'event-rental-software/index.html'),'utf8');
 assert.match(eventSoftware,/<title>Party &amp; Event Rental Software \| RentSketch<\/title>/);
 assert.match(eventSoftware,/Searching for “rent event registration software”\?/);
@@ -65,6 +68,10 @@ assert.match(eventSoftware,/RentSketch is not that category of software/);
 const tentSoftware=fs.readFileSync(path.join(root,'tent-rental-software/index.html'),'utf8');
 assert.match(tentSoftware,/<title>Tent Rental Software/);
 assert.match(tentSoftware,/does not currently replace component-level tent inventory/);
+for(const html of [partySoftware,eventSoftware,tentSoftware]){
+  assert.match(html,/"@type": "FAQPage"/);
+  assert.match(html,/Straight answers before you choose software/);
+}
 
 const inventorySoftware=fs.readFileSync(path.join(root,'party-rental-inventory-software/index.html'),'utf8');
 assert.match(inventorySoftware,/<title>Party Rental Inventory Software \| RentSketch<\/title>/);
@@ -78,6 +85,11 @@ assert.ok(sitemap.includes('/party-rental-inventory-software/'));
 assert.ok(sitemap.includes('/party-rental-management-software/'));
 assert.match(homeHtml,/party-rental-inventory-software/);
 assert.match(homeHtml,/party-rental-management-software/);
+for(const file of ['index.html','party-rental-software/index.html','event-rental-software/index.html','tent-rental-software/index.html']){
+  const html=fs.readFileSync(path.join(root,file),'utf8');
+  const page=new JSDOM(html,{url:'https://rentsketch.com/'+(file==='index.html'?'':file.replace(/index\.html$/,''))}).window.document;
+  for(const img of page.querySelectorAll('.brand img')) assert.ok((img.getAttribute('alt')||'').trim(),file+' brand logo needs alt text');
+}
 for(const html of [partySoftware,eventSoftware,tentSoftware]){
   assert.match(html,/"@type": "SoftwareApplication"/);
   assert.match(html,/Start business trial/);
