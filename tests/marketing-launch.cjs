@@ -45,9 +45,10 @@ for(const file of consumerPages){
 }
 const homeHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.match(homeHtml,/Plan one event · \$9\.99/);
-assert.match(homeHtml,/<title>Party Rental Software &amp; 3D Event Layout Planning/);
+assert.match(homeHtml,/<title>Party Rental Software &amp; 3D Event Planning/);
 assert.match(homeHtml,/<h1>Party rental software<br><span>customers can actually see\.<\/span><\/h1>/);
 assert.match(homeHtml,/Start 14-day business trial/);
+assert.match(homeHtml,/"applicationCategory": "BusinessApplication"/);
 assert.ok(sitemap.includes('/tent-rental-software/'),'Tent rental software landing page must be indexable');
 const partySoftware=fs.readFileSync(path.join(root,'party-rental-software/index.html'),'utf8');
 assert.match(partySoftware,/<title>Party Rental Software/);
