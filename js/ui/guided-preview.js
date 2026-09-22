@@ -1,4 +1,4 @@
-// Watch-only public sample. Never imports the layout store or autosave, and never
+// Quick watch-only public demo. Never imports the layout store or autosave, and never
 // grants an entitlement. The real designer/paywall retain all access authority.
 (function () {
   'use strict';
@@ -26,7 +26,7 @@
       '<div class="gp-stage" aria-label="Watch-only example; editing is locked"><div class="gp-scene" inert><div class="gp-plan"></div><div class="gp-3d" hidden></div></div><div class="gp-summary" hidden><p>Sample rental summary</p><strong>64 seats</strong><span>40 × 60 pole tent</span><span>8 round tables + 64 chairs</span><span>12 × 12 dance floor</span><span>Bistro lighting</span><small>Example only · nothing saved or submitted</small></div><p class="gp-example">Sample reception · not your saved event</p><p class="gp-fallback" hidden>3D is unavailable in this browser. The guided 2D example continues.</p></div>' +
       '<div class="gp-pointer" aria-hidden="true"><svg viewBox="0 0 28 34"><path d="M3 2 L24 21 L15 22 L12 31 L3 2Z"/></svg><span>Demo</span></div></div>' +
       '<section class="gp-explanation"><p class="gp-step"></p><h3></h3><p class="gp-caption" aria-live="polite" aria-atomic="true"></p><div class="gp-progress" role="progressbar" aria-label="Walkthrough progress" aria-valuemin="0" aria-valuemax="84"><span></span></div><div class="gp-player"><button type="button" data-pause>Pause</button><button type="button" data-replay>Replay</button><button type="button" data-narration aria-pressed="false">Narration off</button><span class="gp-time"></span></div></section>' +
-      '<footer class="gp-footer"><button type="button" class="gp-buy"></button><a class="gp-booking" href="https://rentsketch.com/my-event/?tenant=friendly&mode=order">Existing order? Open for FREE</a><p>One event · no subscription · rentals separate. <span class="gp-deadline"></span></p></footer></div>';
+      '<footer class="gp-footer"><button type="button" class="gp-buy"></button><a class="gp-booking" href="https://rentsketch.com/my-event/?tenant=friendly&mode=order">Existing order? Open for FREE</a><p><strong>Quick Demo · watch-only sample.</strong> One event access is separate; rentals are separate.</p></footer></div>';
     document.body.appendChild(root);
     var q = function (selector) { return root.querySelector(selector); };
     var reduced = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
@@ -132,7 +132,6 @@
       if (index !== step) { step = index; root.dataset.step = String(index); q('.gp-step').textContent = elapsed >= duration ? 'Walkthrough complete' : 'Step ' + (index + 1) + ' of 9'; q('.gp-explanation h3').textContent = stages[index][1]; q('.gp-caption').textContent = stages[index][2]; root.querySelectorAll('[data-tool]').forEach(function (el) { el.classList.toggle('active', el.dataset.tool === stages[index][3]); }); point(stages[index][3]); speak(); }
       var progress = q('.gp-progress'); progress.setAttribute('aria-valuenow', String(Math.floor(elapsed))); progress.firstChild.style.width = elapsed / duration * 100 + '%';
       q('.gp-time').textContent = Math.floor(elapsed / 60) + ':' + String(Math.floor(elapsed % 60)).padStart(2, '0') + ' / 1:24';
-      var left = options.remaining?.(); q('.gp-deadline').textContent = Number.isFinite(left) ? 'Free preview: ' + Math.floor(left / 60) + ':' + String(Math.ceil(left % 60)).padStart(2, '0') + ' left.' : 'Five-minute free preview.';
       if (!sample) return;
       var scene = sceneForTime(), key = (elapsed >= 6 ? 'tent:' : 'space:') + JSON.stringify(scene);
       if (key !== lastRender) { q('.gp-plan').innerHTML = planMarkup(scene); lastRender = key; }
