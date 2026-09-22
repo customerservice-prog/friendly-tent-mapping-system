@@ -44,8 +44,23 @@ for(const file of consumerPages){
  assert.doesNotMatch(html,/\{event_pass_url\(/,file+' contains no unrendered template URL');
 }
 const homeHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
-assert.match(homeHtml,/Start my event · \$9\.99/);
-assert.match(homeHtml,/<title>3D Event Planner/);
+assert.match(homeHtml,/Plan one event · \$9\.99/);
+assert.match(homeHtml,/<title>Event Layout &amp; Party Rental Planning Software/);
+assert.ok(sitemap.includes('/tent-rental-software/'),'Tent rental software landing page must be indexable');
+const partySoftware=fs.readFileSync(path.join(root,'party-rental-software/index.html'),'utf8');
+assert.match(partySoftware,/<title>Party Rental Software/);
+for(const phrase of ['party rental business software','party rental inventory software','party rental management software','party and event rental software']) assert.ok(partySoftware.toLowerCase().includes(phrase),phrase+' must appear naturally on party-rental-software');
+assert.match(partySoftware,/does not currently replace live stock-count or availability software/);
+const eventSoftware=fs.readFileSync(path.join(root,'event-rental-software/index.html'),'utf8');
+assert.match(eventSoftware,/<title>Party &amp; Event Rental Software/);
+assert.match(eventSoftware,/This is not event registration software/);
+const tentSoftware=fs.readFileSync(path.join(root,'tent-rental-software/index.html'),'utf8');
+assert.match(tentSoftware,/<title>Tent Rental Software/);
+assert.match(tentSoftware,/does not currently replace component-level tent inventory/);
+for(const html of [partySoftware,eventSoftware,tentSoftware]){
+  assert.match(html,/"@type": "SoftwareApplication"/);
+  assert.match(html,/Start business trial/);
+}
 const eventPassHtml=fs.readFileSync(path.join(root,'event-pass/index.html'),'utf8');
 assert.match(eventPassHtml,/No subscription/);
 assert.match(eventPassHtml,/30 days/);
