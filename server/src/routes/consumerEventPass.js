@@ -40,6 +40,13 @@ function eventPassBranding(slug) {
             display_name: 'RentSketch',
             font_family: 'default',
             logo: { type: 'url', url: friendly ? FRIENDLY_CHECKOUT_LOGO : RENTSKETCH_CHECKOUT_LOGO }
+        },
+        custom_text: {
+            submit: {
+                message: friendly
+                    ? 'One-time RentSketch Event Pass through Friendly Party Rental. No subscription or automatic renewal.'
+                    : 'One-time RentSketch Event Pass. No subscription or automatic renewal.'
+            }
         }
     };
 }
