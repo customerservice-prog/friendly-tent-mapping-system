@@ -192,5 +192,6 @@ for cx,cy in [(x,y) for x in [8,22,38,52] for y in [10,30]]:
     svg.append(f'<ellipse cx="{px:.1f}" cy="{py:.1f}" rx="20" ry="20" fill="#faf8ef" stroke="#b5b69c" stroke-width="1.4"/><circle cx="{px:.1f}" cy="{py:.1f}" r="4" fill="#8b9d70"/>')
 svg.append('<rect x="312" y="192" width="96" height="96" fill="url(#wood)" stroke="#a17d54" stroke-width="1.3"/><rect x="310" y="226" width="100" height="27" rx="4" fill="#fffdf5e8"/><text x="360" y="244" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#7a6244">12′ × 12′ dance floor</text><circle cx="280" cy="240" r="4" fill="#63765a"/><circle cx="440" cy="240" r="4" fill="#63765a"/><text x="360" y="436" text-anchor="middle" font-family="system-ui,sans-serif" font-size="10" fill="#7d8c71">Example arrangement · review clearances with your rental team</text></svg>')
 save('assets/example-layout.svg',''.join(svg))
-save('sitemap.xml','<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+''.join('  <url><loc>'+URL+p+'</loc></url>\n' for p in PAGES)+'</urlset>')
+LASTMOD = '2026-09-22'
+save('sitemap.xml','<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+''.join('  <url><loc>'+URL+p+'</loc><lastmod>'+LASTMOD+'</lastmod></url>\n' for p in PAGES)+'</urlset>')
 print('Built',len(PAGES),'indexable public pages and signup/404 pages.')
