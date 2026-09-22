@@ -104,6 +104,10 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   r = await buy(d, { customerEmail: '', priceCents: 1, paid: true }); assert.equal(r.status, 200);
   const session = [...sessions.values()][0]; assert.equal(session.amount_total, 999); assert.equal(session.args.mode, 'payment');
   assert.equal(session.args.customer_email, undefined, 'direct CTA lets Stripe collect the purchaser email');
+  assert.equal(session.args.branding_settings.display_name, 'RentSketch');
+  assert.equal(session.args.branding_settings.logo.url, 'https://www.friendlypartyrental.com/images/logo.png');
+  assert.equal(session.args.branding_settings.button_color, '#0b3d91');
+  assert.equal(session.args.line_items[0].price_data.product_data.name, 'RentSketch Event Pass — Friendly Party Rental');
   assert.match(session.args.success_url, /tenant=friendly/); assert.match(session.args.success_url, /checkout_session_id=\{CHECKOUT_SESSION_ID\}/);
   const canceled = new URL(session.args.cancel_url), token = new URLSearchParams(canceled.hash.slice(1)).get('draft');
   r = await request('/api/consumer/event-pass/restore', { draftToken: token }); assert.equal(r.body.id, d.id); assert.equal(r.body.active, false); assert.equal(r.body.scene.tentId, d.scene.tentId);
@@ -138,6 +142,9 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal((await request('/api/tenants/friendly/quote-requests', { designId: d.id, anonymousSessionId: 'owner-private-token', customerName: 'Isolated', customerEmail: 'fixture@example.invalid' })).status, 402, 'expired pass cannot quote its layout');
   assert.equal((await request('/api/tenants/friendly/quote-requests', { designId: d.id, anonymousSessionId: 'wrong', customerName: 'Isolated', customerEmail: 'fixture@example.invalid' })).status, 404, 'quote requires design ownership');
   await buy(d, {}, true); const renewal = [...sessions.values()][1]; assert.equal(renewal.amount_total, 499);
+  assert.equal(renewal.args.branding_settings.display_name, 'RentSketch');
+  assert.equal(renewal.args.branding_settings.logo.url, 'https://www.friendlypartyrental.com/images/logo.png');
+  assert.equal(renewal.args.line_items[0].price_data.product_data.name, 'RentSketch Event Pass Renewal — Friendly Party Rental');
   renewal.payment_status = 'paid'; renewal.status = 'complete'; renewal.payment_intent = 'pi_renewal';
   assert.equal((await request('/webhook', { id: 'evt_async', type: 'checkout.session.async_payment_succeeded', data: { object: renewal } }, 'fixture-valid')).status, 200);
   assert.equal((await restore(renewal.id)).body.active, true); assert.equal((await pg.query('SELECT * FROM entitlements')).rows.length, 2);
@@ -218,6 +225,11 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal(directSession.metadata.kind, 'consumer_event_pass');
   assert.equal(directSession.metadata.tenant, 'friendly');
   assert.equal(directSession.metadata.source, 'homepage-test');
+  assert.equal(directSession.args.branding_settings.display_name, 'RentSketch');
+  assert.equal(directSession.args.branding_settings.logo.url, 'https://www.friendlypartyrental.com/images/logo.png');
+  assert.equal(directSession.args.branding_settings.background_color, '#ffffff');
+  assert.equal(directSession.args.branding_settings.button_color, '#0b3d91');
+  assert.equal(directSession.args.line_items[0].price_data.product_data.name, 'RentSketch Event Pass — Friendly Party Rental');
   const directLedger = (await pg.query('SELECT customer_email,status,amount_cents,duration_days FROM consumer_payments WHERE stripe_checkout_session_id=$1',[directSession.id])).rows[0];
   assert.equal(directLedger.customer_email, '');
   assert.equal(directLedger.status, 'pending');
