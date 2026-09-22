@@ -2,6 +2,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {JSDOM}=require('jsdom');const root=path.resolve(__dirname,'..');
 const sitemap=fs.readFileSync(path.join(root,'sitemap.xml'),'utf8');
 const softwareSitemap=fs.readFileSync(path.join(root,'sitemap-software.xml'),'utf8');
+const eventPlanningSitemap=fs.readFileSync(path.join(root,'sitemap-event-planning.xml'),'utf8');
+const robots=fs.readFileSync(path.join(root,'robots.txt'),'utf8');
 const urls=[...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map(x=>x[1]);
 assert.equal(new Set(urls).size,urls.length);
 const titles=new Set();
@@ -53,6 +55,9 @@ assert.match(homeHtml,/"applicationCategory": "BusinessApplication"/);
 assert.ok(sitemap.includes('/tent-rental-software/'),'Tent rental software landing page must be indexable');
 for(const pathName of ['/party-rental-software/','/party-rental-management-software/','/party-rental-inventory-software/','/event-rental-software/','/tent-rental-software/']) assert.ok(softwareSitemap.includes(pathName),'focused software sitemap must contain '+pathName);
 assert.equal((softwareSitemap.match(/<loc>/g)||[]).length,5,'focused software sitemap should contain exactly five canonical software pages');
+for(const pathName of ['/event-pass/','/demo/','/wedding-layout-planner/','/tent-layout-software/','/event-layout-software/']) assert.ok(eventPlanningSitemap.includes(pathName),'focused event planning sitemap must contain '+pathName);
+assert.equal((eventPlanningSitemap.match(/<loc>/g)||[]).length,5,'focused event planning sitemap should contain exactly five canonical consumer planning pages');
+assert.match(robots,/Sitemap: https:\/\/rentsketch\.com\/sitemap-event-planning\.xml/);
 const partySoftware=fs.readFileSync(path.join(root,'party-rental-software/index.html'),'utf8');
 assert.match(partySoftware,/<title>Party Rental Business Software/);
 for(const phrase of ['party rental business software','party rental inventory software','party rental management software','party and event rental software']) assert.ok(partySoftware.toLowerCase().includes(phrase),phrase+' must appear naturally on party-rental-software');
