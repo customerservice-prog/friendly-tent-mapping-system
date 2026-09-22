@@ -21,7 +21,7 @@
 	@analyticsConfig path /analytics-config.js
 	header @analyticsConfig Content-Type "application/javascript; charset=utf-8"
 	header @analyticsConfig Cache-Control "no-store"
-	respond @analyticsConfig "window.RENTSKETCH_GA4_MEASUREMENT_ID='\{$GA4_MEASUREMENT_ID\}';" 200
+	respond @analyticsConfig "window.RENTSKETCH_GA4_MEASUREMENT_ID='{$GA4_MEASUREMENT_ID}';" 200
 	# One public host and one URL per page. Redirects run before file rewrites.
 	@www host www.rentsketch.com
 	redir @www https://rentsketch.com{uri} permanent
