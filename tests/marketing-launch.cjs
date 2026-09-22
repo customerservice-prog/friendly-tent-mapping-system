@@ -55,18 +55,19 @@ assert.match(partySoftware,/<title>Party Rental Software/);
 for(const phrase of ['party rental business software','party rental inventory software','party rental management software','party and event rental software']) assert.ok(partySoftware.toLowerCase().includes(phrase),phrase+' must appear naturally on party-rental-software');
 assert.match(partySoftware,/does not replace live stock-count or reservation software/);
 const eventSoftware=fs.readFileSync(path.join(root,'event-rental-software/index.html'),'utf8');
-assert.match(eventSoftware,/<title>Party &amp; Event Rental Software/);
-assert.match(eventSoftware,/This is event rental software, not event registration software/);
+assert.match(eventSoftware,/<title>Party and Event Rental Software \| RentSketch<\/title>/);
+assert.match(eventSoftware,/Searching for “rent event registration software”\?/);
+assert.match(eventSoftware,/RentSketch is not that category of software/);
 const tentSoftware=fs.readFileSync(path.join(root,'tent-rental-software/index.html'),'utf8');
 assert.match(tentSoftware,/<title>Tent Rental Software/);
 assert.match(tentSoftware,/does not currently replace component-level tent inventory/);
 
 const inventorySoftware=fs.readFileSync(path.join(root,'party-rental-inventory-software/index.html'),'utf8');
-assert.match(inventorySoftware,/<title>Party Rental Inventory Software \| RentSketch/);
+assert.match(inventorySoftware,/<title>Party Rental Inventory Software Guide \| RentSketch<\/title>/);
 assert.match(inventorySoftware,/date-based availability/);
 assert.match(inventorySoftware,/does not claim to replace/);
 const managementSoftware=fs.readFileSync(path.join(root,'party-rental-management-software/index.html'),'utf8');
-assert.match(managementSoftware,/<title>Party Rental Management Software \| RentSketch/);
+assert.match(managementSoftware,/<title>Party Rental Management Software Guide \| RentSketch<\/title>/);
 assert.match(managementSoftware,/booking workflow/);
 assert.match(managementSoftware,/does not currently replace every contract/);
 assert.ok(sitemap.includes('/party-rental-inventory-software/'));
@@ -76,6 +77,19 @@ assert.match(homeHtml,/party-rental-management-software/);
 for(const html of [partySoftware,eventSoftware,tentSoftware]){
   assert.match(html,/"@type": "SoftwareApplication"/);
   assert.match(html,/Start business trial/);
+}
+
+for(const target of ['/party-rental-management-software/','/party-rental-inventory-software/','/tent-rental-software/','/event-rental-software/']){
+  assert.ok(homeHtml.includes('href="'+target+'"'),'homepage must crawl-link '+target);
+}
+assert.match(partySoftware,/Party Rental Software &amp; Party Rental Business Software/);
+assert.match(eventSoftware,/Party and Event Rental Software/);
+assert.match(tentSoftware,/Tent Rental Software \| Layouts, Quotes &amp; Visual Planning/);
+for(const html of [partySoftware,eventSoftware,tentSoftware,inventorySoftware,managementSoftware]){
+  assert.match(html,/Party rental software by job/);
+  assert.match(html,/party-rental-management-software/);
+  assert.match(html,/party-rental-inventory-software/);
+  assert.match(html,/tent-rental-software/);
 }
 const eventPassHtml=fs.readFileSync(path.join(root,'event-pass/index.html'),'utf8');
 assert.match(eventPassHtml,/No subscription/);

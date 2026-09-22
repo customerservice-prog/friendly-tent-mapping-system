@@ -53,3 +53,11 @@
 .homepage-hero .single-event{order:6;margin-top:14px;margin-bottom:0}
 }
 @media(max-width:360px){.homepage-hero h1{font-size:36px;letter-spacing:-1.6px}}
+
+/* Query-intent hub: strong crawl paths into the rental-software topic cluster. */
+.software-intent-links{border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.software-intent-links .guide-links{grid-template-columns:repeat(4,minmax(0,1fr))}
+.software-intent-links .guide-link{background:#fff;min-height:220px}
+.software-intent-links .guide-link h3{font-size:21px}
+@media(max-width:1000px){.software-intent-links .guide-links{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:640px){.software-intent-links .guide-links{grid-template-columns:1fr}.software-intent-links .guide-link{min-height:0}}
