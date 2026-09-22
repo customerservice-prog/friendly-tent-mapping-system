@@ -29,16 +29,17 @@ function safeOrigin(req) {
 }
 
 const FRIENDLY_CHECKOUT_LOGO = 'https://www.friendlypartyrental.com/images/logo.png';
+const RENTSKETCH_CHECKOUT_LOGO = 'https://rentsketch.com/assets/brand-mark.svg';
 function eventPassBranding(slug) {
-    if (slug !== 'friendly') return {};
+    const friendly = slug === 'friendly';
     return {
         branding_settings: {
             background_color: '#ffffff',
             border_style: 'rounded',
-            button_color: '#0b3d91',
+            button_color: friendly ? '#0b3d91' : '#183429',
             display_name: 'RentSketch',
             font_family: 'default',
-            logo: { type: 'url', url: FRIENDLY_CHECKOUT_LOGO }
+            logo: { type: 'url', url: friendly ? FRIENDLY_CHECKOUT_LOGO : RENTSKETCH_CHECKOUT_LOGO }
         }
     };
 }
