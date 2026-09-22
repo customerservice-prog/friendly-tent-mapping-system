@@ -15,6 +15,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Install marketing test dependencies
+        run: npm --prefix tests ci
       - name: Regenerate public marketing pages
         run: python scripts/build-marketing.py
       - name: Verify generated pages
