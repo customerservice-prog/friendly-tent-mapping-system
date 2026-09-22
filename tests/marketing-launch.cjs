@@ -62,11 +62,11 @@ assert.match(tentSoftware,/<title>Tent Rental Software/);
 assert.match(tentSoftware,/does not currently replace component-level tent inventory/);
 
 const inventorySoftware=fs.readFileSync(path.join(root,'party-rental-inventory-software/index.html'),'utf8');
-assert.match(inventorySoftware,/<title>Party Rental Inventory Software \+ Visual Planning/);
+assert.match(inventorySoftware,/<title>Party Rental Inventory Software \| RentSketch/);
 assert.match(inventorySoftware,/date-based availability/);
 assert.match(inventorySoftware,/does not claim to replace/);
 const managementSoftware=fs.readFileSync(path.join(root,'party-rental-management-software/index.html'),'utf8');
-assert.match(managementSoftware,/<title>Party Rental Management Software for Visual Planning/);
+assert.match(managementSoftware,/<title>Party Rental Management Software \| RentSketch/);
 assert.match(managementSoftware,/booking workflow/);
 assert.match(managementSoftware,/does not currently replace every contract/);
 assert.ok(sitemap.includes('/party-rental-inventory-software/'));
