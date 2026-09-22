@@ -1,0 +1,26 @@
+name: Regenerate SEO cleanup
+on:
+  push:
+    branches: [seo/onpage-cleanup]
+    paths: [.github/workflows/regenerate-seo-cleanup.yml]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: seo/onpage-cleanup
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/build-marketing.py
+      - run: |
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html business demo help privacy event-pass tent-layout-software tent-diagram-software party-rental-software event-rental-software tent-rental-software event-layout-software wedding-layout-planner sitemap.xml marketing.css
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Regenerate SEO metadata cleanup'
+          git push origin HEAD:seo/onpage-cleanup
