@@ -7,10 +7,11 @@ Checkout read the same server offer. Rental equipment and its delivery/tax
 are separate. Confirmed Friendly bookings include one layout through seven
 days after the event, without a design fee.
 
-Friendly and direct RentSketch customers see the exact product in a five-minute
-free preview. A visible countdown shares one deadline across products and
-reloads, backed by `consumer_previews` (migration `013_preview_limit.sql`).
-Expiry retains the scene and offers purchase, included booking access and
+Customers can watch a short, replayable Quick Demo that does not create, save,
+or submit an event. The designer may also expose a limited product-preview
+session backed by `consumer_previews` (migration `013_preview_limit.sql`), but
+that timer is not marketed as the free demo. Expiry retains the scene and offers
+purchase, included booking access, the replayable Quick Demo, and
 saved-event recovery. Paid and included saved events keep their verified access.
 The anonymous browser identifier is not proof of a person's identity: clearing
 all site storage or using a different browser can create another preview.
