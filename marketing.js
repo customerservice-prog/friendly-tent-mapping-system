@@ -1,5 +1,9 @@
 (function () {
   'use strict';
+  var analytics = document.createElement('script');
+  analytics.src = '/analytics-loader.js?v=20260922-ga4-1';
+  analytics.async = true;
+  document.head.appendChild(analytics);
   var menu = document.querySelector('.menu-toggle');
   var links = document.getElementById('navlinks');
   function closeMenu() { links.classList.remove('open'); menu.setAttribute('aria-expanded', 'false'); }
