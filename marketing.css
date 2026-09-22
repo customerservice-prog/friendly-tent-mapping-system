@@ -71,3 +71,14 @@
 .software-proof-grid li{margin:9px 0;color:var(--muted);font-size:14px;line-height:1.55}
 .software-proof-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
 @media(max-width:640px){.software-proof-grid{grid-template-columns:1fr}.software-proof-grid article{padding:22px}}
+
+
+/* High-intent software buyer guide */
+.buyer-table{overflow:hidden;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 14px 40px rgba(24,52,41,.06)}
+.buyer-row{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,.7fr) minmax(0,1fr);gap:18px;align-items:center;padding:16px 20px;border-top:1px solid var(--line);font-size:.95rem}
+.buyer-row:first-child{border-top:0}
+.buyer-row strong{color:var(--green)}
+.buyer-head{background:#183429;color:#fff;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em}
+.buyer-head strong,.buyer-head span{color:#fff}
+.software-search-faq .faq details{background:#fff}
+@media(max-width:720px){.buyer-row{grid-template-columns:1fr;gap:5px;padding:15px 17px}.buyer-head{display:none}.buyer-row span:first-child{font-weight:800;color:#183429}.buyer-row strong,.buyer-row span:not(:first-child){font-size:.88rem}}
