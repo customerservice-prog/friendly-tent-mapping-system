@@ -26,6 +26,12 @@
 	}
 	@indexFile path_regexp indexFile ^(.*)/index\.html$
 	redir @indexFile {re.indexFile.1}/{querySuffix} permanent
+	@partyBusinessAlias path /party-rental-business-software /party-rental-business-software/
+	redir @partyBusinessAlias /party-rental-software/{querySuffix} permanent
+	@softwareForPartyAlias path /software-for-party-rental /software-for-party-rental/
+	redir @softwareForPartyAlias /party-rental-software/{querySuffix} permanent
+	@partyEventAlias path /party-event-rental-software /party-event-rental-software/
+	redir @partyEventAlias /event-rental-software/{querySuffix} permanent
 	@missingSlash path /business /demo /help /privacy /tent-layout-software /tent-diagram-software /party-rental-software /party-rental-inventory-software /party-rental-management-software /event-rental-software /tent-rental-software /event-layout-software /wedding-layout-planner
 	redir @missingSlash {path}/{querySuffix} permanent
 	@source path /server/* /docs/* /scripts/* /.git* /.env* /STRIPE* /INTEGRATION_HANDOFF.md /FRIENDLY-EVENT-DESIGNER.md
