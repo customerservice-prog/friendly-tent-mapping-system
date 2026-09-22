@@ -14,6 +14,7 @@ def event_pass_url(source):
     return EVENT_PASS_CHECKOUT + '&source=' + source
 
 
+# SEO intent cluster schema applies to the five high-intent rental-software landing pages.
 SOFTWARE_FAQS = {
     '/party-rental-software/': [
         ('What is party rental software?', 'Party rental software helps rental businesses organize customer requests and operational work. RentSketch focuses on the customer-facing visual-planning step: branded rental catalogs, 2D and 3D layouts, saved designs and quote requests. Keep authoritative availability, reservations, contracts, dispatch and accounting in the system that owns those workflows.'),
