@@ -1,0 +1,141 @@
+name: IndexNow URL submission
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.html'
+      - 'sitemap*.xml'
+      - 'scripts/build-marketing.py'
+      - '.github/workflows/indexnow.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  submit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Select changed canonical URLs
+        id: urls
+        env:
+          BEFORE: ${{ github.event.before }}
+          SHA: ${{ github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import xml.etree.ElementTree as ET
+
+          root = pathlib.Path('.')
+          canonical = set()
+          ns = {'sm': 'http://www.sitemaps.org/schemas/sitemap/0.9'}
+
+          for sitemap in root.glob('sitemap*.xml'):
+              try:
+                  tree = ET.parse(sitemap)
+              except ET.ParseError:
+                  continue
+              for loc in tree.findall('.//sm:loc', ns):
+                  if loc.text and loc.text.startswith('https://rentsketch.com/'):
+                      canonical.add(loc.text.strip())
+
+          event_name = os.environ.get('EVENT_NAME', '')
+          before = os.environ.get('BEFORE', '')
+          sha = os.environ.get('SHA', 'HEAD')
+
+          if event_name == 'workflow_dispatch':
+              selected = sorted(canonical)
+          else:
+              if before and set(before) != {'0'}:
+                  cmd = ['git', 'diff', '--name-only', before, sha]
+              else:
+                  cmd = ['git', 'show', '--pretty=', '--name-only', sha]
+              changed = set(subprocess.check_output(cmd, text=True).splitlines())
+
+              # First install/bootstrap: submit all currently canonical URLs once.
+              if '.github/workflows/indexnow.yml' in changed:
+                  selected = sorted(canonical)
+              else:
+                  candidates = set()
+                  for filename in changed:
+                      if filename == 'index.html':
+                          url = 'https://rentsketch.com/'
+                      elif filename.endswith('/index.html'):
+                          url = 'https://rentsketch.com/' + filename[:-len('index.html')]
+                      elif filename.endswith('.html'):
+                          url = 'https://rentsketch.com/' + filename
+                      else:
+                          continue
+                      if url in canonical:
+                          candidates.add(url)
+                  selected = sorted(candidates)
+
+          with open('/tmp/indexnow-urls.json', 'w', encoding='utf-8') as fh:
+              json.dump(selected, fh)
+
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as out:
+              out.write(f"count={len(selected)}\n")
+              out.write("urls<<EOF\n")
+              out.write("\n".join(selected))
+              out.write("\nEOF\n")
+
+          print(f"Selected {len(selected)} canonical URL(s)")
+          for url in selected:
+              print(url)
+          PY
+
+      - name: Submit changed URLs to IndexNow
+        if: steps.urls.outputs.count != '0'
+        env:
+          INDEXNOW_KEY: 0dd6c4d66819e6a080f7fae83831c298
+          INDEXNOW_HOST: rentsketch.com
+          INDEXNOW_KEY_LOCATION: https://rentsketch.com/0dd6c4d66819e6a080f7fae83831c298.txt
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          with open('/tmp/indexnow-urls.json', encoding='utf-8') as fh:
+              urls = json.load(fh)
+
+          payload = json.dumps({
+              'host': os.environ['INDEXNOW_HOST'],
+              'key': os.environ['INDEXNOW_KEY'],
+              'keyLocation': os.environ['INDEXNOW_KEY_LOCATION'],
+              'urlList': urls,
+          }).encode('utf-8')
+
+          request = urllib.request.Request(
+              'https://api.indexnow.org/indexnow',
+              data=payload,
+              headers={'Content-Type': 'application/json; charset=utf-8'},
+              method='POST',
+          )
+
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  status = response.status
+                  body = response.read().decode('utf-8', 'replace')
+          except urllib.error.HTTPError as exc:
+              status = exc.code
+              body = exc.read().decode('utf-8', 'replace')
+              print(f'IndexNow returned HTTP {status}: {body}')
+              raise
+
+          print(f'IndexNow returned HTTP {status}')
+          if body:
+              print(body)
+          if status not in (200, 202):
+              raise SystemExit(f'Unexpected IndexNow status: {status}')
+          PY
