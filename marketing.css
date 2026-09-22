@@ -61,3 +61,13 @@
 .software-intent-links .guide-link h3{font-size:21px}
 @media(max-width:1000px){.software-intent-links .guide-links{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.software-intent-links .guide-links{grid-template-columns:1fr}.software-intent-links .guide-link{min-height:0}}
+
+/* Search-intent proof block: explain exactly where RentSketch fits in a rental stack. */
+.software-proof{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:#fbfcf9}
+.software-proof-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin-top:26px}
+.software-proof-grid article{border:1px solid var(--line);border-radius:15px;background:#fff;padding:27px}
+.software-proof-grid h3{font-size:22px;margin-bottom:14px}
+.software-proof-grid ul{margin:0;padding-left:20px}
+.software-proof-grid li{margin:9px 0;color:var(--muted);font-size:14px;line-height:1.55}
+.software-proof-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:24px}
+@media(max-width:640px){.software-proof-grid{grid-template-columns:1fr}.software-proof-grid article{padding:22px}}
