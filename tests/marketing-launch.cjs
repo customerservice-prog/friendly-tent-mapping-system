@@ -82,9 +82,9 @@ for(const html of [partySoftware,eventSoftware,tentSoftware]){
 for(const target of ['/party-rental-management-software/','/party-rental-inventory-software/','/tent-rental-software/','/event-rental-software/']){
   assert.ok(homeHtml.includes('href="'+target+'"'),'homepage must crawl-link '+target);
 }
-assert.match(partySoftware,/Party Rental Software &amp; Party Rental Business Software/);
+assert.match(partySoftware,/Party Rental Software \| Business Visual Planning \| RentSketch/);
 assert.match(eventSoftware,/Party and Event Rental Software/);
-assert.match(tentSoftware,/Tent Rental Software \| Layouts, Quotes &amp; Visual Planning/);
+assert.match(tentSoftware,/Tent Rental Software for Layouts &amp; Quotes \| RentSketch/);
 for(const html of [partySoftware,eventSoftware,tentSoftware,inventorySoftware,managementSoftware]){
   assert.match(html,/Party rental software by job/);
   assert.match(html,/party-rental-management-software/);
