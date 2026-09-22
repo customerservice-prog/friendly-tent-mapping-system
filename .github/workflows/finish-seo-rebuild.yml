@@ -1,0 +1,27 @@
+name: Finish SEO generator rebuild
+on:
+  push:
+    branches: [seo/software-intent-indexing-20260922]
+    paths: [.github/workflows/finish-seo-rebuild.yml]
+permissions:
+  contents: write
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: seo/software-intent-indexing-20260922
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 scripts/build-marketing.py
+      - run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git reset -- .github/workflows/finish-seo-rebuild.yml
+          if ! git diff --cached --quiet; then
+            git commit -m 'Synchronize generated marketing tree'
+            git push origin HEAD:seo/software-intent-indexing-20260922
+          fi
