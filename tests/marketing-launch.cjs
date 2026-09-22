@@ -112,7 +112,7 @@ for(const target of ['/party-rental-management-software/','/party-rental-invento
 }
 assert.match(partySoftware,/Party Rental Software for Visual Event Planning/);
 assert.match(eventSoftware,/Party &amp; Event Rental Software/);
-assert.match(tentSoftware,/Tent Rental Software for Visual Layouts &amp; Quotes/);
+assert.match(tentSoftware,/Tent Rental Software for Layouts &amp; Quotes/);
 for(const html of [partySoftware,eventSoftware,tentSoftware,inventorySoftware,managementSoftware]){
   assert.match(html,/Party rental software by job/);
   assert.match(html,/party-rental-management-software/);
