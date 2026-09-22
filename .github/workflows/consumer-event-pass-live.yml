@@ -1,0 +1,76 @@
+name: Consumer Event Pass live conversion verification
+on:
+  push:
+    branches: [qa/consumer-event-pass-live]
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Verify live consumer funnel and create one unpaid QA Checkout
+        run: |
+          node <<'JS'
+          const assert=require('node:assert/strict');
+          const fs=require('node:fs');
+          async function get(url,options={}){
+            const r=await fetch(url,{...options,headers:{'Cache-Control':'no-cache','Pragma':'no-cache',...(options.headers||{})},signal:AbortSignal.timeout(30000)});
+            return r;
+          }
+          async function html(path){
+            const r=await get('https://rentsketch.com'+path+'?liveqa=20260922');
+            assert.equal(r.status,200,path+' status');
+            return r.text();
+          }
+          (async()=>{
+            const pages={
+              home:await html('/'),
+              eventPass:await html('/event-pass/'),
+              pricing:await html('/business/pricing.html'),
+              wedding:await html('/wedding-layout-planner/'),
+              tent:await html('/tent-layout-software/'),
+              eventLayout:await html('/event-layout-software/')
+            };
+            assert.match(pages.home,/<title>3D Event Planner &amp; Event Layout Software \| RentSketch<\/title>/);
+            assert.match(pages.home,/Start my event · \$9\.99/);
+            assert.match(pages.home,/source=rentsketch_home_hero/);
+            assert.doesNotMatch(pages.home,/Start free business trial <span/);
+            assert.match(pages.eventPass,/<title>3D Event Planner \| \$9\.99 One-Time Event Pass \| RentSketch<\/title>/);
+            assert.match(pages.eventPass,/Start my event · \$9\.99/);
+            assert.match(pages.eventPass,/No subscription/);
+            assert.match(pages.pricing,/Start planning · \$9\.99/);
+            for(const key of ['wedding','tent','eventLayout']){
+              assert.match(pages[key],/Start my event · \$9\.99/);
+              assert.match(pages[key],/tenant=generic/);
+            }
+            const sitemap=await (await get('https://rentsketch.com/sitemap.xml?liveqa=20260922')).text();
+            assert.match(sitemap,/https:\/\/rentsketch\.com\/event-pass\//);
+
+            const checkout=await get('https://rentsketch-api-production.up.railway.app/api/consumer/event-pass/direct-checkout?tenant=generic&source=live_marketing_conversion_qa',{redirect:'manual'});
+            assert.equal(checkout.status,303);
+            const location=checkout.headers.get('location');
+            assert.ok(location);
+            const u=new URL(location);
+            assert.equal(u.hostname,'checkout.stripe.com');
+            assert.match(u.pathname,/^\/c\/pay\//);
+            const m=location.match(/cs_live_[A-Za-z0-9_]+/);
+            assert.ok(m,'live session id');
+            const evidence={
+              homeConsumerPrimary:true,eventPassPage:true,pricingConsumerFirst:true,
+              consumerSeoPages:true,sitemapEventPass:true,
+              checkoutStatus:checkout.status,checkoutHost:u.hostname,checkoutSessionId:m[0]
+            };
+            fs.writeFileSync('consumer-live-evidence.json',JSON.stringify(evidence,null,2));
+            console.log('PASS live consumer Event Pass funnel',JSON.stringify(evidence));
+          })().catch(e=>{console.error(e);process.exitCode=1});
+          JS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: consumer-event-pass-live-evidence
+          path: consumer-live-evidence.json
