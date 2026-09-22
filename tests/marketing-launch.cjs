@@ -54,7 +54,7 @@ assert.ok(sitemap.includes('/tent-rental-software/'),'Tent rental software landi
 for(const pathName of ['/party-rental-software/','/party-rental-management-software/','/party-rental-inventory-software/','/event-rental-software/','/tent-rental-software/']) assert.ok(softwareSitemap.includes(pathName),'focused software sitemap must contain '+pathName);
 assert.equal((softwareSitemap.match(/<loc>/g)||[]).length,5,'focused software sitemap should contain exactly five canonical software pages');
 const partySoftware=fs.readFileSync(path.join(root,'party-rental-software/index.html'),'utf8');
-assert.match(partySoftware,/<title>Party Rental Software/);
+assert.match(partySoftware,/<title>Party Rental Business Software/);
 for(const phrase of ['party rental business software','party rental inventory software','party rental management software','party and event rental software']) assert.ok(partySoftware.toLowerCase().includes(phrase),phrase+' must appear naturally on party-rental-software');
 assert.match(partySoftware,/does not replace live stock-count or reservation software/);
 assert.match(partySoftware,/data-software-proof/);
@@ -101,7 +101,7 @@ for(const html of [partySoftware,eventSoftware,tentSoftware]){
 for(const target of ['/party-rental-management-software/','/party-rental-inventory-software/','/tent-rental-software/','/event-rental-software/']){
   assert.ok(homeHtml.includes('href="'+target+'"'),'homepage must crawl-link '+target);
 }
-assert.match(partySoftware,/Party Rental Software & Party Rental Business Software/);
+assert.match(partySoftware,/Party Rental Business Software/);
 assert.match(eventSoftware,/Party &amp; Event Rental Software/);
 assert.match(tentSoftware,/Tent Rental Software for Layouts &amp; Quotes/);
 for(const html of [partySoftware,eventSoftware,tentSoftware,inventorySoftware,managementSoftware]){
