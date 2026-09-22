@@ -1,0 +1,51 @@
+name: Marketing SEO regression
+on:
+  pull_request:
+    paths:
+      - 'scripts/build-marketing.py'
+      - 'index.html'
+      - 'party-rental-software/**'
+      - 'party-rental-management-software/**'
+      - 'party-rental-inventory-software/**'
+      - 'event-rental-software/**'
+      - 'tent-rental-software/**'
+      - 'marketing.css'
+      - 'sitemap.xml'
+      - 'Caddyfile'
+      - 'tests/marketing-launch.cjs'
+      - '.github/workflows/marketing-seo.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/build-marketing.py'
+      - 'index.html'
+      - 'party-rental-software/**'
+      - 'party-rental-management-software/**'
+      - 'party-rental-inventory-software/**'
+      - 'event-rental-software/**'
+      - 'tent-rental-software/**'
+      - 'marketing.css'
+      - 'sitemap.xml'
+      - 'Caddyfile'
+      - 'tests/marketing-launch.cjs'
+permissions:
+  contents: read
+jobs:
+  seo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Compile marketing generator
+        run: python3 -m py_compile scripts/build-marketing.py
+      - name: Install marketing test dependencies
+        run: npm --prefix tests ci
+      - name: Rebuild marketing pages from source
+        run: python3 scripts/build-marketing.py
+      - name: Verify generated tree is clean
+        run: git diff --exit-code
+      - name: Run marketing SEO regression
+        run: npm --prefix tests run test:marketing
