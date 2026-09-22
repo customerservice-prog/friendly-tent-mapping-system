@@ -26,13 +26,19 @@
 	}
 	@indexFile path_regexp indexFile ^(.*)/index\.html$
 	redir @indexFile {re.indexFile.1}/{querySuffix} permanent
-	@missingSlash path /business /demo /help /privacy /tent-layout-software /tent-diagram-software /party-rental-software /event-rental-software /tent-rental-software /event-layout-software /wedding-layout-planner
+	@partyBusinessAlias path /party-rental-business-software /party-rental-business-software/
+	redir @partyBusinessAlias /party-rental-software/{querySuffix} permanent
+	@softwareForPartyAlias path /software-for-party-rental /software-for-party-rental/
+	redir @softwareForPartyAlias /party-rental-software/{querySuffix} permanent
+	@partyEventAlias path /party-event-rental-software /party-event-rental-software/
+	redir @partyEventAlias /event-rental-software/{querySuffix} permanent
+	@missingSlash path /business /demo /help /privacy /tent-layout-software /tent-diagram-software /party-rental-software /party-rental-inventory-software /party-rental-management-software /event-rental-software /tent-rental-software /event-layout-software /wedding-layout-planner
 	redir @missingSlash {path}/{querySuffix} permanent
 	@source path /server/* /docs/* /scripts/* /.git* /.env* /STRIPE* /INTEGRATION_HANDOFF.md /FRIENDLY-EVENT-DESIGNER.md
 	respond @source 404
 	@privatePage path /designer /designer/* /dashboard /dashboard/* /my-event /my-event/* /business/signup* /tests/*
 	header @privatePage X-Robots-Tag "noindex, nofollow"
-	@marketing path / /index.html /business/* /demo/* /help/* /privacy/* /tent-layout-software/* /tent-diagram-software/* /party-rental-software/* /event-rental-software/* /tent-rental-software/* /event-layout-software/* /wedding-layout-planner/* /marketing* /sitemap.xml /robots.txt
+	@marketing path / /index.html /business/* /demo/* /help/* /privacy/* /tent-layout-software/* /tent-diagram-software/* /party-rental-software/* /party-rental-inventory-software/* /party-rental-management-software/* /event-rental-software/* /tent-rental-software/* /event-layout-software/* /wedding-layout-planner/* /marketing* /sitemap.xml /robots.txt
 	header @marketing Cache-Control "no-cache"
 	header {
 		X-XSS-Protection "1; mode=block"
