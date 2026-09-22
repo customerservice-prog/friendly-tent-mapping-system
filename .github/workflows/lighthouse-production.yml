@@ -1,6 +1,10 @@
 name: Production Lighthouse smoke
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/lighthouse-production.yml'
   workflow_dispatch:
   schedule:
     - cron: '17 12 * * *'
