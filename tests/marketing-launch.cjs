@@ -79,7 +79,7 @@ for(const html of [partySoftware,eventSoftware,tentSoftware]){
 }
 
 for(const target of ['/party-rental-management-software/','/party-rental-inventory-software/','/tent-rental-software/','/event-rental-software/']){
-  assert.match(homeHtml,new RegExp('href="'+target.replace(/[.*+?^$\{\}()|[\]\\]/g,'\\const eventPassHtml=fs.readFileSync(path.join(root,'event-pass/index.html'),'utf8');')+'"'),'homepage must crawl-link '+target);
+  assert.ok(homeHtml.includes('href="'+target+'"'),'homepage must crawl-link '+target);
 }
 assert.match(partySoftware,/Party Rental Software &amp; Party Rental Business Software/);
 assert.match(eventSoftware,/Party and Event Rental Software/);
