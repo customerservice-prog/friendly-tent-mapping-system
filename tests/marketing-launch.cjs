@@ -45,9 +45,10 @@ for(const file of consumerPages){
 }
 const homeHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.match(homeHtml,/Plan one event · \$9\.99/);
-assert.match(homeHtml,/<title>Party Rental Software &amp; 3D Event Layout Planning/);
+assert.match(homeHtml,/<title>Party Rental Software &amp; 3D Event Planning/);
 assert.match(homeHtml,/<h1>Party rental software<br><span>customers can actually see\.<\/span><\/h1>/);
 assert.match(homeHtml,/Start 14-day business trial/);
+assert.match(homeHtml,/"applicationCategory": "BusinessApplication"/);
 assert.ok(sitemap.includes('/tent-rental-software/'),'Tent rental software landing page must be indexable');
 const partySoftware=fs.readFileSync(path.join(root,'party-rental-software/index.html'),'utf8');
 assert.match(partySoftware,/<title>Party Rental Software/);
@@ -61,11 +62,11 @@ assert.match(tentSoftware,/<title>Tent Rental Software/);
 assert.match(tentSoftware,/does not currently replace component-level tent inventory/);
 
 const inventorySoftware=fs.readFileSync(path.join(root,'party-rental-inventory-software/index.html'),'utf8');
-assert.match(inventorySoftware,/<title>Party Rental Inventory Software \+ Visual Planning/);
+assert.match(inventorySoftware,/<title>Party Rental Inventory Software \| RentSketch/);
 assert.match(inventorySoftware,/date-based availability/);
 assert.match(inventorySoftware,/does not claim to replace/);
 const managementSoftware=fs.readFileSync(path.join(root,'party-rental-management-software/index.html'),'utf8');
-assert.match(managementSoftware,/<title>Party Rental Management Software for Visual Planning/);
+assert.match(managementSoftware,/<title>Party Rental Management Software \| RentSketch/);
 assert.match(managementSoftware,/booking workflow/);
 assert.match(managementSoftware,/does not currently replace every contract/);
 assert.ok(sitemap.includes('/party-rental-inventory-software/'));
