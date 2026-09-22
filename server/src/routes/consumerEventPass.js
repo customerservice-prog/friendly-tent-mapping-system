@@ -28,6 +28,25 @@ function safeOrigin(req) {
     return candidate && /^https:\/\/([a-z0-9-]+\.)?rentsketch\.com$/i.test(candidate) ? candidate : configured;
 }
 
+const FRIENDLY_CHECKOUT_LOGO = 'https://www.friendlypartyrental.com/images/logo.png';
+function eventPassBranding(slug) {
+    if (slug !== 'friendly') return {};
+    return {
+        branding_settings: {
+            background_color: '#ffffff',
+            border_style: 'rounded',
+            button_color: '#0b3d91',
+            display_name: 'RentSketch',
+            font_family: 'default',
+            logo: { type: 'url', url: FRIENDLY_CHECKOUT_LOGO }
+        }
+    };
+}
+function eventPassProductName(renewal, slug) {
+    const base = renewal ? 'RentSketch Event Pass Renewal' : 'RentSketch Event Pass';
+    return slug === 'friendly' ? base + ' — Friendly Party Rental' : base;
+}
+
 async function designTenant(design) {
     if (!design.tenant_id) return null;
     return (await query('SELECT * FROM tenants WHERE id=$1', [design.tenant_id])).rows[0] || null;
@@ -190,9 +209,10 @@ router.get('/event-pass/direct-checkout', wrap(async (req, res) => {
     const source = String(req.query.source || 'friendly_paid_cta').slice(0,100);
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
+      ...eventPassBranding(slug),
       line_items: [{ price_data: { currency: 'usd', unit_amount: offer.priceCents, product_data: {
-        name: 'RentSketch Event Pass',
-        description: offer.durationDays + ' days to edit, save, print and share one event design. One-time payment; rental equipment is separate.',
+        name: eventPassProductName(false, slug),
+        description: offer.durationDays + ' days to plan one event in RentSketch. Offered through Friendly Party Rental. One-time payment; rental equipment is separate.',
       } }, quantity: 1 }],
       metadata: { kind: 'consumer_event_pass', designId: design.id, tenant: slug, durationDays: String(offer.durationDays), source },
       success_url: returnPath + '&payment=success&checkout_session_id={CHECKOUT_SESSION_ID}',
@@ -242,9 +262,10 @@ function checkout(renewal) {
         const session = await stripe.checkout.sessions.create({
             mode: 'payment',
             ...(customerEmail ? { customer_email: customerEmail } : {}),
+            ...eventPassBranding(slug),
             line_items: [{ price_data: { currency: 'usd', unit_amount: amount, product_data: {
-                name: renewal ? 'RentSketch Event Pass Renewal' : 'RentSketch Event Pass',
-                description: `${days} days to edit, save, print and share one event design. One-time payment; rental equipment is separate.`,
+                name: eventPassProductName(renewal, slug),
+                description: `${days} days to plan one event in RentSketch. ${slug === 'friendly' ? 'Offered through Friendly Party Rental. ' : ''}One-time payment; rental equipment is separate.`,
             } }, quantity: 1 }],
             metadata: { kind, designId: design.id, tenant: slug, durationDays: String(days) },
             success_url: returnPath + '&payment=success&checkout_session_id={CHECKOUT_SESSION_ID}',
