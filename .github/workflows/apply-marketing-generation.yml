@@ -1,0 +1,32 @@
+name: Apply generated marketing pages
+on:
+  push:
+    branches: [seo/software-query-cluster-20260922]
+    paths:
+      - '.github/workflows/apply-marketing-generation.yml'
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: seo/software-query-cluster-20260922
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Regenerate marketing pages
+        run: python scripts/build-marketing.py
+      - name: Commit generated output
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Generated tree already matches."
+            exit 0
+          fi
+          git commit -m 'Regenerate marketing pages for software SEO cluster'
+          git push origin HEAD:seo/software-query-cluster-20260922
