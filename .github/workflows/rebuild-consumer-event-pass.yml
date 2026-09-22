@@ -1,0 +1,32 @@
+name: Rebuild consumer Event Pass marketing
+on:
+  push:
+    branches: [fix/consumer-event-pass-conversion]
+    paths:
+      - scripts/build-marketing.py
+      - .github/workflows/rebuild-consumer-event-pass.yml
+permissions:
+  contents: write
+jobs:
+  rebuild:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/consumer-event-pass-conversion
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python scripts/build-marketing.py
+      - run: |
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html business/pricing.html business/signup.html event-pass wedding-layout-planner tent-layout-software tent-diagram-software event-layout-software party-rental-software event-rental-software help privacy 404.html sitemap.xml
+          if git diff --cached --quiet; then
+            echo "No generated changes"
+          else
+            git commit -m "Rebuild consumer Event Pass marketing pages"
+            git push origin HEAD:fix/consumer-event-pass-conversion
+          fi
