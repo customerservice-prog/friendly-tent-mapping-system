@@ -45,18 +45,31 @@ for(const file of consumerPages){
 }
 const homeHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.match(homeHtml,/Plan one event · \$9\.99/);
-assert.match(homeHtml,/<title>Event Layout &amp; Party Rental Planning Software/);
+assert.match(homeHtml,/<title>Party Rental Software &amp; 3D Event Layout Planning/);
 assert.ok(sitemap.includes('/tent-rental-software/'),'Tent rental software landing page must be indexable');
 const partySoftware=fs.readFileSync(path.join(root,'party-rental-software/index.html'),'utf8');
 assert.match(partySoftware,/<title>Party Rental Software/);
 for(const phrase of ['party rental business software','party rental inventory software','party rental management software','party and event rental software']) assert.ok(partySoftware.toLowerCase().includes(phrase),phrase+' must appear naturally on party-rental-software');
-assert.match(partySoftware,/does not currently replace live stock-count or availability software/);
+assert.match(partySoftware,/does not replace live stock-count or reservation software/);
 const eventSoftware=fs.readFileSync(path.join(root,'event-rental-software/index.html'),'utf8');
 assert.match(eventSoftware,/<title>Party &amp; Event Rental Software/);
-assert.match(eventSoftware,/This is not event registration software/);
+assert.match(eventSoftware,/This is event rental software, not event registration software/);
 const tentSoftware=fs.readFileSync(path.join(root,'tent-rental-software/index.html'),'utf8');
 assert.match(tentSoftware,/<title>Tent Rental Software/);
 assert.match(tentSoftware,/does not currently replace component-level tent inventory/);
+
+const inventorySoftware=fs.readFileSync(path.join(root,'party-rental-inventory-software/index.html'),'utf8');
+assert.match(inventorySoftware,/<title>Party Rental Inventory Software Guide/);
+assert.match(inventorySoftware,/date-based availability/);
+assert.match(inventorySoftware,/does not claim to replace/);
+const managementSoftware=fs.readFileSync(path.join(root,'party-rental-management-software/index.html'),'utf8');
+assert.match(managementSoftware,/<title>Party Rental Management Software Guide/);
+assert.match(managementSoftware,/booking workflow/);
+assert.match(managementSoftware,/does not currently replace every contract/);
+assert.ok(sitemap.includes('/party-rental-inventory-software/'));
+assert.ok(sitemap.includes('/party-rental-management-software/'));
+assert.match(homeHtml,/party-rental-inventory-software/);
+assert.match(homeHtml,/party-rental-management-software/);
 for(const html of [partySoftware,eventSoftware,tentSoftware]){
   assert.match(html,/"@type": "SoftwareApplication"/);
   assert.match(html,/Start business trial/);
