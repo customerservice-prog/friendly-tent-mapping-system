@@ -27,6 +27,29 @@ doc.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'Escape'}));assert
 doc.querySelector('[data-billing=annual]').click();assert.equal(doc.querySelector('[data-plan=starter] [data-monthly]').textContent,'$490');assert.equal(doc.querySelector('[data-period]').textContent,'/year');
 doc.querySelector('[data-billing=monthly]').click();assert.equal(doc.querySelector('[data-plan=starter] [data-monthly]').textContent,'$49');
 assert.ok(!sitemap.includes('/designer/'));assert.ok(!sitemap.includes('signup'));assert.ok(!sitemap.includes('/dashboard/'));assert.ok(sitemap.includes('/demo/'));
+
+assert.ok(sitemap.includes('/event-pass/'),'Event Pass landing page must be indexable');
+const consumerPages=['index.html','event-pass/index.html','business/pricing.html','wedding-layout-planner/index.html','tent-layout-software/index.html','tent-diagram-software/index.html','event-layout-software/index.html'];
+for(const file of consumerPages){
+ const html=fs.readFileSync(path.join(root,file),'utf8'),page=new JSDOM(html,{url:'https://rentsketch.com/'+(file==='index.html'?'':file.replace(/index\.html$/,''))}).window.document;
+ const paid=[...page.querySelectorAll('a[href*="/api/consumer/event-pass/direct-checkout"]')];
+ assert.ok(paid.length>=1,file+' exposes a direct Event Pass purchase CTA');
+ for(const a of paid){
+  const u=new URL(a.href);
+  assert.equal(u.hostname,'rentsketch-api-production.up.railway.app');
+  assert.equal(u.pathname,'/api/consumer/event-pass/direct-checkout');
+  assert.equal(u.searchParams.get('tenant'),'generic');
+  assert.match(a.textContent,/\$9\.99/);
+ }
+ assert.doesNotMatch(html,/\{event_pass_url\(/,file+' contains no unrendered template URL');
+}
+const homeHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
+assert.match(homeHtml,/Start my event · \$9\.99/);
+assert.match(homeHtml,/<title>3D Event Planner/);
+const eventPassHtml=fs.readFileSync(path.join(root,'event-pass/index.html'),'utf8');
+assert.match(eventPassHtml,/No subscription/);
+assert.match(eventPassHtml,/30 days/);
+assert.match(eventPassHtml,/\$9\.99 once/);
 const signup=new JSDOM(fs.readFileSync(path.join(root,'business/signup.html'),'utf8'),{url:'https://rentsketch.com/business/signup.html?plan=starter',runScripts:'outside-only'});
 signup.window.eval(fs.readFileSync(path.join(root,'business/signup.js'),'utf8'));
 assert.equal(signup.window.document.querySelector('input[name=plan]:checked').value,'starter');
