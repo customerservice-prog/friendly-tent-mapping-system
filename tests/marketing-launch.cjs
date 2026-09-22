@@ -52,7 +52,7 @@ assert.match(partySoftware,/<title>Party Rental Software/);
 for(const phrase of ['party rental business software','party rental inventory software','party rental management software','party and event rental software']) assert.ok(partySoftware.toLowerCase().includes(phrase),phrase+' must appear naturally on party-rental-software');
 assert.match(partySoftware,/does not currently replace live stock-count or availability software/);
 const eventSoftware=fs.readFileSync(path.join(root,'event-rental-software/index.html'),'utf8');
-assert.match(eventSoftware,/<title>Party &amp; Event Rental Software/);
+assert.match(eventSoftware,/<title>Event Rental Software/);
 assert.match(eventSoftware,/This is not event registration software/);
 const tentSoftware=fs.readFileSync(path.join(root,'tent-rental-software/index.html'),'utf8');
 assert.match(tentSoftware,/<title>Tent Rental Software/);
