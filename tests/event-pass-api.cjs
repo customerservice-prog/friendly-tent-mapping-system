@@ -235,6 +235,18 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal(directLedger.status, 'pending');
   assert.equal(directLedger.amount_cents, 999);
   assert.equal(directLedger.duration_days, 30);
+  const genericBefore = creates;
+  const genericResponse = await fetch(base + '/api/consumer/event-pass/direct-checkout?tenant=generic&source=marketing-test', { redirect: 'manual' });
+  assert.equal(genericResponse.status, 303);
+  assert.equal(creates, genericBefore + 1);
+  const genericSession = [...sessions.values()].at(-1);
+  assert.equal(genericSession.metadata.tenant, 'generic');
+  assert.equal(genericSession.metadata.source, 'marketing-test');
+  assert.equal(genericSession.amount_total, 999);
+  assert.equal(genericSession.args.branding_settings.display_name, 'RentSketch');
+  assert.equal(genericSession.args.branding_settings.logo.url, 'https://rentsketch.com/assets/brand-mark.svg');
+  assert.equal(genericSession.args.branding_settings.button_color, '#183429');
+  assert.equal(genericSession.args.line_items[0].price_data.product_data.name, 'RentSketch Event Pass');
   console.log('PASS included order access: immediate signed access after name/order match, clear declines, zero queued/sent emails, SMTP-independent access, one layout per booking, server-owned session, no second charge, tenant isolation, cancellation and order-service failure. Isolated fixtures only.');
   console.log('PASS Event Pass API: real SQL/rollback, Friendly and direct $9.99 checkout, tenant isolation, ownership, open-session reuse, cancel restore, unpaid rejection, duplicate/racing fulfillment, delayed payment, $4.99 renewal, exact empty-tent recovery. Fake Stripe only; no production writes.');
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => { if (server) await new Promise(r => server.close(r)); await pg.close(); });
