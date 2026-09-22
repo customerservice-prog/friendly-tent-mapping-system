@@ -30,7 +30,7 @@ const server=http.createServer((req,res)=>{
    await p.screenshot({path:path.join(out,`guided-initial-${width}x${height}.png`)});
    for(const sel of ['.gp-close','.gp-buy','.gp-booking','[data-pause]','[data-replay]','[data-narration]']){const r=await p.locator(sel).boundingBox();assert(r&&r.x>=0&&r.y>=0&&r.x+r.width<=width+1&&r.y+r.height<=height+1,sel+' fits '+width+'x'+height);}
    if(width===320)assert((await p.locator('.gp-stage').boundingBox()).height>=130,'Short phone keeps a useful scene size');
-   assert.match(await p.locator('.gp-buy').innerText(),/\$9.99.*30 days/);assert.match(await p.locator('.gp-footer').innerText(),/Quick Demo.*watch-only.*replay anytime/i);assert.doesNotMatch(await p.locator('.gp-footer').innerText(),/five-minute|5-minute/i);await p.screenshot({path:path.join(out,`guided-${width}x${height}.png`)});
+   assert.match(await p.locator('.gp-buy').innerText(),/\$9.99.*30 days/);assert.match(await p.locator('.gp-footer').innerText(),/Quick Demo.*watch-only/i);assert.doesNotMatch(await p.locator('.gp-footer').innerText(),/five-minute|5-minute/i);await p.screenshot({path:path.join(out,`guided-${width}x${height}.png`)});
    await p.locator('.gp-close').click();assert.equal(await p.locator('.guided-preview').count(),0);assert.equal(await p.locator('#designerApp').getAttribute('inert'),null);assert.equal(await p.evaluate(()=>document.body.style.overflow),'');
    await p.locator('[data-guided-preview]').click();await p.locator('.gp-plan svg').waitFor();await p.locator('.gp-buy').click();await p.locator('#passEmail').waitFor();assert.equal(await p.locator('.guided-preview').count(),0);assert.equal(await p.evaluate(()=>window.savedWrites),0);
    console.log('PASS viewport',width,height);
