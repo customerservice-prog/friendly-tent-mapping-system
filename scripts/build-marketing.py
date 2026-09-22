@@ -253,4 +253,12 @@ SOFTWARE_PAGES = [
     '/tent-rental-software/',
 ]
 save('sitemap-software.xml','<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+''.join('  <url><loc>'+URL+p+'</loc><lastmod>'+LASTMOD+'</lastmod></url>\n' for p in SOFTWARE_PAGES)+'</urlset>')
+EVENT_PLANNING_PAGES = [
+    '/event-pass/',
+    '/demo/',
+    '/wedding-layout-planner/',
+    '/tent-layout-software/',
+    '/event-layout-software/',
+]
+save('sitemap-event-planning.xml','<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'+''.join('  <url><loc>'+URL+p+'</loc><lastmod>'+LASTMOD+'</lastmod></url>\n' for p in EVENT_PLANNING_PAGES)+'</urlset>')
 print('Built',len(PAGES),'indexable public pages and signup/404 pages.')
