@@ -23,7 +23,7 @@
       window.dispatchEvent(new CustomEvent('rentsketch:previewExpired'));
       document.getElementById('designerApp')?.setAttribute('inert', '');
       screen = document.createElement('section'); screen.className = 'preview-limit-screen'; screen.setAttribute('aria-label', 'Free preview ended');
-      screen.innerHTML = '<div class="preview-limit-card"><p class="pass-eyebrow">Your preview is complete</p><h2 tabindex="-1">Ready to make it your event?</h2><p>Your five-minute free preview has ended. Keep this exact rental and unlock your event design.</p><button type="button" class="btn-primary" data-preview-buy></button><p class="pass-fine" data-preview-price></p><a class="btn-secondary" href="https://rentsketch.com/my-event/?tenant=friendly&mode=order" target="_blank" rel="noopener">Booked with Friendly? Get included access</a><button type="button" class="pass-back" data-preview-resume hidden>Continue my saved event</button><button type="button" class="pass-back" data-preview-recover>Open my saved event</button><p class="pass-fine">No subscription. Rental equipment is separate.</p></div>';
+      screen.innerHTML = '<div class="preview-limit-card"><p class="pass-eyebrow">Designer preview complete</p><h2 tabindex="-1">Ready to make it your event?</h2><p>This limited designer preview has ended. Unlock your own event design, use access included with an eligible Friendly order, or watch the Quick Demo anytime.</p><button type="button" class="btn-primary" data-preview-buy></button><p class="pass-fine" data-preview-price></p><a class="btn-secondary" href="/demo/">Watch Quick Demo</a><a class="btn-secondary" href="https://rentsketch.com/my-event/?tenant=friendly&mode=order" target="_blank" rel="noopener">Booked with Friendly? Get included access</a><button type="button" class="pass-back" data-preview-resume hidden>Continue my saved event</button><button type="button" class="pass-back" data-preview-recover>Open my saved event</button><p class="pass-fine">No subscription. Rental equipment is separate.</p></div>';
       screen.querySelector('[data-preview-buy]').textContent = 'Unlock my event · ' + options.price();
       screen.querySelector('[data-preview-price]').textContent = 'One event · ' + options.days() + ' days of access';
       screen.querySelector('[data-preview-buy]').onclick = options.purchase;
@@ -35,7 +35,7 @@
       if (options.hasAccess()) { unlockView(); return; }
       var left = remaining();
       var mark = document.getElementById('eventPreviewMark');
-      if (mark) { var seconds = Math.ceil(left / 1000); mark.textContent = 'Free preview · ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0') + ' left'; }
+      if (mark) { var seconds = Math.ceil(left / 1000); mark.textContent = 'Limited designer preview · ' + Math.floor(seconds / 60) + ':' + String(seconds % 60).padStart(2, '0') + ' left'; }
       if (left <= 0) { clearInterval(interval); expire(); }
     }
     async function begin() {

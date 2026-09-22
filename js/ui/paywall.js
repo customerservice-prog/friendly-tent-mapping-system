@@ -25,7 +25,6 @@
     window.RentSketchGuidedPreview?.open({
       hasAccess: function () { return canEdit(); },
       price: function () { return money(offer.priceCents); }, days: function () { return offer.durationDays; },
-      remaining: function () { return previewLimit?.remainingSeconds(); },
       purchase: requestAccess,
     });
   }
