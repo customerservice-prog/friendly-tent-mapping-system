@@ -9,3 +9,4 @@ Disallow: /scripts/
 # Google can see those directives and remove previously indexed copies.
 
 Sitemap: https://rentsketch.com/sitemap.xml
+Sitemap: https://rentsketch.com/sitemap-software.xml

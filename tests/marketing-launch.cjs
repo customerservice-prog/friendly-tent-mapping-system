@@ -1,6 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path');
 const {JSDOM}=require('jsdom');const root=path.resolve(__dirname,'..');
 const sitemap=fs.readFileSync(path.join(root,'sitemap.xml'),'utf8');
+const softwareSitemap=fs.readFileSync(path.join(root,'sitemap-software.xml'),'utf8');
 const urls=[...sitemap.matchAll(/<loc>(.*?)<\/loc>/g)].map(x=>x[1]);
 assert.equal(new Set(urls).size,urls.length);
 const titles=new Set();
@@ -50,6 +51,8 @@ assert.match(homeHtml,/<h1>Party rental software<br><span>customers can actually
 assert.match(homeHtml,/Start 14-day business trial/);
 assert.match(homeHtml,/"applicationCategory": "BusinessApplication"/);
 assert.ok(sitemap.includes('/tent-rental-software/'),'Tent rental software landing page must be indexable');
+for(const pathName of ['/party-rental-software/','/party-rental-management-software/','/party-rental-inventory-software/','/event-rental-software/','/tent-rental-software/']) assert.ok(softwareSitemap.includes(pathName),'focused software sitemap must contain '+pathName);
+assert.equal((softwareSitemap.match(/<loc>/g)||[]).length,5,'focused software sitemap should contain exactly five canonical software pages');
 const partySoftware=fs.readFileSync(path.join(root,'party-rental-software/index.html'),'utf8');
 assert.match(partySoftware,/<title>Party Rental Software/);
 for(const phrase of ['party rental business software','party rental inventory software','party rental management software','party and event rental software']) assert.ok(partySoftware.toLowerCase().includes(phrase),phrase+' must appear naturally on party-rental-software');
@@ -98,7 +101,7 @@ for(const html of [partySoftware,eventSoftware,tentSoftware]){
 for(const target of ['/party-rental-management-software/','/party-rental-inventory-software/','/tent-rental-software/','/event-rental-software/']){
   assert.ok(homeHtml.includes('href="'+target+'"'),'homepage must crawl-link '+target);
 }
-assert.match(partySoftware,/Party Rental Software for Rental Businesses/);
+assert.match(partySoftware,/Party Rental Software & Party Rental Business Software/);
 assert.match(eventSoftware,/Party &amp; Event Rental Software/);
 assert.match(tentSoftware,/Tent Rental Software for Layouts &amp; Quotes/);
 for(const html of [partySoftware,eventSoftware,tentSoftware,inventorySoftware,managementSoftware]){

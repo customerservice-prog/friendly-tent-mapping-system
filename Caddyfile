@@ -30,7 +30,7 @@
 	redir @partyBusinessAlias /party-rental-software/{querySuffix} permanent
 	@softwareForPartyAlias path /software-for-party-rental /software-for-party-rental/
 	redir @softwareForPartyAlias /party-rental-software/{querySuffix} permanent
-	@partyEventAlias path /party-event-rental-software /party-event-rental-software/
+	@partyEventAlias path /party-event-rental-software /party-event-rental-software/ /party-and-event-rental-software /party-and-event-rental-software/
 	redir @partyEventAlias /event-rental-software/{querySuffix} permanent
 	@missingSlash path /business /demo /help /privacy /tent-layout-software /tent-diagram-software /party-rental-software /party-rental-inventory-software /party-rental-management-software /event-rental-software /tent-rental-software /event-layout-software /wedding-layout-planner
 	redir @missingSlash {path}/{querySuffix} permanent
@@ -38,7 +38,7 @@
 	respond @source 404
 	@privatePage path /designer /designer/* /dashboard /dashboard/* /my-event /my-event/* /business/signup* /tests/*
 	header @privatePage X-Robots-Tag "noindex, nofollow"
-	@marketing path / /index.html /business/* /demo/* /help/* /privacy/* /tent-layout-software/* /tent-diagram-software/* /party-rental-software/* /party-rental-inventory-software/* /party-rental-management-software/* /event-rental-software/* /tent-rental-software/* /event-layout-software/* /wedding-layout-planner/* /marketing* /sitemap.xml /robots.txt
+	@marketing path / /index.html /business/* /demo/* /help/* /privacy/* /tent-layout-software/* /tent-diagram-software/* /party-rental-software/* /party-rental-inventory-software/* /party-rental-management-software/* /event-rental-software/* /tent-rental-software/* /event-layout-software/* /wedding-layout-planner/* /marketing* /sitemap.xml /sitemap-software.xml /robots.txt
 	header @marketing Cache-Control "no-cache"
 	header {
 		X-XSS-Protection "1; mode=block"
