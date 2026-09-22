@@ -10,3 +10,4 @@ Disallow: /scripts/
 
 Sitemap: https://rentsketch.com/sitemap.xml
 Sitemap: https://rentsketch.com/sitemap-software.xml
+Sitemap: https://rentsketch.com/sitemap-event-planning.xml
