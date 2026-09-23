@@ -64,7 +64,7 @@ async function draft(t = tenant) {
 const buy = (d, extra = {}, renewal = false) => request('/api/consumer/designs/' + d.id + '/event-pass/' + (renewal ? 'renewal-' : '') + 'checkout-session', { customerEmail: 'buyer@example.invalid', anonymousSessionId: 'owner-private-token', ...extra });
 const restore = id => request('/api/consumer/event-pass/restore', { checkoutSessionId: id });
 (async () => {
-  await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY);`);
+  await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY);`);
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/004_entitlements.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/011_event_pass_access_email.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/012_friendly_order_access.sql'), 'utf8'));
@@ -80,6 +80,8 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   const adminSaved=await request('/api/consumer/designs',{scene:adminFurnished,anonymousSessionId:'platform-admin-session'},null,'POST',platformAdminToken); assert.equal(adminSaved.status,201,'platform admin can save a full design without buying an Event Pass');
   assert.equal((await pg.query('SELECT owner_user_id FROM designs WHERE id=$1',[adminSaved.body.id])).rows[0].owner_user_id,platformAdminId,'admin-created design is attributable to the platform owner');
   const adminAccess=await request('/api/consumer/designs/'+adminSaved.body.id+'/access',null,null,'GET',platformAdminToken); assert.equal(adminAccess.status,200); assert.equal(adminAccess.body.reason,'platform_admin'); assert.equal(adminAccess.body.paymentRequired,false);
+  const adminReopen=await request('/api/consumer/admin/designs/'+adminSaved.body.id,null,null,'GET',platformAdminToken); assert.equal(adminReopen.status,200); assert.equal(adminReopen.body.adminAccess,true); assert.deepEqual(adminReopen.body.scene,adminFurnished);
+  assert.equal((await request('/api/consumer/admin/designs/'+adminSaved.body.id)).status,403,'saved design admin reopen never works without platform authentication');
   env.EVENT_PASS_ENABLED = 'false'; assert.equal((await request('/api/consumer/event-pass/offer?tenant=friendly')).body.required, false); env.EVENT_PASS_ENABLED = 'true';
   assert.equal((await request('/api/consumer/event-pass/offer?tenant=lakeside')).body.required, false);
   const previewSession = { tenant: 'friendly', anonymousSessionId: 'isolated-preview-session' };
