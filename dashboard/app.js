@@ -75,6 +75,8 @@ function esc(s) {
 
  function shellHtml(route, inner) {
    var tenants = state.tenants || [];
+   var platformAdmin = !!(state.user && state.user.isPlatformAdmin);
+   var brandSub = platformAdmin ? 'Platform Console' : 'Business Dashboard';
    var switcher = '';
    if (tenants.length > 1) {
      switcher = '<select id="tenantSwitch" class="tenant-switch">' + tenants.map(function (t) {
@@ -89,7 +91,7 @@ function esc(s) {
    return '' +
      '<div class="dash-shell">' +
      '<header class="dash-header">' +
-     '<div class="dash-brand">RentSketch <span class="dash-brand-sub">Business Dashboard</span></div>' +
+     '<div class="dash-brand">RentSketch <span class="dash-brand-sub">' + brandSub + '</span></div>' +
      '<nav class="dash-nav">' +
      navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
      navLink('branding', 'Branding') + navLink('billing', 'Billing') + navLink('install', 'Install') +
@@ -149,7 +151,7 @@ function esc(s) {
        var result = await api('/api/auth/login', { method: 'POST', body: { email: email, password: password } });
        setToken(result.token);
        await loadMe();
-       window.location.hash = '#/overview';
+       window.location.hash = (state.user && state.user.isPlatformAdmin) ? '#/superadmin' : '#/overview';
        render();
      } catch (err) {
        errEl.textContent = err.message || 'Login failed';
@@ -189,8 +191,9 @@ function esc(s) {
      if (gen !== renderGeneration) return;
      var html = '' +
        '<h1 class="dash-title">' + esc(admin.name) + '</h1>' +
-       '<p class="dash-subtitle">Plan: ' + esc(admin.subscriptionPlan || 'trial') + ' &middot; Status: ' + esc(admin.subscriptionStatus || 'trialing') + '</p>' +
+       '<p class="dash-subtitle">' + ((state.user && state.user.isPlatformAdmin) ? 'Platform Admin · Full complimentary access · Viewing tenant' : ('Plan: ' + esc(admin.subscriptionPlan || 'trial') + ' &middot; Status: ' + esc(admin.subscriptionStatus || 'trialing'))) + '</p>' +
         (function() {
+          if (state.user && state.user.isPlatformAdmin) return '<div class="dash-saved"><strong>Platform Admin:</strong> unrestricted RentSketch access. Tenant trial and subscription limits do not apply to your account.</div>';
           if (!admin.trialEndsAt) return '';
           var end = new Date(admin.trialEndsAt);
           var now = new Date();
@@ -531,6 +534,14 @@ function esc(s) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading billing...'));
    bindShellEvents();
    if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
+   if (state.user && state.user.isPlatformAdmin) {
+     document.getElementById('dashMain').innerHTML = '' +
+       '<h1 class="dash-title">Platform Billing Access</h1>' +
+       '<p class="dash-subtitle">You are signed in as the RentSketch platform administrator.</p>' +
+       '<div class="dash-saved"><strong>Complimentary platform access is permanent.</strong> Your admin account is not subject to tenant trials, paid plans, cancellations, or past-due billing restrictions.</div>' +
+       '<p class="muted">Use Super Admin to inspect tenant subscription states. Opening a tenant does not change your platform-level access.</p>';
+     return;
+   }
    try {
      var status = await api('/api/business/' + state.tenant + '/billing/status');
      var plans = await api('/api/business/plans');
@@ -706,7 +717,7 @@ function esc(s) {
      return;
    }
    if (route === 'login' || !route) {
-     window.location.hash = '#/overview';
+     window.location.hash = (state.user && state.user.isPlatformAdmin) ? '#/superadmin' : '#/overview';
      return;
    }
    renderGeneration++;
