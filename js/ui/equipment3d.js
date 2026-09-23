@@ -196,7 +196,7 @@ export function makeTable(o) {
     }else drape(g,o,p,fabric);
   }
   mergeParts(g);
-  const chairDef=chairById(o.chairId)||{},positions=chairPositions(o,chairDef);
+  const chairDef=chairById(o.chairId)||{},positions=o.hideChairs?[]:chairPositions(o,chairDef);
   if(positions.length){
     const prototype=makeChair(chairDef),dummy=new THREE.Object3D();
     for(const part of prototype.children){
