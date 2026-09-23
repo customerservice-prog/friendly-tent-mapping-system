@@ -1153,3 +1153,108 @@ html.rs-motion-ready .rs-reveal.is-visible{opacity:1;transform:none}
 @media(prefers-reduced-motion:reduce){
   .wedding-build-curtain,.homepage-hero .tour-3d,.wedding-build-progress span{transition:none}
 }
+
+
+/* Performance-safe automatic wedding build: scene-derived SVG layers. */
+.wedding-build-plan{
+  position:absolute;inset:0;z-index:6;
+  display:block;width:100%;height:100%;
+  opacity:1;
+  background:#e8f1df;
+  transition:opacity .8s cubic-bezier(.22,.7,.2,1),filter .8s ease;
+  pointer-events:none;
+}
+.wedding-build-plan [data-build-layer]{
+  opacity:0;
+  transform:scale(.92);
+  transform-box:fill-box;
+  transform-origin:center;
+  transition:opacity .45s ease,transform .65s cubic-bezier(.2,.75,.2,1);
+}
+.wedding-build-plan [data-build-layer].is-visible{
+  opacity:1;transform:scale(1);
+}
+.wedding-build-plan [data-build-layer="tent"]{
+  transform:scale(.96);
+  transform-origin:center bottom;
+}
+.wedding-build-plan [data-build-layer="chairs"]{
+  transition-duration:.55s;
+}
+.wedding-build-plan [data-build-layer="dance"]{
+  transform:scale(.82) rotate(-2deg);
+}
+.wedding-build-plan [data-build-layer="lighting"]{
+  transition-duration:.75s;
+}
+.wedding-build-plan.is-finished{
+  opacity:0;
+  filter:blur(2px);
+}
+.wedding-build-base{opacity:1}
+.wedding-build-buttons{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:6px;
+  pointer-events:auto;
+}
+.wedding-explore,.wedding-replay{
+  min-height:29px;
+  border:1px solid #d4deea;
+  border-radius:9px;
+  padding:6px 9px;
+  font-size:9px;
+  font-weight:790;
+  white-space:nowrap;
+}
+.wedding-replay{color:#31526f;background:#f7f9fc}
+.wedding-explore{
+  color:#fff;
+  border-color:#2763dd;
+  background:linear-gradient(135deg,#3475f1,#1c56d2);
+  box-shadow:0 5px 13px rgba(37,99,235,.18);
+}
+.wedding-replay:hover{background:#eef4fb}
+.wedding-explore:hover{background:linear-gradient(135deg,#3c7cf3,#194bc1)}
+.studio.wedding-evening .tour-poster{
+  filter:brightness(.7) saturate(.98) contrast(1.04);
+  transition:filter .9s ease;
+}
+.studio.wedding-evening .tour-view:before{
+  content:"";
+  position:absolute;z-index:5;inset:0;
+  opacity:.72;pointer-events:none;
+  background:
+    radial-gradient(circle at 20% 16%,rgba(255,213,120,.14),transparent 10rem),
+    linear-gradient(180deg,rgba(21,39,65,.08),rgba(10,27,49,.25));
+  transition:opacity .7s ease;
+}
+.wedding-build-hud[hidden],.wedding-build-plan[hidden]{display:none!important}
+
+@media(max-width:640px){
+  .wedding-build-buttons{gap:4px}
+  .wedding-explore,.wedding-replay{
+    min-height:27px;
+    padding:5px 7px;
+    font-size:7.5px;
+  }
+  .wedding-build-hud{
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+}
+@media(max-width:420px){
+  .wedding-build-hud{
+    grid-template-columns:1fr;
+  }
+  .wedding-build-buttons{
+    grid-column:1/-1;
+    justify-content:flex-start;
+  }
+  .wedding-explore,.wedding-replay{font-size:8px}
+}
+@media(prefers-reduced-motion:reduce){
+  .wedding-build-plan,
+  .wedding-build-plan [data-build-layer],
+  .studio.wedding-evening .tour-poster{transition:none}
+}
