@@ -200,7 +200,7 @@ export function makeTable(o) {
   if(positions.length){
     const prototype=makeChair(chairDef),dummy=new THREE.Object3D();
     for(const part of prototype.children){
-      const batch=new THREE.InstancedMesh(part.geometry,part.material,positions.length);batch.name=part.name;
+      const batch=new THREE.InstancedMesh(part.geometry,part.material,positions.length);batch.name=part.name;batch.userData.role='chairs';
       positions.forEach((point,i)=>{dummy.position.set(point.x,0,point.y);dummy.rotation.set(0,-point.angle-Math.PI/2,0);dummy.updateMatrix();batch.setMatrixAt(i,dummy.matrix);});
       batch.castShadow=batch.receiveShadow=true;batch.instanceMatrix.needsUpdate=true;g.add(batch);
     }
