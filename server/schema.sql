@@ -53,6 +53,20 @@ CREATE TABLE password_reset_tokens (
 CREATE INDEX password_reset_tokens_user_idx ON password_reset_tokens (user_id);
 CREATE INDEX password_reset_tokens_active_idx ON password_reset_tokens (token_hash, expires_at) WHERE used_at IS NULL;
 
+-- Platform-owner audit history for sensitive administrative actions.
+CREATE TABLE platform_admin_audit (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  admin_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  target_type TEXT,
+  target_id TEXT,
+  target_label TEXT,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX platform_admin_audit_created_idx ON platform_admin_audit(created_at DESC);
+CREATE INDEX platform_admin_audit_target_idx ON platform_admin_audit(target_type,target_id);
+
 -- Which users can access which tenant, and with what role. This is the
 -- authorization join table every tenant-scoped route checks against.
 CREATE TABLE tenant_memberships (
