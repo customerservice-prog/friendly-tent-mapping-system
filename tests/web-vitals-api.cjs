@@ -7,6 +7,7 @@ const { PGlite } = require('@electric-sql/pglite');
 
 const root = path.resolve(__dirname, '..');
 const pg = new PGlite();
+let server;
 const db = { query: (sql, args) => pg.query(sql, args) };
 
 function loadRoute() {
@@ -37,11 +38,12 @@ function loadRoute() {
 
 (async () => {
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/014_web_vitals.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/015_web_vitals_collector_version.sql'), 'utf8'));
 
   const app = express();
   app.use('/api/analytics/web-vitals', loadRoute());
   app.use((err, req, res, next) => res.status(500).json({ error: err.message }));
-  const server = app.listen(0, '127.0.0.1');
+  server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   const base = 'http://127.0.0.1:' + server.address().port;
 
@@ -58,6 +60,7 @@ function loadRoute() {
   }
 
   const valid = {
+    version: 2,
     path: '/party-rental-software/',
     navigationType: 'navigate',
     deviceClass: 'phone',
@@ -69,6 +72,7 @@ function loadRoute() {
 
   const row = (await pg.query('SELECT * FROM web_vitals')).rows[0];
   assert.equal(row.path, '/party-rental-software/');
+  assert.equal(row.collector_version, 2);
   assert.equal(row.navigation_type, 'navigate');
   assert.equal(row.device_class, 'phone');
   assert.equal(Number(row.lcp_ms), 1840.4);
@@ -98,10 +102,14 @@ function loadRoute() {
   assert.equal(fallback.inp_ms, null);
   assert.equal(Number(fallback.fcp_ms), 900);
 
-  server.close();
-  await pg.close();
   console.log('PASS Web Vitals API: sanitized one-row telemetry, strict origins/paths, bounded metrics, no PII fields.');
 })().catch(err => {
   console.error(err);
   process.exitCode = 1;
+}).finally(async () => {
+  if (server) {
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+  await pg.close();
 });

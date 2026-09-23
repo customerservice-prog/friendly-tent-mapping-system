@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  if (window.RENTSKETCH_WEB_VITALS_BOOTED || !('PerformanceObserver' in window)) return;
+  if (window.RENTSKETCH_WEB_VITALS_BOOTED || navigator.webdriver === true || !('PerformanceObserver' in window)) return;
   window.RENTSKETCH_WEB_VITALS_BOOTED = true;
 
   var metrics = { lcp: null, cls: 0, inp: null, fcp: null, ttfb: null };
@@ -61,7 +61,7 @@
     observers.forEach(function (observer) { try { observer.disconnect(); } catch (_) {} });
 
     var payload = JSON.stringify({
-      version: 1,
+      version: 2,
       path: location.pathname || '/',
       navigationType: nav && ['navigate', 'reload', 'back_forward', 'prerender'].includes(nav.type) ? nav.type : null,
       deviceClass: deviceClass(),

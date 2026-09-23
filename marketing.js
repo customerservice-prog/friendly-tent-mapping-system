@@ -6,7 +6,7 @@
   }
   preconnect('https://rentsketch-api-production.up.railway.app');
   var vitals = document.createElement('script');
-  vitals.src = '/web-vitals.js?v=20260922-rum-1';
+  vitals.src = '/web-vitals.js?v=20260922-rum-2';
   vitals.async = true;
   document.head.appendChild(vitals);
   window.RentSketchAnalytics = window.RentSketchAnalytics || { pendingEvents: [] };

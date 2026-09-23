@@ -112,7 +112,8 @@ router.get('/web-vitals', requirePlatformAdmin, async (req, res) => {
        ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY fcp_ms) FILTER (WHERE fcp_ms IS NOT NULL))::numeric, 1) AS fcp_p75_ms,
        ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY ttfb_ms) FILTER (WHERE ttfb_ms IS NOT NULL))::numeric, 1) AS ttfb_p75_ms
      FROM web_vitals
-     WHERE created_at >= now() - $1 * interval '1 day'
+     WHERE collector_version >= 2
+       AND created_at >= now() - $1 * interval '1 day'
        AND ($2::text IS NULL OR path = $2)
      GROUP BY GROUPING SETS ((path), ())
      ORDER BY grouping_level DESC, samples DESC, path
