@@ -71,7 +71,7 @@ jobs:
             --chrome-flags="--headless --no-sandbox --disable-gpu" \
             --output=json --output-path=lighthouse-reports/tent-rental-software.json --quiet
 
-      - name: Check severe regressions
+      - name: Check launch regressions
         run: |
           python3 - <<'PY'
           import json
@@ -79,7 +79,9 @@ jobs:
           import sys
 
           failures = []
+          warnings = []
           rows = []
+          intentional_noindex = {'business-signup'}
 
           for path in sorted(pathlib.Path('lighthouse-reports').glob('*.json')):
               data = json.loads(path.read_text())
