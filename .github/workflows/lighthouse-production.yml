@@ -6,12 +6,21 @@ on:
     paths:
       - '.github/workflows/lighthouse-production.yml'
       - 'marketing-tour.js'
+      - 'wedding-story.js'
       - 'marketing.js'
       - 'marketing.css'
+      - 'marketing-story.css'
       - 'analytics-loader.js'
       - 'index.html'
-      - 'event-pass/index.html'
+      - 'business/**'
+      - 'demo/**'
+      - 'event-pass/**'
+      - 'party-rental-software/**'
+      - 'tent-rental-software/**'
+      - 'js/data/marketing-reception.js'
+      - 'js/ui/view3d.js'
       - 'assets/**'
+      - 'Caddyfile'
       - 'scripts/build-marketing.py'
   workflow_dispatch:
   schedule:
@@ -37,9 +46,30 @@ jobs:
       - name: Run production audits
         run: |
           mkdir -p lighthouse-reports
-          lighthouse https://rentsketch.com/             --chrome-flags="--headless --no-sandbox --disable-gpu"             --output=json --output-path=lighthouse-reports/home.json --quiet
-          lighthouse https://rentsketch.com/party-rental-software/             --chrome-flags="--headless --no-sandbox --disable-gpu"             --output=json --output-path=lighthouse-reports/party-rental-software.json --quiet
-          lighthouse https://rentsketch.com/event-pass/             --chrome-flags="--headless --no-sandbox --disable-gpu"             --output=json --output-path=lighthouse-reports/event-pass.json --quiet
+          lighthouse https://rentsketch.com/ \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --output=json --output-path=lighthouse-reports/home.json --quiet
+          lighthouse https://rentsketch.com/demo/ \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --output=json --output-path=lighthouse-reports/demo.json --quiet
+          lighthouse https://rentsketch.com/event-pass/ \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --output=json --output-path=lighthouse-reports/event-pass.json --quiet
+          lighthouse https://rentsketch.com/business/ \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --output=json --output-path=lighthouse-reports/business.json --quiet
+          lighthouse https://rentsketch.com/business/pricing.html \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --output=json --output-path=lighthouse-reports/business-pricing.json --quiet
+          lighthouse https://rentsketch.com/business/signup.html \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --output=json --output-path=lighthouse-reports/business-signup.json --quiet
+          lighthouse https://rentsketch.com/party-rental-software/ \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --output=json --output-path=lighthouse-reports/party-rental-software.json --quiet
+          lighthouse https://rentsketch.com/tent-rental-software/ \
+            --chrome-flags="--headless --no-sandbox --disable-gpu" \
+            --output=json --output-path=lighthouse-reports/tent-rental-software.json --quiet
 
       - name: Check severe regressions
         run: |
@@ -65,25 +95,34 @@ jobs:
 
               rows.append((path.stem, perf, a11y, bp, seo, lcp, cls, tbt))
 
-              if perf < 0.60:
-                  failures.append(f'{path.stem}: performance {perf:.2f} < 0.60')
-              if a11y < 0.85:
-                  failures.append(f'{path.stem}: accessibility {a11y:.2f} < 0.85')
-              if seo < 0.85:
-                  failures.append(f'{path.stem}: SEO {seo:.2f} < 0.85')
-              if lcp > 6000:
-                  failures.append(f'{path.stem}: LCP {lcp:.0f}ms > 6000ms')
-              if cls > 0.35:
-                  failures.append(f'{path.stem}: CLS {cls:.3f} > 0.35')
-              if tbt > 1500:
-                  failures.append(f'{path.stem}: TBT {tbt:.0f}ms > 1500ms')
+              if perf < 0.75:
+                  failures.append(f'{path.stem}: performance {perf:.2f} < 0.75')
+              if a11y < 0.95:
+                  failures.append(f'{path.stem}: accessibility {a11y:.2f} < 0.95')
+              if bp < 0.95:
+                  failures.append(f'{path.stem}: best practices {bp:.2f} < 0.95')
+              if path.stem not in intentional_noindex and seo < 0.95:
+                  failures.append(f'{path.stem}: SEO {seo:.2f} < 0.95')
+              if lcp > 3000:
+                  failures.append(f'{path.stem}: LCP {lcp:.0f}ms > 3000ms')
+              elif lcp > 2500:
+                  warnings.append(f'{path.stem}: LCP {lcp:.0f}ms is above the 2500ms target')
+              if cls > 0.10:
+                  failures.append(f'{path.stem}: CLS {cls:.3f} > 0.10')
+              if tbt > 600:
+                  failures.append(f'{path.stem}: TBT {tbt:.0f}ms > 600ms')
 
           print('page | perf | a11y | best | seo | LCP ms | CLS | TBT ms')
           for row in rows:
               print(f'{row[0]} | {row[1]:.2f} | {row[2]:.2f} | {row[3]:.2f} | {row[4]:.2f} | {row[5]:.0f} | {row[6]:.3f} | {row[7]:.0f}')
 
+          if warnings:
+              print('\nLighthouse target warning(s):')
+              for item in warnings:
+                  print('- ' + item)
+
           if failures:
-              print('\nSevere Lighthouse regression(s):')
+              print('\nLighthouse regression(s):')
               for item in failures:
                   print('- ' + item)
               sys.exit(1)
