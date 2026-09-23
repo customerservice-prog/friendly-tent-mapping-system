@@ -50,6 +50,11 @@ const server=http.createServer((req,res)=>{
       assert.match(await page.locator('[data-story-label]').innerText(),/empty venue|Measure/);
       await page.locator('[data-view="2d"]').click();
       assert.equal(await page.locator('.story-canvas.show-plan').count(),1);
+      const plan=await page.locator('.story-canvas.show-plan').evaluate(el=>{
+        const ctx=el.getContext('2d'),pixel=ctx.getImageData(Math.floor(el.width/2),Math.floor(el.height/2),1,1).data;
+        return {width:el.width,height:el.height,opacity:getComputedStyle(el).opacity,center:[...pixel]};
+      });
+      assert(plan.width>0&&plan.height>0&&plan.opacity==='1'&&plan.center[3]===255,'2D plan paints immediately on desktop');
       await page.screenshot({path:path.join(out,route==='/'?'home-plan-desktop.png':'demo-plan-desktop.png')});
       await page.locator('[data-view="3d"]').click();
       assert.equal(await page.locator('[data-camera="outside"]').isVisible(),true);

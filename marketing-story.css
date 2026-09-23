@@ -93,7 +93,7 @@ body{background:#fff;color:var(--ink)}
 .story-view .tour-3d canvas{width:100%;height:100%;display:block}
 .story-has-webgl .story-view .tour-poster{opacity:0}
 .story-view .tour-poster.story-final{z-index:4;opacity:1}
-.story-view .story-canvas.show-plan{z-index:5}
+.story-view .story-canvas.show-plan{z-index:5;opacity:1;transition:none}
 .story-view .story-reset{z-index:6;opacity:0;background:#eaf2fa;pointer-events:none;transition:opacity .54s ease}
 .story-view .story-reset.is-visible{opacity:1}
 .story-view-label{position:absolute;z-index:7;top:18px;left:18px;padding:8px 12px;background:rgba(8,23,35,.8);border:1px solid #8da7bc66;border-radius:6px;color:#f3f8fc;font-size:12px;font-weight:650;backdrop-filter:blur(7px)}
