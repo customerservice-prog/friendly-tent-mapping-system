@@ -140,4 +140,10 @@ assert.match(designerHtml,/analytics-loader\.js\?v=20260922-ga4-1/);
 assert.match(analyticsLoader,/\^G-\[A-Z0-9\]\+\$/);
 assert.match(analyticsLoader,/googletagmanager\.com\/gtag\/js/);
 assert.match(analyticsLoader,/send_page_view: true/);
+assert.match(marketingJs,/begin_checkout/);
+assert.match(marketingJs,/event_pass_30_day/);
+const signupJs=fs.readFileSync(path.join(root,'business/signup.js'),'utf8');
+assert.match(signupJs,/gtag\('event', 'sign_up'/);
+assert.match(signupJs,/method: 'business_trial'/);
+
 dom.window.close();signup.window.close();console.log('PASS marketing: all sitemap pages resolve, unique metadata/canonicals, valid structured data, local links/images, accessible menu, accurate annual totals, signup plan selection, and environment-gated GA4 wiring. DOM/static checks, not device rendering.');

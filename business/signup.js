@@ -27,6 +27,9 @@
         // Offer sign-in rather than prompting a duplicate signup.
         document.querySelector('#signup-success p').textContent = 'Your account was created. This browser could not keep you signed in. Open the dashboard and log in with the email and password you just chose.';
       }
+      if (typeof window.gtag === 'function' && window.RENTSKETCH_GA4_ENABLED === true) {
+        window.gtag('event', 'sign_up', { method: 'business_trial', plan: form.elements.plan.value });
+      }
       form.hidden=true; form.elements.password.value='';
       document.getElementById('signup-success').hidden=false;
       document.querySelector('#signup-success a').focus();
