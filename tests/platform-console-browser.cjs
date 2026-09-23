@@ -60,6 +60,7 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.getByText('Event Pass',{exact:true}).count()>0,true);assert.equal(await page.getByRole('button',{name:'Refund'}).count(),2);
    await page.evaluate(()=>{location.hash='insights'});await page.getByRole('heading',{name:'Insights'}).waitFor();assert.equal(await page.getByText('Designs · 30 days',{exact:true}).count(),1);
    await page.evaluate(()=>{location.hash='alerts'});await page.getByRole('heading',{name:'Needs attention'}).waitFor();assert.equal(await page.getByText('Billing issues',{exact:true}).count()>0,true);
+   await page.evaluate(()=>{location.hash='businesses'});await page.getByRole('heading',{name:'Rental businesses'}).waitFor();await page.getByRole('button',{name:/Create business/}).click();assert.equal(await page.getByRole('heading',{name:'Create rental business'}).count(),1);await page.locator('.pc-modal-close').click();
    assert.deepEqual(errors,[]);
    await ctx.close();
   }
