@@ -6,6 +6,7 @@
   var TENANT_KEY = 'rentsketch_dashboard_tenant';
   var ROUTES = ['login', 'overview', 'products', 'branding', 'requests', 'billing', 'install', 'superadmin'];
 
+ function platformTenantView() { try { return new URLSearchParams(window.location.search).get('tenantView') === '1'; } catch (_) { return false; } }
  function getToken() { return localStorage.getItem(TOKEN_KEY); }
   function setToken(t) { if (t) { localStorage.setItem(TOKEN_KEY, t); } else { localStorage.removeItem(TOKEN_KEY); } }
   function getActiveTenant() { return localStorage.getItem(TENANT_KEY); }
@@ -76,7 +77,7 @@ function esc(s) {
  function shellHtml(route, inner) {
    var tenants = state.tenants || [];
    var platformAdmin = !!(state.user && state.user.isPlatformAdmin);
-   var brandSub = platformAdmin ? 'Platform Console' : 'Business Dashboard';
+   var brandSub = platformAdmin ? (platformTenantView() ? 'Tenant Workspace · Admin' : 'Platform Console') : 'Business Dashboard';
    var switcher = '';
    if (tenants.length > 1) {
      switcher = '<select id="tenantSwitch" class="tenant-switch">' + tenants.map(function (t) {
@@ -151,7 +152,7 @@ function esc(s) {
        var result = await api('/api/auth/login', { method: 'POST', body: { email: email, password: password } });
        setToken(result.token);
        await loadMe();
-       if (state.user && state.user.isPlatformAdmin) { window.location.href = '/dashboard/platform.html#overview'; return; }
+       if (state.user && state.user.isPlatformAdmin && !platformTenantView()) { window.location.href = '/dashboard/platform.html#overview'; return; }
        window.location.hash = '#/overview';
        render();
      } catch (err) {
@@ -718,7 +719,7 @@ function esc(s) {
      return;
    }
    if (route === 'login' || !route) {
-     if (state.user && state.user.isPlatformAdmin) { window.location.replace('/dashboard/platform.html#overview'); return; }
+     if (state.user && state.user.isPlatformAdmin && !platformTenantView()) { window.location.replace('/dashboard/platform.html#overview'); return; }
      window.location.hash = '#/overview';
      return;
    }
@@ -738,7 +739,7 @@ function esc(s) {
    if (token) {
      try {
        await loadMe();
-       if (state.user && state.user.isPlatformAdmin && !/\/dashboard\/platform\.html$/i.test(location.pathname)) { window.location.replace('/dashboard/platform.html#overview'); return; }
+       if (state.user && state.user.isPlatformAdmin && !platformTenantView() && !/\/dashboard\/platform\.html$/i.test(location.pathname)) { window.location.replace('/dashboard/platform.html#overview'); return; }
      } catch (e) {
        setToken(null); setActiveTenant(null); state.user = null;
      }
