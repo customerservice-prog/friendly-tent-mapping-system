@@ -58,7 +58,11 @@ assert.match(homeHtml,/<title>RentSketch \| 3D Event Design Software for Rental 
 assert.match(homeHtml,/<h1>Watch a wedding<br><span>come together\.<\/span><\/h1>/);
 assert.match(homeHtml,/data-wedding-story/);
 assert.match(homeHtml,/wedding-story\.js/);
-assert.match(fs.readFileSync(path.join(root,'demo/index.html'),'utf8'),/data-story-scrub/);
+assert.match(homeHtml,/data-story-count>01 \/ 17</,'homepage first paint uses the current 17-stage story count');
+const demoHtml=fs.readFileSync(path.join(root,'demo/index.html'),'utf8');
+assert.match(demoHtml,/data-story-scrub/);
+assert.match(demoHtml,/data-story-count>01 \/ 17</,'demo first paint uses the current 17-stage story count');
+assert.match(demoHtml,/class="visually-hidden">Interactive wedding reception build<\/h2>/,'demo provides an h2 before footer subsection headings');
 assert.doesNotMatch(homeHtml,/<title>Party Rental Software/,'homepage must not compete with the dedicated party-rental-software title');
 assert.match(homeHtml,/href="\/party-rental-software\/">Rental software<\/a>/);
 assert.match(homeHtml,/Start 14-day business trial/);
