@@ -1,5 +1,7 @@
 const express = require('express');
+const crypto = require('crypto');
 const db = require('../db');
+const { hashPassword } = require('../auth');
 const { requirePlatformAdmin } = require('../middleware/requireAuth');
 
 const router = express.Router();
@@ -82,6 +84,46 @@ router.patch('/tenants/:slug', requirePlatformAdmin, async (req, res) => {
   );
   await audit(req, 'tenant.updated', 'tenant', t.id, t.slug, { fields: allowed.filter(k => Object.prototype.hasOwnProperty.call(body, k)) });
   res.json({ tenant: result.rows[0] });
+});
+
+router.post('/tenants/:slug/members', requirePlatformAdmin, async (req, res) => {
+  const email=String(req.body?.email||'').trim().toLowerCase();
+  const displayName=String(req.body?.displayName||'').trim().slice(0,120);
+  const role=String(req.body?.role||'staff').trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return res.status(400).json({error:'Enter a valid email address'});
+  if(!['owner','admin','staff','viewer'].includes(role))return res.status(400).json({error:'Invalid role'});
+  const tenant=(await db.query('SELECT id,name FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
+  if(!tenant)return res.status(404).json({error:'Tenant not found'});
+  let user=(await db.query('SELECT id,email,display_name,is_platform_admin FROM users WHERE lower(email)=$1',[email])).rows[0],created=false,resetUrl=null;
+  if(!user){
+    const unusable=await hashPassword(crypto.randomBytes(48).toString('base64url'));
+    user=(await db.query('INSERT INTO users(email,password_hash,display_name,is_platform_admin) VALUES($1,$2,$3,false) RETURNING id,email,display_name,is_platform_admin',[email,unusable,displayName||null])).rows[0];
+    created=true;
+  }
+  if(user.is_platform_admin)return res.status(409).json({error:'Platform administrators do not need tenant membership invites'});
+  await db.query(`INSERT INTO tenant_memberships(tenant_id,user_id,role) VALUES($1,$2,$3)
+    ON CONFLICT(tenant_id,user_id) DO UPDATE SET role=EXCLUDED.role`,[tenant.id,user.id,role]);
+  if(created){
+    const token=crypto.randomBytes(32).toString('base64url'),tokenHash=crypto.createHash('sha256').update(token,'utf8').digest('hex');
+    await db.query('UPDATE password_reset_tokens SET used_at=COALESCE(used_at,now()) WHERE user_id=$1 AND used_at IS NULL',[user.id]);
+    await db.query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '24 hours')",[user.id,tokenHash]);
+    resetUrl='https://rentsketch.com/dashboard/reset-password.html#token='+encodeURIComponent(token);
+  }
+  await audit(req,created?'tenant.member_invited':'tenant.member_added','user',user.id,req.params.slug,{role,email});
+  res.status(created?201:200).json({member:{id:user.id,email:user.email,display_name:user.display_name,role},created,resetUrl});
+});
+
+router.post('/tenants/:slug/members/:userId/reset-link', requirePlatformAdmin, async (req,res)=>{
+  const tenant=(await db.query('SELECT id FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
+  if(!tenant)return res.status(404).json({error:'Tenant not found'});
+  const user=(await db.query(`SELECT u.id,u.email,u.is_platform_admin FROM users u JOIN tenant_memberships tm ON tm.user_id=u.id WHERE tm.tenant_id=$1 AND u.id=$2`,[tenant.id,req.params.userId])).rows[0];
+  if(!user)return res.status(404).json({error:'Tenant user not found'});
+  if(user.is_platform_admin)return res.status(409).json({error:'Use the platform-admin account recovery flow for this user'});
+  const token=crypto.randomBytes(32).toString('base64url'),tokenHash=crypto.createHash('sha256').update(token,'utf8').digest('hex');
+  await db.query('UPDATE password_reset_tokens SET used_at=COALESCE(used_at,now()) WHERE user_id=$1 AND used_at IS NULL',[user.id]);
+  await db.query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '24 hours')",[user.id,tokenHash]);
+  await audit(req,'tenant.password_reset_link_created','user',user.id,req.params.slug,{email:user.email});
+  res.json({resetUrl:'https://rentsketch.com/dashboard/reset-password.html#token='+encodeURIComponent(token),expiresInHours:24});
 });
 
 router.patch('/tenants/:slug/members/:userId', requirePlatformAdmin, async (req, res) => {
