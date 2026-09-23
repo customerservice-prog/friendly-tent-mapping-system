@@ -6,6 +6,11 @@ const {JSDOM}=require('jsdom');
 
 const root=path.resolve(__dirname,'..');
 const settle=(ms=80)=>new Promise(resolve=>setTimeout(resolve,ms));
+const waitFor=async(predicate,{timeout=900,step=20}={})=>{
+  const start=Date.now();
+  while(Date.now()-start<timeout){if(predicate())return true;await settle(step);}
+  return false;
+};
 
 async function fixture({page='index.html',reduced=false,fail=false}={}){
   const url='https://rentsketch.com/'+(page==='index.html'?'':page.replace(/index\.html$/,''));
@@ -87,7 +92,7 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   assert.equal(home.metrics().imports,0,'initial homepage must not import Three.js');
   assert.ok(home.d.querySelector('[data-story-explore]'),'homepage exposes explicit 3D handoff');
   home.intersect();
-  await settle(140);
+  assert.equal(await waitFor(()=>home.d.querySelector('[data-story-count]').textContent==='15 / 15'),true,'homepage build reaches the final stage');
   assert.equal(home.metrics().imports,0,'homepage autoplay must remain WebGL-free');
   assert.equal(home.metrics().created,0,'homepage autoplay creates no renderer');
   const plan=home.d.querySelector('.story-build-plan');
@@ -141,7 +146,7 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
 
   const demo=await fixture({page:'demo/index.html'});
   demo.intersect();
-  await settle(80);
+  assert.equal(await waitFor(()=>demo.d.querySelector('[data-story-count]').textContent==='15 / 15',{timeout:1100}),true,'demo build reaches the final stage');
   assert.equal(demo.metrics().imports,1,'dedicated demo still auto-loads interactive 3D');
   assert.equal(demo.metrics().created,1);
   assert.ok(demo.metrics().progress.length>2,'demo progresses through the wedding stages in the renderer');
