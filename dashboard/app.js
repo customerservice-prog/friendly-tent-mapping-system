@@ -151,7 +151,8 @@ function esc(s) {
        var result = await api('/api/auth/login', { method: 'POST', body: { email: email, password: password } });
        setToken(result.token);
        await loadMe();
-       window.location.hash = (state.user && state.user.isPlatformAdmin) ? '#/superadmin' : '#/overview';
+       if (state.user && state.user.isPlatformAdmin) { window.location.href = '/dashboard/platform.html#overview'; return; }
+       window.location.hash = '#/overview';
        render();
      } catch (err) {
        errEl.textContent = err.message || 'Login failed';
@@ -717,7 +718,8 @@ function esc(s) {
      return;
    }
    if (route === 'login' || !route) {
-     window.location.hash = (state.user && state.user.isPlatformAdmin) ? '#/superadmin' : '#/overview';
+     if (state.user && state.user.isPlatformAdmin) { window.location.replace('/dashboard/platform.html#overview'); return; }
+     window.location.hash = '#/overview';
      return;
    }
    renderGeneration++;
@@ -736,6 +738,7 @@ function esc(s) {
    if (token) {
      try {
        await loadMe();
+       if (state.user && state.user.isPlatformAdmin && !/\/dashboard\/platform\.html$/i.test(location.pathname)) { window.location.replace('/dashboard/platform.html#overview'); return; }
      } catch (e) {
        setToken(null); setActiveTenant(null); state.user = null;
      }
