@@ -29,6 +29,57 @@ function safeLimit(value, fallback = 100, max = 250) {
   return Number.isFinite(n) ? Math.max(1, Math.min(max, Math.round(n))) : fallback;
 }
 
+function adminSlugify(name) {
+  const base=String(name||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60);
+  const reserved=['generic','friendly','admin','api','www','app'];
+  const value=base||'business';
+  return reserved.includes(value)?value+'-co':value;
+}
+
+router.post('/tenants', requirePlatformAdmin, async (req,res)=>{
+  const name=String(req.body?.name||'').trim();
+  const ownerEmail=String(req.body?.ownerEmail||'').trim().toLowerCase();
+  const ownerName=String(req.body?.ownerName||name).trim().slice(0,120);
+  const plan=String(req.body?.plan||'starter').trim().toLowerCase();
+  if(!name||name.length>120)return res.status(400).json({error:'Business name is required and must be 120 characters or fewer'});
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)||ownerEmail.length>254)return res.status(400).json({error:'Enter a valid owner email address'});
+  if(!['starter','pro','commerce'].includes(plan))return res.status(400).json({error:'Choose Starter, Pro, or Business'});
+  const baseSlug=adminSlugify(name),trialEndsAt=new Date(Date.now()+14*86400000);
+  let client;
+  try{
+    client=await db.pool.connect();await client.query('BEGIN');
+    let user=(await client.query('SELECT id,email,display_name,is_platform_admin FROM users WHERE lower(email)=$1',[ownerEmail])).rows[0],createdUser=false,resetUrl=null;
+    if(user?.is_platform_admin){await client.query('ROLLBACK');return res.status(409).json({error:'Use a non-platform-admin email for the tenant owner'});}
+    if(!user){
+      const unusable=await hashPassword(crypto.randomBytes(48).toString('base64url'));
+      user=(await client.query('INSERT INTO users(email,password_hash,display_name,is_platform_admin) VALUES($1,$2,$3,false) RETURNING id,email,display_name,is_platform_admin',[ownerEmail,unusable,ownerName||name])).rows[0];
+      createdUser=true;
+    }
+    let tenant;
+    for(let attempt=0;attempt<6&&!tenant;attempt++){
+      const slug=attempt?baseSlug+'-'+crypto.randomBytes(3).toString('hex'):baseSlug;
+      tenant=(await client.query(`INSERT INTO tenants(slug,name,contact_email,subscription_plan,subscription_status,trial_ends_at,customer_access,embed_key)
+        VALUES($1,$2,$3,$4,'trialing',$5,'free',encode(gen_random_bytes(16),'hex'))
+        ON CONFLICT(slug) DO NOTHING RETURNING *`,[slug,name,ownerEmail,plan,trialEndsAt])).rows[0];
+    }
+    if(!tenant)throw new Error('Could not allocate a unique business workspace');
+    await client.query('INSERT INTO tenant_memberships(tenant_id,user_id,role) VALUES($1,$2,\'owner\')',[tenant.id,user.id]);
+    if(createdUser){
+      const token=crypto.randomBytes(32).toString('base64url'),tokenHash=crypto.createHash('sha256').update(token,'utf8').digest('hex');
+      await client.query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '24 hours')",[user.id,tokenHash]);
+      resetUrl='https://rentsketch.com/dashboard/reset-password.html#token='+encodeURIComponent(token);
+    }
+    await client.query('COMMIT');
+    await audit(req,'tenant.created','tenant',tenant.id,tenant.slug,{ownerEmail,plan,ownerUserId:user.id});
+    res.status(201).json({tenant:{id:tenant.id,slug:tenant.slug,name:tenant.name,contact_email:tenant.contact_email,subscription_plan:tenant.subscription_plan,subscription_status:tenant.subscription_status,trial_ends_at:tenant.trial_ends_at},owner:{id:user.id,email:user.email,display_name:user.display_name},createdUser,resetUrl});
+  }catch(err){
+    if(client){try{await client.query('ROLLBACK')}catch(_){}}
+    if(err.code==='23505')return res.status(409).json({error:'That owner or workspace already exists'});
+    console.error('[platform tenant create]',err);
+    res.status(500).json({error:'Could not create the business workspace'});
+  }finally{client?.release();}
+});
+
 router.get('/tenants', requirePlatformAdmin, async (req, res) => {
   const result = await db.query(
     `SELECT t.id, t.slug, t.name, t.contact_email, t.website, t.logo_url,
