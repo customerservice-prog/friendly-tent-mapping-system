@@ -100,7 +100,7 @@ body{background:#fff;color:var(--ink)}
 .story-view-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#87d8bf;margin-right:5px}
 .story-timeline{background:#f7f9fe;color:#162741;padding:15px 20px 17px}
 .story-timeline-meta{display:flex;align-items:center;gap:18px;min-height:36px}
-.story-timeline-meta>span{color:#4975b2;font-size:12px;font-weight:850;white-space:nowrap;letter-spacing:.08em}
+.story-timeline-meta>span{color:#4269a1;font-size:12px;font-weight:850;white-space:nowrap;letter-spacing:.08em}
 .story-timeline-meta strong{font-size:16px;flex:1;line-height:1.25}
 .story-timeline-actions{display:flex;align-items:center;gap:6px}
 .story-timeline-actions button{border:1px solid #cbd8ea;border-radius:8px;background:#fff;color:#193654;font-size:12px;font-weight:700;padding:8px 12px;white-space:nowrap}
