@@ -43,8 +43,13 @@
   function canEdit() { return !!(offer && (!offer.required || active())); }
   function api(path, body) {
     var controller = new AbortController(), timer = setTimeout(function () { controller.abort(); }, 12000);
+    var headers = body ? { 'Content-Type': 'application/json' } : {};
+    try {
+      var adminToken = localStorage.getItem('rentsketch_dashboard_token');
+      if (adminToken) headers.Authorization = 'Bearer ' + adminToken;
+    } catch (_) {}
     return fetch((window.RENTSKETCH_API_URL || '') + '/api/consumer' + path, {
-      method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      method: body ? 'POST' : 'GET', headers: Object.keys(headers).length ? headers : undefined,
       body: body ? JSON.stringify(body) : undefined, signal: controller.signal, cache: 'no-store',
     }).then(async function (response) {
       var data = await response.json();
@@ -58,7 +63,7 @@
   }
   function getOffer(refresh) {
     if (!offerPromise || refresh) offerPromise = api('/event-pass/offer?tenant=' + encodeURIComponent(slug)).then(function (data) {
-      offer = data; render(); return data;
+      offer = data; document.body.classList.toggle('rs-platform-admin', !!data.adminAccess); render(); return data;
     }).catch(function (err) { offerPromise = null; throw err; });
     return offerPromise;
   }
