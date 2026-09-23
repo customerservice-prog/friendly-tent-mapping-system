@@ -45,7 +45,7 @@ router.get('/tenants', requirePlatformAdmin, async (req, res) => {
             (SELECT MAX(q.created_at) FROM quote_requests q WHERE q.tenant_id=t.id) AS last_request_at,
             (SELECT COUNT(*)::int FROM tenant_memberships tm WHERE tm.tenant_id=t.id) AS member_count,
             (SELECT COUNT(*)::int FROM platform_tenant_notes n WHERE n.tenant_id=t.id) AS note_count
-     FROM tenants t ORDER BY t.created_at DESC`
+     FROM tenants t WHERE t.slug<>'generic' ORDER BY t.created_at DESC`
   );
   res.json({ tenants: result.rows });
 });
@@ -229,7 +229,7 @@ router.get('/console-overview', requirePlatformAdmin, async (req, res) => {
     tenants, users, designs, paidPasses, paidDeposits, platformFees, subscriptions, monthPasses, monthDeposits,
     recentTenants, monthDesigns, monthRequests, newRequests, refundedPayments, failedPayments, installedTenants,
   ] = await Promise.all([
-    db.query("SELECT COUNT(*)::int AS count FROM tenants"),
+    db.query("SELECT COUNT(*)::int AS count FROM tenants WHERE slug<>'generic'"),
     db.query("SELECT COUNT(*)::int AS count FROM users WHERE is_platform_admin IS NOT TRUE"),
     db.query("SELECT COUNT(*)::int AS count FROM designs"),
     db.query("SELECT COUNT(*)::int AS count,COALESCE(SUM(amount_cents),0)::bigint AS cents FROM consumer_payments WHERE status='paid'"),
@@ -244,13 +244,13 @@ router.get('/console-overview', requirePlatformAdmin, async (req, res) => {
               FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id`),
     db.query("SELECT COALESCE(SUM(amount_cents),0)::bigint AS cents FROM consumer_payments WHERE status='paid' AND created_at>=date_trunc('month',now())"),
     db.query("SELECT COALESCE(SUM(amount_paid_cents),0)::bigint AS cents FROM quote_requests WHERE payment_status='paid' AND created_at>=date_trunc('month',now())"),
-    db.query("SELECT COUNT(*)::int AS count FROM tenants WHERE created_at>=now()-interval '30 days'"),
+    db.query("SELECT COUNT(*)::int AS count FROM tenants WHERE slug<>'generic' AND created_at>=now()-interval '30 days'"),
     db.query("SELECT COUNT(*)::int AS count FROM designs WHERE created_at>=date_trunc('month',now())"),
     db.query("SELECT COUNT(*)::int AS count FROM quote_requests WHERE created_at>=date_trunc('month',now())"),
     db.query("SELECT COUNT(*)::int AS count FROM quote_requests WHERE status='new'"),
     db.query("SELECT COUNT(*)::int AS count FROM consumer_payments WHERE status='refunded'"),
     db.query("SELECT COUNT(*)::int AS count FROM consumer_payments WHERE status='failed'"),
-    db.query("SELECT COUNT(*)::int AS count FROM tenants WHERE jsonb_array_length(COALESCE(allowed_origins,'[]'::jsonb))>0"),
+    db.query("SELECT COUNT(*)::int AS count FROM tenants WHERE slug<>'generic' AND jsonb_array_length(COALESCE(allowed_origins,'[]'::jsonb))>0"),
   ]);
   res.setHeader('Cache-Control', 'no-store');
   res.json({
@@ -482,11 +482,11 @@ router.get('/alerts', requirePlatformAdmin, async (req,res)=>{
     db.query(\`SELECT e.id::text,e.customer_email,e.tenant_slug,e.attempts,e.last_error,e.created_at
       FROM event_pass_emails e WHERE e.status='failed' ORDER BY e.created_at DESC LIMIT 50\`),
     db.query(\`SELECT t.slug,t.name,t.created_at FROM tenants t
-      WHERE jsonb_array_length(COALESCE(t.allowed_origins,'[]'::jsonb))=0 AND t.created_at<now()-interval '2 days'
+      WHERE t.slug<>'generic' AND jsonb_array_length(COALESCE(t.allowed_origins,'[]'::jsonb))=0 AND t.created_at<now()-interval '2 days'
       ORDER BY t.created_at DESC LIMIT 50\`),
     db.query(\`SELECT t.slug,t.name,COUNT(*)::int missing
       FROM products p JOIN tenants t ON t.id=p.tenant_id
-      WHERE p.active AND p.category IN ('tent','table','chair','dance_floor','lighting','linen') AND p.visual_model_id IS NULL
+      WHERE t.slug<>'generic' AND p.active AND p.category IN ('tent','table','chair','dance_floor','lighting','linen') AND p.visual_model_id IS NULL
       GROUP BY t.id,t.slug,t.name HAVING COUNT(*)>0 ORDER BY missing DESC LIMIT 50\`)
   ]);
   res.setHeader('Cache-Control','no-store');
