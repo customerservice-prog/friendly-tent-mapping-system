@@ -136,17 +136,32 @@ function healthCards(s){
 
 async function businesses(){
  var d=await api('/api/admin/tenants');state.tenants=d.tenants||[];
- document.getElementById('pcContent').innerHTML=head('Business accounts','Rental businesses','Manage every RentSketch rental-company workspace and jump directly into its dashboard or designer.',
-  '<a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">✦ Open RentSketch</a>')+
-  '<div class="pc-toolbar"><div class="pc-search"><input id="tenantSearch" type="search" placeholder="Search business, slug or email…"></div></div>'+
+ document.getElementById('pcContent').innerHTML=head('Business accounts','Rental businesses','Manage every tenant workspace, onboarding state, product usage and support context.',
+  '<a class="pc-btn" href="#alerts">Review setup alerts</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">✦ Open RentSketch</a>')+
+  '<div class="pc-toolbar"><div class="pc-search"><input id="tenantSearch" type="search" placeholder="Search business, slug or email…"></div><select id="tenantStatus" class="pc-select"><option value="">All billing states</option><option value="active">Active</option><option value="trialing">Trialing</option><option value="past_due">Past due</option><option value="canceled">Canceled</option></select><select id="tenantSetup" class="pc-select"><option value="">All setup states</option><option value="ready">Launch ready</option><option value="needs_setup">Needs setup</option></select></div>'+
+  '<section class="pc-grid metrics">'+metric('Businesses',state.tenants.length,'All tenant workspaces')+metric('Installed',state.tenants.filter(function(t){return Array.isArray(t.allowed_origins)&&t.allowed_origins.length}).length,'Approved website domain configured')+metric('Active products',state.tenants.reduce(function(n,t){return n+Number(t.active_product_count||0)},0),'Across tenant catalogs')+metric('New requests',state.tenants.reduce(function(n,t){return n+Number(t.new_request_count||0)},0),'Waiting across all businesses')+'</section>'+
   '<section class="pc-panel"><div id="tenantTable"></div></section>';
+ function setupScore(t){
+  var checks=[Number(t.active_product_count||0)>0,!!t.contact_email,Array.isArray(t.allowed_origins)&&t.allowed_origins.length>0];
+  return Math.round(checks.filter(Boolean).length/checks.length*100);
+ }
+ function lastActivity(t){
+  var values=[t.last_design_at,t.last_request_at].filter(Boolean).map(function(v){return new Date(v).getTime()});
+  return values.length?new Date(Math.max.apply(Math,values)).toISOString():t.created_at;
+ }
  function paint(){
-  var q=(document.getElementById('tenantSearch').value||'').toLowerCase();
-  var rows=state.tenants.filter(function(t){return [t.name,t.slug,t.contact_email,t.subscription_plan,t.subscription_status].join(' ').toLowerCase().includes(q)});
-  document.getElementById('tenantTable').innerHTML=rows.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Plan</th><th>Status</th><th>Products</th><th>Requests</th><th>Users</th><th>Actions</th></tr></thead><tbody>'+rows.map(function(t){return '<tr><td><strong>'+esc(t.name)+'</strong><span class="pc-subtext">'+esc(t.slug)+(t.contact_email?' · '+esc(t.contact_email):'')+'</span></td><td>'+esc(t.subscription_plan||'trial')+'</td><td>'+status(t.subscription_status)+'</td><td>'+Number(t.product_count||0)+'</td><td>'+Number(t.quote_request_count||0)+'</td><td>'+Number(t.member_count||0)+'</td><td><div class="pc-actions"><button class="pc-btn small" data-workspace="'+esc(t.slug)+'">Dashboard</button><button class="pc-btn small primary" data-designer="'+esc(t.slug)+'">Open designer</button><button class="pc-btn small" data-manage="'+esc(t.slug)+'">Manage</button></div></td></tr>'}).join('')+'</tbody></table></div>':empty('No businesses match that search.');
+  var q=(document.getElementById('tenantSearch').value||'').toLowerCase(),st=document.getElementById('tenantStatus').value,setupFilter=document.getElementById('tenantSetup').value;
+  var rows=state.tenants.filter(function(t){
+    var score=setupScore(t),setupOk=setupFilter==='ready'?score===100:setupFilter==='needs_setup'?score<100:true;
+    return [t.name,t.slug,t.contact_email,t.subscription_plan,t.subscription_status].join(' ').toLowerCase().includes(q)&&(!st||t.subscription_status===st)&&setupOk;
+  });
+  document.getElementById('tenantTable').innerHTML=rows.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Plan</th><th>Setup</th><th>Usage</th><th>Requests</th><th>Last activity</th><th>Support</th><th>Actions</th></tr></thead><tbody>'+rows.map(function(t){
+    var score=setupScore(t);
+    return '<tr><td><strong>'+esc(t.name)+'</strong><span class="pc-subtext">'+esc(t.slug)+(t.contact_email?' · '+esc(t.contact_email):'')+'</span></td><td>'+esc(t.subscription_plan||'trial')+'<span class="pc-subtext">'+status(t.subscription_status)+'</span></td><td><div class="pc-setup-mini"><span><i style="width:'+score+'%"></i></span><b>'+score+'%</b></div><span class="pc-subtext">'+Number(t.active_product_count||0)+' active products · '+(Array.isArray(t.allowed_origins)?t.allowed_origins.length:0)+' domains</span></td><td><strong>'+Number(t.design_count||0)+' designs</strong><span class="pc-subtext">'+Number(t.design_month_count||0)+' in 30 days</span></td><td><strong>'+Number(t.quote_request_count||0)+'</strong><span class="pc-subtext">'+Number(t.new_request_count||0)+' new</span></td><td>'+datetime(lastActivity(t))+'</td><td><strong>'+Number(t.member_count||0)+' users</strong><span class="pc-subtext">'+Number(t.note_count||0)+' internal notes</span></td><td><div class="pc-actions"><button class="pc-btn small" data-workspace="'+esc(t.slug)+'">Workspace</button><button class="pc-btn small primary" data-designer="'+esc(t.slug)+'">Designer</button><button class="pc-btn small" data-manage="'+esc(t.slug)+'">Manage</button></div></td></tr>';
+  }).join('')+'</tbody></table></div>':empty('No businesses match those filters.');
   bindTenantActions();
  }
- document.getElementById('tenantSearch').oninput=paint;paint();
+ document.getElementById('tenantSearch').oninput=paint;document.getElementById('tenantStatus').onchange=paint;document.getElementById('tenantSetup').onchange=paint;paint();
 }
 function bindTenantActions(){
  document.querySelectorAll('[data-workspace]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.workspace);location.href='/dashboard/?tenantView=1#/overview';};});
@@ -154,21 +169,32 @@ function bindTenantActions(){
  document.querySelectorAll('[data-manage]').forEach(function(b){b.onclick=function(){tenantModal(b.dataset.manage);};});
 }
 async function tenantModal(slug){
- var d=await api('/api/admin/tenants/'+encodeURIComponent(slug)),t=d.tenant,m=d.members||[];
+ var loaded=await Promise.all([api('/api/admin/tenants/'+encodeURIComponent(slug)),api('/api/admin/tenants/'+encodeURIComponent(slug)+'/notes')]);
+ var d=loaded[0],t=d.tenant,m=d.members||[],notes=loaded[1].notes||[];
  var backdrop=document.createElement('div');backdrop.className='pc-modal-backdrop';
- backdrop.innerHTML='<div class="pc-modal"><div class="pc-modal-head"><h2>'+esc(t.name)+'</h2><button class="pc-modal-close">×</button></div><div class="pc-modal-body"><div id="tenantMsg"></div>'+
-  '<div class="pc-modal-field"><label>Business name</label><input id="tmName" value="'+esc(t.name)+'"></div>'+
-  '<div class="pc-modal-field"><label>Contact email</label><input id="tmEmail" type="email" value="'+esc(t.contact_email||'')+'"></div>'+
-  '<div class="pc-modal-field"><label>Trial ends</label><input id="tmTrial" type="date" value="'+esc(t.trial_ends_at?String(t.trial_ends_at).slice(0,10):'')+'"></div>'+
-  '<div class="pc-actions"><button class="pc-btn primary" id="tmSave">Save business</button><button class="pc-btn" id="tmWorkspace">Open dashboard</button><button class="pc-btn" id="tmDesigner">Open designer</button></div>'+
-  '<h3 style="margin:24px 0 8px;font-size:14px">Users</h3><div>'+m.map(function(u){return '<div class="pc-list-row"><div><strong>'+esc(u.display_name||u.email)+'</strong><p>'+esc(u.email)+'</p></div><span class="pc-status">'+esc(u.role)+'</span></div>'}).join('')+'</div></div></div>';
+ function membersHtml(){
+  if(!m.length)return '<div class="pc-empty">No tenant users found.</div>';
+  return '<div class="pc-member-list">'+m.map(function(u){return '<div class="pc-member-row" data-member="'+esc(u.id)+'"><div><strong>'+esc(u.display_name||u.email)+'</strong><small>'+esc(u.email)+'</small></div><select class="pc-select" data-member-role="'+esc(u.id)+'"><option value="owner"'+(u.role==='owner'?' selected':'')+'>Owner</option><option value="admin"'+(u.role==='admin'?' selected':'')+'>Admin</option><option value="staff"'+(u.role==='staff'?' selected':'')+'>Staff</option><option value="viewer"'+(u.role==='viewer'?' selected':'')+'>Viewer</option></select><button class="pc-btn small danger" data-remove-member="'+esc(u.id)+'">Remove</button></div>'}).join('')+'</div>';
+ }
+ function notesHtml(){
+  if(!notes.length)return '<div class="pc-empty pc-empty-small">No internal notes yet.</div>';
+  return '<div class="pc-note-list">'+notes.map(function(n){return '<div class="pc-note"><div><strong>'+esc(n.admin_name||n.admin_email||'Platform admin')+'</strong><time>'+datetime(n.created_at)+'</time></div><p>'+esc(n.body)+'</p><button class="pc-btn small" data-delete-note="'+esc(n.id)+'">Delete</button></div>'}).join('')+'</div>';
+ }
+ backdrop.innerHTML='<div class="pc-modal pc-modal-wide"><div class="pc-modal-head"><div><h2>'+esc(t.name)+'</h2><p>'+esc(t.slug)+' · '+esc(t.subscription_plan||'trial')+' · '+esc(t.subscription_status||'unknown')+'</p></div><button class="pc-modal-close">×</button></div><div class="pc-modal-body"><div id="tenantMsg"></div>'+
+  '<div class="pc-modal-grid"><section><h3>Business account</h3><div class="pc-modal-field"><label>Business name</label><input id="tmName" value="'+esc(t.name)+'"></div><div class="pc-modal-field"><label>Contact email</label><input id="tmEmail" type="email" value="'+esc(t.contact_email||'')+'"></div><div class="pc-modal-field"><label>Trial ends</label><input id="tmTrial" type="date" value="'+esc(t.trial_ends_at?String(t.trial_ends_at).slice(0,10):'')+'"></div><div class="pc-actions"><button class="pc-btn primary" id="tmSave">Save business</button><button class="pc-btn" id="tmWorkspace">Open workspace</button><button class="pc-btn" id="tmDesigner">Open designer</button></div><div class="pc-support-facts"><span><b>Website</b>'+esc(t.website||'Not set')+'</span><span><b>Stripe</b>'+esc(t.stripe_connect_status||'not connected')+'</span><span><b>Approved domains</b>'+((t.allowed_origins||[]).length||0)+'</span><span><b>Webhook</b>'+(t.webhook_url?'Configured':'Not configured')+'</span></div></section>'+
+  '<section><h3>Tenant users</h3><p class="pc-modal-help">Change workspace roles or remove access. The only owner cannot be removed.</p>'+membersHtml()+'</section></div>'+
+  '<section class="pc-modal-notes"><div class="pc-modal-notes-head"><div><h3>Internal support notes</h3><p>Visible only to RentSketch platform admins.</p></div></div><form id="noteForm"><textarea id="noteBody" maxlength="4000" rows="3" placeholder="Add context for future support work…"></textarea><button class="pc-btn primary" type="submit">Add note</button></form><div id="notesList">'+notesHtml()+'</div></section></div></div>';
  document.body.appendChild(backdrop);
  function close(){backdrop.remove()} backdrop.querySelector('.pc-modal-close').onclick=close;backdrop.onclick=function(e){if(e.target===backdrop)close()};
  document.getElementById('tmWorkspace').onclick=function(){setTenant(slug);location.href='/dashboard/?tenantView=1#/overview';};
  document.getElementById('tmDesigner').onclick=function(){setTenant(slug);window.open('/designer/?tenant='+encodeURIComponent(slug)+'&admin=1','_blank','noopener');};
- document.getElementById('tmSave').onclick=async function(){var btn=this;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug),{method:'PATCH',body:{name:document.getElementById('tmName').value,contactEmail:document.getElementById('tmEmail').value,trialEndsAt:document.getElementById('tmTrial').value||null}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">Saved.</div>';setTimeout(function(){close();render()},500);}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
+ document.getElementById('tmSave').onclick=async function(){var btn=this;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug),{method:'PATCH',body:{name:document.getElementById('tmName').value,contactEmail:document.getElementById('tmEmail').value,trialEndsAt:document.getElementById('tmTrial').value||null}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">Business details saved.</div>';btn.disabled=false;}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
+ document.querySelectorAll('[data-member-role]').forEach(function(sel){sel.onchange=async function(){var old=m.find(function(u){return String(u.id)===String(sel.dataset.memberRole)});sel.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members/'+encodeURIComponent(sel.dataset.memberRole),{method:'PATCH',body:{role:sel.value}});if(old)old.role=sel.value;}catch(err){alert(err.message);if(old)sel.value=old.role;}finally{sel.disabled=false;}};});
+ document.querySelectorAll('[data-remove-member]').forEach(function(btn){btn.onclick=async function(){if(!confirm('Remove this user from '+t.name+'?'))return;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members/'+encodeURIComponent(btn.dataset.removeMember),{method:'DELETE'});btn.closest('.pc-member-row').remove();}catch(err){alert(err.message);btn.disabled=false;}};});
+ document.getElementById('noteForm').onsubmit=async function(e){e.preventDefault();var body=document.getElementById('noteBody').value.trim();if(!body)return;var btn=this.querySelector('button');btn.disabled=true;try{var result=await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/notes',{method:'POST',body:{body:body}});notes.unshift({id:result.note.id,body:result.note.body,created_at:result.note.created_at,admin_name:state.user&&state.user.displayName,admin_email:state.user&&state.user.email});document.getElementById('noteBody').value='';document.getElementById('notesList').innerHTML=notesHtml();bindNoteDeletes();}catch(err){alert(err.message);}finally{btn.disabled=false;}};
+ function bindNoteDeletes(){document.querySelectorAll('[data-delete-note]').forEach(function(btn){btn.onclick=async function(){if(!confirm('Delete this internal note?'))return;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/notes/'+encodeURIComponent(btn.dataset.deleteNote),{method:'DELETE'});notes=notes.filter(function(n){return String(n.id)!==String(btn.dataset.deleteNote)});document.getElementById('notesList').innerHTML=notesHtml();bindNoteDeletes();}catch(err){alert(err.message);btn.disabled=false;}};});}
+ bindNoteDeletes();
 }
-
 async function payments(kind){
  var query=kind&&kind!=='all'?'&kind='+encodeURIComponent(kind):'';
  var d=await api('/api/admin/payments?limit=200'+query),rows=d.payments||[];
