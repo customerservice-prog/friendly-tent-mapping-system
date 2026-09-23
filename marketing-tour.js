@@ -157,10 +157,10 @@ if(studio){
    target.classList.add('active');target.style.visibility='hidden';
    const next=renderer.init(target,{registerActive:false});pendingView=next;
    try{
-    const first=cinematic?stages[0].scene:marketingReception();
+    const first=cinematic?(reducedMotion?marketingReception():stages[0].scene):marketingReception();
     next.rebuild(first);
-    next.setScene({motion:false,guests:false,styling:!cinematic,night:false});
-    next.fitCamera();
+    next.setScene({motion:false,guests:false,styling:cinematic?reducedMotion:true,night:false});
+    if(cinematic&&reducedMotion)next.reception();else next.fitCamera();
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     if(disposed||ticket!==generation){if(pendingView===next){next.destroy();pendingView=null;}return;}
     view=next;pendingView=null;target.style.visibility='';
