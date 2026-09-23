@@ -4,6 +4,21 @@
   analytics.src = '/analytics-loader.js?v=20260922-ga4-1';
   analytics.async = true;
   document.head.appendChild(analytics);
+  function track(name, data) {
+    if (typeof window.gtag === 'function' && window.RENTSKETCH_GA4_ENABLED === true) window.gtag('event', name, data || {});
+  }
+  document.addEventListener('click', function (event) {
+    var link = event.target.closest('a[href*="/api/consumer/event-pass/direct-checkout"]');
+    if (!link) return;
+    var source = '';
+    try { source = new URL(link.href, location.href).searchParams.get('source') || ''; } catch (_) {}
+    track('begin_checkout', {
+      currency: 'USD',
+      value: 9.99,
+      checkout_source: source,
+      items: [{ item_id: 'event_pass_30_day', item_name: 'RentSketch Event Pass', price: 9.99, quantity: 1 }]
+    });
+  });
   var menu = document.querySelector('.menu-toggle');
   var links = document.getElementById('navlinks');
   function closeMenu() { links.classList.remove('open'); menu.setAttribute('aria-expanded', 'false'); }
