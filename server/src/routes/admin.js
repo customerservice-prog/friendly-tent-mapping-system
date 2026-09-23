@@ -58,9 +58,10 @@ router.post('/tenants', requirePlatformAdmin, async (req,res)=>{
     let tenant;
     for(let attempt=0;attempt<6&&!tenant;attempt++){
       const slug=attempt?baseSlug+'-'+crypto.randomBytes(3).toString('hex'):baseSlug;
+      const embedKey=crypto.randomBytes(16).toString('hex');
       tenant=(await client.query(`INSERT INTO tenants(slug,name,contact_email,subscription_plan,subscription_status,trial_ends_at,customer_access,embed_key)
-        VALUES($1,$2,$3,$4,'trialing',$5,'free',encode(gen_random_bytes(16),'hex'))
-        ON CONFLICT(slug) DO NOTHING RETURNING *`,[slug,name,ownerEmail,plan,trialEndsAt])).rows[0];
+        VALUES($1,$2,$3,$4,'trialing',$5,'free',$6)
+        ON CONFLICT(slug) DO NOTHING RETURNING *`,[slug,name,ownerEmail,plan,trialEndsAt,embedKey])).rows[0];
     }
     if(!tenant)throw new Error('Could not allocate a unique business workspace');
     await client.query('INSERT INTO tenant_memberships(tenant_id,user_id,role) VALUES($1,$2,\'owner\')',[tenant.id,user.id]);
