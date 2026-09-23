@@ -59,8 +59,11 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
  assert.equal(f.d.querySelector('.plan-img').hidden,true);
  assert.equal(f.metrics().imports,0,'no heavy renderer during initial page load');
  f.intersect();await settle();
- assert.equal(f.metrics().imports,0,'reduced-motion homepage keeps fast static first frame');
+ assert.equal(f.metrics().imports,0,'reduced-motion homepage never autoloads the heavy renderer');
  assert.match(f.d.querySelector('.tour-note').textContent,/Complete wedding reception preview/);
+ assert.ok(f.d.querySelector('.wedding-build-hud'),'reduced-motion keeps the wedding controls available');
+ assert.equal(f.d.querySelector('.wedding-build-hud').dataset.stage,'evening');
+ assert.equal(f.d.querySelector('.wedding-build-plan').hidden,true,'reduced-motion shows the final 3D poster instead of motion layers');
 
  f.d.querySelector('[data-view="3d"]').click();await settle();
  assert.equal(f.metrics().created,1,'explicit 3D selection starts renderer');
@@ -76,7 +79,6 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
  assert.equal(scene.objects.filter(o=>o.kind==='dance').length,16);
  assert.equal(scene.lightingId,'lighting-bistro');
  assert.equal(f.metrics().timelapses,0,'reduced-motion never animates build');
- assert.ok(f.metrics().buildStages.includes('evening'),'reduced-motion shows the finished wedding stage');
  assert.equal(f.d.querySelector('.tour-poster').hidden,true);
  assert.equal(f.d.querySelector('.tour-actions').hidden,false);
 
@@ -99,13 +101,21 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
  assert.ok(tableStage.every(o=>o.hideChairs===true&&o.seatCount===8),'table stage keeps chair count but hides chair meshes');
  assert.ok(chairStage.every(o=>o.hideChairs===false&&o.seatCount===8),'chair stage reveals the 64 chairs');
  assert.equal(autoplay.stages.at(-1).scene.lightingId,'lighting-bistro');
- autoplay.intersect();await settle(120);
- assert.equal(autoplay.metrics().created,1,'homepage auto-loads renderer after the deferred critical window');
+ autoplay.intersect();await settle(180);
+ assert.equal(autoplay.metrics().imports,0,'homepage wedding autoplay never imports Three.js');
+ assert.equal(autoplay.metrics().created,0,'homepage wedding autoplay uses no WebGL renderer');
  assert.ok(autoplay.d.querySelector('.wedding-build-hud'),'cinematic build HUD is created');
+ assert.ok(autoplay.d.querySelector('.wedding-build-plan'),'scene-derived SVG wedding plan is created');
  assert.match(autoplay.d.querySelector('.wedding-build-kicker').textContent,/build the wedding/i);
- assert.equal(autoplay.metrics().rebuilds.length,1,'cinematic prebuilds the complete wedding exactly once');
- assert.ok(autoplay.metrics().rebuilds[0].objects.length>20,'single prebuilt scene contains the complete wedding');
- assert.ok(autoplay.metrics().buildStages.includes('space'),'cinematic hides the prebuilt scene to begin from empty space');
+ assert.equal(autoplay.d.querySelector('.wedding-build-hud').dataset.stage,'evening','lightweight build reaches the completed wedding');
+ assert.ok(autoplay.d.querySelector('.wedding-build-plan').classList.contains('is-finished'),'finished overhead plan crossfades to the 3D poster');
+ assert.equal(autoplay.d.querySelectorAll('.wedding-build-plan [data-build-layer="chairs"] rect').length,64,'lightweight plan draws all 64 guest chairs');
+ assert.equal(autoplay.d.querySelectorAll('.wedding-build-plan [data-build-layer="dance"] rect').length,16,'lightweight plan draws all dance-floor sections');
+ assert.ok(autoplay.d.querySelectorAll('.wedding-build-plan [data-build-layer="service"] > *').length>=7,'lightweight plan includes sweetheart, DJ, buffet, bar and cocktail areas');
+ autoplay.d.querySelector('.wedding-explore').click();await settle(80);
+ assert.equal(autoplay.metrics().created,1,'interactive 3D loads only after the explicit Explore control');
+ assert.equal(autoplay.metrics().rebuilds.length,1,'interactive handoff builds the complete wedding once');
+ assert.ok(autoplay.metrics().rebuilds[0].objects.length>20,'interactive handoff uses the complete wedding scene');
  autoplay.w.dispatchEvent(new autoplay.w.PageTransitionEvent('pagehide'));
  assert.equal(autoplay.metrics().destroyed,1);
  autoplay.dom.window.close();
@@ -122,8 +132,9 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
  const early=await fixture();
  early.d.querySelector('[data-view="2d"]').click();early.intersect();await settle();
  assert.equal(early.metrics().imports,0,'honor a visitor choosing 2D without background 3D work');
+ assert.equal(early.d.querySelector('.plan-img').hidden,false);
  early.d.querySelector('[data-view="3d"]').click();await settle();
- assert.equal(early.metrics().created,1);
+ assert.equal(early.metrics().created,1,'an explicit 3D request still opens the real renderer');
  early.dom.window.close();
 
  const demo=await fixture({page:'demo/index.html'});
@@ -132,5 +143,5 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
  assert.equal(demo.metrics().created,1,'dedicated demo still auto-loads interactive 3D');
  demo.dom.window.close();
 
- console.log('PASS 3D marketing tour: full wedding scene, homepage cinematic autoplay, reduced-motion finished-scene fallback, demo auto-load, camera controls, 2D switching, WebGL fallback, and history cleanup. Renderer stub; not GPU visual QA.');
+ console.log('PASS 3D marketing tour: full wedding scene, lightweight homepage wedding autoplay with zero automatic WebGL imports, explicit interactive-3D handoff, reduced-motion fallback, demo auto-load, camera controls, 2D switching, WebGL fallback, and history cleanup. Renderer stub; not GPU visual QA.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
