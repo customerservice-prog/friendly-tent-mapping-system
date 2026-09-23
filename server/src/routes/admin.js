@@ -515,7 +515,7 @@ router.get('/analytics', requirePlatformAdmin, async (req,res)=>{
         COALESCE((SELECT MAX(d.updated_at) FROM designs d WHERE d.tenant_id=t.id),t.created_at),
         COALESCE((SELECT MAX(q.created_at) FROM quote_requests q WHERE q.tenant_id=t.id),t.created_at)
       ) last_activity
-      FROM tenants t ORDER BY ((SELECT COUNT(*) FROM designs d WHERE d.tenant_id=t.id)+(SELECT COUNT(*) FROM quote_requests q WHERE q.tenant_id=t.id)) DESC,t.created_at DESC LIMIT 12`),
+      FROM tenants t WHERE t.slug<>'generic' ORDER BY ((SELECT COUNT(*) FROM designs d WHERE d.tenant_id=t.id)+(SELECT COUNT(*) FROM quote_requests q WHERE q.tenant_id=t.id)) DESC,t.created_at DESC LIMIT 12`),
     db.query(`SELECT payment_type,status,COUNT(*)::int count,COALESCE(SUM(amount_cents),0)::bigint cents
       FROM consumer_payments GROUP BY payment_type,status ORDER BY payment_type,status`)
   ]);
