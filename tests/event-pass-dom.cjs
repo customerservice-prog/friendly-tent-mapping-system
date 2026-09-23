@@ -12,6 +12,8 @@ const offer = { required: true, available: true, priceCents: 999, durationDays: 
 async function setup(query, options = {}) {
   const dom = new JSDOM(html, { url: 'https://rentsketch.com/designer/' + query, runScripts: 'outside-only', pretendToBeVisual: true }), w = dom.window, calls = [];
   w.AbortController = AbortController; w.ResizeObserver = class { observe() {} disconnect() {} }; w.confirm = () => { throw Error('No surprise restore dialog'); }; w.alert = () => {};
+  const analyticsEvents = [];
+  if (options.analytics) { w.RENTSKETCH_GA4_ENABLED = true; w.gtag = (...args) => analyticsEvents.push(args); }
   if (options.navigations) w.RentSketchCheckoutNavigate = url => options.navigations.push(url);
   if (options.embedded) Object.defineProperty(w, 'parent', { value: { postMessage() {} } });
   w.localStorage.setItem('rentsketch-anon-session', 'existing-browser-owner');
@@ -49,7 +51,7 @@ async function setup(query, options = {}) {
   evalScript('js/ui/preview-limit.js'); evalScript('js/ui/paywall.js'); evalScript('js/ui/autosave.js');
   if (query.includes('autoplace=1')) evalScript('js/ui/tent-preview-entry.js'); else await (await load(path.join(root, 'js/ui/intake.js'))).evaluate();
   await wait(150); evalScript('js/ui/customer-entry.js'); evalScript('js/ui/review-actions.js');
-  return { dom, w, calls, get draft() { return draft; }, get checkouts() { return checkouts; } };
+  return { dom, w, calls, analyticsEvents, get draft() { return draft; }, get checkouts() { return checkouts; } };
 }
 (async () => {
   let t = await setup('?tenant=friendly&embed=1&focus=tent&autoplace=1&view=2d&productId=fpr-pole', { embedded: true });
@@ -72,7 +74,8 @@ async function setup(query, options = {}) {
   assert.equal(t.calls.find(c => c.url.endsWith('/event-pass/checkout-session')).body.priceCents, undefined);
   t.dom.window.close();
   const emptyFrame = { id: 'draft-owned', tenant: 'friendly', scene: { tentId: 'frame-20x20', objects: [], surfaceType: 'concrete', lightingId: 'lighting-none', customer: { name: '', email: '', date: '' } }, anonymousSessionId: 'restored-owner', active: true, renewable: true, expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), customerEmail: 'paid@example.invalid', accessUrl: 'https://rentsketch.com/designer/?tenant=friendly#recoveryToken=fixture.private.token', emailDelivery: 'sent' };
-  t = await setup('?tenant=friendly&payment=success&checkout_session_id=cs_live_fixturecheckout', { restored: emptyFrame });
+  const paidReturn = { ...emptyFrame, analyticsPurchase: { transactionId: 'ep_0123456789abcdef01234567', itemId: 'event_pass_30_day', itemName: 'RentSketch Event Pass', amountCents: 999, currency: 'USD', durationDays: 30 } };
+  t = await setup('?tenant=friendly&payment=success&checkout_session_id=cs_live_fixturecheckout', { restored: paidReturn, analytics: true });
   w = t.w; d = w.document; b = w.FriendlyBridge;
   assert.equal(b.getScene().tentId, 'frame-20x20', 'paid empty frame replaces the initial pole tent'); assert.equal(b.getScene().surfaceType, 'concrete'); assert.equal(b.getScene().objects.length, 0);
   assert.equal(w.RentSketchAutosave.getDesignId(), 'draft-owned'); assert.equal(w.RentSketchAutosave.getSessionId(), 'restored-owner');
@@ -81,6 +84,10 @@ async function setup(query, options = {}) {
   assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 0, 'return never saves the initial blank/default scene over the paid design');
   assert.match(d.querySelector('#eventPassBar').textContent, /Event Pass active/); assert.ok(d.querySelector('.pass-access-link').value.includes('#recoveryToken=fixture.private.token')); assert.match(d.querySelector('[data-email-status]').textContent, /sent to paid@example.invalid/);
   assert.equal(w.location.search.includes('checkout_session_id'), false, 'private credential removed from address after restore');
+  const gaPurchase = t.analyticsEvents.find(args => args[0] === 'event' && args[1] === 'purchase');
+  assert.ok(gaPurchase, 'verified checkout emits GA4 purchase'); assert.equal(gaPurchase[2].value, 9.99); assert.equal(gaPurchase[2].transaction_id, 'ep_0123456789abcdef01234567');
+  assert.equal(gaPurchase[2].items[0].item_id, 'event_pass_30_day'); assert.doesNotMatch(JSON.stringify(gaPurchase), /cs_live_fixturecheckout|paid@example\.invalid/);
+  assert.equal(JSON.parse(w.localStorage.getItem('rentsketch-ga4-purchase:ep_0123456789abcdef01234567')), true, 'purchase is locally deduplicated');
   assert.equal(d.getElementById('customerEmail').value, 'paid@example.invalid', 'checkout email fills an empty saved contact email');
   d.querySelector('.pass-close').click(); d.querySelector('[data-drawer="tables"]').click(); assert.equal(d.getElementById('drawer').hidden, false);
   // Save real edits, then reopen the server snapshot on a separate device.
