@@ -639,10 +639,8 @@ function esc(s) {
    if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    if (state.user && state.user.isPlatformAdmin) {
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Platform Billing Access</h1>' +
-       '<p class="dash-subtitle">You are signed in as the RentSketch platform administrator.</p>' +
-       '<div class="dash-saved"><strong>Complimentary platform access is permanent.</strong> Your admin account is not subject to tenant trials, paid plans, cancellations, or past-due billing restrictions.</div>' +
-       '<p class="muted">Use Super Admin to inspect tenant subscription states. Opening a tenant does not change your platform-level access.</p>';
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Account access</div><h1>Billing &amp; payments</h1><p>You are viewing this tenant as the RentSketch platform administrator.</p></div><div class="tenant-head-actions"><a class="tenant-btn" href="/dashboard/platform.html#subscriptions">Subscriptions</a><a class="tenant-btn primary" href="/dashboard/platform.html#payments">Payment ledger</a></div></div>' +
+       '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Permanent platform access</h2><p>Your owner account is not governed by tenant billing.</p></div><span class="tenant-status-chip good">Complimentary</span></div><div class="tenant-panel-body"><div class="dash-saved"><strong>No RentSketch subscription is required for your platform-admin account.</strong> Tenant trials, cancellations and past-due states never remove your owner access.</div><p class="muted">Use the Platform Console to inspect or manage this tenant’s actual subscription and payment activity.</p></div></section>';
      return;
    }
    try {
@@ -671,11 +669,11 @@ function esc(s) {
        (window.location.search.indexOf('billing=portal-return') > -1) ? '<div class="dash-saved">Returned from billing portal.</div>' : '';
      if (status.friendlyFree) {
        document.getElementById('dashMain').innerHTML = '' +
-         '<h1 class="dash-title">Billing</h1>' +
+         '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Account</div><h1>Billing &amp; payments</h1><p>Manage your RentSketch subscription and customer deposit connection.</p></div></div>' +
          msg +
-         '<div class="dash-empty"><strong>Friendly Party Rental</strong> has complimentary access to RentSketch. No billing required.</div>';
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Complimentary workspace access</h2><p>This business does not need a paid RentSketch subscription.</p></div><span class="tenant-status-chip good">No charge</span></div><div class="tenant-panel-body"><p><strong>Friendly Party Rental</strong> has complimentary access to RentSketch. No subscription billing is required.</p></div></section>';
      } else {
-       var billingHtml = '<h1 class="dash-title">Billing & Subscription</h1>' + msg + trialText + 
+       var billingHtml = '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Account</div><h1>Billing &amp; subscription</h1><p>Choose a plan, review your current status, or open Stripe billing management.</p></div></div>' + msg + trialText + 
          '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px;margin-bottom:20px">' +
          '<h3 style="margin-top:0">Current Status</h3>' +
          '<p><strong>Plan:</strong> ' + esc(status.plan || 'None') + ' &nbsp; <strong>Status:</strong> ' + currentStatus + '</p>' +
