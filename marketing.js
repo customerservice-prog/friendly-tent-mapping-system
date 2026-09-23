@@ -72,8 +72,11 @@
         }); renderPrices();
       }).catch(function () {});
   }
-  if ('requestIdleCallback' in window) requestIdleCallback(hydratePlans, { timeout: 3500 });
-  else setTimeout(hydratePlans, 1800);
+  var isHomepage = location.pathname === '/' || location.pathname === '/index.html';
+  if (!isHomepage) {
+    if ('requestIdleCallback' in window) requestIdleCallback(hydratePlans, { timeout: 3500 });
+    else setTimeout(hydratePlans, 1800);
+  }
 
   var header = document.querySelector('.top');
   function syncHeaderDepth() {
