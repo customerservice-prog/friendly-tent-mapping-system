@@ -73,7 +73,8 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
   function setView(mode){
     selected=mode;modeButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view===mode)));
     if(mode==='2d'){
-      stop();draw();canvas.classList.add('show-plan');target.classList.remove('active');poster.classList.remove('story-final');
+      stop();update(1);label.textContent='Complete reception floor plan';
+      canvas.classList.add('show-plan');target.classList.remove('active');poster.classList.remove('story-final');
       controls.hidden=true;
     }else{
       canvas.classList.remove('show-plan');target.classList.toggle('active',!!view);
