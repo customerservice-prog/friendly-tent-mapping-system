@@ -133,7 +133,7 @@ const server=http.createServer((req,res)=>{
       assert.equal(await page.locator('.story-timeline-actions').isVisible(),false);
       assert.equal(await page.locator('.tour-poster').isVisible(),true);
       assert.equal(await page.locator('.tour-3d canvas').count(),0);
-      assert.equal(await page.locator('[data-story-count]').innerText(),'15 / 15');
+      assert.equal(await page.locator('[data-story-count]').innerText(),'17 / 17');
       await page.screenshot({path:path.join(out,'home-reduced-motion.png')});
       results.push({reducedMotion:true,staticFinal:true,noAutoplayWebGL:true});
       await ctx.close();
