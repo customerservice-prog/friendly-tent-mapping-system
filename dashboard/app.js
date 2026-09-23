@@ -74,36 +74,77 @@ function esc(s) {
 
  function appEl() { return document.getElementById('app'); }
 
+ function activeTenantRecord() {
+   return (state.tenants || []).find(function (t) { return t.slug === state.tenant; }) || null;
+ }
+ function tenantRole() {
+   if (state.user && state.user.isPlatformAdmin) return 'platform_admin';
+   var record = activeTenantRecord();
+   return record && record.role ? record.role : 'viewer';
+ }
+ function tenantDesignerUrl() {
+   return '/designer/?tenant=' + encodeURIComponent(state.tenant || 'generic') + '&staff=1';
+ }
+ function tenantInitials(name) {
+   return String(name || 'RS').trim().split(/\s+/).slice(0, 2).map(function (part) { return part.charAt(0); }).join('').toUpperCase();
+ }
+
  function shellHtml(route, inner) {
    var tenants = state.tenants || [];
    var platformAdmin = !!(state.user && state.user.isPlatformAdmin);
-   var brandSub = platformAdmin ? (platformTenantView() ? 'Tenant Workspace · Admin' : 'Platform Console') : 'Business Dashboard';
+   var record = activeTenantRecord();
+   var tenantName = record ? record.name : (state.tenant || 'Business workspace');
+   var userName = (state.user && (state.user.displayName || state.user.email)) || 'RentSketch user';
+   var role = tenantRole();
    var switcher = '';
    if (tenants.length > 1) {
-     switcher = '<select id="tenantSwitch" class="tenant-switch">' + tenants.map(function (t) {
+     switcher = '<select id="tenantSwitch" class="tenant-switch" aria-label="Switch business">' + tenants.map(function (t) {
        return '<option value="' + esc(t.slug) + '"' + (t.slug === state.tenant ? ' selected' : '') + '>' + esc(t.name) + '</option>';
      }).join('') + '</select>';
    } else if (tenants.length === 1) {
      switcher = '<span class="tenant-name">' + esc(tenants[0].name) + '</span>';
    }
-   function navLink(r, label) {
-     return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '">' + label + '</a>';
+   function navLink(r, label, icon) {
+     return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '"><span class="tenant-nav-icon">' + icon + '</span><span>' + label + '</span></a>';
    }
    return '' +
-     '<div class="dash-shell">' +
-     '<header class="dash-header">' +
-     '<div class="dash-brand">RentSketch <span class="dash-brand-sub">' + brandSub + '</span></div>' +
-     '<nav class="dash-nav">' +
-     navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
-     navLink('branding', 'Branding') + navLink('billing', 'Billing') + navLink('install', 'Install') +
-     (state.user && state.user.isPlatformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link">Platform Console</a>' : '') +
-     '</nav>' +
-     '<div class="dash-account">' + switcher + '<button id="btnLogout" class="btn-logout" type="button">Log out</button></div>' +
-     '</header>' +
-     '<main class="dash-main" id="dashMain">' + inner + '</main>' +
+     '<div class="tenant-shell" id="tenantShell">' +
+       '<aside class="tenant-sidebar">' +
+         '<a class="tenant-brand" href="#/overview"><img src="/assets/brand-mark.svg" alt=""><span><strong>RentSketch</strong><span>Business Workspace</span></span></a>' +
+         '<a class="tenant-launch" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">✦ Open customer designer</a>' +
+         '<nav class="tenant-nav" aria-label="Business workspace">' +
+           '<div class="tenant-nav-group"><div class="tenant-nav-label">Workspace</div>' +
+             navLink('overview', 'Overview', '⌂') +
+             navLink('requests', 'Quote requests', '▤') +
+             navLink('products', 'Products', '▦') +
+           '</div>' +
+           '<div class="tenant-nav-group"><div class="tenant-nav-label">Customer experience</div>' +
+             navLink('branding', 'Branding', '◆') +
+             navLink('install', 'Website install', '↗') +
+           '</div>' +
+           '<div class="tenant-nav-group"><div class="tenant-nav-label">Account</div>' +
+             navLink('billing', 'Billing & payments', '$') +
+             (platformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link"><span class="tenant-nav-icon">★</span><span>Platform Console</span></a>' : '') +
+           '</div>' +
+         '</nav>' +
+         '<div class="tenant-sidebar-foot">' +
+           '<div class="tenant-user"><span class="tenant-avatar">' + esc(tenantInitials(userName)) + '</span><span><strong>' + esc(userName) + '</strong><small>' + esc(role === 'platform_admin' ? 'Platform admin · viewing ' + tenantName : role + ' · ' + tenantName) + '</small></span></div>' +
+           '<button id="btnLogout" class="btn-logout" type="button">Log out</button>' +
+         '</div>' +
+       '</aside>' +
+       '<section class="tenant-workspace">' +
+         '<header class="tenant-topbar">' +
+           '<button class="tenant-mobile-toggle" id="tenantMenuBtn" type="button" aria-label="Open workspace navigation">☰</button>' +
+           '<div class="tenant-crumb"><strong>' + esc(tenantName) + '</strong> / ' + esc(route ? route.charAt(0).toUpperCase() + route.slice(1) : 'Overview') + '</div>' +
+           '<div class="tenant-top-actions">' +
+             (platformAdmin ? '<a class="tenant-return" href="/dashboard/platform.html#businesses">← Platform Console</a>' : '') +
+             '<div class="dash-account"><span class="role-pill">' + esc(role === 'platform_admin' ? 'Super Admin' : role) + '</span>' + switcher + '</div>' +
+           '</div>' +
+         '</header>' +
+         '<main class="dash-main tenant-content" id="dashMain">' + inner + '</main>' +
+       '</section>' +
      '</div>';
  }
-
  function loadingHtml(label) { return '<div class="dash-loading">' + esc(label || 'Loading...') + '</div>'; }
  function errorHtml(err) { return '<div class="dash-error">' + esc(err && err.message ? err.message : String(err)) + (err && err.status === 402 ? ' <a href="#/billing">Open Billing to continue →</a>' : '') + '</div>'; }
 
