@@ -1,10 +1,12 @@
 const express = require('express');
+const crypto = require('crypto');
 const db = require('../db');
 const { hashPassword, verifyPassword, signToken, verifyToken } = require('../auth');
 
 const router = express.Router();
 const loginBuckets = new Map();
 const passwordBuckets = new Map();
+const resetBuckets = new Map();
 function clientIp(req){return(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').toString().split(',')[0].trim();}
 function limited(map,key,max,windowMs){const now=Date.now();let b=map.get(key);if(!b||now-b.start>windowMs)b={start:now,count:0};b.count++;map.set(key,b);return b.count>max;}
 function clearLogin(email,ip){loginBuckets.delete('account:'+email);loginBuckets.delete('pair:'+email+':'+ip);}
@@ -71,6 +73,63 @@ router.get('/me', async (req, res) => {
     user: { id: currentUser.id, email: currentUser.email, displayName: currentUser.display_name, isPlatformAdmin },
     tenants: memberships.rows,
   });
+});
+
+
+router.post('/reset-password', async (req, res) => {
+  const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
+  const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+  const ip = clientIp(req);
+
+  if (limited(resetBuckets, 'ip:' + ip, 12, 15 * 60 * 1000)) {
+    return res.status(429).json({ error: 'Too many reset attempts. Please wait and try again.' });
+  }
+  if (token.length < 32 || token.length > 512) {
+    return res.status(400).json({ error: 'Invalid or expired reset link' });
+  }
+  if (newPassword.length < 12) {
+    return res.status(400).json({ error: 'New password must be at least 12 characters' });
+  }
+  if (newPassword.length > 256) {
+    return res.status(400).json({ error: 'Password is too long' });
+  }
+
+  const tokenHash = crypto.createHash('sha256').update(token, 'utf8').digest('hex');
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const reset = await client.query(
+      `SELECT prt.id, prt.user_id
+       FROM password_reset_tokens prt
+       WHERE prt.token_hash = $1
+         AND prt.used_at IS NULL
+         AND prt.expires_at > now()
+       FOR UPDATE`,
+      [tokenHash]
+    );
+    const row = reset.rows[0];
+    if (!row) {
+      await client.query('ROLLBACK');
+      return res.status(400).json({ error: 'Invalid or expired reset link' });
+    }
+
+    const passwordHash = await hashPassword(newPassword);
+    await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, row.user_id]);
+    await client.query('UPDATE password_reset_tokens SET used_at = now() WHERE id = $1', [row.id]);
+    await client.query(
+      'UPDATE password_reset_tokens SET used_at = COALESCE(used_at, now()) WHERE user_id = $1 AND used_at IS NULL',
+      [row.user_id]
+    );
+    await client.query('COMMIT');
+    resetBuckets.delete('ip:' + ip);
+    return res.json({ ok: true });
+  } catch (err) {
+    try { await client.query('ROLLBACK'); } catch (_) {}
+    console.error('[auth reset-password]', err);
+    return res.status(500).json({ error: 'Could not reset password. Please try again.' });
+  } finally {
+    client.release();
+  }
 });
 
 router.post('/change-password', async (req, res) => {
