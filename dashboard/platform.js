@@ -272,10 +272,13 @@ async function activity(){
 }
 
 async function system(){
- var s=await api('/api/admin/system');
- document.getElementById('pcContent').innerHTML=head('Operations','System health','Check the core services that support RentSketch logins, payments, access, and customer email.')+
+ var loaded=await Promise.all([api('/api/admin/system'),api('/api/admin/web-vitals?days=7')]),s=loaded[0],v=loaded[1]||{},overall=v.overall||{};
+ function ms(n){return n==null?'No data':Math.round(Number(n))+' ms';}
+ function cls(n){return n==null?'No data':Number(n).toFixed(3);}
+ document.getElementById('pcContent').innerHTML=head('Operations','System health','Check the core services that support RentSketch logins, payments, access, email and real-user performance.')+
   '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Production services</h2><p>Application-level readiness. Infrastructure deployment status remains in Railway.</p></div></div><div class="pc-panel-body">'+healthCards(s)+'</div></section>'+
-  '<section class="pc-grid metrics" style="margin-top:16px">'+metric('Stripe webhooks',String(s.payments.processedWebhookEvents||0),'Processed webhook event IDs')+metric('Access email queued',String(s.email.pending||0),'Pending or sending messages')+metric('Access email failed',String(s.email.failed||0),'Needs delivery attention')+metric('Environment',String(s.app.nodeEnv||'—'),'API runtime mode')+'</section>';
+  '<section class="pc-grid metrics" style="margin-top:16px">'+metric('Stripe webhooks',String(s.payments.processedWebhookEvents||0),'Processed webhook event IDs')+metric('Access email queued',String(s.email.pending||0),'Pending or sending messages')+metric('Access email failed',String(s.email.failed||0),'Needs delivery attention')+metric('Environment',String(s.app.nodeEnv||'—'),'API runtime mode')+'</section>'+
+  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>Real-user web vitals · 7 days</h2><p>75th percentile first-party browser measurements from the current collector.</p></div><span class="pc-status '+(Number(overall.samples||0)?'active':'')+'">'+Number(overall.samples||0)+' samples</span></div><div class="pc-panel-body"><div class="pc-health"><div class="pc-health-card"><b><i class="pc-dot '+(overall.lcp_p75_ms!=null&&Number(overall.lcp_p75_ms)>2500?'warn':'')+'"></i>LCP</b><span>'+ms(overall.lcp_p75_ms)+' · target ≤ 2500 ms</span></div><div class="pc-health-card"><b><i class="pc-dot '+(overall.inp_p75_ms!=null&&Number(overall.inp_p75_ms)>200?'warn':'')+'"></i>INP</b><span>'+ms(overall.inp_p75_ms)+' · target ≤ 200 ms</span></div><div class="pc-health-card"><b><i class="pc-dot '+(overall.cls_p75!=null&&Number(overall.cls_p75)>0.1?'warn':'')+'"></i>CLS</b><span>'+cls(overall.cls_p75)+' · target ≤ 0.100</span></div></div></div></section>';
 }
 
 async function boot(){
