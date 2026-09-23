@@ -45,13 +45,13 @@ def save(path, text):
 
 NAV = '''<a class="skip" href="#main">Skip to content</a>
 <header class="top"><nav class="wrap nav" aria-label="Main navigation">
-<a class="brand" href="/"><img src="/assets/brand-mark.svg" width="34" height="34" alt="" aria-hidden="true">RentSketch</a>
+<a class="brand" href="/"><img src="/assets/brand-mark.svg" width="34" height="34" alt="Brand mark" aria-hidden="true">RentSketch</a>
 <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="navlinks">Menu</button>
 <div class="navlinks" id="navlinks"><a href="/event-pass/">Plan one event</a><a href="/demo/">Live demo</a><a href="/party-rental-software/">Rental software</a><a href="/business/">For rental companies</a><a href="/business/pricing.html">Pricing</a><a class="mobile-login" href="/dashboard/">Log in</a><a class="mobile-trial" href="/event-pass/">Event Pass · $9.99</a></div>
 <div class="nav-actions"><a class="btn login" href="/dashboard/">Log in</a><a class="btn primary" href="/business/signup.html">Start free trial <span aria-hidden="true">↗</span></a></div>
 </nav></header>'''
 FOOT = '''<footer class="footer"><div class="wrap"><div class="footer-grid">
-<div class="footer-brand"><a class="brand" href="/"><img src="/assets/brand-mark.svg" width="34" height="34" alt="" aria-hidden="true">RentSketch</a><p>Visual event planning.<br>Built around the equipment you rent.</p></div>
+<div class="footer-brand"><a class="brand" href="/"><img src="/assets/brand-mark.svg" width="34" height="34" alt="Brand mark" aria-hidden="true">RentSketch</a><p>Visual event planning.<br>Built around the equipment you rent.</p></div>
 <div><h3>Explore</h3><a href="/business/">For rental companies</a><a href="/demo/">Product demo</a><a href="/business/pricing.html">Pricing</a><a href="/business/signup.html">Start a free trial</a><a href="/dashboard/">Business log in</a></div>
 <div><h3>Plan an event</h3><a href="/event-pass/">Event Pass · $9.99</a><a href="/demo/">Watch the free demo</a><a href="/my-event/">Open my saved event</a><a href="/wedding-layout-planner/">Wedding layouts</a><a href="/tent-layout-software/">Tent layouts</a><a href="/event-layout-software/">Event floor plans</a></div>
 <div><h3>Rental software</h3><a href="/party-rental-software/">Party rental software</a><a href="/party-rental-management-software/">Party rental management software</a><a href="/party-rental-inventory-software/">Party rental inventory software</a><a href="/event-rental-software/">Party &amp; event rental software</a><a href="/tent-rental-software/">Tent rental software</a><a href="/tent-diagram-software/">Tent diagram software</a><a href="/help/">Help &amp; getting started</a><a href="mailto:hello@rentsketch.com">Contact RentSketch</a><a href="/privacy/">Privacy</a></div>
