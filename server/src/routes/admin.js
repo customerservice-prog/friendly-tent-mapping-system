@@ -94,4 +94,50 @@ router.get('/revenue', requirePlatformAdmin, async (req, res) => {
   res.json({ consumerDeposits: deposits.rows[0], platformFees: fees.rows[0], consumerPayments: consumerPayments.rows });
 });
 
+
+router.get('/web-vitals', requirePlatformAdmin, async (req, res) => {
+  const requestedDays = Number(req.query.days || 7);
+  const days = Number.isFinite(requestedDays) ? Math.max(1, Math.min(90, Math.round(requestedDays))) : 7;
+  const pathFilter = typeof req.query.path === 'string' && req.query.path.startsWith('/') ? req.query.path.slice(0, 256) : null;
+  const params = [days, pathFilter];
+
+  const result = await db.query(
+    `SELECT
+       CASE WHEN GROUPING(path)=1 THEN 'ALL' ELSE path END AS path,
+       GROUPING(path)::int AS grouping_level,
+       COUNT(*)::int AS samples,
+       ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY lcp_ms) FILTER (WHERE lcp_ms IS NOT NULL))::numeric, 1) AS lcp_p75_ms,
+       ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY cls) FILTER (WHERE cls IS NOT NULL))::numeric, 4) AS cls_p75,
+       ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY inp_ms) FILTER (WHERE inp_ms IS NOT NULL))::numeric, 1) AS inp_p75_ms,
+       ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY fcp_ms) FILTER (WHERE fcp_ms IS NOT NULL))::numeric, 1) AS fcp_p75_ms,
+       ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY ttfb_ms) FILTER (WHERE ttfb_ms IS NOT NULL))::numeric, 1) AS ttfb_p75_ms
+     FROM web_vitals
+     WHERE created_at >= now() - $1 * interval '1 day'
+       AND ($2::text IS NULL OR path = $2)
+     GROUP BY GROUPING SETS ((path), ())
+     ORDER BY grouping_level DESC, samples DESC, path
+     LIMIT 101`,
+    params
+  );
+
+  const rows = result.rows.map(({ grouping_level, ...row }) => ({
+    ...row,
+    samples: Number(row.samples || 0),
+    lcp_p75_ms: row.lcp_p75_ms == null ? null : Number(row.lcp_p75_ms),
+    cls_p75: row.cls_p75 == null ? null : Number(row.cls_p75),
+    inp_p75_ms: row.inp_p75_ms == null ? null : Number(row.inp_p75_ms),
+    fcp_p75_ms: row.fcp_p75_ms == null ? null : Number(row.fcp_p75_ms),
+    ttfb_p75_ms: row.ttfb_p75_ms == null ? null : Number(row.ttfb_p75_ms),
+  }));
+  const overall = rows.find(row => row.path === 'ALL') || null;
+  res.json({
+    days,
+    path: pathFilter,
+    source: 'first-party-rum',
+    thresholds: { lcpGoodMs: 2500, clsGood: 0.1, inpGoodMs: 200 },
+    overall,
+    pages: rows.filter(row => row.path !== 'ALL'),
+  });
+});
+
 module.exports = router;
