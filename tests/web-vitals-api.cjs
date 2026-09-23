@@ -58,6 +58,7 @@ function loadRoute() {
   }
 
   const valid = {
+    version: 2,
     path: '/party-rental-software/',
     navigationType: 'navigate',
     deviceClass: 'phone',
@@ -69,6 +70,7 @@ function loadRoute() {
 
   const row = (await pg.query('SELECT * FROM web_vitals')).rows[0];
   assert.equal(row.path, '/party-rental-software/');
+  assert.equal(row.collector_version, 2);
   assert.equal(row.navigation_type, 'navigate');
   assert.equal(row.device_class, 'phone');
   assert.equal(Number(row.lcp_ms), 1840.4);
