@@ -493,21 +493,21 @@ router.get('/system', requirePlatformAdmin, async (req, res) => {
 
 router.get('/analytics', requirePlatformAdmin, async (req,res)=>{
   const [trend,topTenants,passes]=await Promise.all([
-    db.query(`WITH days AS (
-      SELECT generate_series(current_date-29,current_date,'1 day'::interval)::date AS day
+    db.query(`WITH calendar_days AS (
+      SELECT generate_series(current_date-29,current_date,'1 day'::interval)::date AS event_day
     ), design_counts AS (
-      SELECT created_at::date day,COUNT(*)::int count FROM designs WHERE created_at>=current_date-29 GROUP BY 1
+      SELECT created_at::date AS event_day,COUNT(*)::int AS count FROM designs WHERE created_at>=current_date-29 GROUP BY created_at::date
     ), request_counts AS (
-      SELECT created_at::date day,COUNT(*)::int count FROM quote_requests WHERE created_at>=current_date-29 GROUP BY 1
+      SELECT created_at::date AS event_day,COUNT(*)::int AS count FROM quote_requests WHERE created_at>=current_date-29 GROUP BY created_at::date
     ), pass_totals AS (
-      SELECT created_at::date day,COUNT(*)::int count,COALESCE(SUM(amount_cents),0)::bigint cents
-      FROM consumer_payments WHERE created_at>=current_date-29 AND status='paid' GROUP BY 1
+      SELECT created_at::date AS event_day,COUNT(*)::int AS count,COALESCE(SUM(amount_cents),0)::bigint AS cents
+      FROM consumer_payments WHERE created_at>=current_date-29 AND status='paid' GROUP BY created_at::date
     )
-    SELECT d.day,COALESCE(dc.count,0)::int designs,COALESCE(rc.count,0)::int requests,
-           COALESCE(pt.count,0)::int event_passes,COALESCE(pt.cents,0)::bigint event_pass_cents
-    FROM days d LEFT JOIN design_counts dc ON dc.day=d.day
-    LEFT JOIN request_counts rc ON rc.day=d.day LEFT JOIN pass_totals pt ON pt.day=d.day
-    ORDER BY d.day`),
+    SELECT d.event_day AS day,COALESCE(dc.count,0)::int AS designs,COALESCE(rc.count,0)::int AS requests,
+           COALESCE(pt.count,0)::int AS event_passes,COALESCE(pt.cents,0)::bigint AS event_pass_cents
+    FROM calendar_days d LEFT JOIN design_counts dc ON dc.event_day=d.event_day
+    LEFT JOIN request_counts rc ON rc.event_day=d.event_day LEFT JOIN pass_totals pt ON pt.event_day=d.event_day
+    ORDER BY d.event_day`),
     db.query(`SELECT t.slug,t.name,t.created_at,
       (SELECT COUNT(*)::int FROM designs d WHERE d.tenant_id=t.id) design_count,
       (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id=t.id) request_count,
