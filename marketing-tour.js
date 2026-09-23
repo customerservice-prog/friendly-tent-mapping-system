@@ -114,7 +114,10 @@ if(studio){
     view.reception();
    }
 
-   if(stage.animate?.length)view.playItemTimelapse(stage.animate,index===2||index===3?820:680);
+   if(stage.animate?.length){
+    if(stage.chairReveal&&view.playChairTimelapse)view.playChairTimelapse(stage.animate,720);
+    else view.playItemTimelapse(stage.animate,index===2?820:680);
+   }
 
    const dwell={
     tent:1850,
@@ -189,7 +192,11 @@ if(studio){
   if(cinematic)stopWeddingBuild();
   camera=button.dataset.camera;
   studio.querySelectorAll('[data-camera]').forEach(other=>other.setAttribute('aria-pressed',String(other===button)));
-  if(camera==='reception')view?.transitionCamera?.('reception',800)||view?.reception();else view?.transitionCamera?.('outside',800)||view?.fitCamera();
+  if(camera==='reception'){
+   if(view?.transitionCamera)view.transitionCamera('reception',800);else view?.reception();
+  }else{
+   if(view?.transitionCamera)view.transitionCamera('outside',800);else view?.fitCamera();
+  }
  }));
 
  studio.querySelector('[data-night]').addEventListener('click',event=>{
