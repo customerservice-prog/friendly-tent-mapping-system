@@ -86,7 +86,7 @@ export function init(container,callbacks={}) {
   let inflatableActivity=null,styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,cameraAnimationFrame=0;
+  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
   const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pmrem.fromScene(room,.04);
   scene.environment=env.texture;room.dispose();pmrem.dispose();
   const hemi=new THREE.HemisphereLight(0xeaf6ff,0x667052,1.65);scene.add(hemi);
@@ -218,6 +218,37 @@ export function init(container,callbacks={}) {
     }
     itemAnimationFrame=requestAnimationFrame(tick);
   }
+  function playChairTimelapse(ids=[],duration=650){
+    cancelAnimationFrame(chairAnimationFrame);
+    if(reducedMotion||!ids.length)return;
+    const targets=[];
+    for(const id of ids){
+      const tableGroup=rendered.get(id);
+      if(!tableGroup)continue;
+      for(const child of tableGroup.children){
+        if(!child.isInstancedMesh)continue;
+        targets.push({q:child,position:child.position.clone(),scale:child.scale.clone()});
+      }
+    }
+    if(!targets.length)return;
+    targets.forEach(({q,position,scale})=>{
+      q.position.y=position.y+.55;
+      q.scale.set(scale.x*.92,scale.y*.04,scale.z*.92);
+    });
+    const start=performance.now();
+    function tick(now){
+      if(destroyed)return;
+      const k=Math.min(1,(now-start)/duration),e=1-Math.pow(1-k,3);
+      targets.forEach(({q,position,scale})=>{
+        q.position.y=position.y+(1-e)*.55;
+        q.scale.set(scale.x*(.92+.08*e),scale.y*(.04+.96*e),scale.z*(.92+.08*e));
+      });
+      renderer.shadowMap.needsUpdate=true;invalidate();
+      if(k<1)chairAnimationFrame=requestAnimationFrame(tick);
+      else targets.forEach(({q,position,scale})=>{q.position.copy(position);q.scale.copy(scale);});
+    }
+    chairAnimationFrame=requestAnimationFrame(tick);
+  }
   function transitionCamera(mode='reception',duration=1250){
     cancelAnimationFrame(cameraAnimationFrame);
     if(!state?.tent)return;
@@ -237,7 +268,7 @@ export function init(container,callbacks={}) {
     }
     cameraAnimationFrame=requestAnimationFrame(tick);
   }
-  const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,playItemTimelapse,transitionCamera,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
+  const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
   // A watch-only sample must not replace the real designer renderer.
   if(callbacks.registerActive !== false)active=api;return api;
 }
