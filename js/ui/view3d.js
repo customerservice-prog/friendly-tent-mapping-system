@@ -190,7 +190,36 @@ export function init(container,callbacks={}) {
   // An eye-level reception view for the public tour; other designer views keep their existing framing.
   function reception(){if(state?.tent){cameraMode='reception';frame(state.tent);}}
   function fitCamera(){if(state?.tent){cameraMode='outside';frame(state.tent);return true;}return false;}
-  function playTimelapse(){cancelAnimationFrame(animationFrame);if(reducedMotion){structure.scale.y=1;invalidate();return;}const start=performance.now();structure.scale.y=.02;function tick(now){if(destroyed)return;const k=Math.min(1,(now-start)/1800),e=1-Math.pow(1-k,3);structure.scale.y=Math.max(.02,e);renderer.shadowMap.needsUpdate=true;invalidate();if(k<1)animationFrame=requestAnimationFrame(tick);else structure.scale.y=1;}animationFrame=requestAnimationFrame(tick);}
+  function setMarketingBuildStage(key){
+    const order={space:0,tent:1,tables:2,chairs:3,sweetheart:4,dance:5,style:6,lighting:7,reception:8,evening:9};
+    const stage=order[key] ?? 9;
+    structure.visible=stage>=1;
+    if(stage<1)structure.scale.y=1;
+    for(const [id,group] of rendered){
+      const guestTable=id.startsWith('wedding-table-');
+      const marketingItem=id.startsWith('wedding-');
+      if(guestTable)group.visible=stage>=2;
+      else if(marketingItem)group.visible=stage>=4;
+      else group.visible=true;
+      if(guestTable){
+        group.traverse(child=>{
+          if(child.userData?.role==='chairs')child.visible=stage>=3;
+        });
+      }
+    }
+    if(danceMesh)danceMesh.visible=stage>=5;
+    if(styling)styling.visible=stage>=6;
+    if(lightGroup)lightGroup.visible=stage>=7;
+    showStyling=stage>=6;
+    showGuests=stage>=9;
+    motion=false;
+    if(guests)guests.visible=stage>=9;
+    if(inflatableActivity)inflatableActivity.visible=false;
+    setNight(stage>=9);
+    if(lightGroup)lightGroup.visible=stage>=7;
+    renderer.shadowMap.needsUpdate=true;invalidate();
+  }
+  function playTimelapse(){cancelAnimationFrame(animationFrame);if(reducedMotion){structure.scale.y=1;invalidate();return;}const start=performance.now();structure.visible=true;structure.scale.y=.02;function tick(now){if(destroyed)return;const k=Math.min(1,(now-start)/1800),e=1-Math.pow(1-k,3);structure.scale.y=Math.max(.02,e);renderer.shadowMap.needsUpdate=true;invalidate();if(k<1)animationFrame=requestAnimationFrame(tick);else structure.scale.y=1;}animationFrame=requestAnimationFrame(tick);}
   function playItemTimelapse(ids=[],duration=720){
     cancelAnimationFrame(itemAnimationFrame);
     if(reducedMotion||!ids.length)return;
@@ -268,7 +297,7 @@ export function init(container,callbacks={}) {
     }
     cameraAnimationFrame=requestAnimationFrame(tick);
   }
-  const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
+  const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);selection.geometry.dispose();selection.material.dispose();scene.background?.dispose?.();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
   // A watch-only sample must not replace the real designer renderer.
   if(callbacks.registerActive !== false)active=api;return api;
 }
