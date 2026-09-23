@@ -327,7 +327,7 @@ function esc(s) {
        '<td>' + (withActions ? statusSelect(r) : '<span class="status-badge status-' + esc(r.status) + '">' + esc(r.status) + '</span>') + '</td>' +
        '</tr>';
    }).join('');
-   return '<table class="dash-table"><thead><tr><th>Customer</th><th>Event Date</th><th>Guests</th><th>Estimate</th><th>Deposit</th><th>Submitted</th><th>Status</th></tr></thead><tbody>' + body + '</tbody></table>';
+   return '<div class="tenant-table-scroll"><table class="dash-table"><thead><tr><th>Customer</th><th>Event Date</th><th>Guests</th><th>Estimate</th><th>Deposit</th><th>Submitted</th><th>Status</th></tr></thead><tbody>' + body + '</tbody></table></div>';
  }
 
  function statusSelect(r) {
@@ -421,7 +421,7 @@ function esc(s) {
                            '<td><button class="btn-link btn-danger" data-action="delete" data-id="' + esc(p.id) + '">Remove</button></td>' +
                            '</tr>';
      }).join('');
-     var table = products.length ? ('<table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>In Designer</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>') : '<div class="dash-empty">No products yet. Add your first one below.</div>';
+     var table = products.length ? ('<div class="tenant-table-scroll"><table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>In Designer</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>') : '<div class="tenant-empty"><div class="tenant-empty-icon">▦</div><h3>No products yet</h3><p>Add your first rental item below, then map it to a supported visual model.</p></div>';
      document.getElementById('dashMain').innerHTML = '' +
        '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Catalog</div><h1>Products</h1><p>Control the equipment, pricing and visual models customers can use in your designer.</p></div><div class="tenant-head-actions"><a class="tenant-btn primary" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">Preview catalog in designer</a></div></div>' +
        '<div class="tenant-panel"><div class="tenant-panel-head"><div><h2>Customer catalog</h2><p>Items that require a visual model stay hidden until mapped.</p></div><span class="tenant-status-chip blue">' + products.length + ' products</span></div>' + table + '</div>' +
