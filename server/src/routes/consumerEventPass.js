@@ -181,6 +181,29 @@ router.post('/event-pass/resume', wrap(async (req, res) => {
     res.json(await designResponse(design));
 }));
 
+router.get('/admin/designs/:designId', wrap(async (req, res) => {
+    const admin = await platformAdminRequest(req);
+    if (!admin) return res.status(403).json({ error: 'Platform admin access required' });
+    const design = (await query('SELECT * FROM designs WHERE id=$1', [req.params.designId])).rows[0];
+    if (!design) return res.status(404).json({ error: 'Saved design not found' });
+    const tenant = await designTenant(design);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+        id: design.id,
+        tenant: tenant?.slug || 'generic',
+        scene: design.scene,
+        anonymousSessionId: design.anonymous_session_id,
+        active: true,
+        expiresAt: null,
+        renewable: false,
+        includedWithOrder: false,
+        adminAccess: true,
+        eventType: design.event_type,
+        guestCount: design.guest_count,
+        estimateTotal: design.estimate_total,
+    });
+}));
+
 // The opaque Checkout Session is the private recovery credential. Stripe,
 // rather than payment=success in a URL, verifies the purchase. No contact
 // details or draft ownership tokens are placed into the return URL.
