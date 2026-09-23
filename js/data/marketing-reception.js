@@ -13,7 +13,7 @@ function tent() {
   };
 }
 
-function guestTable(id,x,y,seats=8,styled=true) {
+function guestTable(id,x,y,seats=8,styled=true,hideChairs=false) {
   return {
     id,
     kind:'table',
@@ -27,7 +27,8 @@ function guestTable(id,x,y,seats=8,styled=true) {
     seatCount:seats,
     chairId:'chiavari-gold',
     linenId:styled?'linen-round-120':null,
-    linenColor:styled?'Ivory':null
+    linenColor:styled?'Ivory':null,
+    hideChairs
   };
 }
 
@@ -76,10 +77,10 @@ function danceFloor() {
   return floor;
 }
 
-function guestTables(seats=8,styled=true) {
+function guestTables(seats=8,styled=true,hideChairs=false) {
   const tables=[];
   for (const x of [8,32]) for (const y of [10,22,38,50]) {
-    tables.push(guestTable(`wedding-table-${x}-${y}`,x,y,seats,styled));
+    tables.push(guestTable(`wedding-table-${x}-${y}`,x,y,seats,styled,hideChairs));
   }
   return tables;
 }
@@ -138,8 +139,8 @@ export function marketingReception() {
 // Stages are intentionally presentation-only. Each scene is a complete
 // immutable snapshot that can be passed directly into the real 3D renderer.
 export function marketingWeddingBuildStages() {
-  const bareTables=guestTables(0,false);
-  const seatedTables=guestTables(8,false);
+  const bareTables=guestTables(8,false,true);
+  const seatedTables=guestTables(8,false,false);
   const dressedTables=guestTables(8,true);
   const serviceBare=serviceAreas(false);
   const serviceDressed=serviceAreas(true);
@@ -185,7 +186,8 @@ export function marketingWeddingBuildStages() {
       camera:'outside',
       styling:false,
       night:false,
-      animate:seatedTables.map(x=>x.id)
+      animate:seatedTables.map(x=>x.id),
+      chairReveal:true
     },
     {
       key:'sweetheart',
