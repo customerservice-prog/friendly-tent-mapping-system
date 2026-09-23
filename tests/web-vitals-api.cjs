@@ -7,6 +7,7 @@ const { PGlite } = require('@electric-sql/pglite');
 
 const root = path.resolve(__dirname, '..');
 const pg = new PGlite();
+let server;
 const db = { query: (sql, args) => pg.query(sql, args) };
 
 function loadRoute() {
@@ -41,7 +42,7 @@ function loadRoute() {
   const app = express();
   app.use('/api/analytics/web-vitals', loadRoute());
   app.use((err, req, res, next) => res.status(500).json({ error: err.message }));
-  const server = app.listen(0, '127.0.0.1');
+  server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   const base = 'http://127.0.0.1:' + server.address().port;
 
@@ -100,11 +101,14 @@ function loadRoute() {
   assert.equal(fallback.inp_ms, null);
   assert.equal(Number(fallback.fcp_ms), 900);
 
-  if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
-  await new Promise(resolve => server.close(resolve));
-  await pg.close();
   console.log('PASS Web Vitals API: sanitized one-row telemetry, strict origins/paths, bounded metrics, no PII fields.');
 })().catch(err => {
   console.error(err);
   process.exitCode = 1;
+}).finally(async () => {
+  if (server) {
+    if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+    await new Promise(resolve => server.close(resolve));
+  }
+  await pg.close();
 });
