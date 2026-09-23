@@ -32,8 +32,8 @@ async function req(url,{method='GET',body}={}){
  await pg.exec(`
  CREATE TABLE users(id uuid PRIMARY KEY,email text UNIQUE,password_hash text,display_name text,is_platform_admin boolean default false);
  CREATE TABLE tenants(
-   id uuid PRIMARY KEY,slug text UNIQUE,name text,contact_email text,website text,logo_url text,webhook_url text,
-   allowed_origins jsonb default '[]'::jsonb,subscription_plan text,subscription_status text,
+   id uuid PRIMARY KEY,slug text UNIQUE,name text,contact_email text,website text,logo_url text,webhook_url text,embed_key text,
+   allowed_origins jsonb default '[]'::jsonb,customer_access text,subscription_plan text,subscription_status text,
    trial_ends_at timestamptz,stripe_connect_status text,stripe_connect_account_id text,created_at timestamptz default now(),
    updated_at timestamptz default now()
  );
@@ -106,6 +106,9 @@ async function req(url,{method='GET',body}={}){
  r=await req('/api/admin/tenants/friendly/notes/'+noteId,{method:'DELETE'});assert.equal(r.status,200);
  r=await req('/api/admin/tenants/friendly/members',{method:'POST',body:{email:'staff@example.invalid',displayName:'Fixture Staff',role:'staff'}});assert.equal(r.status,201);assert.match(r.body.resetUrl,/reset-password\.html#token=/);const invited=r.body.member;
  r=await req('/api/admin/tenants/friendly/members/'+invited.id+'/reset-link',{method:'POST',body:{}});assert.equal(r.status,200);assert.match(r.body.resetUrl,/reset-password\.html#token=/);
- assert.ok((await pg.query('SELECT COUNT(*)::int AS n FROM platform_admin_audit')).rows[0].n>=7,'sensitive support and account actions are audited');
+ r=await req('/api/admin/tenants/friendly/members/'+admin,{method:'PATCH',body:{role:'staff'}});assert.equal(r.status,409,'the only tenant owner cannot be demoted');
+ r=await req('/api/admin/tenants',{method:'POST',body:{name:'New Fixture Rentals',ownerName:'New Owner',ownerEmail:'new-owner@example.invalid',plan:'starter'}});assert.equal(r.status,201);assert.equal(r.body.tenant.name,'New Fixture Rentals');assert.equal(r.body.tenant.subscription_status,'trialing');assert.match(r.body.resetUrl,/reset-password\.html#token=/);
+ assert.equal((await pg.query("SELECT COUNT(*)::int AS n FROM tenants WHERE slug<>'generic'")).rows[0].n,2);
+ assert.ok((await pg.query('SELECT COUNT(*)::int AS n FROM platform_admin_audit')).rows[0].n>=8,'sensitive support, onboarding and account actions are audited');
  console.log('PASS platform console: revenue, payments/refunds, subscriptions, analytics, alerts, tenant notes, secure staff invites/reset links, designs, health and audit logging.');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{server?.close();await pg.close();});
