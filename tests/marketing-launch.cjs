@@ -183,3 +183,5 @@ assert.match(signupJs,/RentSketchAnalytics\.track\('sign_up'/);
 assert.match(signupJs,/method: 'business_trial'/);
 
 dom.window.close();signup.window.close();console.log('PASS marketing: all sitemap pages resolve, unique metadata/canonicals, valid structured data, local links/images, accessible menu, accurate annual totals, signup plan selection, and environment-gated GA4 wiring. DOM/static checks, not device rendering.');
+assert.ok(marketingJs.includes("var isHomepage = location.pathname === '/' || location.pathname === '/index.html';"),'homepage skips live plan hydration on critical load');
+
