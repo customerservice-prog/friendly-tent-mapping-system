@@ -67,6 +67,16 @@ CREATE TABLE platform_admin_audit (
 CREATE INDEX platform_admin_audit_created_idx ON platform_admin_audit(created_at DESC);
 CREATE INDEX platform_admin_audit_target_idx ON platform_admin_audit(target_type,target_id);
 
+-- Internal support notes visible only to platform administrators.
+CREATE TABLE platform_tenant_notes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  admin_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  body TEXT NOT NULL CHECK (char_length(body) BETWEEN 1 AND 4000),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX platform_tenant_notes_tenant_idx ON platform_tenant_notes(tenant_id,created_at DESC);
+
 -- Which users can access which tenant, and with what role. This is the
 -- authorization join table every tenant-scoped route checks against.
 CREATE TABLE tenant_memberships (
