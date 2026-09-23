@@ -266,6 +266,18 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal(genericSession.args.branding_settings.logo.url, 'https://rentsketch.com/assets/brand-mark.svg');
   assert.equal(genericSession.args.branding_settings.button_color, '#183429');
   assert.equal(genericSession.args.line_items[0].price_data.product_data.name, 'RentSketch Event Pass');
+
+  // A completed Checkout retry after an admin refund must never resurrect access.
+  directSession.customer_details={email:'refund-test@example.invalid'}; directSession.payment_status='paid'; directSession.status='complete'; directSession.payment_intent='pi_direct_refund';
+  assert.equal((await request('/webhook',{id:'evt_direct_refund_seed',type:'checkout.session.completed',data:{object:directSession}},'fixture-valid')).status,200);
+  const refundedPayment=(await pg.query('SELECT * FROM consumer_payments WHERE stripe_checkout_session_id=$1',[directSession.id])).rows[0];
+  assert.equal(refundedPayment.status,'paid');
+  await pg.query("UPDATE consumer_payments SET status='refunded' WHERE id=$1",[refundedPayment.id]);
+  await pg.query("UPDATE entitlements SET status='revoked',revoked_at=now() WHERE id=$1",[refundedPayment.entitlement_id]);
+  const afterRefundRetry=await restore(directSession.id);
+  assert.equal(afterRefundRetry.status,200); assert.equal(afterRefundRetry.body.active,false,'refunded Event Pass stays revoked when old Checkout completion is retried');
+  assert.equal((await pg.query('SELECT status FROM consumer_payments WHERE id=$1',[refundedPayment.id])).rows[0].status,'refunded','fulfillment retry cannot flip a refund back to paid');
+
   console.log('PASS included order access: immediate signed access after name/order match, clear declines, zero queued/sent emails, SMTP-independent access, one layout per booking, server-owned session, no second charge, tenant isolation, cancellation and order-service failure. Isolated fixtures only.');
   console.log('PASS Event Pass API: real SQL/rollback, Friendly and direct $9.99 checkout, tenant isolation, ownership, open-session reuse, cancel restore, unpaid rejection, duplicate/racing fulfillment, delayed payment, $4.99 renewal, exact empty-tent recovery. Fake Stripe only; no production writes.');
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => { if (server) await new Promise(r => server.close(r)); await pg.close(); });
