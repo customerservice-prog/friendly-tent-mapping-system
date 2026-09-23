@@ -1,11 +1,20 @@
 (function () {
   'use strict';
+  function preconnect(href) {
+    if (document.querySelector('link[rel="preconnect"][href="' + href + '"]')) return;
+    var link = document.createElement('link'); link.rel = 'preconnect'; link.href = href; link.crossOrigin = 'anonymous'; document.head.appendChild(link);
+  }
+  preconnect('https://rentsketch-api-production.up.railway.app');
+  window.RentSketchAnalytics = window.RentSketchAnalytics || { pendingEvents: [] };
   var analytics = document.createElement('script');
-  analytics.src = '/analytics-loader.js?v=20260922-ga4-1';
+  analytics.src = '/analytics-loader.js?v=20260922-ga4-2';
   analytics.async = true;
   document.head.appendChild(analytics);
   function track(name, data) {
-    if (typeof window.gtag === 'function' && window.RENTSKETCH_GA4_ENABLED === true) window.gtag('event', name, data || {});
+    var api = window.RentSketchAnalytics;
+    if (api && typeof api.track === 'function') api.track(name, data || {});
+    else if (api) api.pendingEvents.push([name, data || {}]);
+    else if (typeof window.gtag === 'function') window.gtag('event', name, data || {});
   }
   document.addEventListener('click', function (event) {
     var link = event.target.closest('a[href*="/api/consumer/event-pass/direct-checkout"]');

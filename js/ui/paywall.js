@@ -71,23 +71,27 @@
   function track(event, extra) {
     var data = Object.assign({ tenant: slug, currency: 'USD' }, extra || {});
     window.dispatchEvent(new CustomEvent('rentsketch:' + event, { detail: data }));
-    if (typeof window.gtag === 'function') window.gtag('event', event, data);
+    if (window.RentSketchAnalytics && typeof window.RentSketchAnalytics.track === 'function') {
+      window.RentSketchAnalytics.track(event, data); return true;
+    }
+    if (typeof window.gtag === 'function') { window.gtag('event', event, data); return true; }
+    return false;
   }
   function trackVerifiedPurchase(purchase, attempt) {
     if (!purchase || !purchase.transactionId) return;
     var key = 'rentsketch-ga4-purchase:' + purchase.transactionId;
     if (read(key)) return;
-    if (window.RENTSKETCH_GA4_ENABLED !== true || typeof window.gtag !== 'function') {
-      if ((attempt || 0) < 20) setTimeout(function () { trackVerifiedPurchase(purchase, (attempt || 0) + 1); }, 100);
-      return;
-    }
-    track('purchase', {
+    var sent = track('purchase', {
       transaction_id: purchase.transactionId,
       value: Number(purchase.amountCents || 0) / 100,
       currency: purchase.currency || 'USD',
       duration_days: Number(purchase.durationDays || 30),
       items: [{ item_id: purchase.itemId, item_name: purchase.itemName, price: Number(purchase.amountCents || 0) / 100, quantity: 1 }]
     });
+    if (!sent) {
+      if ((attempt || 0) < 60) setTimeout(function () { trackVerifiedPurchase(purchase, (attempt || 0) + 1); }, 100);
+      return;
+    }
     write(key, true);
   }
   function closeModal() {
