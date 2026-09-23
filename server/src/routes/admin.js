@@ -441,7 +441,7 @@ router.get('/system', requirePlatformAdmin, async (req, res) => {
 
 router.get('/analytics', requirePlatformAdmin, async (req,res)=>{
   const [trend,topTenants,passes]=await Promise.all([
-    db.query(\`WITH days AS (
+    db.query(`WITH days AS (
       SELECT generate_series(current_date-29,current_date,'1 day'::interval)::date AS day
     ), design_counts AS (
       SELECT created_at::date day,COUNT(*)::int count FROM designs WHERE created_at>=current_date-29 GROUP BY 1
@@ -455,8 +455,8 @@ router.get('/analytics', requirePlatformAdmin, async (req,res)=>{
            COALESCE(pt.count,0)::int event_passes,COALESCE(pt.cents,0)::bigint event_pass_cents
     FROM days d LEFT JOIN design_counts dc ON dc.day=d.day
     LEFT JOIN request_counts rc ON rc.day=d.day LEFT JOIN pass_totals pt ON pt.day=d.day
-    ORDER BY d.day\`),
-    db.query(\`SELECT t.slug,t.name,t.created_at,
+    ORDER BY d.day`),
+    db.query(`SELECT t.slug,t.name,t.created_at,
       (SELECT COUNT(*)::int FROM designs d WHERE d.tenant_id=t.id) design_count,
       (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id=t.id) request_count,
       (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id=t.id AND q.status='booked') booked_count,
@@ -464,9 +464,9 @@ router.get('/analytics', requirePlatformAdmin, async (req,res)=>{
         COALESCE((SELECT MAX(d.updated_at) FROM designs d WHERE d.tenant_id=t.id),t.created_at),
         COALESCE((SELECT MAX(q.created_at) FROM quote_requests q WHERE q.tenant_id=t.id),t.created_at)
       ) last_activity
-      FROM tenants t ORDER BY ((SELECT COUNT(*) FROM designs d WHERE d.tenant_id=t.id)+(SELECT COUNT(*) FROM quote_requests q WHERE q.tenant_id=t.id)) DESC,t.created_at DESC LIMIT 12\`),
-    db.query(\`SELECT payment_type,status,COUNT(*)::int count,COALESCE(SUM(amount_cents),0)::bigint cents
-      FROM consumer_payments GROUP BY payment_type,status ORDER BY payment_type,status\`)
+      FROM tenants t ORDER BY ((SELECT COUNT(*) FROM designs d WHERE d.tenant_id=t.id)+(SELECT COUNT(*) FROM quote_requests q WHERE q.tenant_id=t.id)) DESC,t.created_at DESC LIMIT 12`),
+    db.query(`SELECT payment_type,status,COUNT(*)::int count,COALESCE(SUM(amount_cents),0)::bigint cents
+      FROM consumer_payments GROUP BY payment_type,status ORDER BY payment_type,status`)
   ]);
   res.setHeader('Cache-Control','no-store');
   res.json({trend:trend.rows.map(r=>({...r,event_pass_cents:Number(r.event_pass_cents||0)})),topTenants:topTenants.rows,eventPassBreakdown:passes.rows.map(r=>({...r,cents:Number(r.cents||0)}))});
@@ -474,20 +474,20 @@ router.get('/analytics', requirePlatformAdmin, async (req,res)=>{
 
 router.get('/alerts', requirePlatformAdmin, async (req,res)=>{
   const [billing,newRequests,failedMail,uninstalled,unmapped]=await Promise.all([
-    db.query(\`SELECT t.slug,t.name,s.status,s.plan_id,s.current_period_end
+    db.query(`SELECT t.slug,t.name,s.status,s.plan_id,s.current_period_end
       FROM subscriptions s JOIN tenants t ON t.id=s.tenant_id
-      WHERE s.status IN ('past_due','unpaid','incomplete','paused') ORDER BY s.current_period_end NULLS FIRST LIMIT 50\`),
-    db.query(\`SELECT q.id::text,t.slug,t.name,q.customer_name,q.customer_email,q.estimate_total,q.created_at
-      FROM quote_requests q JOIN tenants t ON t.id=q.tenant_id WHERE q.status='new' ORDER BY q.created_at DESC LIMIT 50\`),
-    db.query(\`SELECT e.id::text,e.customer_email,e.tenant_slug,e.attempts,e.last_error,e.created_at
-      FROM event_pass_emails e WHERE e.status='failed' ORDER BY e.created_at DESC LIMIT 50\`),
-    db.query(\`SELECT t.slug,t.name,t.created_at FROM tenants t
+      WHERE s.status IN ('past_due','unpaid','incomplete','paused') ORDER BY s.current_period_end NULLS FIRST LIMIT 50`),
+    db.query(`SELECT q.id::text,t.slug,t.name,q.customer_name,q.customer_email,q.estimate_total,q.created_at
+      FROM quote_requests q JOIN tenants t ON t.id=q.tenant_id WHERE q.status='new' ORDER BY q.created_at DESC LIMIT 50`),
+    db.query(`SELECT e.id::text,e.customer_email,e.tenant_slug,e.attempts,e.last_error,e.created_at
+      FROM event_pass_emails e WHERE e.status='failed' ORDER BY e.created_at DESC LIMIT 50`),
+    db.query(`SELECT t.slug,t.name,t.created_at FROM tenants t
       WHERE t.slug<>'generic' AND jsonb_array_length(COALESCE(t.allowed_origins,'[]'::jsonb))=0 AND t.created_at<now()-interval '2 days'
-      ORDER BY t.created_at DESC LIMIT 50\`),
-    db.query(\`SELECT t.slug,t.name,COUNT(*)::int missing
+      ORDER BY t.created_at DESC LIMIT 50`),
+    db.query(`SELECT t.slug,t.name,COUNT(*)::int missing
       FROM products p JOIN tenants t ON t.id=p.tenant_id
       WHERE t.slug<>'generic' AND p.active AND p.category IN ('tent','table','chair','dance_floor','lighting','linen') AND p.visual_model_id IS NULL
-      GROUP BY t.id,t.slug,t.name HAVING COUNT(*)>0 ORDER BY missing DESC LIMIT 50\`)
+      GROUP BY t.id,t.slug,t.name HAVING COUNT(*)>0 ORDER BY missing DESC LIMIT 50`)
   ]);
   res.setHeader('Cache-Control','no-store');
   res.json({
@@ -499,9 +499,9 @@ router.get('/alerts', requirePlatformAdmin, async (req,res)=>{
 router.get('/tenants/:slug/notes', requirePlatformAdmin, async (req,res)=>{
   const tenant=(await db.query('SELECT id FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
   if(!tenant)return res.status(404).json({error:'Tenant not found'});
-  const result=await db.query(\`SELECT n.id::text,n.body,n.created_at,u.email AS admin_email,u.display_name AS admin_name
+  const result=await db.query(`SELECT n.id::text,n.body,n.created_at,u.email AS admin_email,u.display_name AS admin_name
     FROM platform_tenant_notes n LEFT JOIN users u ON u.id=n.admin_user_id
-    WHERE n.tenant_id=$1 ORDER BY n.created_at DESC LIMIT 100\`,[tenant.id]);
+    WHERE n.tenant_id=$1 ORDER BY n.created_at DESC LIMIT 100`,[tenant.id]);
   res.json({notes:result.rows});
 });
 
@@ -510,7 +510,7 @@ router.post('/tenants/:slug/notes', requirePlatformAdmin, async (req,res)=>{
   if(!body||body.length>4000)return res.status(400).json({error:'Note must be between 1 and 4000 characters'});
   const tenant=(await db.query('SELECT id,name FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
   if(!tenant)return res.status(404).json({error:'Tenant not found'});
-  const result=await db.query(\`INSERT INTO platform_tenant_notes(tenant_id,admin_user_id,body) VALUES($1,$2,$3) RETURNING id::text,body,created_at\`,[tenant.id,req.user?.userId||null,body]);
+  const result=await db.query(`INSERT INTO platform_tenant_notes(tenant_id,admin_user_id,body) VALUES($1,$2,$3) RETURNING id::text,body,created_at`,[tenant.id,req.user?.userId||null,body]);
   await audit(req,'tenant.note_added','tenant',tenant.id,req.params.slug,{noteId:result.rows[0].id});
   res.status(201).json({note:result.rows[0]});
 });
