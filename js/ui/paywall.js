@@ -73,6 +73,23 @@
     window.dispatchEvent(new CustomEvent('rentsketch:' + event, { detail: data }));
     if (typeof window.gtag === 'function') window.gtag('event', event, data);
   }
+  function trackVerifiedPurchase(purchase, attempt) {
+    if (!purchase || !purchase.transactionId) return;
+    var key = 'rentsketch-ga4-purchase:' + purchase.transactionId;
+    if (read(key)) return;
+    if (window.RENTSKETCH_GA4_ENABLED !== true || typeof window.gtag !== 'function') {
+      if ((attempt || 0) < 20) setTimeout(function () { trackVerifiedPurchase(purchase, (attempt || 0) + 1); }, 100);
+      return;
+    }
+    track('purchase', {
+      transaction_id: purchase.transactionId,
+      value: Number(purchase.amountCents || 0) / 100,
+      currency: purchase.currency || 'USD',
+      duration_days: Number(purchase.durationDays || 30),
+      items: [{ item_id: purchase.itemId, item_name: purchase.itemName, price: Number(purchase.amountCents || 0) / 100, quantity: 1 }]
+    });
+    write(key, true);
+  }
   function closeModal() {
     if (modal) {
       var focus = modal._returnFocus;
@@ -359,6 +376,7 @@
           }
           if (result.tenant !== slug && recoveryToken) { location.replace(location.pathname + '?tenant=' + encodeURIComponent(result.tenant) + '#recoveryToken=' + encodeURIComponent(recoveryToken)); return; }
           restoreScene(result);
+          if (checkoutId && result.active) trackVerifiedPurchase(result.analyticsPurchase);
           if (checkoutId) write('rentsketch-pass:' + slug, { checkoutId: checkoutId });
           closeModal();
           history.replaceState(null, '', location.pathname + '?tenant=' + encodeURIComponent(slug) + '&design=' + encodeURIComponent(result.id));
