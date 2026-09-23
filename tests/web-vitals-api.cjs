@@ -38,6 +38,7 @@ function loadRoute() {
 
 (async () => {
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/014_web_vitals.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/015_web_vitals_collector_version.sql'), 'utf8'));
 
   const app = express();
   app.use('/api/analytics/web-vitals', loadRoute());
