@@ -70,4 +70,34 @@
         }); renderPrices();
       }).catch(function () {});
   }
+
+  var header = document.querySelector('.top');
+  function syncHeaderDepth() {
+    if (header) header.dataset.scrolled = String(window.scrollY > 12);
+  }
+  syncHeaderDepth();
+  window.addEventListener('scroll', syncHeaderDepth, { passive: true });
+
+  document.addEventListener('click', function (event) {
+    if (!menu || !links || menu.getAttribute('aria-expanded') !== 'true') return;
+    if (event.target.closest('.menu-toggle,#navlinks')) return;
+    closeMenu();
+  });
+
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var revealItems = Array.from(document.querySelectorAll('.section,.cta-band'));
+  if (!reduceMotion && 'IntersectionObserver' in window && revealItems.length) {
+    revealItems.forEach(function (item) { item.classList.add('rs-reveal'); });
+    document.documentElement.classList.add('rs-motion-ready');
+    var revealObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add('is-visible');
+        revealObserver.unobserve(entry.target);
+      });
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
+    revealItems.forEach(function (item) { revealObserver.observe(item); });
+  } else {
+    revealItems.forEach(function (item) { item.classList.add('is-visible'); });
+  }
 })();
