@@ -3,7 +3,7 @@
 var API=window.RENTSKETCH_API_URL||'https://rentsketch-api-production.up.railway.app';
 var TOKEN_KEY='rentsketch_dashboard_token',TENANT_KEY='rentsketch_dashboard_tenant';
 var app=document.getElementById('platformApp');
-var state={user:null,tenants:[],route:'overview',menu:false};
+var state={user:null,tenants:[],route:'overview',menu:false,paymentRows:[]};
 
 var nav=[
  {label:'Platform',items:[
@@ -119,7 +119,7 @@ function priorityRow(label,value,detail,href){
 function paymentTable(rows,actions){
  if(!rows.length)return empty('No payment records yet.');
  return '<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Payment</th><th>Customer</th><th>Business</th><th>Amount</th><th>Status</th><th>Date</th>'+(actions?'<th>Action</th>':'')+'</tr></thead><tbody>'+
- rows.map(function(p){return '<tr><td><strong>'+esc(p.kind==='event_pass'?'Event Pass':'Rental deposit')+'</strong><span class="pc-subtext">'+esc(p.subtype||'')+'</span></td><td>'+esc(p.customer_name||p.customer_email||'—')+(p.customer_name&&p.customer_email?'<span class="pc-subtext">'+esc(p.customer_email)+'</span>':'')+'</td><td>'+esc(p.tenant_name||p.tenant_slug||'—')+'</td><td class="pc-money">'+money(p.amount_cents)+'</td><td>'+status(p.status)+'</td><td>'+date(p.created_at)+'</td>'+(actions?'<td>'+(p.status==='paid'?'<button class="pc-btn small danger" data-refund="'+esc(p.kind)+'" data-id="'+esc(p.id)+'" data-amount="'+esc(p.amount_cents)+'">Refund</button>':'—')+'</td>':'')+'</tr>'}).join('')+
+ rows.map(function(p){return '<tr><td><strong>'+esc(p.kind==='event_pass'?'Event Pass':'Rental deposit')+'</strong><span class="pc-subtext">'+esc(p.subtype||'')+'</span></td><td>'+esc(p.customer_name||p.customer_email||'—')+(p.customer_name&&p.customer_email?'<span class="pc-subtext">'+esc(p.customer_email)+'</span>':'')+'</td><td>'+esc(p.tenant_name||p.tenant_slug||'—')+'</td><td class="pc-money">'+money(p.amount_cents)+'</td><td>'+status(p.status)+'</td><td>'+date(p.created_at)+'</td>'+(actions?'<td><div class="pc-actions"><button class="pc-btn small" data-payment-detail="'+esc(p.id)+'">Details</button>'+(p.status==='paid'?'<button class="pc-btn small danger" data-refund="'+esc(p.kind)+'" data-id="'+esc(p.id)+'" data-amount="'+esc(p.amount_cents)+'">Refund</button>':'')+'</div></td>':'')+'</tr>'}).join('')+
  '</tbody></table></div>';
 }
 function activityList(rows){
@@ -203,18 +203,19 @@ async function tenantModal(slug){
 }
 async function payments(kind){
  var query=kind&&kind!=='all'?'&kind='+encodeURIComponent(kind):'';
- var d=await api('/api/admin/payments?limit=200'+query),rows=d.payments||[];
+ var d=await api('/api/admin/payments?limit=200'+query),rows=d.payments||[];state.paymentRows=rows;
  document.getElementById('pcContent').innerHTML=head('Money','Payments','One ledger for RentSketch Event Pass sales and tenant rental deposits. Refunds are sent through Stripe and recorded here.')+
   '<div class="pc-toolbar"><div class="pc-search"><input id="paySearch" type="search" placeholder="Search customer, business or payment ID…"></div><select class="pc-select" id="payKind"><option value="all">All payments</option><option value="event_pass">Event Pass</option><option value="deposit">Rental deposits</option></select><select class="pc-select" id="payStatus"><option value="">All statuses</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="refunded">Refunded</option><option value="failed">Failed</option></select><button class="pc-btn" id="exportPayments">Export CSV</button></div>'+
   '<section class="pc-panel"><div id="payTable">'+paymentTable(rows,true)+'</div></section>'+
   '<div class="pc-callout" style="margin-top:14px"><strong>Refund safety</strong><p>A refund requires an explicit confirmation. Event Pass refunds revoke the linked software entitlement. Rental-deposit refunds do not cancel the tenant’s event/order automatically.</p></div>';
  var sel=document.getElementById('payKind');sel.value=kind||'all';sel.onchange=function(){payments(sel.value)};
  function currentRows(){var q=(document.getElementById('paySearch').value||'').toLowerCase(),st=document.getElementById('payStatus').value;return rows.filter(function(p){return [p.customer_email,p.customer_name,p.tenant_name,p.payment_intent_id,p.subtype].join(' ').toLowerCase().includes(q)&&(!st||p.status===st)});}
- function paint(){document.getElementById('payTable').innerHTML=paymentTable(currentRows(),true);bindRefunds();}
+ function paint(){document.getElementById('payTable').innerHTML=paymentTable(currentRows(),true);bindRefunds();bindPaymentDetails();}
  document.getElementById('paySearch').oninput=paint;document.getElementById('payStatus').onchange=paint;
  document.getElementById('exportPayments').onclick=function(){var data=currentRows();var cols=['kind','subtype','status','amount_cents','currency','customer_name','customer_email','tenant_name','tenant_slug','payment_intent_id','created_at'];function csv(v){v=String(v==null?'':v);return '"'+v.replaceAll('"','""')+'"';}var content=[cols.join(',')].concat(data.map(function(row){return cols.map(function(key){return csv(row[key]);}).join(',');})).join('\n');var blob=new Blob([content],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='rentsketch-payments-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url)},1000);};
- bindRefunds();
+ bindRefunds();bindPaymentDetails();
 }
+function bindPaymentDetails(){document.querySelectorAll('[data-payment-detail]').forEach(function(btn){btn.onclick=function(){var p=(state.paymentRows||[]).find(function(row){return String(row.id)===String(btn.dataset.paymentDetail)});if(!p)return;var back=document.createElement('div');back.className='pc-modal-backdrop';back.innerHTML='<div class="pc-modal"><div class="pc-modal-head"><div><h2>Payment details</h2><p>'+esc(p.kind==='event_pass'?'Event Pass':'Rental deposit')+' · '+esc(p.status||'unknown')+'</p></div><button class="pc-modal-close">×</button></div><div class="pc-modal-body"><div class="pc-detail-grid"><span><b>Amount</b>'+money(p.amount_cents)+'</span><span><b>Currency</b>'+esc(p.currency||'USD')+'</span><span><b>Customer</b>'+esc(p.customer_name||p.customer_email||'—')+'</span><span><b>Business</b>'+esc(p.tenant_name||p.tenant_slug||'—')+'</span><span><b>Payment intent</b>'+esc(p.payment_intent_id||'—')+'</span><span><b>Checkout session</b>'+esc(p.checkout_session_id||'—')+'</span><span><b>Design</b>'+esc(p.design_id||'—')+'</span><span><b>Created</b>'+esc(datetime(p.created_at))+'</span></div></div></div>';document.body.appendChild(back);function close(){back.remove()}back.querySelector('.pc-modal-close').onclick=close;back.onclick=function(e){if(e.target===back)close()};};});}
 function bindRefunds(){document.querySelectorAll('[data-refund]').forEach(function(b){b.onclick=async function(){var amount=money(Number(b.dataset.amount||0));if(!confirm('Refund '+amount+'?\n\nThis sends a real Stripe refund. This action cannot be undone from RentSketch.'))return;b.disabled=true;b.textContent='Refunding…';try{await api('/api/admin/payments/'+encodeURIComponent(b.dataset.refund)+'/'+encodeURIComponent(b.dataset.id)+'/refund',{method:'POST',body:{confirm:true}});await payments(document.getElementById('payKind')?document.getElementById('payKind').value:'all');}catch(err){alert('Refund failed: '+err.message);b.disabled=false;b.textContent='Refund';}};});}
 
 async function subscriptions(){
