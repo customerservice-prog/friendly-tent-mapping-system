@@ -423,10 +423,9 @@ function esc(s) {
      }).join('');
      var table = products.length ? ('<table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>In Designer</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>') : '<div class="dash-empty">No products yet. Add your first one below.</div>';
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Products</h1>' +
-       '<p class="dash-subtitle">These are the real items customers see in your designer. Changes appear immediately. Pick a Visual for each tent, table, and chair so it renders correctly on the design canvas. Items without one are automatically hidden from the customer designer (not shown as a generic shape) until mapped &mdash; see the "In Designer" column below.</p>' +
-       table +
-       '<h2 class="dash-section-title">Add a Product</h2>' +
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Catalog</div><h1>Products</h1><p>Control the equipment, pricing and visual models customers can use in your designer.</p></div><div class="tenant-head-actions"><a class="tenant-btn primary" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">Preview catalog in designer</a></div></div>' +
+       '<div class="tenant-panel"><div class="tenant-panel-head"><div><h2>Customer catalog</h2><p>Items that require a visual model stay hidden until mapped.</p></div><span class="tenant-status-chip blue">' + products.length + ' products</span></div>' + table + '</div>' +
+       '<h2 class="dash-section-title">Add a product</h2>' +
        '<form id="productForm" class="dash-form">' +
        '<label>Category<select id="pCategory" required><option value="">Select a category</option><option value="tent">Tent</option><option value="table">Table</option><option value="chair">Chair</option><option value="dance_floor">Dance Floor</option><option value="lighting">Lighting</option><option value="linen">Linen</option></select></label>' +
        '<label>Name<input type="text" id="pName" placeholder="20x20 Pole Tent" required></label>' +
