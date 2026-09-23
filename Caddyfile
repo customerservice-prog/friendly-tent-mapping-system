@@ -45,7 +45,10 @@
 	header @privatePage X-Robots-Tag "noindex, nofollow"
 	@marketing path / /index.html /business/* /demo/* /help/* /privacy/* /tent-layout-software/* /tent-diagram-software/* /party-rental-software/* /party-rental-inventory-software/* /party-rental-management-software/* /event-rental-software/* /tent-rental-software/* /event-layout-software/* /wedding-layout-planner/* /marketing* /sitemap.xml /sitemap-software.xml /sitemap-event-planning.xml /robots.txt
 	header @marketing Cache-Control "no-cache"
-	# Public media assets are content-addressed by deploy and safe to cache between visits.\n	@mediaAssets path /assets/*\n	header @mediaAssets Cache-Control "public, max-age=2592000"\n	header {
+	# Public media assets are content-addressed by deploy and safe to cache between visits.
+	@mediaAssets path /assets/*
+	header @mediaAssets Cache-Control "public, max-age=2592000"
+	header {
 		X-XSS-Protection "1; mode=block"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
