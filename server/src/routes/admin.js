@@ -178,13 +178,13 @@ router.get('/console-overview', requirePlatformAdmin, async (req, res) => {
     db.query("SELECT COUNT(*)::int AS count,COALESCE(SUM(amount_cents),0)::bigint AS cents FROM consumer_payments WHERE status='paid'"),
     db.query("SELECT COUNT(*)::int AS count,COALESCE(SUM(amount_paid_cents),0)::bigint AS cents FROM quote_requests WHERE payment_status='paid'"),
     db.query("SELECT COALESCE(SUM(platform_fee_cents),0)::bigint AS cents FROM quote_requests WHERE payment_status='paid' AND platform_fee_cents>0"),
-    db.query(\`SELECT COUNT(*) FILTER (WHERE s.status='active')::int AS active,
+    db.query(`SELECT COUNT(*) FILTER (WHERE s.status='active')::int AS active,
                      COUNT(*) FILTER (WHERE s.status='trialing')::int AS trialing,
                      COUNT(*) FILTER (WHERE s.status IN ('past_due','unpaid','incomplete','paused'))::int AS attention,
                      COALESCE(SUM(CASE WHEN s.status='active' THEN
                        CASE WHEN s.billing_interval='annual' THEN COALESCE(p.annual_price,0)/12
                             ELSE COALESCE(p.monthly_price,0) END ELSE 0 END),0)::numeric(12,2) AS list_mrr
-              FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id\`),
+              FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id`),
     db.query("SELECT COALESCE(SUM(amount_cents),0)::bigint AS cents FROM consumer_payments WHERE status='paid' AND created_at>=date_trunc('month',now())"),
     db.query("SELECT COALESCE(SUM(amount_paid_cents),0)::bigint AS cents FROM quote_requests WHERE payment_status='paid' AND created_at>=date_trunc('month',now())"),
   ]);
@@ -207,7 +207,7 @@ router.get('/payments', requirePlatformAdmin, async (req, res) => {
   const q = String(req.query.q || '').trim().toLowerCase().slice(0, 120);
   const params = [limit, q ? '%' + q + '%' : null];
   const whereKind = kind === 'event_pass' ? "WHERE kind='event_pass'" : kind === 'deposit' ? "WHERE kind='deposit'" : 'WHERE 1=1';
-  const result = await db.query(\`
+  const result = await db.query(`
     SELECT * FROM (
       SELECT cp.id::text AS id,'event_pass'::text AS kind,cp.payment_type::text AS subtype,
              cp.status::text AS status,cp.amount_cents::bigint AS amount_cents,upper(cp.currency)::text AS currency,
@@ -225,10 +225,10 @@ router.get('/payments', requirePlatformAdmin, async (req, res) => {
              qr.design_id::text,qr.stripe_payment_intent_id::text,qr.stripe_checkout_session_id::text,qr.created_at
       FROM quote_requests qr JOIN tenants t ON t.id=qr.tenant_id
     ) ledger
-    \${whereKind}
+    ${whereKind}
     AND ($2::text IS NULL OR lower(COALESCE(customer_email,'')||' '||COALESCE(customer_name,'')||' '||COALESCE(tenant_name,'')||' '||COALESCE(payment_intent_id,'')) LIKE $2)
     ORDER BY created_at DESC LIMIT $1
-  \`, params);
+  `, params);
   res.setHeader('Cache-Control', 'no-store');
   res.json({ payments: result.rows.map(row => ({ ...row, amount_cents: Number(row.amount_cents || 0) })) });
 });
@@ -243,10 +243,10 @@ router.post('/payments/:kind/:id/refund', requirePlatformAdmin, async (req, res)
 
   if (kind === 'event_pass') {
     const payment = (await db.query(
-      \`SELECT cp.*,COALESCE(t.slug,'generic') AS tenant_slug
+      `SELECT cp.*,COALESCE(t.slug,'generic') AS tenant_slug
        FROM consumer_payments cp
        LEFT JOIN designs d ON d.id=cp.design_id LEFT JOIN tenants t ON t.id=d.tenant_id
-       WHERE cp.id=$1\`, [id]
+       WHERE cp.id=$1`, [id]
     )).rows[0];
     if (!payment) return res.status(404).json({ error: 'Payment not found.' });
     if (payment.status === 'refunded') return res.json({ ok: true, alreadyRefunded: true });
@@ -267,8 +267,8 @@ router.post('/payments/:kind/:id/refund', requirePlatformAdmin, async (req, res)
   }
 
   const payment = (await db.query(
-    \`SELECT qr.*,t.slug AS tenant_slug,t.name AS tenant_name,t.stripe_connect_account_id,t.stripe_connect_status
-     FROM quote_requests qr JOIN tenants t ON t.id=qr.tenant_id WHERE qr.id=$1\`, [id]
+    `SELECT qr.*,t.slug AS tenant_slug,t.name AS tenant_name,t.stripe_connect_account_id,t.stripe_connect_status
+     FROM quote_requests qr JOIN tenants t ON t.id=qr.tenant_id WHERE qr.id=$1`, [id]
   )).rows[0];
   if (!payment) return res.status(404).json({ error: 'Deposit payment not found.' });
   if (payment.payment_status === 'refunded') return res.json({ ok: true, alreadyRefunded: true });
@@ -289,7 +289,7 @@ router.post('/payments/:kind/:id/refund', requirePlatformAdmin, async (req, res)
 
 router.get('/subscriptions', requirePlatformAdmin, async (req, res) => {
   const limit = safeLimit(req.query.limit, 150, 250);
-  const result = await db.query(\`
+  const result = await db.query(`
     SELECT s.id::text,t.slug,t.name,t.contact_email,s.plan_id,s.status,s.billing_interval,
            s.current_period_start,s.current_period_end,s.cancel_at_period_end,
            s.provider_customer_id,s.provider_subscription_id,
@@ -298,23 +298,23 @@ router.get('/subscriptions', requirePlatformAdmin, async (req, res) => {
     JOIN tenants t ON t.id=s.tenant_id
     LEFT JOIN plans p ON p.id=s.plan_id
     ORDER BY s.created_at DESC LIMIT $1
-  \`, [limit]);
+  `, [limit]);
   res.setHeader('Cache-Control', 'no-store');
   res.json({ subscriptions: result.rows });
 });
 
 router.patch('/subscriptions/:id', requirePlatformAdmin, async (req, res) => {
   if (typeof req.body?.cancelAtPeriodEnd !== 'boolean') return res.status(400).json({ error: 'cancelAtPeriodEnd must be true or false.' });
-  const current = (await db.query(\`
+  const current = (await db.query(`
     SELECT s.*,t.slug,t.name FROM subscriptions s JOIN tenants t ON t.id=s.tenant_id WHERE s.id=$1
-  \`, [req.params.id])).rows[0];
+  `, [req.params.id])).rows[0];
   if (!current) return res.status(404).json({ error: 'Subscription not found.' });
   if (!current.provider_subscription_id) return res.status(409).json({ error: 'This subscription is not linked to Stripe.' });
   const stripe = stripeClient();
   if (!stripe) return res.status(503).json({ error: 'Stripe is not configured.' });
   const updated = await stripe.subscriptions.update(current.provider_subscription_id, { cancel_at_period_end: req.body.cancelAtPeriodEnd });
   await db.query(
-    \`UPDATE subscriptions SET cancel_at_period_end=$1,status=$2,current_period_end=$3 WHERE id=$4\`,
+    `UPDATE subscriptions SET cancel_at_period_end=$1,status=$2,current_period_end=$3 WHERE id=$4`,
     [!!updated.cancel_at_period_end, updated.status || current.status,
      updated.current_period_end ? new Date(updated.current_period_end * 1000) : current.current_period_end, current.id]
   );
@@ -325,25 +325,25 @@ router.patch('/subscriptions/:id', requirePlatformAdmin, async (req, res) => {
 
 router.get('/designs', requirePlatformAdmin, async (req, res) => {
   const limit = safeLimit(req.query.limit, 100, 250);
-  const result = await db.query(\`
+  const result = await db.query(`
     SELECT d.id::text,COALESCE(t.slug,'generic') AS tenant_slug,COALESCE(t.name,'Direct consumer') AS tenant_name,
            d.event_type,d.guest_count,d.estimate_total,d.created_at,d.updated_at,
            EXISTS(SELECT 1 FROM entitlements e WHERE e.design_id=d.id AND e.status='active' AND (e.expires_at IS NULL OR e.expires_at>now())) AS active_access
     FROM designs d LEFT JOIN tenants t ON t.id=d.tenant_id
     ORDER BY d.updated_at DESC LIMIT $1
-  \`, [limit]);
+  `, [limit]);
   res.setHeader('Cache-Control', 'no-store');
   res.json({ designs: result.rows });
 });
 
 router.get('/activity', requirePlatformAdmin, async (req, res) => {
   const limit = safeLimit(req.query.limit, 50, 200);
-  const result = await db.query(\`
+  const result = await db.query(`
     SELECT a.id::text,a.action,a.target_type,a.target_id,a.target_label,a.metadata,a.created_at,
            u.email AS admin_email,u.display_name AS admin_name
     FROM platform_admin_audit a LEFT JOIN users u ON u.id=a.admin_user_id
     ORDER BY a.created_at DESC LIMIT $1
-  \`, [limit]);
+  `, [limit]);
   res.setHeader('Cache-Control', 'no-store');
   res.json({ activity: result.rows });
 });
