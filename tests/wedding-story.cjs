@@ -92,7 +92,7 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   assert.equal(home.metrics().imports,0,'initial homepage must not import Three.js');
   assert.ok(home.d.querySelector('[data-story-explore]'),'homepage exposes explicit 3D handoff');
   home.intersect();
-  assert.equal(await waitFor(()=>home.d.querySelector('[data-story-count]').textContent==='15 / 15'),true,'homepage build reaches the final stage');
+  assert.equal(await waitFor(()=>home.d.querySelector('[data-story-count]').textContent==='17 / 17'),true,'homepage build reaches the final stage');
   assert.equal(home.metrics().imports,0,'homepage autoplay must remain WebGL-free');
   assert.equal(home.metrics().created,0,'homepage autoplay creates no renderer');
   const plan=home.d.querySelector('.story-build-plan');
@@ -106,7 +106,7 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   assert.ok(plan.querySelectorAll('[data-story-layer="cocktail"] > *').length>=2,'cocktail tables are represented');
   assert.ok(plan.querySelectorAll('[data-story-layer="centerpieces"] > *').length>=16,'centerpiece details are represented');
   assert.ok(plan.querySelectorAll('[data-story-layer="lighting"] > *').length>20,'bistro lighting is represented');
-  assert.equal(home.d.querySelector('[data-story-count]').textContent,'15 / 15');
+  assert.equal(home.d.querySelector('[data-story-count]').textContent,'17 / 17');
   assert.match(home.d.querySelector('[data-story-label]').textContent,/Step inside the reception/);
   assert.ok(plan.classList.contains('is-finished'),'finished build crossfades to the rendered 3D poster');
 
@@ -133,7 +133,7 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   reduced.intersect();
   await settle(30);
   assert.equal(reduced.metrics().imports,0,'reduced-motion homepage stays static and WebGL-free');
-  assert.equal(reduced.d.querySelector('[data-story-count]').textContent,'15 / 15');
+  assert.equal(reduced.d.querySelector('[data-story-count]').textContent,'17 / 17');
   assert.ok(reduced.d.querySelector('.story-build-plan').classList.contains('is-finished'));
   reduced.dom.window.close();
 
@@ -146,10 +146,10 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
 
   const demo=await fixture({page:'demo/index.html'});
   demo.intersect();
-  assert.equal(await waitFor(()=>demo.d.querySelector('[data-story-count]').textContent==='15 / 15',{timeout:1100}),true,'demo build reaches the final stage');
+  assert.equal(await waitFor(()=>demo.d.querySelector('[data-story-count]').textContent==='17 / 17',{timeout:1100}),true,'demo build reaches the final stage');
   assert.equal(demo.metrics().imports,0,'dedicated demo must keep Three.js off the critical path');
   assert.equal(demo.metrics().created,0,'dedicated demo starts with the lightweight staged plan');
-  assert.equal(demo.d.querySelector('[data-story-count]').textContent,'15 / 15');
+  assert.equal(demo.d.querySelector('[data-story-count]').textContent,'17 / 17');
   demo.d.querySelector('[data-view="3d"]').click();
   await settle(50);
   assert.equal(demo.metrics().imports,1,'demo imports Three.js only after an explicit 3D request');
