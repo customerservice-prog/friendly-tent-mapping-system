@@ -77,15 +77,15 @@ const server=http.createServer((req,res)=>{
       await ctx.close();
     }
 
-    // Demo: real 3D still auto-loads and stays interactive.
+    // Demo: lightweight first, real 3D loads only after an explicit request.
     {
       const ctx=await browser.newContext({viewport:{width:1440,height:900}}),page=await ctx.newPage(),errors=[];
       page.on('pageerror',e=>errors.push(e.message));
       await page.goto(base+'/demo/');
       await page.locator('[data-wedding-story]').scrollIntoViewIfNeeded();
-      await page.locator('.story-has-webgl').waitFor({timeout:45000});
-      const render=await page.locator('.tour-3d canvas').evaluate(el=>({w:el.width,h:el.height,lost:el.getContext('webgl2')?.isContextLost()}));
-      assert(render.w>0&&render.h>0&&!render.lost,'demo auto-loads actual WebGL');
+      await page.locator('.story-build-plan').waitFor({timeout:10000});
+      await page.waitForTimeout(1200);
+      assert.equal(await page.locator('.tour-3d canvas').count(),0,'demo critical path must remain WebGL-free');
       assert.equal(await page.locator('[data-story-scrub]').count(),1);
       await page.locator('[data-story-pause]').click();
       const before=await page.locator('[data-story-label]').innerText();
@@ -96,10 +96,13 @@ const server=http.createServer((req,res)=>{
       await page.locator('[data-view="2d"]').click();
       assert.equal(await page.locator('.story-build-plan.show-plan').count(),1);
       await page.locator('[data-view="3d"]').click();
+      await page.locator('.story-has-webgl').waitFor({timeout:30000});
+      const render=await page.locator('.tour-3d canvas').evaluate(el=>({w:el.width,h:el.height,lost:el.getContext('webgl2')?.isContextLost()}));
+      assert(render.w>0&&render.h>0&&!render.lost,'explicit 3D request renders the actual WebGL wedding');
       await page.locator('[data-camera="outside"]').click();
       await page.screenshot({path:path.join(out,'demo-3d-desktop.png')});
       assert.deepEqual(errors,[]);
-      results.push({route:'/demo/',interactiveAutoLoad:true,desktop3d:render,scrub:true,switch2d:true,errors});
+      results.push({route:'/demo/',lightweightFirst:true,explicit3D:true,desktop3d:render,scrub:true,switch2d:true,errors});
       await ctx.close();
     }
 
