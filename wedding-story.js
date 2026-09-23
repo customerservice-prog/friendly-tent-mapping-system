@@ -328,7 +328,10 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
         }
       },450);
     }else if(!reduce.matches&&progress<1&&!view){
-      setTimeout(()=>{if(!disposed&&visible&&!view)play();},220);
+      // The empty venue is already visible immediately. Let the page become
+      // interactive before starting the staged SVG transitions so the wedding
+      // story does not compete with LCP / initial input readiness.
+      setTimeout(()=>{if(!disposed&&visible&&!view)play();},1800);
     }
   },{rootMargin:'120px',threshold:.08});
   observer.observe(studio);
