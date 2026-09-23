@@ -507,8 +507,7 @@ function esc(s) {
      var t = await api('/api/tenants/' + state.tenant + '/admin');
      if (gen !== renderGeneration) return;
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Branding &amp; Settings</h1>' +
-       '<p class="dash-subtitle">This controls how your hosted designer looks to your customers.</p>' +
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Customer experience</div><h1>Branding &amp; settings</h1><p>Make the designer feel like your business before customers see it.</p></div><div class="tenant-head-actions"><a class="tenant-btn primary" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">Preview branded designer</a></div></div>' +
        '<form id="brandingForm" class="dash-form">' +
        '<label>Company Name<input type="text" id="bName" value="' + esc(t.name || '') + '"></label>' +
        '<label>Logo URL<input type="text" id="bLogo" value="' + esc(t.logoUrl || '') + '"></label>' +
@@ -524,7 +523,7 @@ function esc(s) {
        '<div id="brandingSaved" class="dash-saved" hidden>Saved.</div>' +
        '<button type="submit" class="btn-primary">Save Branding</button>' +
        '</form>' +
-        '<div id="payoutsSection" class="dash-section"><h2 class="dash-section-title">Payouts</h2><p id="payoutsStatus" class="dash-subtitle">Loading payouts status...</p><button id="connectStripeBtn" class="btn-primary" hidden>Connect Stripe to receive payouts</button></div>';
+        '<section id="payoutsSection" class="tenant-panel" style="margin-top:18px"><div class="tenant-panel-head"><div><h2>Rental deposit payouts</h2><p>Connect Stripe when you want customer rental deposits paid to your business.</p></div></div><div class="tenant-panel-body"><p id="payoutsStatus" class="dash-subtitle">Loading payouts status...</p><button id="connectStripeBtn" class="btn-primary" hidden>Connect Stripe to receive payouts</button></div></section>';
      document.getElementById('brandingForm').addEventListener('submit', async function (e) {
        e.preventDefault();
        var errEl = document.getElementById('brandingError');
