@@ -9,6 +9,7 @@
   var checkoutId = params.get('checkout_session_id') || fragment.get('eventPass');
   var draftToken = fragment.get('draft');
   var recoveryToken = params.get('recoveryToken') || fragment.get('recoveryToken');
+  var adminDesign = params.get('adminDesign');
   var purchaseRequested = params.get('purchase') === '1';
   var productPreview = ['tent', 'inflatable'].includes(params.get('focus')) && params.get('autoplace') === '1';
   var offer, verified, savedPaidEvent, modal, offerPromise, previewLimit, ready = false, busy = false;
@@ -30,7 +31,7 @@
     });
   }
   var saved = read('rentsketch-autosave:' + slug);
-  var returning = !!(checkoutId || draftToken || recoveryToken || (!productPreview && saved && saved.id));
+  var returning = !!(checkoutId || draftToken || recoveryToken || adminDesign || (!productPreview && saved && saved.id));
   window.RENTSKETCH_PASS_RESTORING = returning;
   // Reserve preview controls before the asynchronous offer request completes.
   document.body.classList.add('rs-pass-checking');
@@ -43,8 +44,13 @@
   function canEdit() { return !!(offer && (!offer.required || active())); }
   function api(path, body) {
     var controller = new AbortController(), timer = setTimeout(function () { controller.abort(); }, 12000);
+    var headers = body ? { 'Content-Type': 'application/json' } : {};
+    try {
+      var adminToken = localStorage.getItem('rentsketch_dashboard_token');
+      if (adminToken) headers.Authorization = 'Bearer ' + adminToken;
+    } catch (_) {}
     return fetch((window.RENTSKETCH_API_URL || '') + '/api/consumer' + path, {
-      method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      method: body ? 'POST' : 'GET', headers: Object.keys(headers).length ? headers : undefined,
       body: body ? JSON.stringify(body) : undefined, signal: controller.signal, cache: 'no-store',
     }).then(async function (response) {
       var data = await response.json();
@@ -58,7 +64,7 @@
   }
   function getOffer(refresh) {
     if (!offerPromise || refresh) offerPromise = api('/event-pass/offer?tenant=' + encodeURIComponent(slug)).then(function (data) {
-      offer = data; render(); return data;
+      offer = data; document.body.classList.toggle('rs-platform-admin', !!data.adminAccess); render(); return data;
     }).catch(function (err) { offerPromise = null; throw err; });
     return offerPromise;
   }
@@ -368,7 +374,12 @@
     if (!bridge() || !window.RENTSKETCH_API_URL || !window.RENTSKETCH_CATALOG_READY || !window.RentSketchStartAutosave) { setTimeout(boot, 50); return; }
     try {
       await getOffer();
-      if (checkoutId || draftToken || recoveryToken) {
+      if (adminDesign && offer?.adminAccess) {
+        var adminResult = await api('/admin/designs/' + encodeURIComponent(adminDesign));
+        restoreScene(adminResult);
+        history.replaceState(null, '', location.pathname + '?tenant=' + encodeURIComponent(adminResult.tenant || slug) + '&admin=1');
+        ready = true;
+      } else if (checkoutId || draftToken || recoveryToken) {
         var view = openModal('Opening your saved event', '<p class="paywall-error" role="status">Checking your access and restoring your layout…</p><button type="button" class="btn-primary" data-check hidden>Check again</button><button type="button" class="pass-back" data-recover>Email me my access link</button>');
         async function checkReturn() {
           var result = await api('/event-pass/restore', checkoutId ? { checkoutSessionId: checkoutId } : (draftToken ? { draftToken: draftToken } : { recoveryToken: recoveryToken }));
@@ -421,12 +432,12 @@
       // Only free new previews get the public sample. Restore/buy entry and
       // already-paid/booked designs retain their existing flow. No demo scene
       // is ever loaded into the real editor or autosave.
-      if (!guidedAutoAttempted && !purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !modal) {
+      if (!guidedAutoAttempted && !purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !adminDesign && !modal) {
         maybeStartGuidedPreview();
       }
       // A priced purchase link opens the offer, never a charge. Restore
       // existing access first so returning customers are not sold twice.
-      if (purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !(returning && !verified)) {
+      if (purchaseRequested && !checkoutId && !draftToken && !recoveryToken && !adminDesign && !(returning && !verified)) {
         params.delete('purchase');
         history.replaceState(null, '', location.pathname + '?' + params.toString() + location.hash);
         if (canEdit()) continueProduct(); else directStripeCheckout();

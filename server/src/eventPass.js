@@ -59,6 +59,13 @@ async function fulfillEventPass(session) {
     const result = await client.query('SELECT * FROM consumer_payments WHERE stripe_checkout_session_id=$1 FOR UPDATE', [session.id]);
     const payment = result.rows[0];
     if (!payment) throw new Error('Event Pass payment record not found');
+    // A platform-admin refund is final for this purchase. Stripe may retry the
+    // original checkout completion later; never let that retry re-grant access
+    // or flip a refunded ledger row back to paid.
+    if (payment.status === 'refunded') {
+      await client.query('COMMIT');
+      return false;
+    }
     if (payment.status === 'paid' && payment.entitlement_id) {
       await queueReceipt(client, payment, session.metadata.tenant || 'generic');
       queued = true;

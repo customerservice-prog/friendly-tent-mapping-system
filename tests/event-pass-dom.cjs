@@ -17,11 +17,12 @@ async function setup(query, options = {}) {
   if (options.navigations) w.RentSketchCheckoutNavigate = url => options.navigations.push(url);
   if (options.embedded) Object.defineProperty(w, 'parent', { value: { postMessage() {} } });
   w.localStorage.setItem('rentsketch-anon-session', 'existing-browser-owner');
+  if (options.adminToken) w.localStorage.setItem('rentsketch_dashboard_token', options.adminToken);
   if (options.previewDeadline) w.localStorage.setItem('rentsketch-preview-deadline:v1', String(options.previewDeadline));
   if (options.saved) w.localStorage.setItem('rentsketch-autosave:friendly', JSON.stringify(options.saved));
   let draft, checkouts = 0;
   w.fetch = async (url, request = {}) => {
-    const body = request.body && JSON.parse(request.body); calls.push({ url, body, method: request.method || 'GET' });
+    const body = request.body && JSON.parse(request.body); calls.push({ url, body, method: request.method || 'GET', headers: request.headers || {} });
     let data;
     if (url.endsWith('/api/tenants/friendly')) data = { slug: 'friendly', name: 'Friendly Party Rental', showPrices: true };
     else if (url.endsWith('/products')) data = { products };
@@ -29,6 +30,7 @@ async function setup(query, options = {}) {
     else if (url.endsWith('/event-pass/preview')) { if(options.failPreview)throw Error('Preview service unavailable');data={limited:true,remainingSeconds:options.previewSeconds ?? 300}; }
     else if (url.endsWith('/designs/recovery-link')) data = { ok: true };
     else if (url.endsWith('/event-pass/restore')) data = options.restored;
+    else if (url.includes('/admin/designs/')) data = options.adminDesign;
     else if (url.endsWith('/event-pass/resume')) { if (options.failResume) throw Error('Connection unavailable'); data = options.resumed || draft; }
     else if (url.includes('/review-pricing')) data = { available: true, zip: new URL(url).searchParams.get('zip'), deliveryFee: new URL(url).searchParams.has('zip') ? 49.99 : null, taxRate: 8, taxDelivery: true };
     else if (url.endsWith('/quote-requests')) data = { id: 'isolated-quote', notificationSent: true };
@@ -73,6 +75,19 @@ async function setup(query, options = {}) {
   assert.equal(t.calls.filter(c => c.method === 'POST' && c.url.endsWith('/designs')).length, 1, 'checkout reuses one autosaved draft');
   assert.equal(t.calls.find(c => c.url.endsWith('/event-pass/checkout-session')).body.priceCents, undefined);
   t.dom.window.close();
+
+  const adminScene={tentId:'frame-20x20',objects:[{id:'admin-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:3,y:3,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Admin layout',email:'',date:''}};
+  const adminOwned={id:'admin-owned',tenant:'friendly',scene:adminScene,anonymousSessionId:'admin-session',active:true,adminAccess:true};
+  t=await setup('?tenant=friendly&adminDesign=admin-owned&admin=1',{adminToken:'platform-token',offer:{required:false,adminAccess:true},adminDesign:adminOwned});
+  w=t.w;d=w.document;b=w.FriendlyBridge;
+  assert.equal(w.RentSketchEventPass.canEdit(),true,'platform admin can edit without Event Pass');
+  assert.equal(d.querySelector('.paywall-overlay'),null,'platform admin never sees purchase modal');
+  assert.equal(b.getScene().objects[0].id,'admin-table','adminDesign opens the selected saved layout');
+  const adminOfferCall=t.calls.find(c=>c.url.includes('/event-pass/offer?'));assert.equal(adminOfferCall.headers.Authorization,'Bearer platform-token');
+  const adminDesignCall=t.calls.find(c=>c.url.includes('/admin/designs/admin-owned'));assert.equal(adminDesignCall.headers.Authorization,'Bearer platform-token');
+  assert.equal(w.location.search.includes('adminDesign'),false,'one-time admin design handoff is cleaned from the address after restore');
+  t.dom.window.close();
+
   const emptyFrame = { id: 'draft-owned', tenant: 'friendly', scene: { tentId: 'frame-20x20', objects: [], surfaceType: 'concrete', lightingId: 'lighting-none', customer: { name: '', email: '', date: '' } }, anonymousSessionId: 'restored-owner', active: true, renewable: true, expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), customerEmail: 'paid@example.invalid', accessUrl: 'https://rentsketch.com/designer/?tenant=friendly#recoveryToken=fixture.private.token', emailDelivery: 'sent' };
   const paidReturn = { ...emptyFrame, analyticsPurchase: { transactionId: 'ep_0123456789abcdef01234567', itemId: 'event_pass_30_day', itemName: 'RentSketch Event Pass', amountCents: 999, currency: 'USD', durationDays: 30 } };
   t = await setup('?tenant=friendly&payment=success&checkout_session_id=cs_live_fixturecheckout', { restored: paidReturn, analytics: true });

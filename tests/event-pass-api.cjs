@@ -45,15 +45,15 @@ const orderAccess = load('server/src/friendlyOrderAccess.js', { crypto: require(
 } } });
 const pass = load('server/src/eventPass.js', { './db': db, './pricing': pricing, './eventPassEmail': mailQueue, stripe: Stripe });
 const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass, './friendlyOrderAccess': orderAccess });
-const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../access': { resolveAccess: async () => ({}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
+const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../middleware/requireAuth': { isConfiguredPlatformAdmin: async payload => payload?.isPlatformAdmin === true }, '../access': { resolveAccess: async () => ({}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
 const designs = load('server/src/routes/designs.js', { express, '../db': db, '../middleware/requireAuth': { requireTenantAccess: (req,res,next) => next() }, '../eventPassAccess': access });
 const quotes = load('server/src/routes/quoteRequests.js', { express, crypto: require('crypto'), '../db': db, '../mailer': { getMailer: () => null }, '../middleware/requireAuth': { requireTenantRole: () => (req,res,next) => next() }, '../orderProviders/quoteRequestOrderProvider': {}, '../outboundWebhook': {}, '../eventPass': pass, '../eventPassAccess': access });
 const webhook = load('server/src/routes/stripeWebhook.js', { express, '../db': db, '../pricing': pricing, stripe: Stripe, '../eventPass': pass, '../orderProviders/quoteRequestOrderProvider': {} });
 const app = express(); app.use('/webhook', express.raw({ type: 'application/json' }), webhook); app.use(express.json()); app.use('/api/consumer', consumer); app.use('/api/tenants', designs); app.use('/api/tenants', quotes); app.use((err, req, res, next) => res.status(500).json({ error: err.message }));
 const tenant = '10000000-0000-4000-8000-000000000001', other = '10000000-0000-4000-8000-000000000002';
 let server, base;
-async function request(url, body, signature, method) {
-  const r = await fetch(base + url, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', ...(signature ? { 'stripe-signature': signature } : {}) }, body: body ? JSON.stringify(body) : undefined });
+async function request(url, body, signature, method, authorization) {
+  const r = await fetch(base + url, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', ...(signature ? { 'stripe-signature': signature } : {}), ...(authorization ? { Authorization: 'Bearer ' + authorization } : {}) }, body: body ? JSON.stringify(body) : undefined });
   return { status: r.status, body: await r.text().then(t => { try { return JSON.parse(t); } catch { return t; } }) };
 }
 async function draft(t = tenant) {
@@ -64,14 +64,24 @@ async function draft(t = tenant) {
 const buy = (d, extra = {}, renewal = false) => request('/api/consumer/designs/' + d.id + '/event-pass/' + (renewal ? 'renewal-' : '') + 'checkout-session', { customerEmail: 'buyer@example.invalid', anonymousSessionId: 'owner-private-token', ...extra });
 const restore = id => request('/api/consumer/event-pass/restore', { checkoutSessionId: id });
 (async () => {
-  await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY);`);
+  await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY);`);
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/004_entitlements.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/011_event_pass_access_email.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/012_friendly_order_access.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/013_preview_limit.sql'), 'utf8'));
   await pg.query('INSERT INTO tenants VALUES($1,$2),($3,$4)', [tenant, 'friendly', other, 'lakeside']);
+  const platformAdminId='10000000-0000-4000-8000-000000000099';
+  await pg.query('INSERT INTO users(id) VALUES($1)',[platformAdminId]);
+  const platformAdminToken=auth.signToken({userId:platformAdminId,isPlatformAdmin:true},{expiresIn:'1h'});
   server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); base = 'http://127.0.0.1:' + server.address().port;
   let r = await request('/api/consumer/event-pass/offer?tenant=friendly'); assert.equal(r.body.priceCents, 999); assert.equal(r.body.durationDays, 30); assert.equal(r.body.required, true); assert.equal(r.body.paymentMode, 'test');
+  const adminOffer=await request('/api/consumer/event-pass/offer?tenant=generic',null,null,'GET',platformAdminToken); assert.equal(adminOffer.status,200); assert.equal(adminOffer.body.required,false); assert.equal(adminOffer.body.adminAccess,true);
+  const adminFurnished={tentId:'pole-20x20',objects:[{id:'admin-table',kind:'table',tableId:'round-5ft'}],guestCount:8,lightingId:'lighting-bistro'};
+  const adminSaved=await request('/api/consumer/designs',{scene:adminFurnished,anonymousSessionId:'platform-admin-session'},null,'POST',platformAdminToken); assert.equal(adminSaved.status,201,'platform admin can save a full design without buying an Event Pass');
+  assert.equal((await pg.query('SELECT owner_user_id FROM designs WHERE id=$1',[adminSaved.body.id])).rows[0].owner_user_id,platformAdminId,'admin-created design is attributable to the platform owner');
+  const adminAccess=await request('/api/consumer/designs/'+adminSaved.body.id+'/access',null,null,'GET',platformAdminToken); assert.equal(adminAccess.status,200); assert.equal(adminAccess.body.reason,'platform_admin'); assert.equal(adminAccess.body.paymentRequired,false);
+  const adminReopen=await request('/api/consumer/admin/designs/'+adminSaved.body.id,null,null,'GET',platformAdminToken); assert.equal(adminReopen.status,200); assert.equal(adminReopen.body.adminAccess,true); assert.deepEqual(adminReopen.body.scene,adminFurnished);
+  assert.equal((await request('/api/consumer/admin/designs/'+adminSaved.body.id)).status,403,'saved design admin reopen never works without platform authentication');
   env.EVENT_PASS_ENABLED = 'false'; assert.equal((await request('/api/consumer/event-pass/offer?tenant=friendly')).body.required, false); env.EVENT_PASS_ENABLED = 'true';
   assert.equal((await request('/api/consumer/event-pass/offer?tenant=lakeside')).body.required, false);
   const previewSession = { tenant: 'friendly', anonymousSessionId: 'isolated-preview-session' };
@@ -256,6 +266,18 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal(genericSession.args.branding_settings.logo.url, 'https://rentsketch.com/assets/brand-mark.svg');
   assert.equal(genericSession.args.branding_settings.button_color, '#183429');
   assert.equal(genericSession.args.line_items[0].price_data.product_data.name, 'RentSketch Event Pass');
+
+  // A completed Checkout retry after an admin refund must never resurrect access.
+  directSession.customer_details={email:'refund-test@example.invalid'}; directSession.payment_status='paid'; directSession.status='complete'; directSession.payment_intent='pi_direct_refund';
+  assert.equal((await request('/webhook',{id:'evt_direct_refund_seed',type:'checkout.session.completed',data:{object:directSession}},'fixture-valid')).status,200);
+  const refundedPayment=(await pg.query('SELECT * FROM consumer_payments WHERE stripe_checkout_session_id=$1',[directSession.id])).rows[0];
+  assert.equal(refundedPayment.status,'paid');
+  await pg.query("UPDATE consumer_payments SET status='refunded' WHERE id=$1",[refundedPayment.id]);
+  await pg.query("UPDATE entitlements SET status='revoked',revoked_at=now() WHERE id=$1",[refundedPayment.entitlement_id]);
+  const afterRefundRetry=await restore(directSession.id);
+  assert.equal(afterRefundRetry.status,200); assert.equal(afterRefundRetry.body.active,false,'refunded Event Pass stays revoked when old Checkout completion is retried');
+  assert.equal((await pg.query('SELECT status FROM consumer_payments WHERE id=$1',[refundedPayment.id])).rows[0].status,'refunded','fulfillment retry cannot flip a refund back to paid');
+
   console.log('PASS included order access: immediate signed access after name/order match, clear declines, zero queued/sent emails, SMTP-independent access, one layout per booking, server-owned session, no second charge, tenant isolation, cancellation and order-service failure. Isolated fixtures only.');
   console.log('PASS Event Pass API: real SQL/rollback, Friendly and direct $9.99 checkout, tenant isolation, ownership, open-session reuse, cancel restore, unpaid rejection, duplicate/racing fulfillment, delayed payment, $4.99 renewal, exact empty-tent recovery. Fake Stripe only; no production writes.');
 })().catch(e => { console.error(e); process.exitCode = 1; }).finally(async () => { if (server) await new Promise(r => server.close(r)); await pg.close(); });

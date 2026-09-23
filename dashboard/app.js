@@ -6,6 +6,7 @@
   var TENANT_KEY = 'rentsketch_dashboard_tenant';
   var ROUTES = ['login', 'overview', 'products', 'branding', 'requests', 'billing', 'install', 'superadmin'];
 
+ function platformTenantView() { try { return new URLSearchParams(window.location.search).get('tenantView') === '1'; } catch (_) { return false; } }
  function getToken() { return localStorage.getItem(TOKEN_KEY); }
   function setToken(t) { if (t) { localStorage.setItem(TOKEN_KEY, t); } else { localStorage.removeItem(TOKEN_KEY); } }
   function getActiveTenant() { return localStorage.getItem(TENANT_KEY); }
@@ -76,7 +77,7 @@ function esc(s) {
  function shellHtml(route, inner) {
    var tenants = state.tenants || [];
    var platformAdmin = !!(state.user && state.user.isPlatformAdmin);
-   var brandSub = platformAdmin ? 'Platform Console' : 'Business Dashboard';
+   var brandSub = platformAdmin ? (platformTenantView() ? 'Tenant Workspace · Admin' : 'Platform Console') : 'Business Dashboard';
    var switcher = '';
    if (tenants.length > 1) {
      switcher = '<select id="tenantSwitch" class="tenant-switch">' + tenants.map(function (t) {
@@ -95,7 +96,7 @@ function esc(s) {
      '<nav class="dash-nav">' +
      navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
      navLink('branding', 'Branding') + navLink('billing', 'Billing') + navLink('install', 'Install') +
-     (state.user && state.user.isPlatformAdmin ? navLink('superadmin', 'Super Admin') : '') +
+     (state.user && state.user.isPlatformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link">Platform Console</a>' : '') +
      '</nav>' +
      '<div class="dash-account">' + switcher + '<button id="btnLogout" class="btn-logout" type="button">Log out</button></div>' +
      '</header>' +
@@ -151,7 +152,8 @@ function esc(s) {
        var result = await api('/api/auth/login', { method: 'POST', body: { email: email, password: password } });
        setToken(result.token);
        await loadMe();
-       window.location.hash = (state.user && state.user.isPlatformAdmin) ? '#/superadmin' : '#/overview';
+       if (state.user && state.user.isPlatformAdmin && !platformTenantView()) { window.location.href = '/dashboard/platform.html#overview'; return; }
+       window.location.hash = '#/overview';
        render();
      } catch (err) {
        errEl.textContent = err.message || 'Login failed';
@@ -717,7 +719,8 @@ function esc(s) {
      return;
    }
    if (route === 'login' || !route) {
-     window.location.hash = (state.user && state.user.isPlatformAdmin) ? '#/superadmin' : '#/overview';
+     if (state.user && state.user.isPlatformAdmin && !platformTenantView()) { window.location.replace('/dashboard/platform.html#overview'); return; }
+     window.location.hash = '#/overview';
      return;
    }
    renderGeneration++;
@@ -728,7 +731,7 @@ function esc(s) {
    else if (route === 'branding') viewBranding(route, __gen);
    else if (route === 'billing') viewBilling(route, __gen);
    else if (route === 'install') viewInstall(route, __gen);
-   else if (route === 'superadmin') viewSuperAdmin(route, __gen);
+   else if (route === 'superadmin') { window.location.replace('/dashboard/platform.html#overview'); }
  }
 
  async function boot() {
@@ -736,6 +739,7 @@ function esc(s) {
    if (token) {
      try {
        await loadMe();
+       if (state.user && state.user.isPlatformAdmin && !platformTenantView() && !/\/dashboard\/platform\.html$/i.test(location.pathname)) { window.location.replace('/dashboard/platform.html#overview'); return; }
      } catch (e) {
        setToken(null); setActiveTenant(null); state.user = null;
      }

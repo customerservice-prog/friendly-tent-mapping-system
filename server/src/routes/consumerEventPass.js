@@ -10,6 +10,7 @@ const express = require('express');
 const { query } = require('../db');
 const { createHash } = require('crypto');
 const { signToken, verifyToken } = require('../auth');
+const { isConfiguredPlatformAdmin } = require('../middleware/requireAuth');
 const { resolveAccess } = require('../access');
 const { getStripe, isPassEnabled, passOffer, paymentReadiness, fulfillEventPass, PASS_KINDS } = require('../eventPass');
 const { savePermission } = require('../eventPassAccess');
@@ -19,6 +20,18 @@ const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next)
 
 const router = express.Router();
 const PREVIEW_SECONDS = 5 * 60;
+
+async function platformAdminRequest(req) {
+    const header = req.headers.authorization || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
+    if (!token) return null;
+    try {
+        const payload = verifyToken(token);
+        return await isConfiguredPlatformAdmin(payload) ? payload : null;
+    } catch (_) {
+        return null;
+    }
+}
 
 // safeOrigin: strict allowlisting for rentsketch.com subdomains with APP_URL fallback.
 // Never concatenates arbitrary/undefined origins into Stripe return URLs.
@@ -92,19 +105,23 @@ async function designResponse(design) {
 
 // Price and launch switch come from the same server authority as Checkout.
 router.get('/event-pass/offer', wrap(async (req, res) => {
+    const admin = await platformAdminRequest(req);
     const slug = String(req.query.tenant || 'generic');
     const tenant = slug === 'generic' ? null : (await query('SELECT * FROM tenants WHERE slug=$1', [slug])).rows[0];
     if (slug !== 'generic' && !tenant) return res.status(404).json({ error: 'Rental company not found' });
     res.setHeader('Cache-Control', 'no-store');
+    if (admin) return res.json({ ...passOffer(tenant), required: false, adminAccess: true, previewDurationSeconds: PREVIEW_SECONDS, ...(await paymentReadiness()) });
     res.json({ ...passOffer(tenant), previewDurationSeconds: PREVIEW_SECONDS, ...(await paymentReadiness()) });
 }));
 
 router.post('/event-pass/preview', wrap(async (req, res) => {
+    const admin = await platformAdminRequest(req);
     const sid = req.body?.anonymousSessionId, slug = req.body?.tenant || 'generic';
     if (typeof sid !== 'string' || !/^[a-zA-Z0-9_:-]{16,160}$/.test(sid)) return res.status(400).json({ error: 'A valid preview session is required.' });
     const tenant = slug === 'generic' ? null : (await query('SELECT * FROM tenants WHERE slug=$1', [slug])).rows[0];
     if (slug !== 'generic' && !tenant) return res.status(404).json({ error: 'Rental company not found' });
     res.setHeader('Cache-Control', 'no-store');
+    if (admin) return res.json({ limited: false, adminAccess: true });
     if (!isPassEnabled(tenant)) return res.json({ limited: false });
     const hash = createHash('sha256').update('preview:' + sid).digest('hex');
     const row = (await query(`INSERT INTO consumer_previews(session_hash,expires_at)
@@ -162,6 +179,29 @@ router.post('/event-pass/resume', wrap(async (req, res) => {
     if (!design) return res.status(404).json({ error: 'Saved design not found for this browser' });
     res.setHeader('Cache-Control', 'no-store');
     res.json(await designResponse(design));
+}));
+
+router.get('/admin/designs/:designId', wrap(async (req, res) => {
+    const admin = await platformAdminRequest(req);
+    if (!admin) return res.status(403).json({ error: 'Platform admin access required' });
+    const design = (await query('SELECT * FROM designs WHERE id=$1', [req.params.designId])).rows[0];
+    if (!design) return res.status(404).json({ error: 'Saved design not found' });
+    const tenant = await designTenant(design);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({
+        id: design.id,
+        tenant: tenant?.slug || 'generic',
+        scene: design.scene,
+        anonymousSessionId: design.anonymous_session_id,
+        active: true,
+        expiresAt: null,
+        renewable: false,
+        includedWithOrder: false,
+        adminAccess: true,
+        eventType: design.event_type,
+        guestCount: design.guest_count,
+        estimateTotal: design.estimate_total,
+    });
 }));
 
 // The opaque Checkout Session is the private recovery credential. Stripe,
@@ -308,16 +348,17 @@ router.post('/designs/:designId/event-pass/renewal-checkout-session', checkout(t
 // required. This is what the Event Pass checkout below is gated on;
 // tenant-attached designs use POST /api/tenants/:slug/designs instead.
 router.post('/designs', wrap(async (req, res) => {
+    const admin = await platformAdminRequest(req);
     const { scene, eventType, guestCount, estimateTotal, anonymousSessionId, schemaVersion } = req.body || {};
     if (!scene) {
         return res.status(400).json({ error: 'scene is required' });
     }
-    const denied = await savePermission(null, null, scene);
+    const denied = admin ? null : await savePermission(null, null, scene);
     if (denied) return res.status(402).json(denied);
     const result = await query(
-        `INSERT INTO designs (tenant_id, anonymous_session_id, schema_version, event_type, guest_count, scene, estimate_total)
-         VALUES (NULL, $1, $2, $3, $4, $5, $6) RETURNING id`,
-        [anonymousSessionId || null, schemaVersion || 1, eventType || null, guestCount || null, scene, estimateTotal || null]
+        `INSERT INTO designs (tenant_id, owner_user_id, anonymous_session_id, schema_version, event_type, guest_count, scene, estimate_total)
+         VALUES (NULL, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [admin?.userId || null, anonymousSessionId || null, schemaVersion || 1, eventType || null, guestCount || null, scene, estimateTotal || null]
     );
     res.status(201).json(result.rows[0]);
 }));
@@ -428,6 +469,7 @@ router.get('/designs/:designId/entitlement', async (req, res) => {
 // itself. Works for a generic consumer design (tenant_id NULL) and for a
 // tenant-scoped design (created via /api/tenants/:slug/designs) alike.
 router.get('/designs/:designId/access', async (req, res) => {
+    const admin = await platformAdminRequest(req);
     const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
     const design = designResult.rows[0];
     if (!design) return res.status(404).json({ error: 'Design not found' });
@@ -437,6 +479,8 @@ router.get('/designs/:designId/access', async (req, res) => {
         const tenantResult = await query('SELECT * FROM tenants WHERE id = $1', [design.tenant_id]);
         tenant = tenantResult.rows[0] || null;
     }
+
+    if (admin) return res.json({ context: 'staff', access: 'included', reason: 'platform_admin', expiresAt: null, capabilities: ['view','edit','save','3d','export','share'], paymentRequired: false, price: null, currency: 'usd', tenant: tenant?.slug || null });
 
     let isStaff = false;
     const header = req.headers.authorization || '';
@@ -465,12 +509,13 @@ router.get('/designs/:designId/access', async (req, res) => {
 // Paid editing applies to every save, including designs that have never paid.
 // A bare rental preview can be checkpointed so Checkout restores that rental.
 router.patch('/designs/:designId', wrap(async (req, res) => {
+    const admin = await platformAdminRequest(req);
     const { scene, eventType, guestCount, estimateTotal, anonymousSessionId } = req.body || {};
     if (!scene) return res.status(400).json({ error: 'scene is required' });
     if (!anonymousSessionId) return res.status(400).json({ error: 'anonymousSessionId is required to update a draft' });
     const design = (await query("SELECT * FROM designs WHERE id=$1 AND anonymous_session_id=$2 AND (tenant_id IS NULL OR tenant_id=(SELECT id FROM tenants WHERE slug='generic'))", [req.params.designId, anonymousSessionId])).rows[0];
     if (!design) return res.status(404).json({ error: 'Design not found' });
-    const denied = await savePermission(null, design, scene);
+    const denied = admin ? null : await savePermission(null, design, scene);
     if (denied) return res.status(402).json(denied);
 
     const result = await query(
