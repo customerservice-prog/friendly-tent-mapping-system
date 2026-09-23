@@ -18,9 +18,11 @@ const steps=[
   {p:.80,label:'Dress the tables',detail:'Add wedding linens'},
   {p:.85,label:'Place the centerpieces',detail:'Finish each guest table'},
   {p:.91,label:'String the lights',detail:'Add bistro lighting'},
+  {p:.95,label:'Create the entrance',detail:'Frame the guest arrival path'},
+  {p:.975,label:'Welcome the guests',detail:'Bring the finished layout to life'},
   {p:1,label:'Step inside the reception',detail:'Reveal the finished 3D wedding'}
 ];
-const stageDelays=[650,700,850,900,900,720,760,620,620,620,620,760,680,850,1500];
+const stageDelays=[650,700,850,900,900,720,760,620,620,620,620,760,680,760,620,850,1500];
 const reduce=matchMedia('(prefers-reduced-motion: reduce)');
 
 function svgNode(name,attrs={}){
@@ -44,7 +46,7 @@ function esc(value){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<
 function buildPlanSvg(){
   const guestTables=scene.objects.filter(o=>o.id?.startsWith('wedding-table-'));
   const serviceObject=id=>scene.objects.find(o=>o.id===id);
-  const tables=[],chairs=[],linens=[],centerpieces=[],dance=[],lighting=[];
+  const tables=[],chairs=[],linens=[],centerpieces=[],dance=[],lighting=[],entrance=[],guests=[];
 
   guestTables.forEach((o,index)=>{
     const [cx,cy]=centerOf(o);
@@ -76,6 +78,17 @@ function buildPlanSvg(){
     for(const y of [6,12,18,24,30,36])lighting.push(`<circle cx="${x}" cy="${y}" r=".17" fill="#ffd77b" stroke="#fff4c8" stroke-width=".08"/>`);
   }
 
+  entrance.push(
+    '<path d="M26 39 C26 35.5 28 33.4 30 33.4 C32 33.4 34 35.5 34 39" fill="none" stroke="#7e6a47" stroke-width=".42"/>',
+    '<circle cx="26" cy="38.4" r=".62" fill="#6f8f59"/><circle cx="34" cy="38.4" r=".62" fill="#6f8f59"/>',
+    '<path d="M27.2 39 H32.8" stroke="#cfb675" stroke-width=".16" stroke-dasharray=".42 .34"/>'
+  );
+
+  [[12,8],[12,20],[12,36],[48,8],[48,20],[48,36],[20,14],[40,14],[20,46],[40,46]].forEach(([x,y],i)=>{
+    const fill=i%3===0?'#355c7d':i%3===1?'#8b5c6b':'#546b46';
+    guests.push(`<circle cx="${x}" cy="${y}" r=".42" fill="${fill}" stroke="#fff" stroke-width=".12"/><path d="M${x} ${y+.45} v1.05" stroke="${fill}" stroke-width=".22" stroke-linecap="round"/>`);
+  });
+
   const poles=(scene.tent.centerPoles||[]).map(pole=>{
     const [cx,cy]=mapPoint(pole.x,pole.y);
     return `<circle cx="${cx}" cy="${cy}" r=".38" fill="#566d50" stroke="#fff" stroke-width=".14"/>`;
@@ -96,7 +109,9 @@ function buildPlanSvg(){
     <g data-story-layer="cocktail" data-threshold="10">${serviceMarkup(serviceObject('wedding-cocktail-a'),'#f5ead3')}${serviceMarkup(serviceObject('wedding-cocktail-b'),'#f5ead3')}</g>
     <g data-story-layer="linens" data-threshold="11">${linens.join('')}</g>
     <g data-story-layer="centerpieces" data-threshold="12">${centerpieces.join('')}</g>
-    <g data-story-layer="lighting" data-threshold="13">${lighting.join('')}</g>`;
+    <g data-story-layer="lighting" data-threshold="13">${lighting.join('')}</g>
+    <g data-story-layer="entrance" data-threshold="14">${entrance.join('')}</g>
+    <g data-story-layer="guests" data-threshold="15">${guests.join('')}</g>`;
 
   const template=document.createElement('template');
   template.innerHTML=`<svg class="story-build-plan" viewBox="0 0 60 40" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Animated overhead wedding layout building from an empty venue to a complete reception">${markup}</svg>`;
