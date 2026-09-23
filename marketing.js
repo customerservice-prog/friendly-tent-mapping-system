@@ -5,6 +5,10 @@
     var link = document.createElement('link'); link.rel = 'preconnect'; link.href = href; link.crossOrigin = 'anonymous'; document.head.appendChild(link);
   }
   preconnect('https://rentsketch-api-production.up.railway.app');
+  var vitals = document.createElement('script');
+  vitals.src = '/web-vitals.js?v=20260922-rum-1';
+  vitals.async = true;
+  document.head.appendChild(vitals);
   window.RentSketchAnalytics = window.RentSketchAnalytics || { pendingEvents: [] };
   var analytics = document.createElement('script');
   analytics.src = '/analytics-loader.js?v=20260922-ga4-2';
