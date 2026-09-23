@@ -1032,3 +1032,124 @@ html.rs-motion-ready .rs-reveal.is-visible{opacity:1;transform:none}
   .feature,.guide-link,.use-case-grid article,.price-card,.btn{transition:none}
   html.rs-motion-ready .rs-reveal{opacity:1;transform:none;transition:none}
 }
+
+
+/* Homepage cinematic wedding build */
+.homepage-hero .tour-view{position:relative}
+.wedding-build-curtain{
+  position:absolute;inset:0;z-index:7;
+  display:grid;place-items:center;
+  opacity:0;pointer-events:none;
+  background:
+    radial-gradient(circle at 50% 44%,rgba(255,255,255,.5),transparent 16rem),
+    linear-gradient(180deg,rgba(229,239,226,.97),rgba(214,229,207,.98));
+  transition:opacity .55s ease;
+}
+.wedding-build-curtain:before{
+  content:"";
+  position:absolute;inset:0;
+  opacity:.45;
+  background-image:
+    linear-gradient(rgba(89,117,86,.09) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(89,117,86,.09) 1px,transparent 1px);
+  background-size:36px 36px;
+  mask-image:radial-gradient(circle at center,#000,transparent 80%);
+}
+.wedding-build-curtain span{
+  position:relative;
+  padding:8px 13px;
+  border:1px solid rgba(86,114,83,.16);
+  border-radius:999px;
+  color:#405d43;
+  background:rgba(255,255,255,.7);
+  box-shadow:0 10px 30px rgba(56,84,54,.08);
+  font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+}
+.wedding-build-curtain.is-visible{opacity:1}
+.wedding-build-hud{
+  position:absolute;z-index:9;
+  left:12px;right:12px;bottom:12px;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:9px 12px;
+  align-items:end;
+  padding:12px 13px;
+  border:1px solid rgba(207,219,233,.88);
+  border-radius:15px;
+  background:rgba(255,255,255,.9);
+  box-shadow:0 14px 34px rgba(16,33,55,.14);
+  backdrop-filter:blur(16px) saturate(145%);
+  -webkit-backdrop-filter:blur(16px) saturate(145%);
+  pointer-events:none;
+}
+.wedding-build-copy{min-width:0}
+.wedding-build-kicker{
+  display:block;
+  margin-bottom:2px;
+  color:#718196;
+  font-size:8px;font-weight:840;letter-spacing:.12em;text-transform:uppercase;
+}
+.wedding-build-copy strong{
+  display:block;
+  color:#15263b;
+  font-size:12px;
+  line-height:1.2;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.wedding-build-copy small{
+  display:block;
+  color:#718196;
+  font-size:9px;
+  line-height:1.35;
+  margin-top:2px;
+}
+.wedding-build-progress{
+  grid-column:1/-1;
+  height:3px;
+  overflow:hidden;
+  border-radius:999px;
+  background:#e7edf4;
+}
+.wedding-build-progress span{
+  display:block;width:10%;height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#4d7cf0,#4faf6f);
+  transition:width .5s cubic-bezier(.22,.8,.25,1);
+}
+.wedding-replay{
+  pointer-events:auto;
+  align-self:center;
+  border:1px solid #d4deea;
+  border-radius:9px;
+  padding:7px 9px;
+  color:#31526f;
+  background:#f7f9fc;
+  font-size:9px;font-weight:780;
+}
+.wedding-replay:hover{background:#eef4fb}
+.wedding-replay[hidden]{display:none}
+.homepage-hero.wedding-building .tour-note,
+.homepage-hero .wedding-building .tour-note{opacity:0}
+.homepage-hero .tour-3d{
+  transition:opacity .5s ease,filter .5s ease;
+}
+.homepage-hero .studio.wedding-resetting .tour-3d{
+  opacity:.45;
+  filter:saturate(.8);
+}
+@media(max-width:640px){
+  .wedding-build-hud{
+    left:8px;right:8px;bottom:8px;
+    padding:9px 10px;
+    border-radius:12px;
+    gap:6px 8px;
+  }
+  .wedding-build-kicker{font-size:7px}
+  .wedding-build-copy strong{font-size:10px}
+  .wedding-build-copy small{font-size:8px}
+  .wedding-replay{padding:6px 8px;font-size:8px}
+  .wedding-build-curtain span{font-size:9px}
+}
+@media(prefers-reduced-motion:reduce){
+  .wedding-build-curtain,.homepage-hero .tour-3d,.wedding-build-progress span{transition:none}
+}
