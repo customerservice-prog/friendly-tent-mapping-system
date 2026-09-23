@@ -103,7 +103,8 @@ router.get('/web-vitals', requirePlatformAdmin, async (req, res) => {
 
   const result = await db.query(
     `SELECT
-       COALESCE(path, 'ALL') AS path,
+       CASE WHEN GROUPING(path)=1 THEN 'ALL' ELSE path END AS path,
+       GROUPING(path)::int AS grouping_level,
        COUNT(*)::int AS samples,
        ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY lcp_ms) FILTER (WHERE lcp_ms IS NOT NULL))::numeric, 1) AS lcp_p75_ms,
        ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY cls) FILTER (WHERE cls IS NOT NULL))::numeric, 4) AS cls_p75,
@@ -114,12 +115,12 @@ router.get('/web-vitals', requirePlatformAdmin, async (req, res) => {
      WHERE created_at >= now() - $1 * interval '1 day'
        AND ($2::text IS NULL OR path = $2)
      GROUP BY GROUPING SETS ((path), ())
-     ORDER BY CASE WHEN path IS NULL THEN 0 ELSE 1 END, samples DESC, path
+     ORDER BY grouping_level DESC, samples DESC, path
      LIMIT 101`,
     params
   );
 
-  const rows = result.rows.map(row => ({
+  const rows = result.rows.map(({ grouping_level, ...row }) => ({
     ...row,
     samples: Number(row.samples || 0),
     lcp_p75_ms: row.lcp_p75_ms == null ? null : Number(row.lcp_p75_ms),
