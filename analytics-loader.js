@@ -71,7 +71,7 @@
 
     // Keep Google's large analytics library out of the critical render path.
     // Conversion events and the first visitor interaction still force it now.
-    timer = setTimeout(loadNow, 2500);
+    timer = setTimeout(loadNow, location.pathname === '/' ? 4500 : 2500);
     ['pointerdown', 'touchstart', 'keydown'].forEach(function (type) {
       window.addEventListener(type, loadNow, { once: true, capture: true, passive: type !== 'keydown' });
     });

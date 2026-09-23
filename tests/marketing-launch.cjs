@@ -81,6 +81,10 @@ assert.match(partySoftware,/event-reception-3d\.webp/);
 assert.match(partySoftware,/https:\/\/www\.friendlypartyrental\.com\/design-your-event/);
 assert.match(partySoftware,/Party rental software buying checklist/);
 assert.match(partySoftware,/class="buyer-table"/);
+assert.equal((partySoftware.match(/role="cell"/g)||[]).length,18,'buyer comparison rows expose accessible table cells');
+assert.match(partySoftware,/event-reception-3d-mobile\.webp 720w/);
+assert.match(caddy,/@mediaAssets path \/assets\/\*/);
+assert.match(caddy,/max-age=2592000/);
 assert.match(partySoftware,/What is party rental software\?/);
 const eventSoftware=fs.readFileSync(path.join(root,'event-rental-software/index.html'),'utf8');
 assert.match(eventSoftware,/<title>Party &amp; Event Rental Software \| RentSketch<\/title>/);
@@ -109,7 +113,11 @@ assert.match(homeHtml,/party-rental-management-software/);
 for(const file of ['index.html','party-rental-software/index.html','event-rental-software/index.html','tent-rental-software/index.html']){
   const html=fs.readFileSync(path.join(root,file),'utf8');
   const page=new JSDOM(html,{url:'https://rentsketch.com/'+(file==='index.html'?'':file.replace(/index\.html$/,''))}).window.document;
-  for(const img of page.querySelectorAll('.brand img')) assert.ok((img.getAttribute('alt')||'').trim(),file+' brand logo needs alt text');
+  for(const img of page.querySelectorAll('.brand img')) {
+    assert.equal(img.getAttribute('alt'),'',
+      file+' brand mark should be decorative because the adjacent link text already says RentSketch');
+    assert.equal(img.getAttribute('aria-hidden'),'true');
+  }
 }
 for(const html of [partySoftware,eventSoftware,tentSoftware]){
   assert.match(html,/"@type": "SoftwareApplication"/);
@@ -145,7 +153,7 @@ assert.match(designerHtml,/analytics-loader\.js\?v=20260922-ga4-2/);
 assert.match(analyticsLoader,/\^G-\[A-Z0-9\]\+\$/);
 assert.match(analyticsLoader,/googletagmanager\.com\/gtag\/js/);
 assert.match(analyticsLoader,/send_page_view: true/);
-assert.match(analyticsLoader,/setTimeout\(loadNow, 2500\)/);
+assert.match(analyticsLoader,/location\.pathname === '\/' \? 4500 : 2500/);
 assert.match(analyticsLoader,/pendingEvents/);
 assert.match(analyticsLoader,/RentSketchAnalytics/);
 assert.match(marketingJs,/web-vitals\.js\?v=20260922-rum-2/);
