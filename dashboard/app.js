@@ -96,7 +96,7 @@ function esc(s) {
      '<nav class="dash-nav">' +
      navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
      navLink('branding', 'Branding') + navLink('billing', 'Billing') + navLink('install', 'Install') +
-     (state.user && state.user.isPlatformAdmin ? navLink('superadmin', 'Super Admin') : '') +
+     (state.user && state.user.isPlatformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link">Platform Console</a>' : '') +
      '</nav>' +
      '<div class="dash-account">' + switcher + '<button id="btnLogout" class="btn-logout" type="button">Log out</button></div>' +
      '</header>' +
@@ -731,7 +731,7 @@ function esc(s) {
    else if (route === 'branding') viewBranding(route, __gen);
    else if (route === 'billing') viewBilling(route, __gen);
    else if (route === 'install') viewInstall(route, __gen);
-   else if (route === 'superadmin') viewSuperAdmin(route, __gen);
+   else if (route === 'superadmin') { window.location.replace('/dashboard/platform.html#overview'); }
  }
 
  async function boot() {
