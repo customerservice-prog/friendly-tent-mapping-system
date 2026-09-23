@@ -49,6 +49,7 @@ router.post('/', express.text({ type: 'text/plain', limit: '8kb' }), async (req,
   const deviceClass = ['phone', 'tablet', 'desktop'].includes(body.deviceClass)
     ? body.deviceClass : 'desktop';
 
+  const collectorVersion = Number.isInteger(body.version) && body.version >= 1 && body.version <= 100 ? body.version : 1;
   const metrics = body.metrics && typeof body.metrics === 'object' ? body.metrics : {};
   const lcp = finiteMetric(metrics.lcp, 120000);
   const cls = finiteMetric(metrics.cls, 10);
@@ -61,9 +62,9 @@ router.post('/', express.text({ type: 'text/plain', limit: '8kb' }), async (req,
 
   try {
     await db.query(
-      `INSERT INTO web_vitals(path,navigation_type,device_class,lcp_ms,cls,inp_ms,fcp_ms,ttfb_ms)
-       VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,
-      [pagePath, navigationType, deviceClass, lcp, cls, inp, fcp, ttfb]
+      `INSERT INTO web_vitals(path,navigation_type,device_class,lcp_ms,cls,inp_ms,fcp_ms,ttfb_ms,collector_version)
+       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+      [pagePath, navigationType, deviceClass, lcp, cls, inp, fcp, ttfb, collectorVersion]
     );
     res.status(204).end();
   } catch (err) {
