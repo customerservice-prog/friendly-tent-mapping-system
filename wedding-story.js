@@ -217,7 +217,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
   }
 
   function scheduleNext(){
-    if(!playing||disposed||!visible||selected!=='3d'||view)return;
+    if(!playing||disposed||!visible||selected!=='3d'||(view&&!demo))return;
     const index=stepIndex(progress);
     if(index>=steps.length-1){
       stop();
@@ -225,14 +225,14 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
     }
     const next=index+1;
     timer=setTimeout(()=>{
-      if(!playing||disposed||!visible||selected!=='3d'||view)return;
+      if(!playing||disposed||!visible||selected!=='3d'||(view&&!demo))return;
       setProgress(steps[next].p);
       scheduleNext();
     },stageDelays[index]||750);
   }
 
   function play(){
-    if(reduce.matches||disposed||!visible||selected!=='3d'||view||playing)return;
+    if(reduce.matches||disposed||!visible||selected!=='3d'||(view&&!demo)||playing)return;
     if(progress>=1)setProgress(0);
     playing=true;
     pause.textContent='Pause';
@@ -283,6 +283,9 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
     setProgress(1);
     const active=await ensure3D();
     if(active){
+      target.classList.add('active');
+      studio.classList.add('story-has-webgl');
+      plan.classList.add('is-hidden');
       active.setMarketingProgress(1);
       active.reception();
       controls.hidden=false;
@@ -301,14 +304,14 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
   }
 
   replay.addEventListener('click',()=>{
-    if(view){
-      view.destroy();view=null;
-      studio.classList.remove('story-has-webgl');
-      target.classList.remove('active');
-      controls.hidden=true;
-    }
     selected='3d';
     modeButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view==='3d')));
+    if(view){
+      target.classList.add('active');
+      studio.classList.add('story-has-webgl');
+      plan.classList.add('is-hidden');
+      controls.hidden=false;
+    }
     setProgress(0);
     if(!reduce.matches)play();
   });
