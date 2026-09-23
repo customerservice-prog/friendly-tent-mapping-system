@@ -58,3 +58,6 @@ body{background:var(--tw-bg)!important}
   .tenant-quick-grid{grid-template-columns:1fr}.tenant-topbar .dash-account .role-pill{display:none}.tenant-topbar .tenant-switch{max-width:155px;font-size:10px}.login-card{margin:14px;padding:28px!important}
 }
 @media(prefers-reduced-motion:reduce){.tenant-sidebar{transition:none}}
+
+.tenant-account-link{color:#53667f;text-decoration:none;border:1px solid #d5dfeb;background:#fff;border-radius:8px;padding:7px 9px;font-size:10px;font-weight:800}.tenant-account-link:hover{background:#f5f8fc}
+.pc-subtext{display:block;margin-top:3px;color:#8997a9;font-size:9px}.tenant-table-scroll{overflow-x:auto;width:100%}
