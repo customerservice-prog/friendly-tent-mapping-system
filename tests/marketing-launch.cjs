@@ -144,6 +144,8 @@ const eventPassHtml=fs.readFileSync(path.join(root,'event-pass/index.html'),'utf
 assert.match(eventPassHtml,/No subscription/);
 assert.match(eventPassHtml,/30 days/);
 assert.match(eventPassHtml,/\$9\.99 once/);
+const pricingHtml=fs.readFileSync(path.join(root,'business/pricing.html'),'utf8');
+assert.match(pricingHtml,/<h2 class="event-pass-title">Event Pass · \$9\.99 once<\/h2>/,'pricing Event Pass should be an h2 so heading order stays sequential');
 const signup=new JSDOM(fs.readFileSync(path.join(root,'business/signup.html'),'utf8'),{url:'https://rentsketch.com/business/signup.html?plan=starter',runScripts:'outside-only'});
 signup.window.eval(fs.readFileSync(path.join(root,'business/signup.js'),'utf8'));
 assert.equal(signup.window.document.querySelector('input[name=plan]:checked').value,'starter');

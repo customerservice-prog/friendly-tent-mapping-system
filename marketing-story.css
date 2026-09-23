@@ -27,7 +27,7 @@ body{background:#fff;color:var(--ink)}
 .price-card.featured:before{background:#245de4}
 .price{font-size:52px}.price-card .desc,.price-card li{font-size:14px}
 .event-pass{background:#142442;border-color:#142442;color:#fff;border-radius:18px;padding:34px}
-.event-pass h3{color:#fff;font-size:27px}.event-pass p{color:#c7d2e3;font-size:15px}
+.event-pass h2,.event-pass h3{color:#fff;font-size:27px}.event-pass .event-pass-title{margin:13px 0 8px;letter-spacing:-.03em}.event-pass p{color:#c7d2e3;font-size:15px}
 .event-pass .pill{background:#dce9ff;color:#1c4a9b}
 .event-pass .btn:not(.primary){background:transparent;color:#fff;border-color:#8094ac}
 .guide-links:not(.software-intent-links .guide-links){gap:12px}
