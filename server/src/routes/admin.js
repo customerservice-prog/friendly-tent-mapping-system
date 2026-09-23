@@ -131,6 +131,12 @@ router.patch('/tenants/:slug/members/:userId', requirePlatformAdmin, async (req,
   if (!['owner', 'admin', 'staff', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
   const tenant = await db.query('SELECT id FROM tenants WHERE slug=$1', [req.params.slug]);
   if (!tenant.rows[0]) return res.status(404).json({ error: 'Tenant not found' });
+  const current = (await db.query('SELECT role FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',[tenant.rows[0].id,req.params.userId])).rows[0];
+  if (!current) return res.status(404).json({ error: 'Membership not found' });
+  if (current.role === 'owner' && role !== 'owner') {
+    const owners = await db.query("SELECT COUNT(*)::int AS count FROM tenant_memberships WHERE tenant_id=$1 AND role='owner'",[tenant.rows[0].id]);
+    if (Number(owners.rows[0].count||0) <= 1) return res.status(409).json({ error: 'Cannot demote the tenant’s only owner' });
+  }
   const result = await db.query(
     `UPDATE tenant_memberships SET role=$1 WHERE tenant_id=$2 AND user_id=$3 RETURNING *`,
     [role, tenant.rows[0].id, req.params.userId]
