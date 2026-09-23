@@ -149,6 +149,14 @@ function esc(s) {
  function errorHtml(err) { return '<div class="dash-error">' + esc(err && err.message ? err.message : String(err)) + (err && err.status === 402 ? ' <a href="#/billing">Open Billing to continue →</a>' : '') + '</div>'; }
 
  function bindShellEvents() {
+   var menuBtn = document.getElementById('tenantMenuBtn');
+   var tenantShell = document.getElementById('tenantShell');
+   if (menuBtn && tenantShell) menuBtn.addEventListener('click', function () {
+     tenantShell.classList.toggle('menu-open');
+   });
+   Array.prototype.forEach.call(document.querySelectorAll('.tenant-nav .nav-link'), function (link) {
+     link.addEventListener('click', function () { if (tenantShell) tenantShell.classList.remove('menu-open'); });
+   });
    var logout = document.getElementById('btnLogout');
    if (logout) logout.addEventListener('click', function () {
      setToken(null);
