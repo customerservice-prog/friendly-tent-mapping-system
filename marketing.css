@@ -498,7 +498,7 @@ a{transition:color .2s ease,opacity .2s ease}
 }
 .guide-link:hover{border-color:#c3d2e4}
 .guide-link h3{position:relative;font-size:22px}
-.guide-link p{position:relative;color:#68798c;font-size:13px;line-height:1.65}
+.guide-link p{position:relative;color:#637488;font-size:13px;line-height:1.65}
 .guide-link span{position:relative;color:var(--blue);font-weight:740}
 .software-intent-links{
   border:0;
@@ -611,7 +611,7 @@ a{transition:color .2s ease,opacity .2s ease}
   background:#eef3f8;
   padding:4px;
 }
-.billing-toggle button{border-radius:10px;color:#607286;font-weight:690}
+.billing-toggle button{border-radius:10px;color:#5b6d81;font-weight:690}
 .billing-toggle button[aria-pressed=true]{
   color:#17345d;
   background:#fff;
