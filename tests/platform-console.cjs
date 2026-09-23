@@ -21,7 +21,7 @@ function load(file,deps){
   return mod.exports;
 }
 const guard=(req,res,next)=>{req.user={userId:'00000000-0000-4000-8000-000000000099',isPlatformAdmin:true};next();};
-const routes=load('server/src/routes/admin.js',{express,'../db':db,'../middleware/requireAuth':{requirePlatformAdmin:guard},stripe:Stripe});
+const routes=load('server/src/routes/admin.js',{express,crypto:require('crypto'),'../db':db,'../auth':{hashPassword:async value=>'fixture-hash-'+value.slice(0,8)},'../middleware/requireAuth':{requirePlatformAdmin:guard},stripe:Stripe});
 const app=express();app.use(express.json());app.use('/api/admin',routes);app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:err.message});});
 let server,base;
 async function req(url,{method='GET',body}={}){
@@ -30,14 +30,15 @@ async function req(url,{method='GET',body}={}){
 }
 (async()=>{
  await pg.exec(`
- CREATE TABLE users(id uuid PRIMARY KEY,email text,display_name text,is_platform_admin boolean default false);
+ CREATE TABLE users(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),email text UNIQUE,password_hash text,display_name text,is_platform_admin boolean default false);
  CREATE TABLE tenants(
-   id uuid PRIMARY KEY,slug text UNIQUE,name text,contact_email text,subscription_plan text,subscription_status text,
+   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),slug text UNIQUE,name text,contact_email text,website text,logo_url text,webhook_url text,embed_key text,
+   allowed_origins jsonb default '[]'::jsonb,customer_access text,subscription_plan text,subscription_status text,
    trial_ends_at timestamptz,stripe_connect_status text,stripe_connect_account_id text,created_at timestamptz default now(),
    updated_at timestamptz default now()
  );
- CREATE TABLE products(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid);
- CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text,created_at timestamptz default now());
+ CREATE TABLE products(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,category text default 'tent',active boolean default true,visual_model_id text);
+ CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text,created_at timestamptz default now(),UNIQUE(tenant_id,user_id));
  CREATE TABLE designs(
    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,event_type text,guest_count int,
    estimate_total numeric,created_at timestamptz default now(),updated_at timestamptz default now()
@@ -49,7 +50,7 @@ async function req(url,{method='GET',body}={}){
  );
  CREATE TABLE quote_requests(
    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,design_id uuid,customer_name text,customer_email text,
-   payment_status text,deposit_amount_cents int,amount_paid_cents int,platform_fee_cents int,
+   status text default 'new',estimate_total numeric,payment_status text,deposit_amount_cents int,amount_paid_cents int,platform_fee_cents int,
    stripe_checkout_session_id text,stripe_payment_intent_id text,created_at timestamptz default now()
  );
  CREATE TABLE plans(id text PRIMARY KEY,monthly_price numeric,annual_price numeric);
@@ -62,8 +63,10 @@ async function req(url,{method='GET',body}={}){
    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),admin_user_id uuid,action text,target_type text,target_id text,target_label text,
    metadata jsonb default '{}'::jsonb,created_at timestamptz default now()
  );
- CREATE TABLE event_pass_emails(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),status text);
+ CREATE TABLE event_pass_emails(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),customer_email text,tenant_slug text,attempts int default 0,last_error text,status text,created_at timestamptz default now());
  CREATE TABLE processed_stripe_events(id text PRIMARY KEY,event_type text);
+ CREATE TABLE platform_tenant_notes(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,admin_user_id uuid,body text,created_at timestamptz default now());
+ CREATE TABLE password_reset_tokens(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),user_id uuid,token_hash text UNIQUE,expires_at timestamptz,used_at timestamptz,created_at timestamptz default now());
  `);
  const admin='00000000-0000-4000-8000-000000000099',tenant='00000000-0000-4000-8000-000000000001';
  await pg.query("INSERT INTO users(id,email,display_name,is_platform_admin) VALUES($1,'owner@example.invalid','Owner',true)",[admin]);
@@ -76,7 +79,7 @@ async function req(url,{method='GET',body}={}){
  const deposit=(await pg.query("INSERT INTO quote_requests(tenant_id,design_id,customer_name,customer_email,payment_status,deposit_amount_cents,amount_paid_cents,platform_fee_cents,stripe_checkout_session_id,stripe_payment_intent_id) VALUES($1,$2,'Deposit Buyer','deposit@example.invalid','paid',2000,2000,100,'cs_dep','pi_dep') RETURNING id",[tenant,design.id])).rows[0];
  await pg.query("INSERT INTO plans(id,monthly_price,annual_price) VALUES('pro',99,990)");
  const sub=(await pg.query("INSERT INTO subscriptions(tenant_id,plan_id,status,billing_interval,current_period_start,current_period_end,provider_customer_id,provider_subscription_id) VALUES($1,'pro','active','monthly',now(),now()+interval '1 month','cus_fixture','sub_fixture') RETURNING id",[tenant])).rows[0];
- await pg.query("INSERT INTO event_pass_emails(status) VALUES('pending'),('failed')");
+ await pg.query("INSERT INTO event_pass_emails(customer_email,tenant_slug,status,attempts,last_error) VALUES('queued@example.invalid','friendly','pending',0,NULL),('failed@example.invalid','friendly','failed',3,'fixture failure')");
  await pg.query("INSERT INTO processed_stripe_events(id,event_type) VALUES('evt_1','checkout.session.completed')");
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 
@@ -96,5 +99,16 @@ async function req(url,{method='GET',body}={}){
  r=await req('/api/admin/system');assert.equal(r.status,200);assert.equal(r.body.database.ok,true);assert.equal(r.body.payments.stripeConfigured,true);assert.equal(r.body.email.pending,1);assert.equal(r.body.email.failed,1);
  r=await req('/api/admin/activity');assert.equal(r.status,200);assert.ok(r.body.activity.some(a=>a.action==='payment.refunded'));assert.ok(r.body.activity.some(a=>a.action==='subscription.cancel_scheduled'));
  assert.ok((await pg.query('SELECT COUNT(*)::int AS n FROM platform_admin_audit')).rows[0].n>=3,'sensitive actions are audited');
- console.log('PASS platform console: revenue, payment ledger, guarded Stripe refunds, entitlement revocation, subscription cancellation, designs, health and audit logging.');
+ r=await req('/api/admin/analytics');assert.equal(r.status,200);assert.equal(r.body.trend.length,30);assert.equal(r.body.topTenants[0].slug,'friendly');
+ r=await req('/api/admin/alerts');assert.equal(r.status,200);assert.equal(r.body.counts.failedMail,1);assert.equal(r.body.counts.newRequests,1);
+ r=await req('/api/admin/tenants/friendly/notes',{method:'POST',body:{body:'Fixture support note'}});assert.equal(r.status,201);const noteId=r.body.note.id;
+ r=await req('/api/admin/tenants/friendly/notes');assert.equal(r.status,200);assert.equal(r.body.notes.length,1);
+ r=await req('/api/admin/tenants/friendly/notes/'+noteId,{method:'DELETE'});assert.equal(r.status,200);
+ r=await req('/api/admin/tenants/friendly/members',{method:'POST',body:{email:'staff@example.invalid',displayName:'Fixture Staff',role:'staff'}});assert.equal(r.status,201);assert.match(r.body.resetUrl,/reset-password\.html#token=/);const invited=r.body.member;
+ r=await req('/api/admin/tenants/friendly/members/'+invited.id+'/reset-link',{method:'POST',body:{}});assert.equal(r.status,200);assert.match(r.body.resetUrl,/reset-password\.html#token=/);
+ r=await req('/api/admin/tenants/friendly/members/'+admin,{method:'PATCH',body:{role:'staff'}});assert.equal(r.status,409,'the only tenant owner cannot be demoted');
+ r=await req('/api/admin/tenants',{method:'POST',body:{name:'New Fixture Rentals',ownerName:'New Owner',ownerEmail:'new-owner@example.invalid',plan:'starter'}});assert.equal(r.status,201);assert.equal(r.body.tenant.name,'New Fixture Rentals');assert.equal(r.body.tenant.subscription_status,'trialing');assert.match(r.body.resetUrl,/reset-password\.html#token=/);
+ assert.equal((await pg.query("SELECT COUNT(*)::int AS n FROM tenants WHERE slug<>'generic'")).rows[0].n,2);
+ assert.ok((await pg.query('SELECT COUNT(*)::int AS n FROM platform_admin_audit')).rows[0].n>=8,'sensitive support, onboarding and account actions are audited');
+ console.log('PASS platform console: revenue, payments/refunds, subscriptions, analytics, alerts, tenant notes, secure staff invites/reset links, designs, health and audit logging.');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{server?.close();await pg.close();});

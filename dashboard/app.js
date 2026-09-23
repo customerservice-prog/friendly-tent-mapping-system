@@ -74,40 +74,89 @@ function esc(s) {
 
  function appEl() { return document.getElementById('app'); }
 
+ function activeTenantRecord() {
+   return (state.tenants || []).find(function (t) { return t.slug === state.tenant; }) || null;
+ }
+ function tenantRole() {
+   if (state.user && state.user.isPlatformAdmin) return 'platform_admin';
+   var record = activeTenantRecord();
+   return record && record.role ? record.role : 'viewer';
+ }
+ function tenantDesignerUrl() {
+   return '/designer/?tenant=' + encodeURIComponent(state.tenant || 'generic') + '&staff=1';
+ }
+ function tenantInitials(name) {
+   return String(name || 'RS').trim().split(/\s+/).slice(0, 2).map(function (part) { return part.charAt(0); }).join('').toUpperCase();
+ }
+
  function shellHtml(route, inner) {
    var tenants = state.tenants || [];
    var platformAdmin = !!(state.user && state.user.isPlatformAdmin);
-   var brandSub = platformAdmin ? (platformTenantView() ? 'Tenant Workspace · Admin' : 'Platform Console') : 'Business Dashboard';
+   var record = activeTenantRecord();
+   var tenantName = record ? record.name : (state.tenant || 'Business workspace');
+   var userName = (state.user && (state.user.displayName || state.user.email)) || 'RentSketch user';
+   var role = tenantRole();
    var switcher = '';
    if (tenants.length > 1) {
-     switcher = '<select id="tenantSwitch" class="tenant-switch">' + tenants.map(function (t) {
+     switcher = '<select id="tenantSwitch" class="tenant-switch" aria-label="Switch business">' + tenants.map(function (t) {
        return '<option value="' + esc(t.slug) + '"' + (t.slug === state.tenant ? ' selected' : '') + '>' + esc(t.name) + '</option>';
      }).join('') + '</select>';
    } else if (tenants.length === 1) {
      switcher = '<span class="tenant-name">' + esc(tenants[0].name) + '</span>';
    }
-   function navLink(r, label) {
-     return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '">' + label + '</a>';
+   function navLink(r, label, icon) {
+     return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '"><span class="tenant-nav-icon">' + icon + '</span><span>' + label + '</span></a>';
    }
    return '' +
-     '<div class="dash-shell">' +
-     '<header class="dash-header">' +
-     '<div class="dash-brand">RentSketch <span class="dash-brand-sub">' + brandSub + '</span></div>' +
-     '<nav class="dash-nav">' +
-     navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
-     navLink('branding', 'Branding') + navLink('billing', 'Billing') + navLink('install', 'Install') +
-     (state.user && state.user.isPlatformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link">Platform Console</a>' : '') +
-     '</nav>' +
-     '<div class="dash-account">' + switcher + '<button id="btnLogout" class="btn-logout" type="button">Log out</button></div>' +
-     '</header>' +
-     '<main class="dash-main" id="dashMain">' + inner + '</main>' +
+     '<div class="tenant-shell" id="tenantShell">' +
+       '<aside class="tenant-sidebar">' +
+         '<a class="tenant-brand" href="#/overview"><img src="/assets/brand-mark.svg" alt=""><span><strong>RentSketch</strong><span>Business Workspace</span></span></a>' +
+         '<a class="tenant-launch" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">✦ Open customer designer</a>' +
+         '<nav class="tenant-nav" aria-label="Business workspace">' +
+           '<div class="tenant-nav-group"><div class="tenant-nav-label">Workspace</div>' +
+             navLink('overview', 'Overview', '⌂') +
+             navLink('requests', 'Quote requests', '▤') +
+             navLink('products', 'Products', '▦') +
+           '</div>' +
+           '<div class="tenant-nav-group"><div class="tenant-nav-label">Customer experience</div>' +
+             navLink('branding', 'Branding', '◆') +
+             navLink('install', 'Website install', '↗') +
+           '</div>' +
+           '<div class="tenant-nav-group"><div class="tenant-nav-label">Account</div>' +
+             navLink('billing', 'Billing & payments', '$') +
+             (platformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link"><span class="tenant-nav-icon">★</span><span>Platform Console</span></a>' : '') +
+           '</div>' +
+         '</nav>' +
+         '<div class="tenant-sidebar-foot">' +
+           '<div class="tenant-user"><span class="tenant-avatar">' + esc(tenantInitials(userName)) + '</span><span><strong>' + esc(userName) + '</strong><small>' + esc(role === 'platform_admin' ? 'Platform admin · viewing ' + tenantName : role + ' · ' + tenantName) + '</small></span></div>' +
+           '<button id="btnLogout" class="btn-logout" type="button">Log out</button>' +
+         '</div>' +
+       '</aside>' +
+       '<section class="tenant-workspace">' +
+         '<header class="tenant-topbar">' +
+           '<button class="tenant-mobile-toggle" id="tenantMenuBtn" type="button" aria-label="Open workspace navigation">☰</button>' +
+           '<div class="tenant-crumb"><strong>' + esc(tenantName) + '</strong> / ' + esc(route ? route.charAt(0).toUpperCase() + route.slice(1) : 'Overview') + '</div>' +
+           '<div class="tenant-top-actions">' +
+             (platformAdmin ? '<a class="tenant-return" href="/dashboard/platform.html#businesses">← Platform Console</a>' : '') +
+             '<div class="dash-account"><span class="role-pill">' + esc(role === 'platform_admin' ? 'Super Admin' : role) + '</span>' + switcher + '</div>' +
+           '</div>' +
+         '</header>' +
+         '<main class="dash-main tenant-content" id="dashMain">' + inner + '</main>' +
+       '</section>' +
      '</div>';
  }
-
  function loadingHtml(label) { return '<div class="dash-loading">' + esc(label || 'Loading...') + '</div>'; }
  function errorHtml(err) { return '<div class="dash-error">' + esc(err && err.message ? err.message : String(err)) + (err && err.status === 402 ? ' <a href="#/billing">Open Billing to continue →</a>' : '') + '</div>'; }
 
  function bindShellEvents() {
+   var menuBtn = document.getElementById('tenantMenuBtn');
+   var tenantShell = document.getElementById('tenantShell');
+   if (menuBtn && tenantShell) menuBtn.addEventListener('click', function () {
+     tenantShell.classList.toggle('menu-open');
+   });
+   Array.prototype.forEach.call(document.querySelectorAll('.tenant-nav .nav-link'), function (link) {
+     link.addEventListener('click', function () { if (tenantShell) tenantShell.classList.remove('menu-open'); });
+   });
    var logout = document.getElementById('btnLogout');
    if (logout) logout.addEventListener('click', function () {
      setToken(null);
@@ -177,53 +226,94 @@ function esc(s) {
  }
 
  async function viewOverview(route, gen) {
-   appEl().innerHTML = shellHtml(route, loadingHtml('Loading overview...'));
+   appEl().innerHTML = shellHtml(route, loadingHtml('Loading business workspace...'));
    bindShellEvents();
    if (!state.tenant) {
-     document.getElementById('dashMain').innerHTML = '<div class="dash-empty"><div class="dash-empty-icon">RS</div><h3>No business assigned yet</h3><p>Your account is not a member of any tenant yet. Ask a RentSketch admin to add you.</p></div>';
+     document.getElementById('dashMain').innerHTML = '<div class="tenant-empty"><div class="tenant-empty-icon">RS</div><h3>No business assigned yet</h3><p>Your account is not attached to a RentSketch business workspace yet.</p></div>';
      return;
    }
    try {
-     var admin = await api('/api/tenants/' + state.tenant + '/admin');
-     var designs = await api('/api/tenants/' + state.tenant + '/designs');
-     var requests = await api('/api/tenants/' + state.tenant + '/quote-requests');
-     var reqs = requests.quoteRequests || [];
-     var newCount = reqs.filter(function (r) { return r.status === 'new'; }).length;
-     var bookedCount = reqs.filter(function (r) { return r.status === 'booked'; }).length;
+     var summary = await api('/api/tenants/' + state.tenant + '/dashboard-summary');
      if (gen !== renderGeneration) return;
+     var t = summary.tenant || {};
+     var setup = summary.setup || { completed: 0, total: 4, percent: 0, items: [] };
+     var requests = summary.requests || {};
+     var designs = summary.designs || {};
+     var products = summary.products || {};
+     var health = summary.health || {};
+     var platformAdmin = !!(state.user && state.user.isPlatformAdmin);
+     var role = tenantRole();
+     var trialText = '';
+     if (!platformAdmin && t.subscriptionStatus === 'trialing' && t.trialEndsAt) {
+       var daysLeft = Math.ceil((new Date(t.trialEndsAt) - new Date()) / 86400000);
+       trialText = daysLeft > 0 ? (daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' left in trial') : 'Trial ended';
+     }
+     var subscriptionLabel = platformAdmin ? 'Platform admin access' : ((t.subscriptionPlan || 'trial') + ' · ' + (t.subscriptionStatus || 'trialing'));
+     var healthRows = [
+       ['Customer designer', health.designer, 'Designer is available for this workspace'],
+       ['Catalog', health.catalogReady, health.catalogReady ? products.active + ' active products ready' : (products.missingVisual ? products.missingVisual + ' products need visual mapping' : 'Add active products')],
+       ['Branding', health.brandingReady, health.brandingReady ? 'Customer-facing brand details configured' : 'Add logo/contact/colors'],
+       ['Website install', health.installReady, health.installReady ? ((t.allowedOrigins || []).length + ' approved domain' + ((t.allowedOrigins || []).length === 1 ? '' : 's')) : 'No approved website domain yet'],
+       ['Stripe deposits', health.paymentsReady, health.paymentsReady ? 'Stripe Connect active' : 'Not connected'],
+       ['Webhook', health.webhookConfigured, health.webhookConfigured ? 'Outbound webhook configured' : 'Optional integration not configured']
+     ];
+     function cents(value) { return '$' + (Number(value || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+     function setupHtml() {
+       return '<div class="tenant-progress-row"><div><strong>' + setup.percent + '%</strong><span class="pc-subtext"> workspace launch readiness</span></div><span class="tenant-status-chip ' + (setup.percent === 100 ? 'good' : 'blue') + '">' + setup.completed + ' of ' + setup.total + ' complete</span></div>' +
+         '<div class="tenant-progress-track"><span style="width:' + setup.percent + '%"></span></div>' +
+         '<div class="tenant-checklist">' + (setup.items || []).map(function (item) {
+           return '<a class="tenant-check' + (item.complete ? ' done' : '') + '" href="' + esc(item.href) + '"><span class="tenant-check-icon">' + (item.complete ? '✓' : '•') + '</span><span><strong>' + esc(item.label) + '</strong><small>' + esc(item.detail) + '</small></span><span>→</span></a>';
+         }).join('') + '</div>';
+     }
+     function recentRequestsHtml() {
+       var rows = summary.recentRequests || [];
+       if (!rows.length) return '<div class="tenant-empty"><div class="tenant-empty-icon">↗</div><h3>No quote requests yet</h3><p>Preview your customer designer or install it on your website. New customer requests will appear here automatically.</p><a class="tenant-btn primary" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">Open customer designer</a></div>';
+       return '<div class="tenant-request-list">' + rows.map(function (r) {
+         return '<div class="tenant-request-row"><div><strong>' + esc(r.customer_name || 'Customer') + '</strong><small>' + esc(r.customer_email || '') + '</small></div><div><strong>' + esc(fmtDate(r.event_date)) + '</strong><small>' + esc(r.event_type || 'Event') + '</small></div><div><strong>' + esc(r.guest_count || '—') + '</strong><small>guests</small></div><div class="tenant-request-value">' + esc(money(r.estimate_total)) + '</div><div><span class="status-badge status-' + esc(r.status) + '">' + esc(r.status) + '</span></div></div>';
+       }).join('') + '</div>';
+     }
+     function activityHtml() {
+       var rows = summary.activity || [];
+       if (!rows.length) return '<div class="tenant-empty"><p>Customer designs and quote activity will appear here as this workspace is used.</p></div>';
+       return '<div class="tenant-activity">' + rows.map(function (a) {
+         return '<div class="tenant-activity-row ' + esc(a.type) + '"><span class="tenant-activity-dot"></span><div><strong>' + esc(a.title) + '</strong><p>' + esc(a.detail || '') + '</p></div><time>' + esc(fmtDateTime(a.at)) + '</time></div>';
+       }).join('') + '</div>';
+     }
      var html = '' +
-       '<h1 class="dash-title">' + esc(admin.name) + '</h1>' +
-       '<p class="dash-subtitle">' + ((state.user && state.user.isPlatformAdmin) ? 'Platform Admin · Full complimentary access · Viewing tenant' : ('Plan: ' + esc(admin.subscriptionPlan || 'trial') + ' &middot; Status: ' + esc(admin.subscriptionStatus || 'trialing'))) + '</p>' +
-        (function() {
-          if (state.user && state.user.isPlatformAdmin) return '<div class="dash-saved"><strong>Platform Admin:</strong> unrestricted RentSketch access. Tenant trial and subscription limits do not apply to your account.</div>';
-          if (!admin.trialEndsAt) return '';
-          var end = new Date(admin.trialEndsAt);
-          var now = new Date();
-          var daysLeft = Math.ceil((end - now) / (24*60*60*1000));
-          if (admin.subscriptionStatus === 'trialing' && daysLeft <= 0) {
-            return '<div class="trial-banner trial-expired">Your free trial has ended. Please upgrade to keep using RentSketch.</div>';
-          }
-          if (admin.subscriptionStatus === 'trialing' && daysLeft > 0) {
-            return '<div class="trial-banner">Trial ends in ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + '.</div>';
-          }
-          return '';
-        })() +
-       (!(designs.designs || []).length ? '<section class="dash-onboarding"><h2>Set up your customer designer</h2><p>Your workspace is ready. Complete these steps before sharing it with customers.</p><div class="dash-setup-grid"><a href="#/products"><strong>1. Add your products</strong><span>Set dimensions, prices and visual models.</span></a><a href="#/branding"><strong>2. Add your branding</strong><span>Make the customer experience yours.</span></a><a href="#/install"><strong>3. Preview and install</strong><span>Check your designer, then add it to your website.</span></a></div><p><a href="/help/#business" target="_blank" rel="noopener">Read the getting-started guide ↗</a></p></section>' : '') +
-       '<div class="stat-row">' +
-       '<div class="stat-card"><div class="stat-num">' + reqs.length + '</div><div class="stat-label">Quote Requests</div></div>' +
-       '<div class="stat-card"><div class="stat-num">' + newCount + '</div><div class="stat-label">New / Unread</div></div>' +
-       '<div class="stat-card"><div class="stat-num">' + bookedCount + '</div><div class="stat-label">Booked / Active Orders</div></div>' +
-       '<div class="stat-card"><div class="stat-num">' + (designs.designs || []).length + '</div><div class="stat-label">Saved Designs (last 50)</div></div>' +
-       '</div>' +
-       '<h2 class="dash-section-title">Recent Quote Requests</h2>' +
-       renderRequestsTable(reqs.slice(0, 8), false) +
-       '<p class="dash-more"><a href="#/requests">View all requests &rarr;</a></p>';
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Business workspace</div><h1>' + esc(t.name || state.tenant) + '</h1><p>' + esc(t.contactEmail || 'Manage your customer-facing RentSketch workspace') + '</p>' +
+         '<div class="tenant-status-row"><span class="tenant-status-chip blue">' + esc(subscriptionLabel) + '</span>' +
+         (trialText ? '<span class="tenant-status-chip warn">' + esc(trialText) + '</span>' : '') +
+         '<span class="tenant-status-chip ' + (health.installReady ? 'good' : 'warn') + '">' + (health.installReady ? 'Website connected' : 'Install not finished') + '</span>' +
+         '<span class="tenant-status-chip ' + (health.catalogReady ? 'good' : 'warn') + '">' + (health.catalogReady ? 'Catalog ready' : 'Catalog needs attention') + '</span></div></div>' +
+         '<div class="tenant-head-actions"><a class="tenant-btn" href="#/requests">View requests</a><a class="tenant-btn" href="#/products">Manage products</a><a class="tenant-btn primary" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">✦ Open designer</a></div></div>' +
+       (platformAdmin ? '<div class="tenant-admin-strip"><span><strong>Super Admin tenant view.</strong> You are seeing this workspace with unrestricted platform access.</span><a href="/dashboard/platform.html#businesses">Return to Platform Console →</a></div>' : '') +
+       '<section class="tenant-kpis">' +
+         '<article class="tenant-kpi"><label>Quote requests</label><strong>' + Number(requests.total || 0) + '</strong><small>' + Number(requests.month || 0) + ' submitted this month</small></article>' +
+         '<article class="tenant-kpi ' + (Number(requests.new || 0) ? 'attention' : '') + '"><label>Needs follow-up</label><strong>' + Number(requests.new || 0) + '</strong><small>New customer requests</small></article>' +
+         '<article class="tenant-kpi"><label>Saved designs</label><strong>' + Number(designs.total || 0) + '</strong><small>' + Number(designs.month || 0) + ' created this month</small></article>' +
+         '<article class="tenant-kpi"><label>Request pipeline</label><strong>' + esc(money(requests.pipelineValue || 0)) + '</strong><small>Non-declined estimated request value</small></article>' +
+         '<article class="tenant-kpi positive"><label>Deposits collected</label><strong>' + cents(requests.paidDepositCents) + '</strong><small>Recorded paid rental deposits</small></article>' +
+       '</section>' +
+       '<div class="tenant-grid"><div class="tenant-stack">' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Recent quote requests</h2><p>Customer requests from your designer.</p></div><a class="tenant-btn" href="#/requests">All requests</a></div>' + recentRequestsHtml() + '</section>' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Workspace setup</h2><p>Finish the customer experience before sending traffic to it.</p></div><a class="tenant-btn" href="#/install">Install</a></div><div class="tenant-panel-body">' + setupHtml() + '</div></section>' +
+       '</div><aside class="tenant-stack">' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Quick actions</h2><p>Common workspace tasks.</p></div></div><div class="tenant-panel-body"><div class="tenant-quick-grid">' +
+           '<a class="tenant-quick" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener"><span>✦</span><strong>Open designer</strong><small>See the customer experience</small></a>' +
+           '<a class="tenant-quick" href="#/products"><span>▦</span><strong>Products</strong><small>Catalog, pricing and visuals</small></a>' +
+           '<a class="tenant-quick" href="#/branding"><span>◆</span><strong>Branding</strong><small>Logo, colors and contact info</small></a>' +
+           '<a class="tenant-quick" href="#/install"><span>↗</span><strong>Website install</strong><small>Domains and embed code</small></a>' +
+         '</div></div></section>' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Business health</h2><p>What is ready and what still needs setup.</p></div></div><div class="tenant-panel-body"><div class="tenant-health">' +
+           healthRows.map(function (row) { return '<div class="tenant-health-row"><span><strong>' + esc(row[0]) + '</strong><small>' + esc(row[2]) + '</small></span><span class="tenant-health-state ' + (row[1] ? 'good' : 'warn') + '">' + (row[1] ? 'Ready' : 'Review') + '</span></div>'; }).join('') +
+         '</div></div></section>' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Recent activity</h2><p>Designs and customer requests.</p></div></div><div class="tenant-panel-body">' + activityHtml() + '</div></section>' +
+       '</aside></div>';
      document.getElementById('dashMain').innerHTML = html;
    } catch (err) {
      document.getElementById('dashMain').innerHTML = errorHtml(err);
    }
  }
-
  function renderRequestsTable(rows, withActions) {
    if (!rows.length) return '<div class="dash-empty">No quote requests yet.</div>';
    var body = rows.map(function (r) {
@@ -237,7 +327,7 @@ function esc(s) {
        '<td>' + (withActions ? statusSelect(r) : '<span class="status-badge status-' + esc(r.status) + '">' + esc(r.status) + '</span>') + '</td>' +
        '</tr>';
    }).join('');
-   return '<table class="dash-table"><thead><tr><th>Customer</th><th>Event Date</th><th>Guests</th><th>Estimate</th><th>Deposit</th><th>Submitted</th><th>Status</th></tr></thead><tbody>' + body + '</tbody></table>';
+   return '<div class="tenant-table-scroll"><table class="dash-table"><thead><tr><th>Customer</th><th>Event Date</th><th>Guests</th><th>Estimate</th><th>Deposit</th><th>Submitted</th><th>Status</th></tr></thead><tbody>' + body + '</tbody></table></div>';
  }
 
  function statusSelect(r) {
@@ -250,29 +340,55 @@ function esc(s) {
  async function viewRequests(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading requests...'));
    bindShellEvents();
-   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
+   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="tenant-empty">No tenant access.</div>'; return; }
    try {
      var requests = await api('/api/tenants/' + state.tenant + '/quote-requests');
      var reqs = requests.quoteRequests || [];
      if (gen !== renderGeneration) return;
-     document.getElementById('dashMain').innerHTML = '<h1 class="dash-title">Quote Requests</h1>' + renderRequestsTable(reqs, true);
-     Array.prototype.forEach.call(document.querySelectorAll('.status-select'), function (sel) {
-       sel.addEventListener('change', async function () {
-         sel.disabled = true;
-         try {
-           await api('/api/tenants/' + state.tenant + '/quote-requests/' + sel.getAttribute('data-id'), { method: 'PATCH', body: { status: sel.value } });
-         } catch (err) {
-           window.alert('Could not update status: ' + err.message);
-         } finally {
-           sel.disabled = false;
-         }
+     document.getElementById('dashMain').innerHTML = '' +
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Customer pipeline</div><h1>Quote requests</h1><p>Review customer layouts, estimated values, deposits and follow-up status.</p></div><div class="tenant-head-actions"><a class="tenant-btn primary" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">Preview customer designer</a></div></div>' +
+       '<div class="tenant-kpis">' +
+         '<article class="tenant-kpi"><label>Total requests</label><strong>' + reqs.length + '</strong><small>All customer quote requests</small></article>' +
+         '<article class="tenant-kpi attention"><label>Needs follow-up</label><strong>' + reqs.filter(function(r){return r.status === 'new';}).length + '</strong><small>New requests</small></article>' +
+         '<article class="tenant-kpi"><label>Quoted</label><strong>' + reqs.filter(function(r){return r.status === 'quoted';}).length + '</strong><small>Waiting on customer decision</small></article>' +
+         '<article class="tenant-kpi positive"><label>Booked</label><strong>' + reqs.filter(function(r){return r.status === 'booked';}).length + '</strong><small>Marked booked</small></article>' +
+         '<article class="tenant-kpi positive"><label>Paid deposits</label><strong>' + reqs.filter(function(r){return r.payment_status === 'paid';}).length + '</strong><small>Requests with recorded deposits</small></article>' +
+       '</div>' +
+       '<div class="tenant-panel"><div class="tenant-panel-head"><div><h2>Customer requests</h2><p>Search or filter the pipeline, then update status inline.</p></div></div><div class="tenant-panel-body">' +
+         '<div class="pc-toolbar"><div class="pc-search"><input id="requestSearch" type="search" placeholder="Search customer, email or event type…"></div><select class="pc-select" id="requestStatus"><option value="">All statuses</option><option value="new">New</option><option value="contacted">Contacted</option><option value="quoted">Quoted</option><option value="booked">Booked</option><option value="declined">Declined</option></select></div>' +
+         '<div id="requestTable"></div></div></div>';
+     function bindStatuses() {
+       Array.prototype.forEach.call(document.querySelectorAll('.status-select'), function (sel) {
+         sel.addEventListener('change', async function () {
+           sel.disabled = true;
+           try {
+             await api('/api/tenants/' + state.tenant + '/quote-requests/' + sel.getAttribute('data-id'), { method: 'PATCH', body: { status: sel.value } });
+             var row = reqs.find(function(r){return String(r.id) === String(sel.getAttribute('data-id'));}); if(row)row.status=sel.value;
+           } catch (err) {
+             window.alert('Could not update status: ' + err.message);
+           } finally {
+             sel.disabled = false;
+           }
+         });
        });
-     });
+     }
+     function paint() {
+       var q=(document.getElementById('requestSearch').value||'').trim().toLowerCase();
+       var s=document.getElementById('requestStatus').value;
+       var filtered=reqs.filter(function(r){
+         var hit=!q || [r.customer_name,r.customer_email,r.event_type].join(' ').toLowerCase().indexOf(q)>-1;
+         return hit && (!s || r.status===s);
+       });
+       document.getElementById('requestTable').innerHTML=renderRequestsTable(filtered,true);
+       bindStatuses();
+     }
+     document.getElementById('requestSearch').addEventListener('input',paint);
+     document.getElementById('requestStatus').addEventListener('change',paint);
+     paint();
    } catch (err) {
      document.getElementById('dashMain').innerHTML = errorHtml(err);
    }
  }
-
  async function viewProducts(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading products...'));
    bindShellEvents();
@@ -305,12 +421,11 @@ function esc(s) {
                            '<td><button class="btn-link btn-danger" data-action="delete" data-id="' + esc(p.id) + '">Remove</button></td>' +
                            '</tr>';
      }).join('');
-     var table = products.length ? ('<table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>In Designer</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>') : '<div class="dash-empty">No products yet. Add your first one below.</div>';
+     var table = products.length ? ('<div class="tenant-table-scroll"><table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>In Designer</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>') : '<div class="tenant-empty"><div class="tenant-empty-icon">▦</div><h3>No products yet</h3><p>Add your first rental item below, then map it to a supported visual model.</p></div>';
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Products</h1>' +
-       '<p class="dash-subtitle">These are the real items customers see in your designer. Changes appear immediately. Pick a Visual for each tent, table, and chair so it renders correctly on the design canvas. Items without one are automatically hidden from the customer designer (not shown as a generic shape) until mapped &mdash; see the "In Designer" column below.</p>' +
-       table +
-       '<h2 class="dash-section-title">Add a Product</h2>' +
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Catalog</div><h1>Products</h1><p>Control the equipment, pricing and visual models customers can use in your designer.</p></div><div class="tenant-head-actions"><a class="tenant-btn primary" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">Preview catalog in designer</a></div></div>' +
+       '<div class="tenant-panel"><div class="tenant-panel-head"><div><h2>Customer catalog</h2><p>Items that require a visual model stay hidden until mapped.</p></div><span class="tenant-status-chip blue">' + products.length + ' products</span></div>' + table + '</div>' +
+       '<h2 class="dash-section-title">Add a product</h2>' +
        '<form id="productForm" class="dash-form">' +
        '<label>Category<select id="pCategory" required><option value="">Select a category</option><option value="tent">Tent</option><option value="table">Table</option><option value="chair">Chair</option><option value="dance_floor">Dance Floor</option><option value="lighting">Lighting</option><option value="linen">Linen</option></select></label>' +
        '<label>Name<input type="text" id="pName" placeholder="20x20 Pole Tent" required></label>' +
@@ -392,8 +507,7 @@ function esc(s) {
      var t = await api('/api/tenants/' + state.tenant + '/admin');
      if (gen !== renderGeneration) return;
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Branding &amp; Settings</h1>' +
-       '<p class="dash-subtitle">This controls how your hosted designer looks to your customers.</p>' +
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Customer experience</div><h1>Branding &amp; settings</h1><p>Make the designer feel like your business before customers see it.</p></div><div class="tenant-head-actions"><a class="tenant-btn primary" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">Preview branded designer</a></div></div>' +
        '<form id="brandingForm" class="dash-form">' +
        '<label>Company Name<input type="text" id="bName" value="' + esc(t.name || '') + '"></label>' +
        '<label>Logo URL<input type="text" id="bLogo" value="' + esc(t.logoUrl || '') + '"></label>' +
@@ -409,7 +523,7 @@ function esc(s) {
        '<div id="brandingSaved" class="dash-saved" hidden>Saved.</div>' +
        '<button type="submit" class="btn-primary">Save Branding</button>' +
        '</form>' +
-        '<div id="payoutsSection" class="dash-section"><h2 class="dash-section-title">Payouts</h2><p id="payoutsStatus" class="dash-subtitle">Loading payouts status...</p><button id="connectStripeBtn" class="btn-primary" hidden>Connect Stripe to receive payouts</button></div>';
+        '<section id="payoutsSection" class="tenant-panel" style="margin-top:18px"><div class="tenant-panel-head"><div><h2>Rental deposit payouts</h2><p>Connect Stripe when you want customer rental deposits paid to your business.</p></div></div><div class="tenant-panel-body"><p id="payoutsStatus" class="dash-subtitle">Loading payouts status...</p><button id="connectStripeBtn" class="btn-primary" hidden>Connect Stripe to receive payouts</button></div></section>';
      document.getElementById('brandingForm').addEventListener('submit', async function (e) {
        e.preventDefault();
        var errEl = document.getElementById('brandingError');
@@ -486,27 +600,14 @@ function esc(s) {
      var loaderCode = '<div id="rentsketch-embed"></div>\n<script src="https://rentsketch.com/embed/v1.js" data-tenant="' + esc(state.tenant) + '" data-embed-key="' + esc(t.embedKey || '') + '" defer></script>';
      var origins = (t.allowedOrigins || []).join('\n');
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Install RentSketch</h1>' +
-       '<p class="dash-subtitle">Add your event designer to your own website. No RentSketch source code needed.</p>' +
-       '<h2 class="dash-section-title">1. Hosted Designer Link</h2>' +
-       '<p>Share or link directly to your own hosted designer:</p>' +
-       '<textarea class="code-box" rows="1" readonly>' + esc(designerUrl) + '</textarea>' +
-       '<h2 class="dash-section-title">2. Iframe Embed (recommended)</h2>' +
-       '<p>Paste this anywhere on your website, e.g. a "Design Your Event" page:</p>' +
-       '<textarea class="code-box" rows="3" readonly>' + esc(iframeCode) + '</textarea>' +
-       '<h2 class="dash-section-title">3. Loader Script (optional, versioned)</h2>' +
-       '<p>Renders into the placeholder div automatically and supports future updates without changing your code:</p>' +
-       '<textarea class="code-box" rows="3" readonly>' + esc(loaderCode) + '</textarea>' +
-       '<h2 class="dash-section-title">4. Allowed Domains</h2>' +
-       '<p>List the domains allowed to embed your designer (one per line), e.g. www.yourdomain.com</p>' +
-       '<form id="originsForm" class="dash-form">' +
-       '<textarea id="originsBox" rows="4">' + esc(origins) + '</textarea>' +
-       '<div id="originsError" class="dash-error" hidden></div>' +
-       '<div id="originsSaved" class="dash-saved" hidden>Saved.</div>' +
-       '<button type="submit" class="btn-primary">Save Allowed Domains</button>' +
-       '</form>' +
-       '<h2 class="dash-section-title">Embed Identifier</h2>' +
-       '<p class="muted">Public embed key (safe to include in front-end code): <code>' + esc(t.embedKey || '') + '</code></p>';
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Go live</div><h1>Website install</h1><p>Preview, share or embed your customer designer on an approved business website.</p></div><div class="tenant-head-actions"><a class="tenant-btn primary" href="' + designerUrl + '" target="_blank" rel="noopener">Open live designer</a></div></div>' +
+       '<div class="tenant-grid"><div class="tenant-stack">' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>1. Hosted designer link</h2><p>Use this link in buttons, emails or your website navigation.</p></div><span class="tenant-status-chip good">Ready</span></div><div class="tenant-panel-body"><textarea class="code-box" rows="2" readonly>' + esc(designerUrl) + '</textarea></div></section>' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>2. Website embed</h2><p>The iframe option is the simplest installation method.</p></div></div><div class="tenant-panel-body"><textarea class="code-box" rows="4" readonly>' + esc(iframeCode) + '</textarea><h3 class="dash-section-title">Versioned loader</h3><p class="muted">Use the loader when you want RentSketch to render into a placeholder automatically.</p><textarea class="code-box" rows="4" readonly>' + esc(loaderCode) + '</textarea></div></section>' +
+       '</div><aside class="tenant-stack">' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>3. Approved website domains</h2><p>Only approved origins may embed this workspace.</p></div></div><div class="tenant-panel-body"><form id="originsForm" class="dash-form" style="box-shadow:none;border:0;padding:0"><label>One full origin per line<textarea id="originsBox" rows="6" placeholder="https://www.yourdomain.com">' + esc(origins) + '</textarea></label><div id="originsError" class="dash-error" hidden></div><div id="originsSaved" class="dash-saved" hidden>Allowed domains saved.</div><button type="submit" class="btn-primary">Save approved domains</button></form></div></section>' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Install status</h2><p>Public identifiers are safe to include in front-end code.</p></div></div><div class="tenant-panel-body"><div class="tenant-health-row"><span><strong>Tenant slug</strong><small>' + esc(state.tenant) + '</small></span><span class="tenant-health-state good">Active</span></div><div class="tenant-health-row"><span><strong>Approved domains</strong><small>' + ((t.allowedOrigins || []).length ? (t.allowedOrigins || []).length + ' configured' : 'None yet') + '</small></span><span class="tenant-health-state ' + ((t.allowedOrigins || []).length ? 'good' : 'warn') + '">' + ((t.allowedOrigins || []).length ? 'Ready' : 'Review') + '</span></div><div class="tenant-health-row"><span><strong>Embed key</strong><small style="word-break:break-all">' + esc(t.embedKey || '') + '</small></span><span class="tenant-health-state good">Public</span></div></div></section>' +
+       '</aside></div>';
      document.getElementById('originsForm').addEventListener('submit', async function (e) {
        e.preventDefault();
        var errEl = document.getElementById('originsError');
@@ -538,10 +639,8 @@ function esc(s) {
    if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    if (state.user && state.user.isPlatformAdmin) {
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Platform Billing Access</h1>' +
-       '<p class="dash-subtitle">You are signed in as the RentSketch platform administrator.</p>' +
-       '<div class="dash-saved"><strong>Complimentary platform access is permanent.</strong> Your admin account is not subject to tenant trials, paid plans, cancellations, or past-due billing restrictions.</div>' +
-       '<p class="muted">Use Super Admin to inspect tenant subscription states. Opening a tenant does not change your platform-level access.</p>';
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Account access</div><h1>Billing &amp; payments</h1><p>You are viewing this tenant as the RentSketch platform administrator.</p></div><div class="tenant-head-actions"><a class="tenant-btn" href="/dashboard/platform.html#subscriptions">Subscriptions</a><a class="tenant-btn primary" href="/dashboard/platform.html#payments">Payment ledger</a></div></div>' +
+       '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Permanent platform access</h2><p>Your owner account is not governed by tenant billing.</p></div><span class="tenant-status-chip good">Complimentary</span></div><div class="tenant-panel-body"><div class="dash-saved"><strong>No RentSketch subscription is required for your platform-admin account.</strong> Tenant trials, cancellations and past-due states never remove your owner access.</div><p class="muted">Use the Platform Console to inspect or manage this tenant’s actual subscription and payment activity.</p></div></section>';
      return;
    }
    try {
@@ -570,11 +669,11 @@ function esc(s) {
        (window.location.search.indexOf('billing=portal-return') > -1) ? '<div class="dash-saved">Returned from billing portal.</div>' : '';
      if (status.friendlyFree) {
        document.getElementById('dashMain').innerHTML = '' +
-         '<h1 class="dash-title">Billing</h1>' +
+         '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Account</div><h1>Billing &amp; payments</h1><p>Manage your RentSketch subscription and customer deposit connection.</p></div></div>' +
          msg +
-         '<div class="dash-empty"><strong>Friendly Party Rental</strong> has complimentary access to RentSketch. No billing required.</div>';
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Complimentary workspace access</h2><p>This business does not need a paid RentSketch subscription.</p></div><span class="tenant-status-chip good">No charge</span></div><div class="tenant-panel-body"><p><strong>Friendly Party Rental</strong> has complimentary access to RentSketch. No subscription billing is required.</p></div></section>';
      } else {
-       var billingHtml = '<h1 class="dash-title">Billing & Subscription</h1>' + msg + trialText + 
+       var billingHtml = '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Account</div><h1>Billing &amp; subscription</h1><p>Choose a plan, review your current status, or open Stripe billing management.</p></div></div>' + msg + trialText + 
          '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px;margin-bottom:20px">' +
          '<h3 style="margin-top:0">Current Status</h3>' +
          '<p><strong>Plan:</strong> ' + esc(status.plan || 'None') + ' &nbsp; <strong>Status:</strong> ' + currentStatus + '</p>' +

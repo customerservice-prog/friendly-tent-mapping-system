@@ -32,6 +32,17 @@ async function platformAdminRequest(req) {
         return null;
     }
 }
+async function tenantStaffRequest(req, tenant) {
+    const header=req.headers.authorization||'',token=header.startsWith('Bearer ')?header.slice(7):null;
+    if(!token)return null;
+    try{
+        const payload=verifyToken(token);
+        if(await isConfiguredPlatformAdmin(payload))return {payload,platformAdmin:true,role:'platform_admin'};
+        if(!tenant)return null;
+        const membership=await query('SELECT role FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',[tenant.id,payload.userId]);
+        return membership.rows[0]?{payload,platformAdmin:false,role:membership.rows[0].role}:null;
+    }catch(_){return null;}
+}
 
 // safeOrigin: strict allowlisting for rentsketch.com subdomains with APP_URL fallback.
 // Never concatenates arbitrary/undefined origins into Stripe return URLs.
@@ -105,23 +116,23 @@ async function designResponse(design) {
 
 // Price and launch switch come from the same server authority as Checkout.
 router.get('/event-pass/offer', wrap(async (req, res) => {
-    const admin = await platformAdminRequest(req);
     const slug = String(req.query.tenant || 'generic');
     const tenant = slug === 'generic' ? null : (await query('SELECT * FROM tenants WHERE slug=$1', [slug])).rows[0];
     if (slug !== 'generic' && !tenant) return res.status(404).json({ error: 'Rental company not found' });
+    const staff = await tenantStaffRequest(req, tenant);
     res.setHeader('Cache-Control', 'no-store');
-    if (admin) return res.json({ ...passOffer(tenant), required: false, adminAccess: true, previewDurationSeconds: PREVIEW_SECONDS, ...(await paymentReadiness()) });
+    if (staff) return res.json({ ...passOffer(tenant), required: false, adminAccess: staff.platformAdmin, staffAccess: true, staffRole: staff.role, previewDurationSeconds: PREVIEW_SECONDS, ...(await paymentReadiness()) });
     res.json({ ...passOffer(tenant), previewDurationSeconds: PREVIEW_SECONDS, ...(await paymentReadiness()) });
 }));
 
 router.post('/event-pass/preview', wrap(async (req, res) => {
-    const admin = await platformAdminRequest(req);
     const sid = req.body?.anonymousSessionId, slug = req.body?.tenant || 'generic';
     if (typeof sid !== 'string' || !/^[a-zA-Z0-9_:-]{16,160}$/.test(sid)) return res.status(400).json({ error: 'A valid preview session is required.' });
     const tenant = slug === 'generic' ? null : (await query('SELECT * FROM tenants WHERE slug=$1', [slug])).rows[0];
     if (slug !== 'generic' && !tenant) return res.status(404).json({ error: 'Rental company not found' });
+    const staff = await tenantStaffRequest(req, tenant);
     res.setHeader('Cache-Control', 'no-store');
-    if (admin) return res.json({ limited: false, adminAccess: true });
+    if (staff) return res.json({ limited: false, adminAccess: staff.platformAdmin, staffAccess: true });
     if (!isPassEnabled(tenant)) return res.json({ limited: false });
     const hash = createHash('sha256').update('preview:' + sid).digest('hex');
     const row = (await query(`INSERT INTO consumer_previews(session_hash,expires_at)

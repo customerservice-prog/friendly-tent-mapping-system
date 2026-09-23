@@ -1,5 +1,7 @@
 const express = require('express');
+const crypto = require('crypto');
 const db = require('../db');
+const { hashPassword } = require('../auth');
 const { requirePlatformAdmin } = require('../middleware/requireAuth');
 
 const router = express.Router();
@@ -27,15 +29,75 @@ function safeLimit(value, fallback = 100, max = 250) {
   return Number.isFinite(n) ? Math.max(1, Math.min(max, Math.round(n))) : fallback;
 }
 
+function adminSlugify(name) {
+  const base=String(name||'').toLowerCase().trim().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,60);
+  const reserved=['generic','friendly','admin','api','www','app'];
+  const value=base||'business';
+  return reserved.includes(value)?value+'-co':value;
+}
+
+router.post('/tenants', requirePlatformAdmin, async (req,res)=>{
+  const name=String(req.body?.name||'').trim();
+  const ownerEmail=String(req.body?.ownerEmail||'').trim().toLowerCase();
+  const ownerName=String(req.body?.ownerName||name).trim().slice(0,120);
+  const plan=String(req.body?.plan||'starter').trim().toLowerCase();
+  if(!name||name.length>120)return res.status(400).json({error:'Business name is required and must be 120 characters or fewer'});
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)||ownerEmail.length>254)return res.status(400).json({error:'Enter a valid owner email address'});
+  if(!['starter','pro','commerce'].includes(plan))return res.status(400).json({error:'Choose Starter, Pro, or Business'});
+  const baseSlug=adminSlugify(name),trialEndsAt=new Date(Date.now()+14*86400000);
+  let client;
+  try{
+    client=await db.pool.connect();await client.query('BEGIN');
+    let user=(await client.query('SELECT id,email,display_name,is_platform_admin FROM users WHERE lower(email)=$1',[ownerEmail])).rows[0],createdUser=false,resetUrl=null;
+    if(user?.is_platform_admin){await client.query('ROLLBACK');return res.status(409).json({error:'Use a non-platform-admin email for the tenant owner'});}
+    if(!user){
+      const unusable=await hashPassword(crypto.randomBytes(48).toString('base64url'));
+      user=(await client.query('INSERT INTO users(email,password_hash,display_name,is_platform_admin) VALUES($1,$2,$3,false) RETURNING id,email,display_name,is_platform_admin',[ownerEmail,unusable,ownerName||name])).rows[0];
+      createdUser=true;
+    }
+    let tenant;
+    for(let attempt=0;attempt<6&&!tenant;attempt++){
+      const slug=attempt?baseSlug+'-'+crypto.randomBytes(3).toString('hex'):baseSlug;
+      const embedKey=crypto.randomBytes(16).toString('hex');
+      tenant=(await client.query(`INSERT INTO tenants(slug,name,contact_email,subscription_plan,subscription_status,trial_ends_at,customer_access,embed_key)
+        VALUES($1,$2,$3,$4,'trialing',$5,'free',$6)
+        ON CONFLICT(slug) DO NOTHING RETURNING *`,[slug,name,ownerEmail,plan,trialEndsAt,embedKey])).rows[0];
+    }
+    if(!tenant)throw new Error('Could not allocate a unique business workspace');
+    await client.query('INSERT INTO tenant_memberships(tenant_id,user_id,role) VALUES($1,$2,\'owner\')',[tenant.id,user.id]);
+    if(createdUser){
+      const token=crypto.randomBytes(32).toString('base64url'),tokenHash=crypto.createHash('sha256').update(token,'utf8').digest('hex');
+      await client.query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '24 hours')",[user.id,tokenHash]);
+      resetUrl='https://rentsketch.com/dashboard/reset-password.html#token='+encodeURIComponent(token);
+    }
+    await client.query('COMMIT');
+    await audit(req,'tenant.created','tenant',tenant.id,tenant.slug,{ownerEmail,plan,ownerUserId:user.id});
+    res.status(201).json({tenant:{id:tenant.id,slug:tenant.slug,name:tenant.name,contact_email:tenant.contact_email,subscription_plan:tenant.subscription_plan,subscription_status:tenant.subscription_status,trial_ends_at:tenant.trial_ends_at},owner:{id:user.id,email:user.email,display_name:user.display_name},createdUser,resetUrl});
+  }catch(err){
+    if(client){try{await client.query('ROLLBACK')}catch(_){}}
+    if(err.code==='23505')return res.status(409).json({error:'That owner or workspace already exists'});
+    console.error('[platform tenant create]',err);
+    res.status(500).json({error:'Could not create the business workspace'});
+  }finally{client?.release();}
+});
+
 router.get('/tenants', requirePlatformAdmin, async (req, res) => {
   const result = await db.query(
-    `SELECT t.id, t.slug, t.name, t.contact_email, t.subscription_plan,
-            t.subscription_status, t.trial_ends_at, t.stripe_connect_status,
-            t.created_at,
-            (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id = t.id) AS product_count,
-            (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id = t.id) AS quote_request_count,
-            (SELECT COUNT(*)::int FROM tenant_memberships tm WHERE tm.tenant_id = t.id) AS member_count
-     FROM tenants t ORDER BY t.created_at DESC`
+    `SELECT t.id, t.slug, t.name, t.contact_email, t.website, t.logo_url,
+            t.subscription_plan, t.subscription_status, t.trial_ends_at,
+            t.stripe_connect_status, t.webhook_url, t.allowed_origins, t.created_at,
+            (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id=t.id) AS product_count,
+            (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id=t.id AND p.active) AS active_product_count,
+            (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id=t.id AND p.active AND p.visual_model_id IS NOT NULL) AS mapped_product_count,
+            (SELECT COUNT(*)::int FROM designs d WHERE d.tenant_id=t.id) AS design_count,
+            (SELECT COUNT(*)::int FROM designs d WHERE d.tenant_id=t.id AND d.created_at>=now()-interval '30 days') AS design_month_count,
+            (SELECT MAX(d.updated_at) FROM designs d WHERE d.tenant_id=t.id) AS last_design_at,
+            (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id=t.id) AS quote_request_count,
+            (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id=t.id AND q.status='new') AS new_request_count,
+            (SELECT MAX(q.created_at) FROM quote_requests q WHERE q.tenant_id=t.id) AS last_request_at,
+            (SELECT COUNT(*)::int FROM tenant_memberships tm WHERE tm.tenant_id=t.id) AS member_count,
+            (SELECT COUNT(*)::int FROM platform_tenant_notes n WHERE n.tenant_id=t.id) AS note_count
+     FROM tenants t WHERE t.slug<>'generic' ORDER BY t.created_at DESC`
   );
   res.json({ tenants: result.rows });
 });
@@ -76,11 +138,57 @@ router.patch('/tenants/:slug', requirePlatformAdmin, async (req, res) => {
   res.json({ tenant: result.rows[0] });
 });
 
+router.post('/tenants/:slug/members', requirePlatformAdmin, async (req, res) => {
+  const email=String(req.body?.email||'').trim().toLowerCase();
+  const displayName=String(req.body?.displayName||'').trim().slice(0,120);
+  const role=String(req.body?.role||'staff').trim().toLowerCase();
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return res.status(400).json({error:'Enter a valid email address'});
+  if(!['owner','admin','staff','viewer'].includes(role))return res.status(400).json({error:'Invalid role'});
+  const tenant=(await db.query('SELECT id,name FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
+  if(!tenant)return res.status(404).json({error:'Tenant not found'});
+  let user=(await db.query('SELECT id,email,display_name,is_platform_admin FROM users WHERE lower(email)=$1',[email])).rows[0],created=false,resetUrl=null;
+  if(!user){
+    const unusable=await hashPassword(crypto.randomBytes(48).toString('base64url'));
+    user=(await db.query('INSERT INTO users(email,password_hash,display_name,is_platform_admin) VALUES($1,$2,$3,false) RETURNING id,email,display_name,is_platform_admin',[email,unusable,displayName||null])).rows[0];
+    created=true;
+  }
+  if(user.is_platform_admin)return res.status(409).json({error:'Platform administrators do not need tenant membership invites'});
+  await db.query(`INSERT INTO tenant_memberships(tenant_id,user_id,role) VALUES($1,$2,$3)
+    ON CONFLICT(tenant_id,user_id) DO UPDATE SET role=EXCLUDED.role`,[tenant.id,user.id,role]);
+  if(created){
+    const token=crypto.randomBytes(32).toString('base64url'),tokenHash=crypto.createHash('sha256').update(token,'utf8').digest('hex');
+    await db.query('UPDATE password_reset_tokens SET used_at=COALESCE(used_at,now()) WHERE user_id=$1 AND used_at IS NULL',[user.id]);
+    await db.query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '24 hours')",[user.id,tokenHash]);
+    resetUrl='https://rentsketch.com/dashboard/reset-password.html#token='+encodeURIComponent(token);
+  }
+  await audit(req,created?'tenant.member_invited':'tenant.member_added','user',user.id,req.params.slug,{role,email});
+  res.status(created?201:200).json({member:{id:user.id,email:user.email,display_name:user.display_name,role},created,resetUrl});
+});
+
+router.post('/tenants/:slug/members/:userId/reset-link', requirePlatformAdmin, async (req,res)=>{
+  const tenant=(await db.query('SELECT id FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
+  if(!tenant)return res.status(404).json({error:'Tenant not found'});
+  const user=(await db.query(`SELECT u.id,u.email,u.is_platform_admin FROM users u JOIN tenant_memberships tm ON tm.user_id=u.id WHERE tm.tenant_id=$1 AND u.id=$2`,[tenant.id,req.params.userId])).rows[0];
+  if(!user)return res.status(404).json({error:'Tenant user not found'});
+  if(user.is_platform_admin)return res.status(409).json({error:'Use the platform-admin account recovery flow for this user'});
+  const token=crypto.randomBytes(32).toString('base64url'),tokenHash=crypto.createHash('sha256').update(token,'utf8').digest('hex');
+  await db.query('UPDATE password_reset_tokens SET used_at=COALESCE(used_at,now()) WHERE user_id=$1 AND used_at IS NULL',[user.id]);
+  await db.query("INSERT INTO password_reset_tokens(user_id,token_hash,expires_at) VALUES($1,$2,now()+interval '24 hours')",[user.id,tokenHash]);
+  await audit(req,'tenant.password_reset_link_created','user',user.id,req.params.slug,{email:user.email});
+  res.json({resetUrl:'https://rentsketch.com/dashboard/reset-password.html#token='+encodeURIComponent(token),expiresInHours:24});
+});
+
 router.patch('/tenants/:slug/members/:userId', requirePlatformAdmin, async (req, res) => {
   const role = String((req.body || {}).role || '').trim().toLowerCase();
   if (!['owner', 'admin', 'staff', 'viewer'].includes(role)) return res.status(400).json({ error: 'Invalid role' });
   const tenant = await db.query('SELECT id FROM tenants WHERE slug=$1', [req.params.slug]);
   if (!tenant.rows[0]) return res.status(404).json({ error: 'Tenant not found' });
+  const current = (await db.query('SELECT role FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',[tenant.rows[0].id,req.params.userId])).rows[0];
+  if (!current) return res.status(404).json({ error: 'Membership not found' });
+  if (current.role === 'owner' && role !== 'owner') {
+    const owners = await db.query("SELECT COUNT(*)::int AS count FROM tenant_memberships WHERE tenant_id=$1 AND role='owner'",[tenant.rows[0].id]);
+    if (Number(owners.rows[0].count||0) <= 1) return res.status(409).json({ error: 'Cannot demote the tenant’s only owner' });
+  }
   const result = await db.query(
     `UPDATE tenant_memberships SET role=$1 WHERE tenant_id=$2 AND user_id=$3 RETURNING *`,
     [role, tenant.rows[0].id, req.params.userId]
@@ -171,8 +279,9 @@ router.get('/web-vitals', requirePlatformAdmin, async (req, res) => {
 router.get('/console-overview', requirePlatformAdmin, async (req, res) => {
   const [
     tenants, users, designs, paidPasses, paidDeposits, platformFees, subscriptions, monthPasses, monthDeposits,
+    recentTenants, monthDesigns, monthRequests, newRequests, refundedPayments, failedPayments, installedTenants,
   ] = await Promise.all([
-    db.query("SELECT COUNT(*)::int AS count FROM tenants"),
+    db.query("SELECT COUNT(*)::int AS count FROM tenants WHERE slug<>'generic'"),
     db.query("SELECT COUNT(*)::int AS count FROM users WHERE is_platform_admin IS NOT TRUE"),
     db.query("SELECT COUNT(*)::int AS count FROM designs"),
     db.query("SELECT COUNT(*)::int AS count,COALESCE(SUM(amount_cents),0)::bigint AS cents FROM consumer_payments WHERE status='paid'"),
@@ -187,6 +296,13 @@ router.get('/console-overview', requirePlatformAdmin, async (req, res) => {
               FROM subscriptions s LEFT JOIN plans p ON p.id=s.plan_id`),
     db.query("SELECT COALESCE(SUM(amount_cents),0)::bigint AS cents FROM consumer_payments WHERE status='paid' AND created_at>=date_trunc('month',now())"),
     db.query("SELECT COALESCE(SUM(amount_paid_cents),0)::bigint AS cents FROM quote_requests WHERE payment_status='paid' AND created_at>=date_trunc('month',now())"),
+    db.query("SELECT COUNT(*)::int AS count FROM tenants WHERE slug<>'generic' AND created_at>=now()-interval '30 days'"),
+    db.query("SELECT COUNT(*)::int AS count FROM designs WHERE created_at>=date_trunc('month',now())"),
+    db.query("SELECT COUNT(*)::int AS count FROM quote_requests WHERE created_at>=date_trunc('month',now())"),
+    db.query("SELECT COUNT(*)::int AS count FROM quote_requests WHERE status='new'"),
+    db.query("SELECT COUNT(*)::int AS count FROM consumer_payments WHERE status='refunded'"),
+    db.query("SELECT COUNT(*)::int AS count FROM consumer_payments WHERE status='failed'"),
+    db.query("SELECT COUNT(*)::int AS count FROM tenants WHERE slug<>'generic' AND jsonb_array_length(COALESCE(allowed_origins,'[]'::jsonb))>0"),
   ]);
   res.setHeader('Cache-Control', 'no-store');
   res.json({
@@ -197,7 +313,12 @@ router.get('/console-overview', requirePlatformAdmin, async (req, res) => {
     eventPassRevenue: { count: paidPasses.rows[0].count, cents: Number(paidPasses.rows[0].cents || 0) },
     tenantDepositVolume: { count: paidDeposits.rows[0].count, cents: Number(paidDeposits.rows[0].cents || 0) },
     platformFeeRevenue: { cents: Number(platformFees.rows[0].cents || 0) },
-    month: { eventPassCents: Number(monthPasses.rows[0].cents || 0), depositCents: Number(monthDeposits.rows[0].cents || 0) },
+    month: { eventPassCents: Number(monthPasses.rows[0].cents || 0), depositCents: Number(monthDeposits.rows[0].cents || 0), designs: Number(monthDesigns.rows[0].count||0), requests: Number(monthRequests.rows[0].count||0) },
+    recentTenants: Number(recentTenants.rows[0].count||0),
+    newRequests: Number(newRequests.rows[0].count||0),
+    refundedPayments: Number(refundedPayments.rows[0].count||0),
+    failedPayments: Number(failedPayments.rows[0].count||0),
+    installedTenants: Number(installedTenants.rows[0].count||0),
   });
 });
 
@@ -367,6 +488,92 @@ router.get('/system', requirePlatformAdmin, async (req, res) => {
     email: { pending: mail.rows[0].pending, failed: failedMail.rows[0].failed },
     app: { nodeEnv: process.env.NODE_ENV || 'development' },
   });
+});
+
+
+router.get('/analytics', requirePlatformAdmin, async (req,res)=>{
+  const [trend,topTenants,passes]=await Promise.all([
+    db.query(`WITH calendar_days AS (
+      SELECT generate_series(current_date-29,current_date,'1 day'::interval)::date AS event_day
+    ), design_counts AS (
+      SELECT created_at::date AS event_day,COUNT(*)::int AS count FROM designs WHERE created_at>=current_date-29 GROUP BY created_at::date
+    ), request_counts AS (
+      SELECT created_at::date AS event_day,COUNT(*)::int AS count FROM quote_requests WHERE created_at>=current_date-29 GROUP BY created_at::date
+    ), pass_totals AS (
+      SELECT created_at::date AS event_day,COUNT(*)::int AS count,COALESCE(SUM(amount_cents),0)::bigint AS cents
+      FROM consumer_payments WHERE created_at>=current_date-29 AND status='paid' GROUP BY created_at::date
+    )
+    SELECT d.event_day AS day,COALESCE(dc.count,0)::int AS designs,COALESCE(rc.count,0)::int AS requests,
+           COALESCE(pt.count,0)::int AS event_passes,COALESCE(pt.cents,0)::bigint AS event_pass_cents
+    FROM calendar_days d LEFT JOIN design_counts dc ON dc.event_day=d.event_day
+    LEFT JOIN request_counts rc ON rc.event_day=d.event_day LEFT JOIN pass_totals pt ON pt.event_day=d.event_day
+    ORDER BY d.event_day`),
+    db.query(`SELECT t.slug,t.name,t.created_at,
+      (SELECT COUNT(*)::int FROM designs d WHERE d.tenant_id=t.id) design_count,
+      (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id=t.id) request_count,
+      (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id=t.id AND q.status='booked') booked_count,
+      GREATEST(
+        COALESCE((SELECT MAX(d.updated_at) FROM designs d WHERE d.tenant_id=t.id),t.created_at),
+        COALESCE((SELECT MAX(q.created_at) FROM quote_requests q WHERE q.tenant_id=t.id),t.created_at)
+      ) last_activity
+      FROM tenants t WHERE t.slug<>'generic' ORDER BY ((SELECT COUNT(*) FROM designs d WHERE d.tenant_id=t.id)+(SELECT COUNT(*) FROM quote_requests q WHERE q.tenant_id=t.id)) DESC,t.created_at DESC LIMIT 12`),
+    db.query(`SELECT payment_type,status,COUNT(*)::int count,COALESCE(SUM(amount_cents),0)::bigint cents
+      FROM consumer_payments GROUP BY payment_type,status ORDER BY payment_type,status`)
+  ]);
+  res.setHeader('Cache-Control','no-store');
+  res.json({trend:trend.rows.map(r=>({...r,event_pass_cents:Number(r.event_pass_cents||0)})),topTenants:topTenants.rows,eventPassBreakdown:passes.rows.map(r=>({...r,cents:Number(r.cents||0)}))});
+});
+
+router.get('/alerts', requirePlatformAdmin, async (req,res)=>{
+  const [billing,newRequests,failedMail,uninstalled,unmapped]=await Promise.all([
+    db.query(`SELECT t.slug,t.name,s.status,s.plan_id,s.current_period_end
+      FROM subscriptions s JOIN tenants t ON t.id=s.tenant_id
+      WHERE s.status IN ('past_due','unpaid','incomplete','paused') ORDER BY s.current_period_end NULLS FIRST LIMIT 50`),
+    db.query(`SELECT q.id::text,t.slug,t.name,q.customer_name,q.customer_email,q.estimate_total,q.created_at
+      FROM quote_requests q JOIN tenants t ON t.id=q.tenant_id WHERE q.status='new' ORDER BY q.created_at DESC LIMIT 50`),
+    db.query(`SELECT e.id::text,e.customer_email,e.tenant_slug,e.attempts,e.last_error,e.created_at
+      FROM event_pass_emails e WHERE e.status='failed' ORDER BY e.created_at DESC LIMIT 50`),
+    db.query(`SELECT t.slug,t.name,t.created_at FROM tenants t
+      WHERE t.slug<>'generic' AND jsonb_array_length(COALESCE(t.allowed_origins,'[]'::jsonb))=0 AND t.created_at<now()-interval '2 days'
+      ORDER BY t.created_at DESC LIMIT 50`),
+    db.query(`SELECT t.slug,t.name,COUNT(*)::int missing
+      FROM products p JOIN tenants t ON t.id=p.tenant_id
+      WHERE t.slug<>'generic' AND p.active AND p.category IN ('tent','table','chair','dance_floor','lighting','linen') AND p.visual_model_id IS NULL
+      GROUP BY t.id,t.slug,t.name HAVING COUNT(*)>0 ORDER BY missing DESC LIMIT 50`)
+  ]);
+  res.setHeader('Cache-Control','no-store');
+  res.json({
+    counts:{billing:billing.rows.length,newRequests:newRequests.rows.length,failedMail:failedMail.rows.length,uninstalled:uninstalled.rows.length,unmapped:unmapped.rows.length},
+    billing:billing.rows,newRequests:newRequests.rows,failedMail:failedMail.rows,uninstalled:uninstalled.rows,unmapped:unmapped.rows
+  });
+});
+
+router.get('/tenants/:slug/notes', requirePlatformAdmin, async (req,res)=>{
+  const tenant=(await db.query('SELECT id FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
+  if(!tenant)return res.status(404).json({error:'Tenant not found'});
+  const result=await db.query(`SELECT n.id::text,n.body,n.created_at,u.email AS admin_email,u.display_name AS admin_name
+    FROM platform_tenant_notes n LEFT JOIN users u ON u.id=n.admin_user_id
+    WHERE n.tenant_id=$1 ORDER BY n.created_at DESC LIMIT 100`,[tenant.id]);
+  res.json({notes:result.rows});
+});
+
+router.post('/tenants/:slug/notes', requirePlatformAdmin, async (req,res)=>{
+  const body=String(req.body?.body||'').trim();
+  if(!body||body.length>4000)return res.status(400).json({error:'Note must be between 1 and 4000 characters'});
+  const tenant=(await db.query('SELECT id,name FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
+  if(!tenant)return res.status(404).json({error:'Tenant not found'});
+  const result=await db.query(`INSERT INTO platform_tenant_notes(tenant_id,admin_user_id,body) VALUES($1,$2,$3) RETURNING id::text,body,created_at`,[tenant.id,req.user?.userId||null,body]);
+  await audit(req,'tenant.note_added','tenant',tenant.id,req.params.slug,{noteId:result.rows[0].id});
+  res.status(201).json({note:result.rows[0]});
+});
+
+router.delete('/tenants/:slug/notes/:noteId', requirePlatformAdmin, async (req,res)=>{
+  const tenant=(await db.query('SELECT id FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
+  if(!tenant)return res.status(404).json({error:'Tenant not found'});
+  const removed=await db.query('DELETE FROM platform_tenant_notes WHERE id=$1 AND tenant_id=$2 RETURNING id::text',[req.params.noteId,tenant.id]);
+  if(!removed.rows[0])return res.status(404).json({error:'Note not found'});
+  await audit(req,'tenant.note_deleted','tenant',tenant.id,req.params.slug,{noteId:req.params.noteId});
+  res.json({ok:true});
 });
 
 module.exports = router;

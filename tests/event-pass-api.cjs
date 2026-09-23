@@ -46,7 +46,7 @@ const orderAccess = load('server/src/friendlyOrderAccess.js', { crypto: require(
 const pass = load('server/src/eventPass.js', { './db': db, './pricing': pricing, './eventPassEmail': mailQueue, stripe: Stripe });
 const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass, './friendlyOrderAccess': orderAccess });
 const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../middleware/requireAuth': { isConfiguredPlatformAdmin: async payload => payload?.isPlatformAdmin === true }, '../access': { resolveAccess: async () => ({}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
-const designs = load('server/src/routes/designs.js', { express, '../db': db, '../middleware/requireAuth': { requireTenantAccess: (req,res,next) => next() }, '../eventPassAccess': access });
+const designs = load('server/src/routes/designs.js', { express, '../db': db, '../auth': auth, '../middleware/requireAuth': { requireTenantAccess: (req,res,next) => next(), isConfiguredPlatformAdmin: async payload => payload?.isPlatformAdmin === true }, '../eventPassAccess': access });
 const quotes = load('server/src/routes/quoteRequests.js', { express, crypto: require('crypto'), '../db': db, '../mailer': { getMailer: () => null }, '../middleware/requireAuth': { requireTenantRole: () => (req,res,next) => next() }, '../orderProviders/quoteRequestOrderProvider': {}, '../outboundWebhook': {}, '../eventPass': pass, '../eventPassAccess': access });
 const webhook = load('server/src/routes/stripeWebhook.js', { express, '../db': db, '../pricing': pricing, stripe: Stripe, '../eventPass': pass, '../orderProviders/quoteRequestOrderProvider': {} });
 const app = express(); app.use('/webhook', express.raw({ type: 'application/json' }), webhook); app.use(express.json()); app.use('/api/consumer', consumer); app.use('/api/tenants', designs); app.use('/api/tenants', quotes); app.use((err, req, res, next) => res.status(500).json({ error: err.message }));
@@ -64,7 +64,7 @@ async function draft(t = tenant) {
 const buy = (d, extra = {}, renewal = false) => request('/api/consumer/designs/' + d.id + '/event-pass/' + (renewal ? 'renewal-' : '') + 'checkout-session', { customerEmail: 'buyer@example.invalid', anonymousSessionId: 'owner-private-token', ...extra });
 const restore = id => request('/api/consumer/event-pass/restore', { checkoutSessionId: id });
 (async () => {
-  await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY);`);
+  await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY); CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text);`);
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/004_entitlements.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/011_event_pass_access_email.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/012_friendly_order_access.sql'), 'utf8'));
@@ -82,6 +82,11 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   const adminAccess=await request('/api/consumer/designs/'+adminSaved.body.id+'/access',null,null,'GET',platformAdminToken); assert.equal(adminAccess.status,200); assert.equal(adminAccess.body.reason,'platform_admin'); assert.equal(adminAccess.body.paymentRequired,false);
   const adminReopen=await request('/api/consumer/admin/designs/'+adminSaved.body.id,null,null,'GET',platformAdminToken); assert.equal(adminReopen.status,200); assert.equal(adminReopen.body.adminAccess,true); assert.deepEqual(adminReopen.body.scene,adminFurnished);
   assert.equal((await request('/api/consumer/admin/designs/'+adminSaved.body.id)).status,403,'saved design admin reopen never works without platform authentication');
+  const tenantStaffId='10000000-0000-4000-8000-000000000088';
+  await pg.query('INSERT INTO users(id) VALUES($1)',[tenantStaffId]);await pg.query("INSERT INTO tenant_memberships(tenant_id,user_id,role) VALUES($1,$2,'staff')",[tenant,tenantStaffId]);
+  const tenantStaffToken=auth.signToken({userId:tenantStaffId,isPlatformAdmin:false},{expiresIn:'1h'});
+  const staffOffer=await request('/api/consumer/event-pass/offer?tenant=friendly',null,null,'GET',tenantStaffToken);assert.equal(staffOffer.status,200);assert.equal(staffOffer.body.required,false);assert.equal(staffOffer.body.staffAccess,true);assert.equal(staffOffer.body.adminAccess,false);
+  const staffSaved=await request('/api/tenants/friendly/designs',{scene:adminFurnished,anonymousSessionId:'tenant-staff-session'},null,'POST',tenantStaffToken);assert.equal(staffSaved.status,201,'authenticated tenant staff can use their designer without purchasing an Event Pass');
   env.EVENT_PASS_ENABLED = 'false'; assert.equal((await request('/api/consumer/event-pass/offer?tenant=friendly')).body.required, false); env.EVENT_PASS_ENABLED = 'true';
   assert.equal((await request('/api/consumer/event-pass/offer?tenant=lakeside')).body.required, false);
   const previewSession = { tenant: 'friendly', anonymousSessionId: 'isolated-preview-session' };

@@ -3,17 +3,20 @@
 var API=window.RENTSKETCH_API_URL||'https://rentsketch-api-production.up.railway.app';
 var TOKEN_KEY='rentsketch_dashboard_token',TENANT_KEY='rentsketch_dashboard_tenant';
 var app=document.getElementById('platformApp');
-var state={user:null,tenants:[],route:'overview',menu:false};
+var state={user:null,tenants:[],route:'overview',menu:false,paymentRows:[]};
 
 var nav=[
  {label:'Platform',items:[
   ['overview','Overview','⌂'],['businesses','Businesses','▦'],['payments','Payments','＄'],['subscriptions','Subscriptions','↻']
  ]},
+ {label:'Intelligence',items:[
+  ['insights','Insights','⌁'],['alerts','Needs attention','!']
+ ]},
  {label:'Product',items:[
-  ['event-pass','Event Pass','◇'],['designs','Saved designs','✦'],['activity','Admin activity','≡']
+  ['event-pass','Event Pass','◇'],['designs','Saved designs','✦']
  ]},
  {label:'Operations',items:[
-  ['system','System health','●']
+  ['activity','Admin activity','≡'],['system','System health','●']
  ]}
 ];
 
@@ -70,6 +73,8 @@ async function render(){
   else if(state.route==='subscriptions')await subscriptions();
   else if(state.route==='event-pass')await eventPass();
   else if(state.route==='designs')await designs();
+  else if(state.route==='insights')await insights();
+  else if(state.route==='alerts')await alerts();
   else if(state.route==='activity')await activity();
   else if(state.route==='system')await system();
  }catch(err){if(err.status===401||err.status===403){setToken(null);location.href='/dashboard/#/login';return;}fail(err);}
@@ -77,27 +82,44 @@ async function render(){
 
 async function overview(){
  var d=await Promise.all([
-  api('/api/admin/console-overview'),api('/api/admin/payments?limit=7'),api('/api/admin/activity?limit=7'),api('/api/admin/system')
+  api('/api/admin/console-overview'),api('/api/admin/payments?limit=7'),api('/api/admin/activity?limit=7'),api('/api/admin/system'),api('/api/admin/alerts')
  ]);
- var o=d[0],p=d[1].payments||[],a=d[2].activity||[],s=d[3];
- var content=head('Platform overview','Your RentSketch business','Revenue, subscriptions, customers, designs, and system activity in one operating view.',
-  '<a class="pc-btn" href="#payments">Review payments</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">Use RentSketch now</a>')+
+ var o=d[0],p=d[1].payments||[],a=d[2].activity||[],s=d[3],attention=d[4]||{counts:{}};
+ var attentionTotal=Object.values(attention.counts||{}).reduce(function(sum,n){return sum+Number(n||0)},0);
+ var content=head('Platform overview','Your RentSketch business','Revenue, customers, subscriptions, product activity and operational health in one owner workspace.',
+  '<a class="pc-btn" href="#alerts">Needs attention'+(attentionTotal?' · '+attentionTotal:'')+'</a><a class="pc-btn" href="#payments">Review payments</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">✦ Use RentSketch now</a>')+
   '<section class="pc-grid metrics">'+
-   metric('List-price MRR',moneyDollars(o.subscriptions&&o.subscriptions.list_mrr),'Active subscription records at configured list pricing','positive')+
+   metric('List-price MRR',moneyDollars(o.subscriptions&&o.subscriptions.list_mrr),'Active subscriptions at configured list pricing','positive')+
    metric('Event Pass revenue',money(o.eventPassRevenue.cents),o.eventPassRevenue.count+' paid Event Pass transactions','positive')+
-   metric('Rental deposit volume',money(o.tenantDepositVolume.cents),o.tenantDepositVolume.count+' tenant deposit payments')+
+   metric('Rental deposit volume',money(o.tenantDepositVolume.cents),o.tenantDepositVolume.count+' recorded tenant deposits')+
    metric('Rental businesses',o.tenants,(o.subscriptions.active||0)+' active subscriptions · '+(o.subscriptions.trialing||0)+' trials')+
   '</section>'+
+  '<section class="pc-pulse-grid">'+
+   '<a href="#insights" class="pc-pulse"><span>Saved designs this month</span><strong>'+Number(o.month&&o.month.designs||0)+'</strong><small>'+Number(o.designs||0)+' all-time designs</small></a>'+
+   '<a href="#alerts" class="pc-pulse '+(Number(o.newRequests||0)?'attention':'')+'"><span>New quote requests</span><strong>'+Number(o.newRequests||0)+'</strong><small>'+Number(o.month&&o.month.requests||0)+' requests this month</small></a>'+
+   '<a href="#businesses" class="pc-pulse"><span>New businesses · 30 days</span><strong>'+Number(o.recentTenants||0)+'</strong><small>'+Number(o.installedTenants||0)+' businesses installed on a website</small></a>'+
+   '<a href="#subscriptions" class="pc-pulse '+(Number(o.subscriptions&&o.subscriptions.attention||0)?'attention':'')+'"><span>Billing attention</span><strong>'+Number(o.subscriptions&&o.subscriptions.attention||0)+'</strong><small>Past due, unpaid, incomplete or paused</small></a>'+
+   '<a href="#payments" class="pc-pulse"><span>Refunded Event Passes</span><strong>'+Number(o.refundedPayments||0)+'</strong><small>'+Number(o.failedPayments||0)+' failed Event Pass records</small></a>'+
+  '</section>'+
   '<div class="pc-split"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Recent payments</h2><p>Event Pass sales and tenant rental deposits.</p></div><a class="pc-btn small" href="#payments">All payments</a></div>'+paymentTable(p,false)+'</section>'+
-  '<aside class="pc-panel"><div class="pc-panel-head"><div><h2>Admin activity</h2><p>Changes made from the platform console.</p></div><a class="pc-btn small" href="#activity">Audit log</a></div><div class="pc-panel-body">'+activityList(a)+'</div></aside></div>'+
-  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>System snapshot</h2><p>Critical services that keep checkout and access working.</p></div><a class="pc-btn small" href="#system">System health</a></div><div class="pc-panel-body">'+healthCards(s)+'</div></section>';
+  '<aside class="pc-stack"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Owner priorities</h2><p>Operational work that needs review.</p></div><a class="pc-btn small" href="#alerts">Open alerts</a></div><div class="pc-panel-body">'+
+    priorityRow('New quote requests',attention.counts&&attention.counts.newRequests,'Customer requests waiting for follow-up','#alerts')+
+    priorityRow('Billing issues',attention.counts&&attention.counts.billing,'Subscriptions requiring attention','#alerts')+
+    priorityRow('Failed access email',attention.counts&&attention.counts.failedMail,'Customer access messages that failed','#alerts')+
+    priorityRow('Uninstalled businesses',attention.counts&&attention.counts.uninstalled,'Older tenant workspaces without an approved domain','#alerts')+
+  '</div></section>'+
+  '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Admin activity</h2><p>Sensitive changes from the owner console.</p></div><a class="pc-btn small" href="#activity">Audit log</a></div><div class="pc-panel-body">'+activityList(a)+'</div></section></aside></div>'+
+  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>System snapshot</h2><p>Critical services that keep checkout and customer access working.</p></div><a class="pc-btn small" href="#system">System health</a></div><div class="pc-panel-body">'+healthCards(s)+'</div></section>';
  document.getElementById('pcContent').innerHTML=content;
 }
-
+function priorityRow(label,value,detail,href){
+ value=Number(value||0);
+ return '<a class="pc-priority" href="'+href+'"><span><strong>'+esc(label)+'</strong><small>'+esc(detail)+'</small></span><b class="'+(value?'hot':'')+'">'+value+'</b></a>';
+}
 function paymentTable(rows,actions){
  if(!rows.length)return empty('No payment records yet.');
  return '<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Payment</th><th>Customer</th><th>Business</th><th>Amount</th><th>Status</th><th>Date</th>'+(actions?'<th>Action</th>':'')+'</tr></thead><tbody>'+
- rows.map(function(p){return '<tr><td><strong>'+esc(p.kind==='event_pass'?'Event Pass':'Rental deposit')+'</strong><span class="pc-subtext">'+esc(p.subtype||'')+'</span></td><td>'+esc(p.customer_name||p.customer_email||'—')+(p.customer_name&&p.customer_email?'<span class="pc-subtext">'+esc(p.customer_email)+'</span>':'')+'</td><td>'+esc(p.tenant_name||p.tenant_slug||'—')+'</td><td class="pc-money">'+money(p.amount_cents)+'</td><td>'+status(p.status)+'</td><td>'+date(p.created_at)+'</td>'+(actions?'<td>'+(p.status==='paid'?'<button class="pc-btn small danger" data-refund="'+esc(p.kind)+'" data-id="'+esc(p.id)+'" data-amount="'+esc(p.amount_cents)+'">Refund</button>':'—')+'</td>':'')+'</tr>'}).join('')+
+ rows.map(function(p){return '<tr><td><strong>'+esc(p.kind==='event_pass'?'Event Pass':'Rental deposit')+'</strong><span class="pc-subtext">'+esc(p.subtype||'')+'</span></td><td>'+esc(p.customer_name||p.customer_email||'—')+(p.customer_name&&p.customer_email?'<span class="pc-subtext">'+esc(p.customer_email)+'</span>':'')+'</td><td>'+esc(p.tenant_name||p.tenant_slug||'—')+'</td><td class="pc-money">'+money(p.amount_cents)+'</td><td>'+status(p.status)+'</td><td>'+date(p.created_at)+'</td>'+(actions?'<td><div class="pc-actions"><button class="pc-btn small" data-payment-detail="'+esc(p.id)+'">Details</button>'+(p.status==='paid'?'<button class="pc-btn small danger" data-refund="'+esc(p.kind)+'" data-id="'+esc(p.id)+'" data-amount="'+esc(p.amount_cents)+'">Refund</button>':'')+'</div></td>':'')+'</tr>'}).join('')+
  '</tbody></table></div>';
 }
 function activityList(rows){
@@ -114,50 +136,93 @@ function healthCards(s){
 
 async function businesses(){
  var d=await api('/api/admin/tenants');state.tenants=d.tenants||[];
- document.getElementById('pcContent').innerHTML=head('Business accounts','Rental businesses','Manage every RentSketch rental-company workspace and jump directly into its dashboard or designer.',
-  '<a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">✦ Open RentSketch</a>')+
-  '<div class="pc-toolbar"><div class="pc-search"><input id="tenantSearch" type="search" placeholder="Search business, slug or email…"></div></div>'+
+ document.getElementById('pcContent').innerHTML=head('Business accounts','Rental businesses','Manage every tenant workspace, onboarding state, product usage and support context.',
+  '<button class="pc-btn" id="createBusiness" type="button">＋ Create business</button><a class="pc-btn" href="#alerts">Review setup alerts</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">✦ Open RentSketch</a>')+
+  '<div class="pc-toolbar"><div class="pc-search"><input id="tenantSearch" type="search" placeholder="Search business, slug or email…"></div><select id="tenantStatus" class="pc-select"><option value="">All billing states</option><option value="active">Active</option><option value="trialing">Trialing</option><option value="past_due">Past due</option><option value="canceled">Canceled</option></select><select id="tenantSetup" class="pc-select"><option value="">All setup states</option><option value="ready">Launch ready</option><option value="needs_setup">Needs setup</option></select></div>'+
+  '<section class="pc-grid metrics">'+metric('Businesses',state.tenants.length,'All tenant workspaces')+metric('Installed',state.tenants.filter(function(t){return Array.isArray(t.allowed_origins)&&t.allowed_origins.length}).length,'Approved website domain configured')+metric('Active products',state.tenants.reduce(function(n,t){return n+Number(t.active_product_count||0)},0),'Across tenant catalogs')+metric('New requests',state.tenants.reduce(function(n,t){return n+Number(t.new_request_count||0)},0),'Waiting across all businesses')+'</section>'+
   '<section class="pc-panel"><div id="tenantTable"></div></section>';
+ function setupScore(t){
+  var checks=[Number(t.active_product_count||0)>0,!!t.contact_email,Array.isArray(t.allowed_origins)&&t.allowed_origins.length>0];
+  return Math.round(checks.filter(Boolean).length/checks.length*100);
+ }
+ function lastActivity(t){
+  var values=[t.last_design_at,t.last_request_at].filter(Boolean).map(function(v){return new Date(v).getTime()});
+  return values.length?new Date(Math.max.apply(Math,values)).toISOString():t.created_at;
+ }
  function paint(){
-  var q=(document.getElementById('tenantSearch').value||'').toLowerCase();
-  var rows=state.tenants.filter(function(t){return [t.name,t.slug,t.contact_email,t.subscription_plan,t.subscription_status].join(' ').toLowerCase().includes(q)});
-  document.getElementById('tenantTable').innerHTML=rows.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Plan</th><th>Status</th><th>Products</th><th>Requests</th><th>Users</th><th>Actions</th></tr></thead><tbody>'+rows.map(function(t){return '<tr><td><strong>'+esc(t.name)+'</strong><span class="pc-subtext">'+esc(t.slug)+(t.contact_email?' · '+esc(t.contact_email):'')+'</span></td><td>'+esc(t.subscription_plan||'trial')+'</td><td>'+status(t.subscription_status)+'</td><td>'+Number(t.product_count||0)+'</td><td>'+Number(t.quote_request_count||0)+'</td><td>'+Number(t.member_count||0)+'</td><td><div class="pc-actions"><button class="pc-btn small" data-workspace="'+esc(t.slug)+'">Dashboard</button><button class="pc-btn small primary" data-designer="'+esc(t.slug)+'">Open designer</button><button class="pc-btn small" data-manage="'+esc(t.slug)+'">Manage</button></div></td></tr>'}).join('')+'</tbody></table></div>':empty('No businesses match that search.');
+  var q=(document.getElementById('tenantSearch').value||'').toLowerCase(),st=document.getElementById('tenantStatus').value,setupFilter=document.getElementById('tenantSetup').value;
+  var rows=state.tenants.filter(function(t){
+    var score=setupScore(t),setupOk=setupFilter==='ready'?score===100:setupFilter==='needs_setup'?score<100:true;
+    return [t.name,t.slug,t.contact_email,t.subscription_plan,t.subscription_status].join(' ').toLowerCase().includes(q)&&(!st||t.subscription_status===st)&&setupOk;
+  });
+  document.getElementById('tenantTable').innerHTML=rows.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Plan</th><th>Setup</th><th>Usage</th><th>Requests</th><th>Last activity</th><th>Support</th><th>Actions</th></tr></thead><tbody>'+rows.map(function(t){
+    var score=setupScore(t);
+    return '<tr><td><strong>'+esc(t.name)+'</strong><span class="pc-subtext">'+esc(t.slug)+(t.contact_email?' · '+esc(t.contact_email):'')+'</span></td><td>'+esc(t.subscription_plan||'trial')+'<span class="pc-subtext">'+status(t.subscription_status)+'</span></td><td><div class="pc-setup-mini"><span><i style="width:'+score+'%"></i></span><b>'+score+'%</b></div><span class="pc-subtext">'+Number(t.active_product_count||0)+' active products · '+(Array.isArray(t.allowed_origins)?t.allowed_origins.length:0)+' domains</span></td><td><strong>'+Number(t.design_count||0)+' designs</strong><span class="pc-subtext">'+Number(t.design_month_count||0)+' in 30 days</span></td><td><strong>'+Number(t.quote_request_count||0)+'</strong><span class="pc-subtext">'+Number(t.new_request_count||0)+' new</span></td><td>'+datetime(lastActivity(t))+'</td><td><strong>'+Number(t.member_count||0)+' users</strong><span class="pc-subtext">'+Number(t.note_count||0)+' internal notes</span></td><td><div class="pc-actions"><button class="pc-btn small" data-workspace="'+esc(t.slug)+'">Workspace</button><button class="pc-btn small primary" data-designer="'+esc(t.slug)+'">Designer</button><button class="pc-btn small" data-manage="'+esc(t.slug)+'">Manage</button></div></td></tr>';
+  }).join('')+'</tbody></table></div>':empty('No businesses match those filters.');
   bindTenantActions();
  }
- document.getElementById('tenantSearch').oninput=paint;paint();
+ document.getElementById('tenantSearch').oninput=paint;document.getElementById('tenantStatus').onchange=paint;document.getElementById('tenantSetup').onchange=paint;document.getElementById('createBusiness').onclick=createBusinessModal;paint();
 }
+function createBusinessModal(){
+ var back=document.createElement('div');back.className='pc-modal-backdrop';
+ back.innerHTML='<div class="pc-modal"><div class="pc-modal-head"><div><h2>Create rental business</h2><p>Create the workspace and its first owner without asking them to self-sign-up.</p></div><button class="pc-modal-close">×</button></div><div class="pc-modal-body"><form id="createTenantForm"><div class="pc-modal-field"><label>Business name</label><input id="ctName" required maxlength="120" placeholder="Acme Event Rentals"></div><div class="pc-modal-field"><label>Owner name</label><input id="ctOwnerName" maxlength="120" placeholder="Alex Owner"></div><div class="pc-modal-field"><label>Owner email</label><input id="ctEmail" type="email" required maxlength="254" placeholder="owner@example.com"></div><div class="pc-modal-field"><label>Starting plan</label><select id="ctPlan" class="pc-select"><option value="starter">Starter</option><option value="pro">Pro</option><option value="commerce">Business</option></select></div><div id="ctMsg"></div><button class="pc-btn primary" type="submit">Create 14-day trial workspace</button></form></div></div>';
+ document.body.appendChild(back);function close(){back.remove()}back.querySelector('.pc-modal-close').onclick=close;back.onclick=function(e){if(e.target===back)close()};
+ document.getElementById('createTenantForm').onsubmit=async function(e){e.preventDefault();var btn=this.querySelector('button[type=submit]');btn.disabled=true;try{var result=await api('/api/admin/tenants',{method:'POST',body:{name:document.getElementById('ctName').value.trim(),ownerName:document.getElementById('ctOwnerName').value.trim(),ownerEmail:document.getElementById('ctEmail').value.trim(),plan:document.getElementById('ctPlan').value}});var html='<div class="pc-message success"><strong>'+esc(result.tenant.name)+' created.</strong><br>Workspace: '+esc(result.tenant.slug);if(result.resetUrl)html+='<br><span class="pc-reset-link">'+esc(result.resetUrl)+'</span><br><button id="copyNewTenantLink" class="pc-btn small" type="button">Copy owner setup link</button><br><small>Send this private one-time link to the owner. It expires in 24 hours.</small>';else html+='<br><small>The owner already has a RentSketch login and can use it for this workspace.</small>';html+='</div><div class="pc-actions"><button class="pc-btn" id="openCreatedWorkspace">Open workspace</button><button class="pc-btn primary" id="openCreatedDesigner">Open designer</button></div>';document.getElementById('ctMsg').innerHTML=html;btn.hidden=true;if(result.resetUrl)document.getElementById('copyNewTenantLink').onclick=async function(){try{await navigator.clipboard.writeText(result.resetUrl);this.textContent='Copied';}catch(_){prompt('Copy owner setup link:',result.resetUrl);}};document.getElementById('openCreatedWorkspace').onclick=function(){setTenant(result.tenant.slug);location.href='/dashboard/?tenantView=1#/overview';};document.getElementById('openCreatedDesigner').onclick=function(){window.open('/designer/?tenant='+encodeURIComponent(result.tenant.slug)+'&admin=1','_blank','noopener');};}catch(err){document.getElementById('ctMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
+}
+
 function bindTenantActions(){
  document.querySelectorAll('[data-workspace]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.workspace);location.href='/dashboard/?tenantView=1#/overview';};});
  document.querySelectorAll('[data-designer]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.designer);window.open('/designer/?tenant='+encodeURIComponent(b.dataset.designer)+'&admin=1','_blank','noopener');};});
  document.querySelectorAll('[data-manage]').forEach(function(b){b.onclick=function(){tenantModal(b.dataset.manage);};});
 }
 async function tenantModal(slug){
- var d=await api('/api/admin/tenants/'+encodeURIComponent(slug)),t=d.tenant,m=d.members||[];
+ var loaded=await Promise.all([api('/api/admin/tenants/'+encodeURIComponent(slug)),api('/api/admin/tenants/'+encodeURIComponent(slug)+'/notes')]);
+ var d=loaded[0],t=d.tenant,m=d.members||[],notes=loaded[1].notes||[];
  var backdrop=document.createElement('div');backdrop.className='pc-modal-backdrop';
- backdrop.innerHTML='<div class="pc-modal"><div class="pc-modal-head"><h2>'+esc(t.name)+'</h2><button class="pc-modal-close">×</button></div><div class="pc-modal-body"><div id="tenantMsg"></div>'+
-  '<div class="pc-modal-field"><label>Business name</label><input id="tmName" value="'+esc(t.name)+'"></div>'+
-  '<div class="pc-modal-field"><label>Contact email</label><input id="tmEmail" type="email" value="'+esc(t.contact_email||'')+'"></div>'+
-  '<div class="pc-modal-field"><label>Trial ends</label><input id="tmTrial" type="date" value="'+esc(t.trial_ends_at?String(t.trial_ends_at).slice(0,10):'')+'"></div>'+
-  '<div class="pc-actions"><button class="pc-btn primary" id="tmSave">Save business</button><button class="pc-btn" id="tmWorkspace">Open dashboard</button><button class="pc-btn" id="tmDesigner">Open designer</button></div>'+
-  '<h3 style="margin:24px 0 8px;font-size:14px">Users</h3><div>'+m.map(function(u){return '<div class="pc-list-row"><div><strong>'+esc(u.display_name||u.email)+'</strong><p>'+esc(u.email)+'</p></div><span class="pc-status">'+esc(u.role)+'</span></div>'}).join('')+'</div></div></div>';
+ function membersHtml(){
+  if(!m.length)return '<div class="pc-empty">No tenant users found.</div>';
+  return '<div class="pc-member-list">'+m.map(function(u){return '<div class="pc-member-row" data-member="'+esc(u.id)+'"><div><strong>'+esc(u.display_name||u.email)+'</strong><small>'+esc(u.email)+'</small></div><select class="pc-select" data-member-role="'+esc(u.id)+'"><option value="owner"'+(u.role==='owner'?' selected':'')+'>Owner</option><option value="admin"'+(u.role==='admin'?' selected':'')+'>Admin</option><option value="staff"'+(u.role==='staff'?' selected':'')+'>Staff</option><option value="viewer"'+(u.role==='viewer'?' selected':'')+'>Viewer</option></select><div class="pc-actions"><button class="pc-btn small" data-reset-member="'+esc(u.id)+'">Reset link</button><button class="pc-btn small danger" data-remove-member="'+esc(u.id)+'">Remove</button></div></div>'}).join('')+'</div>';
+ }
+ function notesHtml(){
+  if(!notes.length)return '<div class="pc-empty pc-empty-small">No internal notes yet.</div>';
+  return '<div class="pc-note-list">'+notes.map(function(n){return '<div class="pc-note"><div><strong>'+esc(n.admin_name||n.admin_email||'Platform admin')+'</strong><time>'+datetime(n.created_at)+'</time></div><p>'+esc(n.body)+'</p><button class="pc-btn small" data-delete-note="'+esc(n.id)+'">Delete</button></div>'}).join('')+'</div>';
+ }
+ backdrop.innerHTML='<div class="pc-modal pc-modal-wide"><div class="pc-modal-head"><div><h2>'+esc(t.name)+'</h2><p>'+esc(t.slug)+' · '+esc(t.subscription_plan||'trial')+' · '+esc(t.subscription_status||'unknown')+'</p></div><button class="pc-modal-close">×</button></div><div class="pc-modal-body"><div id="tenantMsg"></div>'+
+  '<div class="pc-modal-grid"><section><h3>Business account</h3><div class="pc-modal-field"><label>Business name</label><input id="tmName" value="'+esc(t.name)+'"></div><div class="pc-modal-field"><label>Contact email</label><input id="tmEmail" type="email" value="'+esc(t.contact_email||'')+'"></div><div class="pc-modal-field"><label>Trial ends</label><input id="tmTrial" type="date" value="'+esc(t.trial_ends_at?String(t.trial_ends_at).slice(0,10):'')+'"></div><div class="pc-actions"><button class="pc-btn primary" id="tmSave">Save business</button><button class="pc-btn" id="tmWorkspace">Open workspace</button><button class="pc-btn" id="tmDesigner">Open designer</button></div><div class="pc-support-facts"><span><b>Website</b>'+esc(t.website||'Not set')+'</span><span><b>Stripe</b>'+esc(t.stripe_connect_status||'not connected')+'</span><span><b>Approved domains</b>'+((t.allowed_origins||[]).length||0)+'</span><span><b>Webhook</b>'+(t.webhook_url?'Configured':'Not configured')+'</span></div></section>'+
+  '<section><h3>Tenant users</h3><p class="pc-modal-help">Invite staff, change roles, create a one-time password setup/reset link, or remove access.</p><form id="memberInviteForm" class="pc-invite-form"><input id="inviteName" placeholder="Name (optional)"><input id="inviteEmail" type="email" required placeholder="staff@example.com"><select id="inviteRole" class="pc-select"><option value="staff">Staff</option><option value="admin">Admin</option><option value="viewer">Viewer</option><option value="owner">Owner</option></select><button class="pc-btn primary" type="submit">Add user</button></form><div id="memberSetupLink"></div><div id="membersList">'+membersHtml()+'</div></section></div>'+
+  '<section class="pc-modal-notes"><div class="pc-modal-notes-head"><div><h3>Internal support notes</h3><p>Visible only to RentSketch platform admins.</p></div></div><form id="noteForm"><textarea id="noteBody" maxlength="4000" rows="3" placeholder="Add context for future support work…"></textarea><button class="pc-btn primary" type="submit">Add note</button></form><div id="notesList">'+notesHtml()+'</div></section></div></div>';
  document.body.appendChild(backdrop);
  function close(){backdrop.remove()} backdrop.querySelector('.pc-modal-close').onclick=close;backdrop.onclick=function(e){if(e.target===backdrop)close()};
  document.getElementById('tmWorkspace').onclick=function(){setTenant(slug);location.href='/dashboard/?tenantView=1#/overview';};
  document.getElementById('tmDesigner').onclick=function(){setTenant(slug);window.open('/designer/?tenant='+encodeURIComponent(slug)+'&admin=1','_blank','noopener');};
- document.getElementById('tmSave').onclick=async function(){var btn=this;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug),{method:'PATCH',body:{name:document.getElementById('tmName').value,contactEmail:document.getElementById('tmEmail').value,trialEndsAt:document.getElementById('tmTrial').value||null}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">Saved.</div>';setTimeout(function(){close();render()},500);}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
+ document.getElementById('tmSave').onclick=async function(){var btn=this;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug),{method:'PATCH',body:{name:document.getElementById('tmName').value,contactEmail:document.getElementById('tmEmail').value,trialEndsAt:document.getElementById('tmTrial').value||null}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">Business details saved.</div>';btn.disabled=false;}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
+ function setupLinkBox(url,label){document.getElementById('memberSetupLink').innerHTML='<div class="pc-message success"><strong>'+esc(label)+'</strong><br><span class="pc-reset-link">'+esc(url)+'</span><br><button class="pc-btn small" id="copySetupLink" type="button">Copy one-time link</button> <small>Expires in 24 hours and works once.</small></div>';document.getElementById('copySetupLink').onclick=async function(){try{await navigator.clipboard.writeText(url);this.textContent='Copied';}catch(_){prompt('Copy this one-time link:',url);}};}
+ function bindMemberControls(){
+  document.querySelectorAll('[data-member-role]').forEach(function(sel){sel.onchange=async function(){var old=m.find(function(u){return String(u.id)===String(sel.dataset.memberRole)});sel.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members/'+encodeURIComponent(sel.dataset.memberRole),{method:'PATCH',body:{role:sel.value}});if(old)old.role=sel.value;}catch(err){alert(err.message);if(old)sel.value=old.role;}finally{sel.disabled=false;}};});
+  document.querySelectorAll('[data-reset-member]').forEach(function(btn){btn.onclick=async function(){btn.disabled=true;try{var result=await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members/'+encodeURIComponent(btn.dataset.resetMember)+'/reset-link',{method:'POST',body:{}});setupLinkBox(result.resetUrl,'One-time password reset link created');}catch(err){alert(err.message);}finally{btn.disabled=false;}};});
+  document.querySelectorAll('[data-remove-member]').forEach(function(btn){btn.onclick=async function(){if(!confirm('Remove this user from '+t.name+'?'))return;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members/'+encodeURIComponent(btn.dataset.removeMember),{method:'DELETE'});m=m.filter(function(u){return String(u.id)!==String(btn.dataset.removeMember)});document.getElementById('membersList').innerHTML=membersHtml();bindMemberControls();}catch(err){alert(err.message);btn.disabled=false;}};});
+ }
+ bindMemberControls();
+ document.getElementById('memberInviteForm').onsubmit=async function(e){e.preventDefault();var btn=this.querySelector('button');btn.disabled=true;try{var result=await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members',{method:'POST',body:{displayName:document.getElementById('inviteName').value.trim(),email:document.getElementById('inviteEmail').value.trim(),role:document.getElementById('inviteRole').value}});var existing=m.find(function(u){return String(u.id)===String(result.member.id)});if(existing)Object.assign(existing,result.member);else m.push(result.member);document.getElementById('membersList').innerHTML=membersHtml();bindMemberControls();document.getElementById('inviteName').value='';document.getElementById('inviteEmail').value='';if(result.resetUrl)setupLinkBox(result.resetUrl,'New user created — send this setup link securely');else document.getElementById('memberSetupLink').innerHTML='<div class="pc-message success">Existing RentSketch user added to this tenant.</div>';}catch(err){alert(err.message);}finally{btn.disabled=false;}};
+ document.getElementById('noteForm').onsubmit=async function(e){e.preventDefault();var body=document.getElementById('noteBody').value.trim();if(!body)return;var btn=this.querySelector('button');btn.disabled=true;try{var result=await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/notes',{method:'POST',body:{body:body}});notes.unshift({id:result.note.id,body:result.note.body,created_at:result.note.created_at,admin_name:state.user&&state.user.displayName,admin_email:state.user&&state.user.email});document.getElementById('noteBody').value='';document.getElementById('notesList').innerHTML=notesHtml();bindNoteDeletes();}catch(err){alert(err.message);}finally{btn.disabled=false;}};
+ function bindNoteDeletes(){document.querySelectorAll('[data-delete-note]').forEach(function(btn){btn.onclick=async function(){if(!confirm('Delete this internal note?'))return;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/notes/'+encodeURIComponent(btn.dataset.deleteNote),{method:'DELETE'});notes=notes.filter(function(n){return String(n.id)!==String(btn.dataset.deleteNote)});document.getElementById('notesList').innerHTML=notesHtml();bindNoteDeletes();}catch(err){alert(err.message);btn.disabled=false;}};});}
+ bindNoteDeletes();
 }
-
 async function payments(kind){
  var query=kind&&kind!=='all'?'&kind='+encodeURIComponent(kind):'';
- var d=await api('/api/admin/payments?limit=200'+query),rows=d.payments||[];
+ var d=await api('/api/admin/payments?limit=200'+query),rows=d.payments||[];state.paymentRows=rows;
  document.getElementById('pcContent').innerHTML=head('Money','Payments','One ledger for RentSketch Event Pass sales and tenant rental deposits. Refunds are sent through Stripe and recorded here.')+
-  '<div class="pc-toolbar"><div class="pc-search"><input id="paySearch" type="search" placeholder="Search customer, business or payment ID…"></div><select class="pc-select" id="payKind"><option value="all">All payments</option><option value="event_pass">Event Pass</option><option value="deposit">Rental deposits</option></select></div>'+
+  '<div class="pc-toolbar"><div class="pc-search"><input id="paySearch" type="search" placeholder="Search customer, business or payment ID…"></div><select class="pc-select" id="payKind"><option value="all">All payments</option><option value="event_pass">Event Pass</option><option value="deposit">Rental deposits</option></select><select class="pc-select" id="payStatus"><option value="">All statuses</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="refunded">Refunded</option><option value="failed">Failed</option></select><button class="pc-btn" id="exportPayments">Export CSV</button></div>'+
   '<section class="pc-panel"><div id="payTable">'+paymentTable(rows,true)+'</div></section>'+
   '<div class="pc-callout" style="margin-top:14px"><strong>Refund safety</strong><p>A refund requires an explicit confirmation. Event Pass refunds revoke the linked software entitlement. Rental-deposit refunds do not cancel the tenant’s event/order automatically.</p></div>';
  var sel=document.getElementById('payKind');sel.value=kind||'all';sel.onchange=function(){payments(sel.value)};
- function paint(){var q=(document.getElementById('paySearch').value||'').toLowerCase();var filtered=rows.filter(function(p){return [p.customer_email,p.customer_name,p.tenant_name,p.payment_intent_id,p.subtype].join(' ').toLowerCase().includes(q)});document.getElementById('payTable').innerHTML=paymentTable(filtered,true);bindRefunds();}
- document.getElementById('paySearch').oninput=paint;bindRefunds();
+ function currentRows(){var q=(document.getElementById('paySearch').value||'').toLowerCase(),st=document.getElementById('payStatus').value;return rows.filter(function(p){return [p.customer_email,p.customer_name,p.tenant_name,p.payment_intent_id,p.subtype].join(' ').toLowerCase().includes(q)&&(!st||p.status===st)});}
+ function paint(){document.getElementById('payTable').innerHTML=paymentTable(currentRows(),true);bindRefunds();bindPaymentDetails();}
+ document.getElementById('paySearch').oninput=paint;document.getElementById('payStatus').onchange=paint;
+ document.getElementById('exportPayments').onclick=function(){var data=currentRows();var cols=['kind','subtype','status','amount_cents','currency','customer_name','customer_email','tenant_name','tenant_slug','payment_intent_id','created_at'];function csv(v){v=String(v==null?'':v);return '"'+v.replaceAll('"','""')+'"';}var content=[cols.join(',')].concat(data.map(function(row){return cols.map(function(key){return csv(row[key]);}).join(',');})).join('\n');var blob=new Blob([content],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='rentsketch-payments-'+new Date().toISOString().slice(0,10)+'.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url)},1000);};
+ bindRefunds();bindPaymentDetails();
 }
+function bindPaymentDetails(){document.querySelectorAll('[data-payment-detail]').forEach(function(btn){btn.onclick=function(){var p=(state.paymentRows||[]).find(function(row){return String(row.id)===String(btn.dataset.paymentDetail)});if(!p)return;var back=document.createElement('div');back.className='pc-modal-backdrop';back.innerHTML='<div class="pc-modal"><div class="pc-modal-head"><div><h2>Payment details</h2><p>'+esc(p.kind==='event_pass'?'Event Pass':'Rental deposit')+' · '+esc(p.status||'unknown')+'</p></div><button class="pc-modal-close">×</button></div><div class="pc-modal-body"><div class="pc-detail-grid"><span><b>Amount</b>'+money(p.amount_cents)+'</span><span><b>Currency</b>'+esc(p.currency||'USD')+'</span><span><b>Customer</b>'+esc(p.customer_name||p.customer_email||'—')+'</span><span><b>Business</b>'+esc(p.tenant_name||p.tenant_slug||'—')+'</span><span><b>Payment intent</b>'+esc(p.payment_intent_id||'—')+'</span><span><b>Checkout session</b>'+esc(p.checkout_session_id||'—')+'</span><span><b>Design</b>'+esc(p.design_id||'—')+'</span><span><b>Created</b>'+esc(datetime(p.created_at))+'</span></div></div></div>';document.body.appendChild(back);function close(){back.remove()}back.querySelector('.pc-modal-close').onclick=close;back.onclick=function(e){if(e.target===back)close()};};});}
 function bindRefunds(){document.querySelectorAll('[data-refund]').forEach(function(b){b.onclick=async function(){var amount=money(Number(b.dataset.amount||0));if(!confirm('Refund '+amount+'?\n\nThis sends a real Stripe refund. This action cannot be undone from RentSketch.'))return;b.disabled=true;b.textContent='Refunding…';try{await api('/api/admin/payments/'+encodeURIComponent(b.dataset.refund)+'/'+encodeURIComponent(b.dataset.id)+'/refund',{method:'POST',body:{confirm:true}});await payments(document.getElementById('payKind')?document.getElementById('payKind').value:'all');}catch(err){alert('Refund failed: '+err.message);b.disabled=false;b.textContent='Refund';}};});}
 
 async function subscriptions(){
@@ -183,6 +248,37 @@ async function designs(){
   '<section class="pc-panel">'+(rows.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Design</th><th>Workspace</th><th>Event</th><th>Guests</th><th>Estimate</th><th>Access</th><th>Updated</th><th>Open</th></tr></thead><tbody>'+rows.map(function(d){return '<tr><td><strong>'+esc(String(d.id).slice(0,8))+'</strong><span class="pc-subtext">'+esc(d.id)+'</span></td><td>'+esc(d.tenant_name||d.tenant_slug)+'</td><td>'+esc(d.event_type||'—')+'</td><td>'+esc(d.guest_count||'—')+'</td><td>'+moneyDollars(d.estimate_total||0)+'</td><td>'+(d.active_access?status('active'):'<span class="pc-status">No active pass</span>')+'</td><td>'+datetime(d.updated_at)+'</td><td><a class="pc-btn small" target="_blank" rel="noopener" href="/designer/?tenant='+encodeURIComponent(d.tenant_slug||'generic')+'&adminDesign='+encodeURIComponent(d.id)+'&admin=1">Open</a></td></tr>'}).join('')+'</tbody></table></div>':empty('No saved designs yet.'))+'</section>';
 }
 
+
+async function insights(){
+ var d=await Promise.all([api('/api/admin/analytics'),api('/api/admin/console-overview')]),a=d[0],o=d[1],trend=a.trend||[],top=a.topTenants||[];
+ var designTotal=trend.reduce(function(n,r){return n+Number(r.designs||0)},0),requestTotal=trend.reduce(function(n,r){return n+Number(r.requests||0)},0),passCount=trend.reduce(function(n,r){return n+Number(r.event_passes||0)},0),passCents=trend.reduce(function(n,r){return n+Number(r.event_pass_cents||0)},0);
+ var max=Math.max.apply(Math,trend.map(function(r){return Math.max(Number(r.designs||0),Number(r.requests||0),Number(r.event_passes||0))}).concat([1]));
+ var chart='<div class="pc-trend-chart">'+trend.map(function(r){var h=Math.max(3,Math.round(Math.max(Number(r.designs||0),Number(r.requests||0),Number(r.event_passes||0))/max*100));return '<div class="pc-trend-day" title="'+esc(r.day)+' · '+r.designs+' designs · '+r.requests+' requests · '+r.event_passes+' passes"><i style="height:'+h+'%"></i><span>'+esc(String(r.day).slice(5))+'</span></div>';}).join('')+'</div>';
+ document.getElementById('pcContent').innerHTML=head('Product intelligence','Insights','Thirty-day product activity and the tenant workspaces using RentSketch most.')+
+  '<section class="pc-grid metrics">'+metric('Designs · 30 days',designTotal,'Saved design activity')+metric('Quote requests · 30 days',requestTotal,'Customer quote requests')+metric('Event Passes · 30 days',passCount,money(passCents)+' paid revenue','positive')+metric('Installed businesses',o.installedTenants||0,'Tenant workspaces with approved domains')+'</section>'+
+  '<section class="pc-panel"><div class="pc-panel-head"><div><h2>30-day activity</h2><p>Daily peak across designs, requests and paid Event Passes.</p></div></div><div class="pc-panel-body">'+chart+'<div class="pc-chart-legend"><span><i class="pc-dot"></i>Activity volume</span><span>Hover each day for the exact mix.</span></div></div></section>'+
+  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>Most active tenant workspaces</h2><p>Usage based on saved designs and quote requests.</p></div><a class="pc-btn small" href="#businesses">All businesses</a></div>'+(top.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Designs</th><th>Requests</th><th>Booked</th><th>Last activity</th><th></th></tr></thead><tbody>'+top.map(function(t){return '<tr><td><strong>'+esc(t.name)+'</strong><span class="pc-subtext">'+esc(t.slug)+'</span></td><td>'+Number(t.design_count||0)+'</td><td>'+Number(t.request_count||0)+'</td><td>'+Number(t.booked_count||0)+'</td><td>'+datetime(t.last_activity)+'</td><td><button class="pc-btn small" data-insight-workspace="'+esc(t.slug)+'">Open workspace</button></td></tr>'}).join('')+'</tbody></table></div>':empty('No tenant activity yet.'))+'</section>';
+ document.querySelectorAll('[data-insight-workspace]').forEach(function(btn){btn.onclick=function(){setTenant(btn.dataset.insightWorkspace);location.href='/dashboard/?tenantView=1#/overview';};});
+}
+
+async function alerts(){
+ var a=await api('/api/admin/alerts'),counts=a.counts||{};
+ document.getElementById('pcContent').innerHTML=head('Operations queue','Needs attention','A focused queue of customer, billing, setup and delivery issues that need human review.',
+  '<a class="pc-btn" href="#businesses">Businesses</a><a class="pc-btn" href="#system">System health</a>')+
+  '<section class="pc-grid metrics">'+metric('New requests',counts.newRequests||0,'Customer quote requests awaiting follow-up',Number(counts.newRequests)?'':'')+metric('Billing issues',counts.billing||0,'Past due, unpaid, incomplete or paused')+metric('Failed email',counts.failedMail||0,'Access messages that failed')+metric('Uninstalled',counts.uninstalled||0,'Older businesses with no approved domain')+'</section>'+
+  alertSection('New quote requests','Customer requests that still have status “new”.',a.newRequests||[],function(r){return '<strong>'+esc(r.customer_name||'Customer')+'</strong><span class="pc-subtext">'+esc(r.name)+' · '+moneyDollars(r.estimate_total||0)+' · '+datetime(r.created_at)+'</span>';},'request')+
+  alertSection('Billing issues','Subscriptions requiring owner review.',a.billing||[],function(r){return '<strong>'+esc(r.name)+'</strong><span class="pc-subtext">'+esc(r.plan_id||'plan')+' · '+esc(r.status)+' · period ends '+date(r.current_period_end)+'</span>';},'business')+
+  alertSection('Failed access email','Customer access messages that exhausted the current send attempt.',a.failedMail||[],function(r){return '<strong>'+esc(r.customer_email||'Unknown recipient')+'</strong><span class="pc-subtext">'+esc(r.tenant_slug||'generic')+' · '+Number(r.attempts||0)+' attempts · '+esc(r.last_error||'Delivery failed')+'</span>';},'none')+
+  alertSection('Businesses not installed','Tenant workspaces older than two days without an approved website origin.',a.uninstalled||[],function(r){return '<strong>'+esc(r.name)+'</strong><span class="pc-subtext">'+esc(r.slug)+' · created '+date(r.created_at)+'</span>';},'business')+
+  alertSection('Catalog visual mapping','Active catalog items that require a visual model before customers can use them.',a.unmapped||[],function(r){return '<strong>'+esc(r.name)+'</strong><span class="pc-subtext">'+Number(r.missing||0)+' active products need visual mapping</span>';},'business');
+ document.querySelectorAll('[data-alert-workspace]').forEach(function(btn){btn.onclick=function(){setTenant(btn.dataset.alertWorkspace);location.href='/dashboard/?tenantView=1#/overview';};});
+ document.querySelectorAll('[data-alert-request]').forEach(function(btn){btn.onclick=function(){setTenant(btn.dataset.alertRequest);location.href='/dashboard/?tenantView=1#/requests';};});
+}
+function alertSection(title,description,rows,renderer,action){
+ if(!rows.length)return '<section class="pc-panel pc-alert-panel resolved"><div class="pc-panel-head"><div><h2>'+esc(title)+'</h2><p>'+esc(description)+'</p></div><span class="pc-status active">Clear</span></div></section>';
+ return '<section class="pc-panel pc-alert-panel"><div class="pc-panel-head"><div><h2>'+esc(title)+'</h2><p>'+esc(description)+'</p></div><span class="pc-status past_due">'+rows.length+' open</span></div><div class="pc-alert-list">'+rows.map(function(r){var slug=r.slug||r.tenant_slug||'';var button=action==='request'?'<button class="pc-btn small" data-alert-request="'+esc(slug)+'">Open requests</button>':action==='business'?'<button class="pc-btn small" data-alert-workspace="'+esc(slug)+'">Open workspace</button>':'';return '<div class="pc-alert-row"><div>'+renderer(r)+'</div>'+button+'</div>';}).join('')+'</div></section>';
+}
+
 async function activity(){
  var d=await api('/api/admin/activity?limit=200'),rows=d.activity||[];
  document.getElementById('pcContent').innerHTML=head('Accountability','Admin activity','A record of sensitive actions performed from the RentSketch platform console.')+
@@ -190,10 +286,13 @@ async function activity(){
 }
 
 async function system(){
- var s=await api('/api/admin/system');
- document.getElementById('pcContent').innerHTML=head('Operations','System health','Check the core services that support RentSketch logins, payments, access, and customer email.')+
+ var loaded=await Promise.all([api('/api/admin/system'),api('/api/admin/web-vitals?days=7')]),s=loaded[0],v=loaded[1]||{},overall=v.overall||{};
+ function ms(n){return n==null?'No data':Math.round(Number(n))+' ms';}
+ function cls(n){return n==null?'No data':Number(n).toFixed(3);}
+ document.getElementById('pcContent').innerHTML=head('Operations','System health','Check the core services that support RentSketch logins, payments, access, email and real-user performance.')+
   '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Production services</h2><p>Application-level readiness. Infrastructure deployment status remains in Railway.</p></div></div><div class="pc-panel-body">'+healthCards(s)+'</div></section>'+
-  '<section class="pc-grid metrics" style="margin-top:16px">'+metric('Stripe webhooks',String(s.payments.processedWebhookEvents||0),'Processed webhook event IDs')+metric('Access email queued',String(s.email.pending||0),'Pending or sending messages')+metric('Access email failed',String(s.email.failed||0),'Needs delivery attention')+metric('Environment',String(s.app.nodeEnv||'—'),'API runtime mode')+'</section>';
+  '<section class="pc-grid metrics" style="margin-top:16px">'+metric('Stripe webhooks',String(s.payments.processedWebhookEvents||0),'Processed webhook event IDs')+metric('Access email queued',String(s.email.pending||0),'Pending or sending messages')+metric('Access email failed',String(s.email.failed||0),'Needs delivery attention')+metric('Environment',String(s.app.nodeEnv||'—'),'API runtime mode')+'</section>'+
+  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>Real-user web vitals · 7 days</h2><p>75th percentile first-party browser measurements from the current collector.</p></div><span class="pc-status '+(Number(overall.samples||0)?'active':'')+'">'+Number(overall.samples||0)+' samples</span></div><div class="pc-panel-body"><div class="pc-health"><div class="pc-health-card"><b><i class="pc-dot '+(overall.lcp_p75_ms!=null&&Number(overall.lcp_p75_ms)>2500?'warn':'')+'"></i>LCP</b><span>'+ms(overall.lcp_p75_ms)+' · target ≤ 2500 ms</span></div><div class="pc-health-card"><b><i class="pc-dot '+(overall.inp_p75_ms!=null&&Number(overall.inp_p75_ms)>200?'warn':'')+'"></i>INP</b><span>'+ms(overall.inp_p75_ms)+' · target ≤ 200 ms</span></div><div class="pc-health-card"><b><i class="pc-dot '+(overall.cls_p75!=null&&Number(overall.cls_p75)>0.1?'warn':'')+'"></i>CLS</b><span>'+cls(overall.cls_p75)+' · target ≤ 0.100</span></div></div></div></section>';
 }
 
 async function boot(){
