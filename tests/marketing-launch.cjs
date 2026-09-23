@@ -114,8 +114,8 @@ for(const file of ['index.html','party-rental-software/index.html','event-rental
   const html=fs.readFileSync(path.join(root,file),'utf8');
   const page=new JSDOM(html,{url:'https://rentsketch.com/'+(file==='index.html'?'':file.replace(/index\.html$/,''))}).window.document;
   for(const img of page.querySelectorAll('.brand img')) {
-    assert.equal(img.getAttribute('alt'),'',
-      file+' brand mark should be decorative because the adjacent link text already says RentSketch');
+    assert.equal(img.getAttribute('alt'),'Brand mark',
+      file+' brand mark should use a neutral non-redundant alt value for crawler compatibility');
     assert.equal(img.getAttribute('aria-hidden'),'true');
   }
 }
