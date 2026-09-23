@@ -45,15 +45,15 @@ const orderAccess = load('server/src/friendlyOrderAccess.js', { crypto: require(
 } } });
 const pass = load('server/src/eventPass.js', { './db': db, './pricing': pricing, './eventPassEmail': mailQueue, stripe: Stripe });
 const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass, './friendlyOrderAccess': orderAccess });
-const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../access': { resolveAccess: async () => ({}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
+const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../middleware/requireAuth': { isConfiguredPlatformAdmin: async payload => payload?.isPlatformAdmin === true }, '../access': { resolveAccess: async () => ({}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
 const designs = load('server/src/routes/designs.js', { express, '../db': db, '../middleware/requireAuth': { requireTenantAccess: (req,res,next) => next() }, '../eventPassAccess': access });
 const quotes = load('server/src/routes/quoteRequests.js', { express, crypto: require('crypto'), '../db': db, '../mailer': { getMailer: () => null }, '../middleware/requireAuth': { requireTenantRole: () => (req,res,next) => next() }, '../orderProviders/quoteRequestOrderProvider': {}, '../outboundWebhook': {}, '../eventPass': pass, '../eventPassAccess': access });
 const webhook = load('server/src/routes/stripeWebhook.js', { express, '../db': db, '../pricing': pricing, stripe: Stripe, '../eventPass': pass, '../orderProviders/quoteRequestOrderProvider': {} });
 const app = express(); app.use('/webhook', express.raw({ type: 'application/json' }), webhook); app.use(express.json()); app.use('/api/consumer', consumer); app.use('/api/tenants', designs); app.use('/api/tenants', quotes); app.use((err, req, res, next) => res.status(500).json({ error: err.message }));
 const tenant = '10000000-0000-4000-8000-000000000001', other = '10000000-0000-4000-8000-000000000002';
 let server, base;
-async function request(url, body, signature, method) {
-  const r = await fetch(base + url, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', ...(signature ? { 'stripe-signature': signature } : {}) }, body: body ? JSON.stringify(body) : undefined });
+async function request(url, body, signature, method, authorization) {
+  const r = await fetch(base + url, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', ...(signature ? { 'stripe-signature': signature } : {}), ...(authorization ? { Authorization: 'Bearer ' + authorization } : {}) }, body: body ? JSON.stringify(body) : undefined });
   return { status: r.status, body: await r.text().then(t => { try { return JSON.parse(t); } catch { return t; } }) };
 }
 async function draft(t = tenant) {
@@ -70,8 +70,16 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/012_friendly_order_access.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/013_preview_limit.sql'), 'utf8'));
   await pg.query('INSERT INTO tenants VALUES($1,$2),($3,$4)', [tenant, 'friendly', other, 'lakeside']);
+  const platformAdminId='10000000-0000-4000-8000-000000000099';
+  await pg.query('INSERT INTO users(id) VALUES($1)',[platformAdminId]);
+  const platformAdminToken=auth.signToken({userId:platformAdminId,isPlatformAdmin:true},{expiresIn:'1h'});
   server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); base = 'http://127.0.0.1:' + server.address().port;
   let r = await request('/api/consumer/event-pass/offer?tenant=friendly'); assert.equal(r.body.priceCents, 999); assert.equal(r.body.durationDays, 30); assert.equal(r.body.required, true); assert.equal(r.body.paymentMode, 'test');
+  const adminOffer=await request('/api/consumer/event-pass/offer?tenant=generic',null,null,'GET',platformAdminToken); assert.equal(adminOffer.status,200); assert.equal(adminOffer.body.required,false); assert.equal(adminOffer.body.adminAccess,true);
+  const adminFurnished={tentId:'pole-20x20',objects:[{id:'admin-table',kind:'table',tableId:'round-5ft'}],guestCount:8,lightingId:'lighting-bistro'};
+  const adminSaved=await request('/api/consumer/designs',{scene:adminFurnished,anonymousSessionId:'platform-admin-session'},null,'POST',platformAdminToken); assert.equal(adminSaved.status,201,'platform admin can save a full design without buying an Event Pass');
+  assert.equal((await pg.query('SELECT owner_user_id FROM designs WHERE id=$1',[adminSaved.body.id])).rows[0].owner_user_id,platformAdminId,'admin-created design is attributable to the platform owner');
+  const adminAccess=await request('/api/consumer/designs/'+adminSaved.body.id+'/access',null,null,'GET',platformAdminToken); assert.equal(adminAccess.status,200); assert.equal(adminAccess.body.reason,'platform_admin'); assert.equal(adminAccess.body.paymentRequired,false);
   env.EVENT_PASS_ENABLED = 'false'; assert.equal((await request('/api/consumer/event-pass/offer?tenant=friendly')).body.required, false); env.EVENT_PASS_ENABLED = 'true';
   assert.equal((await request('/api/consumer/event-pass/offer?tenant=lakeside')).body.required, false);
   const previewSession = { tenant: 'friendly', anonymousSessionId: 'isolated-preview-session' };
