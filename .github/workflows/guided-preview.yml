@@ -20,6 +20,7 @@ jobs:
       - run: node --experimental-vm-modules tests/marketing-tour.cjs
       - run: npm install --prefix /tmp/guided-qa --no-save playwright@1.56.1
       - run: /tmp/guided-qa/node_modules/.bin/playwright install --with-deps chromium
+      - run: NODE_PATH=/tmp/guided-qa/node_modules node tests/platform-console-browser.cjs
       - run: NODE_PATH=/tmp/guided-qa/node_modules node tests/guided-preview-browser.cjs
       - run: NODE_PATH=/tmp/guided-qa/node_modules node tests/wedding-story-browser.cjs
       - uses: actions/upload-artifact@v4
@@ -27,5 +28,6 @@ jobs:
         with:
           name: guided-preview-evidence
           path: |
+            qa-platform-console/
             qa-guided-preview/
             qa-wedding-story/
