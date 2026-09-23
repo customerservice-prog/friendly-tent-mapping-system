@@ -82,23 +82,40 @@ async function render(){
 
 async function overview(){
  var d=await Promise.all([
-  api('/api/admin/console-overview'),api('/api/admin/payments?limit=7'),api('/api/admin/activity?limit=7'),api('/api/admin/system')
+  api('/api/admin/console-overview'),api('/api/admin/payments?limit=7'),api('/api/admin/activity?limit=7'),api('/api/admin/system'),api('/api/admin/alerts')
  ]);
- var o=d[0],p=d[1].payments||[],a=d[2].activity||[],s=d[3];
- var content=head('Platform overview','Your RentSketch business','Revenue, subscriptions, customers, designs, and system activity in one operating view.',
-  '<a class="pc-btn" href="#payments">Review payments</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">Use RentSketch now</a>')+
+ var o=d[0],p=d[1].payments||[],a=d[2].activity||[],s=d[3],attention=d[4]||{counts:{}};
+ var attentionTotal=Object.values(attention.counts||{}).reduce(function(sum,n){return sum+Number(n||0)},0);
+ var content=head('Platform overview','Your RentSketch business','Revenue, customers, subscriptions, product activity and operational health in one owner workspace.',
+  '<a class="pc-btn" href="#alerts">Needs attention'+(attentionTotal?' · '+attentionTotal:'')+'</a><a class="pc-btn" href="#payments">Review payments</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">✦ Use RentSketch now</a>')+
   '<section class="pc-grid metrics">'+
-   metric('List-price MRR',moneyDollars(o.subscriptions&&o.subscriptions.list_mrr),'Active subscription records at configured list pricing','positive')+
+   metric('List-price MRR',moneyDollars(o.subscriptions&&o.subscriptions.list_mrr),'Active subscriptions at configured list pricing','positive')+
    metric('Event Pass revenue',money(o.eventPassRevenue.cents),o.eventPassRevenue.count+' paid Event Pass transactions','positive')+
-   metric('Rental deposit volume',money(o.tenantDepositVolume.cents),o.tenantDepositVolume.count+' tenant deposit payments')+
+   metric('Rental deposit volume',money(o.tenantDepositVolume.cents),o.tenantDepositVolume.count+' recorded tenant deposits')+
    metric('Rental businesses',o.tenants,(o.subscriptions.active||0)+' active subscriptions · '+(o.subscriptions.trialing||0)+' trials')+
   '</section>'+
+  '<section class="pc-pulse-grid">'+
+   '<a href="#insights" class="pc-pulse"><span>Saved designs this month</span><strong>'+Number(o.month&&o.month.designs||0)+'</strong><small>'+Number(o.designs||0)+' all-time designs</small></a>'+
+   '<a href="#alerts" class="pc-pulse '+(Number(o.newRequests||0)?'attention':'')+'"><span>New quote requests</span><strong>'+Number(o.newRequests||0)+'</strong><small>'+Number(o.month&&o.month.requests||0)+' requests this month</small></a>'+
+   '<a href="#businesses" class="pc-pulse"><span>New businesses · 30 days</span><strong>'+Number(o.recentTenants||0)+'</strong><small>'+Number(o.installedTenants||0)+' businesses installed on a website</small></a>'+
+   '<a href="#subscriptions" class="pc-pulse '+(Number(o.subscriptions&&o.subscriptions.attention||0)?'attention':'')+'"><span>Billing attention</span><strong>'+Number(o.subscriptions&&o.subscriptions.attention||0)+'</strong><small>Past due, unpaid, incomplete or paused</small></a>'+
+   '<a href="#payments" class="pc-pulse"><span>Refunded Event Passes</span><strong>'+Number(o.refundedPayments||0)+'</strong><small>'+Number(o.failedPayments||0)+' failed Event Pass records</small></a>'+
+  '</section>'+
   '<div class="pc-split"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Recent payments</h2><p>Event Pass sales and tenant rental deposits.</p></div><a class="pc-btn small" href="#payments">All payments</a></div>'+paymentTable(p,false)+'</section>'+
-  '<aside class="pc-panel"><div class="pc-panel-head"><div><h2>Admin activity</h2><p>Changes made from the platform console.</p></div><a class="pc-btn small" href="#activity">Audit log</a></div><div class="pc-panel-body">'+activityList(a)+'</div></aside></div>'+
-  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>System snapshot</h2><p>Critical services that keep checkout and access working.</p></div><a class="pc-btn small" href="#system">System health</a></div><div class="pc-panel-body">'+healthCards(s)+'</div></section>';
+  '<aside class="pc-stack"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Owner priorities</h2><p>Operational work that needs review.</p></div><a class="pc-btn small" href="#alerts">Open alerts</a></div><div class="pc-panel-body">'+
+    priorityRow('New quote requests',attention.counts&&attention.counts.newRequests,'Customer requests waiting for follow-up','#alerts')+
+    priorityRow('Billing issues',attention.counts&&attention.counts.billing,'Subscriptions requiring attention','#alerts')+
+    priorityRow('Failed access email',attention.counts&&attention.counts.failedMail,'Customer access messages that failed','#alerts')+
+    priorityRow('Uninstalled businesses',attention.counts&&attention.counts.uninstalled,'Older tenant workspaces without an approved domain','#alerts')+
+  '</div></section>'+
+  '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Admin activity</h2><p>Sensitive changes from the owner console.</p></div><a class="pc-btn small" href="#activity">Audit log</a></div><div class="pc-panel-body">'+activityList(a)+'</div></section></aside></div>'+
+  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>System snapshot</h2><p>Critical services that keep checkout and customer access working.</p></div><a class="pc-btn small" href="#system">System health</a></div><div class="pc-panel-body">'+healthCards(s)+'</div></section>';
  document.getElementById('pcContent').innerHTML=content;
 }
-
+function priorityRow(label,value,detail,href){
+ value=Number(value||0);
+ return '<a class="pc-priority" href="'+href+'"><span><strong>'+esc(label)+'</strong><small>'+esc(detail)+'</small></span><b class="'+(value?'hot':'')+'">'+value+'</b></a>';
+}
 function paymentTable(rows,actions){
  if(!rows.length)return empty('No payment records yet.');
  return '<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Payment</th><th>Customer</th><th>Business</th><th>Amount</th><th>Status</th><th>Date</th>'+(actions?'<th>Action</th>':'')+'</tr></thead><tbody>'+
