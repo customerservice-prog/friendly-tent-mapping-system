@@ -9,11 +9,14 @@ var nav=[
  {label:'Platform',items:[
   ['overview','Overview','⌂'],['businesses','Businesses','▦'],['payments','Payments','＄'],['subscriptions','Subscriptions','↻']
  ]},
+ {label:'Intelligence',items:[
+  ['insights','Insights','⌁'],['alerts','Needs attention','!']
+ ]},
  {label:'Product',items:[
-  ['event-pass','Event Pass','◇'],['designs','Saved designs','✦'],['activity','Admin activity','≡']
+  ['event-pass','Event Pass','◇'],['designs','Saved designs','✦']
  ]},
  {label:'Operations',items:[
-  ['system','System health','●']
+  ['activity','Admin activity','≡'],['system','System health','●']
  ]}
 ];
 
@@ -70,6 +73,8 @@ async function render(){
   else if(state.route==='subscriptions')await subscriptions();
   else if(state.route==='event-pass')await eventPass();
   else if(state.route==='designs')await designs();
+  else if(state.route==='insights')await insights();
+  else if(state.route==='alerts')await alerts();
   else if(state.route==='activity')await activity();
   else if(state.route==='system')await system();
  }catch(err){if(err.status===401||err.status===403){setToken(null);location.href='/dashboard/#/login';return;}fail(err);}
