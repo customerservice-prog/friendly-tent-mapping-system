@@ -318,31 +318,21 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
 
   document.addEventListener('visibilitychange',()=>{
     if(document.hidden)stop();
-    else if(visible&&!demo&&!reduce.matches&&progress<1&&!view)play();
+    else if(visible&&!reduce.matches&&progress<1&&!view)play();
   });
 
   const observer=new IntersectionObserver(entries=>{
     visible=entries.some(entry=>entry.isIntersecting);
     if(!visible){stop();return;}
-    if(demo&&!reduce.matches){
-      setTimeout(async()=>{
-        if(disposed||!visible||view)return;
-        const active=await ensure3D();
-        if(active){
-          active.setMarketingProgress(progress);
-          if(progress<1)play();
-        }
-      },450);
-    }else if(!reduce.matches&&progress<1&&!view){
-      // The empty venue is already visible immediately. Let the page become
-      // interactive before starting the staged SVG transitions so the wedding
-      // story does not compete with LCP / initial input readiness. Keep this
-      // timer cancellable so Pause / viewport exit truly freezes the story.
+    if(!reduce.matches&&progress<1&&!view){
+      // Keep every public marketing story lightweight until the visitor
+      // explicitly asks for 3D. The dedicated demo starts its staged SVG build
+      // sooner, but it still does not import Three.js on the critical path.
       clearTimeout(autoplayStartTimer);
       autoplayStartTimer=setTimeout(()=>{
         autoplayStartTimer=0;
         if(!disposed&&visible&&!view)play();
-      },1800);
+      },demo?450:1800);
     }
   },{rootMargin:'120px',threshold:.08});
   observer.observe(studio);
