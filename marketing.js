@@ -56,9 +56,11 @@
       renderPrices();
     });
   });
-  // The page remains useful without JavaScript or API availability. Hydrate
-  // the visible catalog from the same amounts the checkout server validates.
-  if (document.querySelector('[data-monthly]')) {
+  // Static prices are already correct in the HTML. Reconcile them with the
+  // server only after the critical render so below-fold billing never blocks
+  // the wedding hero.
+  function hydratePlans() {
+    if (!document.querySelector('[data-monthly]')) return;
     fetch('https://rentsketch-api-production.up.railway.app/api/business/plans')
       .then(function (r) { if (!r.ok) throw Error('Catalog unavailable'); return r.json(); })
       .then(function (data) {
@@ -70,6 +72,8 @@
         }); renderPrices();
       }).catch(function () {});
   }
+  if ('requestIdleCallback' in window) requestIdleCallback(hydratePlans, { timeout: 3500 });
+  else setTimeout(hydratePlans, 1800);
 
   var header = document.querySelector('.top');
   function syncHeaderDepth() {
@@ -84,20 +88,7 @@
     closeMenu();
   });
 
-  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var revealItems = Array.from(document.querySelectorAll('.section,.cta-band'));
-  if (!reduceMotion && 'IntersectionObserver' in window && revealItems.length) {
-    revealItems.forEach(function (item) { item.classList.add('rs-reveal'); });
-    document.documentElement.classList.add('rs-motion-ready');
-    var revealObserver = new IntersectionObserver(function (entries) {
-      entries.forEach(function (entry) {
-        if (!entry.isIntersecting) return;
-        entry.target.classList.add('is-visible');
-        revealObserver.unobserve(entry.target);
-      });
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
-    revealItems.forEach(function (item) { revealObserver.observe(item); });
-  } else {
-    revealItems.forEach(function (item) { item.classList.add('is-visible'); });
-  }
+  // Keep the rest of the page immediately paintable. The wedding build is the
+  // primary motion system; generic section reveal effects caused expensive
+  // style/layout work on first load.
 })();
