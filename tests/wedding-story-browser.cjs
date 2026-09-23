@@ -61,6 +61,9 @@ const server=http.createServer((req,res)=>{
       await page.locator('[data-view="2d"]').click();
       assert.equal(await page.locator('.story-build-plan.show-plan').count(),1);
       assert.match(await page.locator('[data-story-label]').innerText(),/Complete reception floor plan/);
+      await page.waitForTimeout(750);
+      const visiblePlanLayer=await page.locator('.story-build-plan [data-story-layer="tables"]').evaluate(el=>Number(getComputedStyle(el).opacity));
+      assert(visiblePlanLayer>.9,'2D plan layers must finish visibly rendering before visual QA capture');
       await page.screenshot({path:path.join(out,'home-plan-desktop.png')});
 
       await page.locator('[data-story-explore]').click();
