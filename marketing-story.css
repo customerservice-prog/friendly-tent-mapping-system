@@ -332,3 +332,17 @@ body{background:#fff;color:var(--ink)}
   .story-view .story-build-plan,
   .story-build-plan [data-story-layer]{transition:none}
 }
+
+.demo-explainer-secondary{
+  margin-top:-5px;
+  padding:21px 23px;
+  border:1px solid #d7e2ef;
+  border-radius:14px;
+  background:#f7f9fd;
+}
+.demo-explainer-secondary>div{border-top:0;padding-top:0}
+.demo-explainer-secondary strong{color:#244b82}
+.demo-explainer-secondary p{margin-bottom:0}
+@media(max-width:640px){
+  .demo-explainer-secondary{padding:16px;margin-top:3px}
+}
