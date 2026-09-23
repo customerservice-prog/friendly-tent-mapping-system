@@ -20,7 +20,7 @@ const {JSDOM}=require('jsdom');
  function get(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,m);return m;}
  async function load(file){const m=get(file);if(m.status==='unlinked')await m.link((s,r)=>s==='three'?three:s.endsWith('/OrbitControls.js')?orbit:get(s.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',s.slice(13)):path.resolve(path.dirname(r.identifier),s)));if(m.status!=='evaluated')await m.evaluate();return m.namespace;}
  const data=await load(path.join(root,'js/data/marketing-reception.js')),mod=await load(path.join(root,'js/ui/view3d.js'));
- const view=mod.init(container);view.rebuild(data.marketingReception());view.setScene({motion:false,guests:false,styling:true,night:false});view.reception();
+ const view=mod.init(container,{marketingOnly:true,registerActive:false});view.rebuild(data.marketingReception());view.setScene({motion:false,guests:false,styling:true,night:false});view.setMarketingProgress(1);
  renderer.scene.updateMatrixWorld(true);
  const groups=new Map();let meshes=0;
  renderer.scene.traverse(o=>{
