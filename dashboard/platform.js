@@ -48,7 +48,7 @@ function shell(){
   '<a class="pc-sidebar-launch" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">✦ Open RentSketch</a>'+
   '<nav class="pc-nav">'+navHtml+'</nav>'+
   '<div class="pc-sidebar-foot"><div class="pc-admin-badge"><span class="pc-avatar">'+esc(initials(state.user&&state.user.displayName||state.user&&state.user.email))+'</span><div><strong>'+esc(state.user&&state.user.displayName||'Platform Admin')+'</strong><small>'+esc(state.user&&state.user.email||'')+'</small></div></div><button class="pc-logout" id="pcLogout">Log out</button></div></aside>'+
-  '<section class="pc-main"><header class="pc-topbar"><div class="pc-crumb"><strong>Platform</strong> / '+esc(routeTitle(state.route))+'</div><div class="pc-top-actions"><button class="pc-btn pc-mobile-toggle" id="pcMenu">☰</button><a class="pc-btn" href="/dashboard/#/overview">Tenant dashboard</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">✦ Open RentSketch</a></div></header><main class="pc-content" id="pcContent"><div class="pc-loading">Loading…</div></main></section></div>';
+  '<section class="pc-main"><header class="pc-topbar"><div class="pc-crumb"><strong>Platform</strong> / '+esc(routeTitle(state.route))+'</div><div class="pc-top-actions"><button class="pc-btn pc-mobile-toggle" id="pcMenu">☰</button><a class="pc-btn" href="/dashboard/?tenantView=1#/overview">Tenant dashboard</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">✦ Open RentSketch</a></div></header><main class="pc-content" id="pcContent"><div class="pc-loading">Loading…</div></main></section></div>';
 }
 function head(eyebrow,title,description,actions){
  return '<div class="pc-page-head"><div><div class="pc-eyebrow">'+esc(eyebrow)+'</div><h1>'+esc(title)+'</h1><p>'+esc(description)+'</p></div>'+(actions?'<div class="pc-actions">'+actions+'</div>':'')+'</div>';
@@ -127,7 +127,7 @@ async function businesses(){
  document.getElementById('tenantSearch').oninput=paint;paint();
 }
 function bindTenantActions(){
- document.querySelectorAll('[data-workspace]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.workspace);location.href='/dashboard/#/overview';};});
+ document.querySelectorAll('[data-workspace]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.workspace);location.href='/dashboard/?tenantView=1#/overview';};});
  document.querySelectorAll('[data-designer]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.designer);window.open('/designer/?tenant='+encodeURIComponent(b.dataset.designer)+'&admin=1','_blank','noopener');};});
  document.querySelectorAll('[data-manage]').forEach(function(b){b.onclick=function(){tenantModal(b.dataset.manage);};});
 }
@@ -142,7 +142,7 @@ async function tenantModal(slug){
   '<h3 style="margin:24px 0 8px;font-size:14px">Users</h3><div>'+m.map(function(u){return '<div class="pc-list-row"><div><strong>'+esc(u.display_name||u.email)+'</strong><p>'+esc(u.email)+'</p></div><span class="pc-status">'+esc(u.role)+'</span></div>'}).join('')+'</div></div></div>';
  document.body.appendChild(backdrop);
  function close(){backdrop.remove()} backdrop.querySelector('.pc-modal-close').onclick=close;backdrop.onclick=function(e){if(e.target===backdrop)close()};
- document.getElementById('tmWorkspace').onclick=function(){setTenant(slug);location.href='/dashboard/#/overview';};
+ document.getElementById('tmWorkspace').onclick=function(){setTenant(slug);location.href='/dashboard/?tenantView=1#/overview';};
  document.getElementById('tmDesigner').onclick=function(){setTenant(slug);window.open('/designer/?tenant='+encodeURIComponent(slug)+'&admin=1','_blank','noopener');};
  document.getElementById('tmSave').onclick=async function(){var btn=this;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug),{method:'PATCH',body:{name:document.getElementById('tmName').value,contactEmail:document.getElementById('tmEmail').value,trialEndsAt:document.getElementById('tmTrial').value||null}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">Saved.</div>';setTimeout(function(){close();render()},500);}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
 }
