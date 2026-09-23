@@ -340,29 +340,55 @@ function esc(s) {
  async function viewRequests(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading requests...'));
    bindShellEvents();
-   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
+   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="tenant-empty">No tenant access.</div>'; return; }
    try {
      var requests = await api('/api/tenants/' + state.tenant + '/quote-requests');
      var reqs = requests.quoteRequests || [];
      if (gen !== renderGeneration) return;
-     document.getElementById('dashMain').innerHTML = '<h1 class="dash-title">Quote Requests</h1>' + renderRequestsTable(reqs, true);
-     Array.prototype.forEach.call(document.querySelectorAll('.status-select'), function (sel) {
-       sel.addEventListener('change', async function () {
-         sel.disabled = true;
-         try {
-           await api('/api/tenants/' + state.tenant + '/quote-requests/' + sel.getAttribute('data-id'), { method: 'PATCH', body: { status: sel.value } });
-         } catch (err) {
-           window.alert('Could not update status: ' + err.message);
-         } finally {
-           sel.disabled = false;
-         }
+     document.getElementById('dashMain').innerHTML = '' +
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Customer pipeline</div><h1>Quote requests</h1><p>Review customer layouts, estimated values, deposits and follow-up status.</p></div><div class="tenant-head-actions"><a class="tenant-btn primary" href="' + tenantDesignerUrl() + '" target="_blank" rel="noopener">Preview customer designer</a></div></div>' +
+       '<div class="tenant-kpis">' +
+         '<article class="tenant-kpi"><label>Total requests</label><strong>' + reqs.length + '</strong><small>All customer quote requests</small></article>' +
+         '<article class="tenant-kpi attention"><label>Needs follow-up</label><strong>' + reqs.filter(function(r){return r.status === 'new';}).length + '</strong><small>New requests</small></article>' +
+         '<article class="tenant-kpi"><label>Quoted</label><strong>' + reqs.filter(function(r){return r.status === 'quoted';}).length + '</strong><small>Waiting on customer decision</small></article>' +
+         '<article class="tenant-kpi positive"><label>Booked</label><strong>' + reqs.filter(function(r){return r.status === 'booked';}).length + '</strong><small>Marked booked</small></article>' +
+         '<article class="tenant-kpi positive"><label>Paid deposits</label><strong>' + reqs.filter(function(r){return r.payment_status === 'paid';}).length + '</strong><small>Requests with recorded deposits</small></article>' +
+       '</div>' +
+       '<div class="tenant-panel"><div class="tenant-panel-head"><div><h2>Customer requests</h2><p>Search or filter the pipeline, then update status inline.</p></div></div><div class="tenant-panel-body">' +
+         '<div class="pc-toolbar"><div class="pc-search"><input id="requestSearch" type="search" placeholder="Search customer, email or event type…"></div><select class="pc-select" id="requestStatus"><option value="">All statuses</option><option value="new">New</option><option value="contacted">Contacted</option><option value="quoted">Quoted</option><option value="booked">Booked</option><option value="declined">Declined</option></select></div>' +
+         '<div id="requestTable"></div></div></div>';
+     function bindStatuses() {
+       Array.prototype.forEach.call(document.querySelectorAll('.status-select'), function (sel) {
+         sel.addEventListener('change', async function () {
+           sel.disabled = true;
+           try {
+             await api('/api/tenants/' + state.tenant + '/quote-requests/' + sel.getAttribute('data-id'), { method: 'PATCH', body: { status: sel.value } });
+             var row = reqs.find(function(r){return String(r.id) === String(sel.getAttribute('data-id'));}); if(row)row.status=sel.value;
+           } catch (err) {
+             window.alert('Could not update status: ' + err.message);
+           } finally {
+             sel.disabled = false;
+           }
+         });
        });
-     });
+     }
+     function paint() {
+       var q=(document.getElementById('requestSearch').value||'').trim().toLowerCase();
+       var s=document.getElementById('requestStatus').value;
+       var filtered=reqs.filter(function(r){
+         var hit=!q || [r.customer_name,r.customer_email,r.event_type].join(' ').toLowerCase().indexOf(q)>-1;
+         return hit && (!s || r.status===s);
+       });
+       document.getElementById('requestTable').innerHTML=renderRequestsTable(filtered,true);
+       bindStatuses();
+     }
+     document.getElementById('requestSearch').addEventListener('input',paint);
+     document.getElementById('requestStatus').addEventListener('change',paint);
+     paint();
    } catch (err) {
      document.getElementById('dashMain').innerHTML = errorHtml(err);
    }
  }
-
  async function viewProducts(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading products...'));
    bindShellEvents();
