@@ -13,28 +13,28 @@ router.patch('/:slug',requireTenantRole('admin'),async(req,res)=>{const body=req
 router.get('/:slug/dashboard-summary',requireTenantRole('viewer'),async(req,res)=>{
   const t=req.tenant;
   const [products,designs,requests,recentRequests,recentDesigns,members]=await Promise.all([
-    db.query(\`SELECT COUNT(*)::int AS total,
+    db.query(`SELECT COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE active)::int AS active,
       COUNT(*) FILTER (WHERE active AND visual_model_id IS NOT NULL)::int AS mapped,
       COUNT(*) FILTER (WHERE active AND category IN ('tent','table','chair','dance_floor','lighting','linen') AND visual_model_id IS NULL)::int AS missing_visual
-      FROM products WHERE tenant_id=$1\`,[t.id]),
-    db.query(\`SELECT COUNT(*)::int AS total,
+      FROM products WHERE tenant_id=$1`,[t.id]),
+    db.query(`SELECT COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE created_at>=now()-interval '30 days')::int AS month,
       MAX(updated_at) AS last_activity
-      FROM designs WHERE tenant_id=$1\`,[t.id]),
-    db.query(\`SELECT COUNT(*)::int AS total,
+      FROM designs WHERE tenant_id=$1`,[t.id]),
+    db.query(`SELECT COUNT(*)::int AS total,
       COUNT(*) FILTER (WHERE status='new')::int AS new_count,
       COUNT(*) FILTER (WHERE status='booked')::int AS booked,
       COUNT(*) FILTER (WHERE created_at>=now()-interval '30 days')::int AS month,
       COALESCE(SUM(estimate_total) FILTER (WHERE status NOT IN ('declined')),0)::numeric(12,2) AS pipeline_value,
       COALESCE(SUM(amount_paid_cents) FILTER (WHERE payment_status='paid'),0)::bigint AS paid_deposit_cents,
       MAX(created_at) AS last_activity
-      FROM quote_requests WHERE tenant_id=$1\`,[t.id]),
-    db.query(\`SELECT id,customer_name,customer_email,event_date,guest_count,event_type,estimate_total,status,payment_status,amount_paid_cents,created_at
-      FROM quote_requests WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 8\`,[t.id]),
-    db.query(\`SELECT id,event_type,guest_count,estimate_total,created_at,updated_at
-      FROM designs WHERE tenant_id=$1 ORDER BY updated_at DESC LIMIT 8\`,[t.id]),
-    db.query(\`SELECT COUNT(*)::int AS total FROM tenant_memberships WHERE tenant_id=$1\`,[t.id])
+      FROM quote_requests WHERE tenant_id=$1`,[t.id]),
+    db.query(`SELECT id,customer_name,customer_email,event_date,guest_count,event_type,estimate_total,status,payment_status,amount_paid_cents,created_at
+      FROM quote_requests WHERE tenant_id=$1 ORDER BY created_at DESC LIMIT 8`,[t.id]),
+    db.query(`SELECT id,event_type,guest_count,estimate_total,created_at,updated_at
+      FROM designs WHERE tenant_id=$1 ORDER BY updated_at DESC LIMIT 8`,[t.id]),
+    db.query(`SELECT COUNT(*)::int AS total FROM tenant_memberships WHERE tenant_id=$1`,[t.id])
   ]);
   const p=products.rows[0],d=designs.rows[0],q=requests.rows[0];
   const origins=Array.isArray(t.allowed_origins)?t.allowed_origins:[];
