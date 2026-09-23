@@ -120,7 +120,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
   const demo=!!scrub;
 
   let view=null,pending=null,loading=null,failed=false,disposed=false,visible=false;
-  let progress=reduce.matches?1:0,playing=false,timer=0,selected='3d',night=false;
+  let progress=reduce.matches?1:0,playing=false,timer=0,autoplayStartTimer=0,selected='3d',night=false;
 
   const plan=buildPlanSvg();
   poster.after(plan);
@@ -169,6 +169,8 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
     playing=false;
     clearTimeout(timer);
     timer=0;
+    clearTimeout(autoplayStartTimer);
+    autoplayStartTimer=0;
     if(pause){
       pause.textContent='Play';
       pause.setAttribute('aria-label','Play wedding build');
@@ -330,8 +332,13 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
     }else if(!reduce.matches&&progress<1&&!view){
       // The empty venue is already visible immediately. Let the page become
       // interactive before starting the staged SVG transitions so the wedding
-      // story does not compete with LCP / initial input readiness.
-      setTimeout(()=>{if(!disposed&&visible&&!view)play();},1800);
+      // story does not compete with LCP / initial input readiness. Keep this
+      // timer cancellable so Pause / viewport exit truly freezes the story.
+      clearTimeout(autoplayStartTimer);
+      autoplayStartTimer=setTimeout(()=>{
+        autoplayStartTimer=0;
+        if(!disposed&&visible&&!view)play();
+      },1800);
     }
   },{rootMargin:'120px',threshold:.08});
   observer.observe(studio);
