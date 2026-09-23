@@ -90,7 +90,7 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
 
  const autoplay=await fixture({reduced:false});
  assert.equal(autoplay.metrics().imports,0,'normal homepage still avoids renderer before viewport/idle');
- assert.deepEqual(autoplay.stages.map(x=>x.key),['space','tent','tables','chairs','sweetheart','dance','style','lighting','reception','evening']);
+ assert.deepEqual(Array.from(autoplay.stages,x=>String(x.key)),['space','tent','tables','chairs','sweetheart','dance','style','lighting','reception','evening']);
  const tableStage=autoplay.stages.find(x=>x.key==='tables').scene.objects.filter(o=>o.id.startsWith('wedding-table-'));
  const chairStage=autoplay.stages.find(x=>x.key==='chairs').scene.objects.filter(o=>o.id.startsWith('wedding-table-'));
  assert.ok(tableStage.every(o=>o.hideChairs===true&&o.seatCount===8),'table stage keeps chair count but hides chair meshes');
