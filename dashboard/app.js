@@ -600,27 +600,14 @@ function esc(s) {
      var loaderCode = '<div id="rentsketch-embed"></div>\n<script src="https://rentsketch.com/embed/v1.js" data-tenant="' + esc(state.tenant) + '" data-embed-key="' + esc(t.embedKey || '') + '" defer></script>';
      var origins = (t.allowedOrigins || []).join('\n');
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Install RentSketch</h1>' +
-       '<p class="dash-subtitle">Add your event designer to your own website. No RentSketch source code needed.</p>' +
-       '<h2 class="dash-section-title">1. Hosted Designer Link</h2>' +
-       '<p>Share or link directly to your own hosted designer:</p>' +
-       '<textarea class="code-box" rows="1" readonly>' + esc(designerUrl) + '</textarea>' +
-       '<h2 class="dash-section-title">2. Iframe Embed (recommended)</h2>' +
-       '<p>Paste this anywhere on your website, e.g. a "Design Your Event" page:</p>' +
-       '<textarea class="code-box" rows="3" readonly>' + esc(iframeCode) + '</textarea>' +
-       '<h2 class="dash-section-title">3. Loader Script (optional, versioned)</h2>' +
-       '<p>Renders into the placeholder div automatically and supports future updates without changing your code:</p>' +
-       '<textarea class="code-box" rows="3" readonly>' + esc(loaderCode) + '</textarea>' +
-       '<h2 class="dash-section-title">4. Allowed Domains</h2>' +
-       '<p>List the domains allowed to embed your designer (one per line), e.g. www.yourdomain.com</p>' +
-       '<form id="originsForm" class="dash-form">' +
-       '<textarea id="originsBox" rows="4">' + esc(origins) + '</textarea>' +
-       '<div id="originsError" class="dash-error" hidden></div>' +
-       '<div id="originsSaved" class="dash-saved" hidden>Saved.</div>' +
-       '<button type="submit" class="btn-primary">Save Allowed Domains</button>' +
-       '</form>' +
-       '<h2 class="dash-section-title">Embed Identifier</h2>' +
-       '<p class="muted">Public embed key (safe to include in front-end code): <code>' + esc(t.embedKey || '') + '</code></p>';
+       '<div class="tenant-page-head"><div><div class="tenant-eyebrow">Go live</div><h1>Website install</h1><p>Preview, share or embed your customer designer on an approved business website.</p></div><div class="tenant-head-actions"><a class="tenant-btn primary" href="' + designerUrl + '" target="_blank" rel="noopener">Open live designer</a></div></div>' +
+       '<div class="tenant-grid"><div class="tenant-stack">' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>1. Hosted designer link</h2><p>Use this link in buttons, emails or your website navigation.</p></div><span class="tenant-status-chip good">Ready</span></div><div class="tenant-panel-body"><textarea class="code-box" rows="2" readonly>' + esc(designerUrl) + '</textarea></div></section>' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>2. Website embed</h2><p>The iframe option is the simplest installation method.</p></div></div><div class="tenant-panel-body"><textarea class="code-box" rows="4" readonly>' + esc(iframeCode) + '</textarea><h3 class="dash-section-title">Versioned loader</h3><p class="muted">Use the loader when you want RentSketch to render into a placeholder automatically.</p><textarea class="code-box" rows="4" readonly>' + esc(loaderCode) + '</textarea></div></section>' +
+       '</div><aside class="tenant-stack">' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>3. Approved website domains</h2><p>Only approved origins may embed this workspace.</p></div></div><div class="tenant-panel-body"><form id="originsForm" class="dash-form" style="box-shadow:none;border:0;padding:0"><label>One full origin per line<textarea id="originsBox" rows="6" placeholder="https://www.yourdomain.com">' + esc(origins) + '</textarea></label><div id="originsError" class="dash-error" hidden></div><div id="originsSaved" class="dash-saved" hidden>Allowed domains saved.</div><button type="submit" class="btn-primary">Save approved domains</button></form></div></section>' +
+         '<section class="tenant-panel"><div class="tenant-panel-head"><div><h2>Install status</h2><p>Public identifiers are safe to include in front-end code.</p></div></div><div class="tenant-panel-body"><div class="tenant-health-row"><span><strong>Tenant slug</strong><small>' + esc(state.tenant) + '</small></span><span class="tenant-health-state good">Active</span></div><div class="tenant-health-row"><span><strong>Approved domains</strong><small>' + ((t.allowedOrigins || []).length ? (t.allowedOrigins || []).length + ' configured' : 'None yet') + '</small></span><span class="tenant-health-state ' + ((t.allowedOrigins || []).length ? 'good' : 'warn') + '">' + ((t.allowedOrigins || []).length ? 'Ready' : 'Review') + '</span></div><div class="tenant-health-row"><span><strong>Embed key</strong><small style="word-break:break-all">' + esc(t.embedKey || '') + '</small></span><span class="tenant-health-state good">Public</span></div></div></section>' +
+       '</aside></div>';
      document.getElementById('originsForm').addEventListener('submit', async function (e) {
        e.preventDefault();
        var errEl = document.getElementById('originsError');
