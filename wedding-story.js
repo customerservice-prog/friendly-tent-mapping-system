@@ -40,108 +40,67 @@ function layer(svg,key,threshold){
   return g;
 }
 
+function esc(value){return String(value).replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));}
 function buildPlanSvg(){
-  const svg=svgNode('svg',{
-    class:'story-build-plan',
-    viewBox:'0 0 60 40',
-    preserveAspectRatio:'xMidYMid slice',
-    role:'img',
-    'aria-label':'Animated overhead wedding layout building from an empty venue to a complete reception'
-  });
-
-  const defs=svgNode('defs');
-  const grid=svgNode('pattern',{id:'story-grid',width:3,height:3,patternUnits:'userSpaceOnUse'});
-  grid.appendChild(svgNode('path',{d:'M3 0H0V3',fill:'none',stroke:'#78926f','stroke-width':'.07',opacity:'.28'}));
-  defs.appendChild(grid);
-  svg.appendChild(defs);
-
-  const base=svgNode('g',{class:'story-build-base'});
-  base.appendChild(svgNode('rect',{x:0,y:0,width:60,height:40,fill:'#e8f1df'}));
-  base.appendChild(svgNode('rect',{x:0,y:0,width:60,height:40,fill:'url(#story-grid)'}));
-  svg.appendChild(base);
-
-  const footprint=layer(svg,'footprint',1);
-  footprint.appendChild(svgNode('rect',{x:.7,y:.7,width:58.6,height:38.6,rx:1,fill:'none',stroke:'#71906f','stroke-width':'.18','stroke-dasharray':'.65 .55'}));
-  footprint.appendChild(svgNode('line',{x1:2,y1:2.1,x2:58,y2:2.1,stroke:'#78926f','stroke-width':'.1'}));
-  footprint.appendChild(svgNode('line',{x1:2,y1:1.7,x2:2,y2:2.5,stroke:'#78926f','stroke-width':'.1'}));
-  footprint.appendChild(svgNode('line',{x1:58,y1:1.7,x2:58,y2:2.5,stroke:'#78926f','stroke-width':'.1'}));
-
-  const tentLayer=layer(svg,'tent',2);
-  tentLayer.appendChild(svgNode('rect',{x:1.1,y:1.1,width:57.8,height:37.8,rx:1.1,fill:'#fffdf8',stroke:'#6f856a','stroke-width':'.32'}));
-  tentLayer.appendChild(svgNode('line',{x1:1.8,y1:20,x2:58.2,y2:20,stroke:'#b0bda9','stroke-width':'.11','stroke-dasharray':'.7 .65'}));
-  for(const pole of scene.tent.centerPoles||[]){
-    const [cx,cy]=mapPoint(pole.x,pole.y);
-    tentLayer.appendChild(svgNode('circle',{cx,cy,r:.38,fill:'#566d50',stroke:'#fff','stroke-width':'.14'}));
-  }
-
-  const tablesLayer=layer(svg,'tables',3);
-  const chairsLayer=layer(svg,'chairs',4);
-  const sweetheartLayer=layer(svg,'sweetheart',5);
-  const danceLayer=layer(svg,'dance',6);
-  const djLayer=layer(svg,'dj',7);
-  const barLayer=layer(svg,'bar',8);
-  const buffetLayer=layer(svg,'buffet',9);
-  const cocktailLayer=layer(svg,'cocktail',10);
-  const linensLayer=layer(svg,'linens',11);
-  const centerpiecesLayer=layer(svg,'centerpieces',12);
-  const lightingLayer=layer(svg,'lighting',13);
-
   const guestTables=scene.objects.filter(o=>o.id?.startsWith('wedding-table-'));
+  const serviceObject=id=>scene.objects.find(o=>o.id===id);
+  const tables=[],chairs=[],linens=[],centerpieces=[],dance=[],lighting=[];
+
   guestTables.forEach((o,index)=>{
     const [cx,cy]=centerOf(o);
-    tablesLayer.appendChild(svgNode('circle',{
-      cx,cy,r:2.45,fill:index%2?'#f7f2e8':'#fbf7ef',stroke:'#8d948b','stroke-width':'.2'
-    }));
+    tables.push(`<circle cx="${cx}" cy="${cy}" r="2.45" fill="${index%2?'#f7f2e8':'#fbf7ef'}" stroke="#8d948b" stroke-width=".2"/>`);
     for(let seat=0;seat<8;seat++){
       const angle=(Math.PI*2*seat/8)-Math.PI/2;
       const x=cx+Math.cos(angle)*3.35,y=cy+Math.sin(angle)*3.35;
-      chairsLayer.appendChild(svgNode('rect',{
-        x:x-.43,y:y-.29,width:.86,height:.58,rx:.14,
-        fill:'#d9b95e',stroke:'#8d7840','stroke-width':'.08',
-        transform:`rotate(${seat*45} ${x} ${y})`
-      }));
+      chairs.push(`<rect x="${(x-.43).toFixed(2)}" y="${(y-.29).toFixed(2)}" width=".86" height=".58" rx=".14" fill="#d9b95e" stroke="#8d7840" stroke-width=".08" transform="rotate(${seat*45} ${x.toFixed(2)} ${y.toFixed(2)})"/>`);
     }
-    linensLayer.appendChild(svgNode('circle',{cx,cy,r:2.17,fill:'#fffdf7',stroke:'#e4d7c3','stroke-width':'.12',opacity:.94}));
-    centerpiecesLayer.appendChild(svgNode('circle',{cx,cy,r:.43,fill:'#6f8f59',stroke:'#f7ead0','stroke-width':'.15'}));
-    centerpiecesLayer.appendChild(svgNode('circle',{cx,cy,r:.14,fill:'#f2d183'}));
+    linens.push(`<circle cx="${cx}" cy="${cy}" r="2.17" fill="#fffdf7" stroke="#e4d7c3" stroke-width=".12" opacity=".94"/>`);
+    centerpieces.push(`<circle cx="${cx}" cy="${cy}" r=".43" fill="#6f8f59" stroke="#f7ead0" stroke-width=".15"/><circle cx="${cx}" cy="${cy}" r=".14" fill="#f2d183"/>`);
   });
 
-  const serviceObject=id=>scene.objects.find(o=>o.id===id);
-  function drawService(o,target,fill='#f7f2e7'){
-    if(!o)return;
+  function serviceMarkup(o,fill='#f7f2e7'){
+    if(!o)return '';
     const [cx,cy]=centerOf(o);
-    if(o.shape==='round'||o.tableId==='cocktail'){
-      target.appendChild(svgNode('circle',{cx,cy,r:Math.max(.9,o.widthFt/2),fill,stroke:'#75858b','stroke-width':'.19'}));
-    }else{
-      const r=rectFor(o);
-      target.appendChild(svgNode('rect',{x:r.x,y:r.y,width:r.width,height:r.height,rx:.34,fill,stroke:'#75858b','stroke-width':'.19'}));
-    }
+    if(o.shape==='round'||o.tableId==='cocktail')return `<circle cx="${cx}" cy="${cy}" r="${Math.max(.9,o.widthFt/2)}" fill="${fill}" stroke="#75858b" stroke-width=".19"/>`;
+    const r=rectFor(o);
+    return `<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" rx=".34" fill="${fill}" stroke="#75858b" stroke-width=".19"/>`;
   }
-
-  drawService(serviceObject('wedding-sweetheart'),sweetheartLayer,'#f6eadc');
-  drawService(serviceObject('wedding-dj'),djLayer,'#324655');
-  drawService(serviceObject('wedding-bar'),barLayer,'#263746');
-  drawService(serviceObject('wedding-buffet-a'),buffetLayer,'#f8f3e9');
-  drawService(serviceObject('wedding-buffet-b'),buffetLayer,'#f8f3e9');
-  drawService(serviceObject('wedding-cocktail-a'),cocktailLayer,'#f5ead3');
-  drawService(serviceObject('wedding-cocktail-b'),cocktailLayer,'#f5ead3');
 
   scene.objects.filter(o=>o.kind==='dance').forEach(o=>{
     const r=rectFor(o);
-    danceLayer.appendChild(svgNode('rect',{x:r.x,y:r.y,width:r.width,height:r.height,fill:'#d1aa77',stroke:'#a27b50','stroke-width':'.07'}));
+    dance.push(`<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" fill="#d1aa77" stroke="#a27b50" stroke-width=".07"/>`);
   });
 
   for(const x of [7,17,27,37,47,57]){
-    lightingLayer.appendChild(svgNode('path',{
-      d:`M${x} 2 C${x-2} 12 ${x+2} 28 ${x} 38`,
-      fill:'none',stroke:'#8a6d42','stroke-width':'.11',opacity:.78
-    }));
-    for(const y of [6,12,18,24,30,36]){
-      lightingLayer.appendChild(svgNode('circle',{cx:x,cy:y,r:.17,fill:'#ffd77b',stroke:'#fff4c8','stroke-width':'.08'}));
-    }
+    lighting.push(`<path d="M${x} 2 C${x-2} 12 ${x+2} 28 ${x} 38" fill="none" stroke="#8a6d42" stroke-width=".11" opacity=".78"/>`);
+    for(const y of [6,12,18,24,30,36])lighting.push(`<circle cx="${x}" cy="${y}" r=".17" fill="#ffd77b" stroke="#fff4c8" stroke-width=".08"/>`);
   }
 
-  return svg;
+  const poles=(scene.tent.centerPoles||[]).map(pole=>{
+    const [cx,cy]=mapPoint(pole.x,pole.y);
+    return `<circle cx="${cx}" cy="${cy}" r=".38" fill="#566d50" stroke="#fff" stroke-width=".14"/>`;
+  }).join('');
+
+  const markup=`
+    <defs><pattern id="story-grid" width="3" height="3" patternUnits="userSpaceOnUse"><path d="M3 0H0V3" fill="none" stroke="#78926f" stroke-width=".07" opacity=".28"/></pattern></defs>
+    <g class="story-build-base"><rect x="0" y="0" width="60" height="40" fill="#e8f1df"/><rect x="0" y="0" width="60" height="40" fill="url(#story-grid)"/></g>
+    <g data-story-layer="footprint" data-threshold="1"><rect x=".7" y=".7" width="58.6" height="38.6" rx="1" fill="none" stroke="#71906f" stroke-width=".18" stroke-dasharray=".65 .55"/><line x1="2" y1="2.1" x2="58" y2="2.1" stroke="#78926f" stroke-width=".1"/><line x1="2" y1="1.7" x2="2" y2="2.5" stroke="#78926f" stroke-width=".1"/><line x1="58" y1="1.7" x2="58" y2="2.5" stroke="#78926f" stroke-width=".1"/></g>
+    <g data-story-layer="tent" data-threshold="2"><rect x="1.1" y="1.1" width="57.8" height="37.8" rx="1.1" fill="#fffdf8" stroke="#6f856a" stroke-width=".32"/><line x1="1.8" y1="20" x2="58.2" y2="20" stroke="#b0bda9" stroke-width=".11" stroke-dasharray=".7 .65"/>${poles}</g>
+    <g data-story-layer="tables" data-threshold="3">${tables.join('')}</g>
+    <g data-story-layer="chairs" data-threshold="4">${chairs.join('')}</g>
+    <g data-story-layer="sweetheart" data-threshold="5">${serviceMarkup(serviceObject('wedding-sweetheart'),'#f6eadc')}</g>
+    <g data-story-layer="dance" data-threshold="6">${dance.join('')}</g>
+    <g data-story-layer="dj" data-threshold="7">${serviceMarkup(serviceObject('wedding-dj'),'#324655')}</g>
+    <g data-story-layer="bar" data-threshold="8">${serviceMarkup(serviceObject('wedding-bar'),'#263746')}</g>
+    <g data-story-layer="buffet" data-threshold="9">${serviceMarkup(serviceObject('wedding-buffet-a'),'#f8f3e9')}${serviceMarkup(serviceObject('wedding-buffet-b'),'#f8f3e9')}</g>
+    <g data-story-layer="cocktail" data-threshold="10">${serviceMarkup(serviceObject('wedding-cocktail-a'),'#f5ead3')}${serviceMarkup(serviceObject('wedding-cocktail-b'),'#f5ead3')}</g>
+    <g data-story-layer="linens" data-threshold="11">${linens.join('')}</g>
+    <g data-story-layer="centerpieces" data-threshold="12">${centerpieces.join('')}</g>
+    <g data-story-layer="lighting" data-threshold="13">${lighting.join('')}</g>`;
+
+  const template=document.createElement('template');
+  template.innerHTML=`<svg class="story-build-plan" viewBox="0 0 60 40" preserveAspectRatio="xMidYMid slice" role="img" aria-label="Animated overhead wedding layout building from an empty venue to a complete reception">${markup}</svg>`;
+  return template.content.firstElementChild;
 }
 
 document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
