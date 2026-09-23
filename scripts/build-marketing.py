@@ -50,7 +50,7 @@ NAV = '''<a class="skip" href="#main">Skip to content</a>
 <div class="navlinks" id="navlinks"><a href="/event-pass/">Plan one event</a><a href="/demo/">Live demo</a><a href="/party-rental-software/">Rental software</a><a href="/business/">For rental companies</a><a href="/business/pricing.html">Pricing</a><a class="mobile-login" href="/dashboard/">Log in</a><a class="mobile-trial" href="/event-pass/">Event Pass · $9.99</a></div>
 <div class="nav-actions"><a class="btn login" href="/dashboard/">Log in</a><a class="btn primary" href="/business/signup.html">Start free trial <span aria-hidden="true">↗</span></a></div>
 </nav></header>'''
-FOOT = '''<footer class="footer"><div class="wrap"><div class="footer-grid">
+FOOT = '''<footer class="footer"><div class="wrap"><h2 class="visually-hidden">RentSketch links</h2><div class="footer-grid">
 <div class="footer-brand"><a class="brand" href="/"><img src="/assets/brand-mark.svg" width="34" height="34" alt="Brand mark" aria-hidden="true">RentSketch</a><p>Visual event planning.<br>Built around the equipment you rent.</p></div>
 <div><h3>Explore</h3><a href="/business/">For rental companies</a><a href="/demo/">Product demo</a><a href="/business/pricing.html">Pricing</a><a href="/business/signup.html">Start a free trial</a><a href="/dashboard/">Business log in</a></div>
 <div><h3>Plan an event</h3><a href="/event-pass/">Event Pass · $9.99</a><a href="/demo/">Watch the free demo</a><a href="/my-event/">Open my saved event</a><a href="/wedding-layout-planner/">Wedding layouts</a><a href="/tent-layout-software/">Tent layouts</a><a href="/event-layout-software/">Event floor plans</a></div>
