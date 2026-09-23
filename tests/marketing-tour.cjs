@@ -28,6 +28,7 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
        night(){},
        playTimelapse(){timelapses++;},
        playItemTimelapse(ids){itemAnimations.push(ids);},
+       playChairTimelapse(ids){itemAnimations.push(['chairs',...ids]);},
        transitionCamera(mode){cameraTransitions.push(mode);cameras.push(mode);},
        destroy(){destroyed++;}
      };
@@ -90,6 +91,10 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
  const autoplay=await fixture({reduced:false});
  assert.equal(autoplay.metrics().imports,0,'normal homepage still avoids renderer before viewport/idle');
  assert.deepEqual(autoplay.stages.map(x=>x.key),['space','tent','tables','chairs','sweetheart','dance','style','lighting','reception','evening']);
+ const tableStage=autoplay.stages.find(x=>x.key==='tables').scene.objects.filter(o=>o.id.startsWith('wedding-table-'));
+ const chairStage=autoplay.stages.find(x=>x.key==='chairs').scene.objects.filter(o=>o.id.startsWith('wedding-table-'));
+ assert.ok(tableStage.every(o=>o.hideChairs===true&&o.seatCount===8),'table stage keeps chair count but hides chair meshes');
+ assert.ok(chairStage.every(o=>o.hideChairs===false&&o.seatCount===8),'chair stage reveals the 64 chairs');
  assert.equal(autoplay.stages.at(-1).scene.lightingId,'lighting-bistro');
  autoplay.intersect();await settle(100);
  assert.equal(autoplay.metrics().created,1,'homepage auto-loads renderer after hero enters view');
