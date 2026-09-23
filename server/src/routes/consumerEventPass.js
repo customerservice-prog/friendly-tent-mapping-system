@@ -55,6 +55,20 @@ function eventPassProductName(renewal, slug) {
     return slug === 'friendly' ? base + ' — Friendly Party Rental' : base;
 }
 
+function analyticsPurchase(session) {
+    const renewal = session?.metadata?.kind === 'consumer_event_pass_renewal';
+    const amountCents = Number(session?.amount_total);
+    if (!session?.id || !Number.isFinite(amountCents) || amountCents <= 0) return null;
+    return {
+        transactionId: 'ep_' + createHash('sha256').update(String(session.id)).digest('hex').slice(0, 24),
+        itemId: renewal ? 'event_pass_renewal_30_day' : 'event_pass_30_day',
+        itemName: renewal ? 'RentSketch Event Pass Renewal' : 'RentSketch Event Pass',
+        amountCents,
+        currency: String(session.currency || 'usd').toUpperCase(),
+        durationDays: Number(session?.metadata?.durationDays || 30),
+    };
+}
+
 async function designTenant(design) {
     if (!design.tenant_id) return null;
     return (await query('SELECT * FROM tenants WHERE id=$1', [design.tenant_id])).rows[0] || null;
@@ -184,7 +198,7 @@ router.post('/event-pass/restore', wrap(async (req, res) => {
     res.setHeader('Cache-Control', 'no-store');
     if (session.payment_status !== 'paid') return res.status(202).json({ ...(await designResponse(design)), active: false, pending: true });
     await fulfillEventPass(session);
-    res.json(await designResponse(design));
+    res.json({ ...(await designResponse(design)), analyticsPurchase: analyticsPurchase(session) });
 }));
 
 // GET /api/consumer/event-pass/direct-checkout
