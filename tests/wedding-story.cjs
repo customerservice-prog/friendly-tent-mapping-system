@@ -147,11 +147,16 @@ async function fixture({page='index.html',reduced=false,fail=false}={}){
   const demo=await fixture({page:'demo/index.html'});
   demo.intersect();
   assert.equal(await waitFor(()=>demo.d.querySelector('[data-story-count]').textContent==='15 / 15',{timeout:1100}),true,'demo build reaches the final stage');
-  assert.equal(demo.metrics().imports,1,'dedicated demo still auto-loads interactive 3D');
-  assert.equal(demo.metrics().created,1);
-  assert.ok(demo.metrics().progress.length>2,'demo progresses through the wedding stages in the renderer');
+  assert.equal(demo.metrics().imports,0,'dedicated demo must keep Three.js off the critical path');
+  assert.equal(demo.metrics().created,0,'dedicated demo starts with the lightweight staged plan');
   assert.equal(demo.d.querySelector('[data-story-count]').textContent,'15 / 15');
+  demo.d.querySelector('[data-view="3d"]').click();
+  await settle(50);
+  assert.equal(demo.metrics().imports,1,'demo imports Three.js only after an explicit 3D request');
+  assert.equal(demo.metrics().created,1);
+  assert.equal(demo.metrics().rebuilds.length,1);
+  assert.ok(demo.metrics().cameras.includes('reception'));
   demo.dom.window.close();
 
-  console.log('PASS wedding story: complete staged wedding, zero homepage autoplay WebGL, explicit 3D handoff, reduced-motion fallback, and interactive demo auto-load.');
+  console.log('PASS wedding story: complete staged wedding, zero autoplay WebGL, explicit 3D handoff, reduced-motion fallback, and on-demand interactive demo.');
 })().catch(err=>{console.error(err);process.exitCode=1;});
