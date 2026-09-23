@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
-const { requireTenantAccess } = require('../middleware/requireAuth');
+const { requireTenantAccess, isConfiguredPlatformAdmin } = require('../middleware/requireAuth');
+const { verifyToken } = require('../auth');
 const { savePermission } = require('../eventPassAccess');
 
 const router = express.Router();
@@ -56,6 +57,16 @@ async function tenantForSlug(slug) {
 function rateLimitSave(req, tenant) {
   return limited(`${tenant.id}:${clientIp(req)}`);
 }
+async function authenticatedTenantStaff(req, tenant) {
+  const header=req.headers.authorization||'',token=header.startsWith('Bearer ')?header.slice(7):null;
+  if(!token)return null;
+  try{
+    const payload=verifyToken(token);
+    if(await isConfiguredPlatformAdmin(payload))return payload;
+    const membership=await db.query('SELECT role FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',[tenant.id,payload.userId]);
+    return membership.rows[0]?{...payload,tenantRole:membership.rows[0].role}:null;
+  }catch(_){return null;}
+}
 
 // POST /api/tenants/:slug/designs
 // Creates the first anonymous design snapshot. Subsequent autosaves should use
@@ -70,7 +81,8 @@ router.post('/:slug/designs', wrap(async (req, res) => {
   const sceneError = validateScene(body.scene);
   if (sceneError) return res.status(400).json({ error: sceneError });
 
-  const denied = await savePermission(tenant, null, body.scene);
+  const staff = await authenticatedTenantStaff(req, tenant);
+  const denied = staff ? null : await savePermission(tenant, null, body.scene);
   if (denied) return res.status(402).json(denied);
 
   const result = await db.query(
@@ -97,7 +109,8 @@ router.patch('/:slug/designs/:id', wrap(async (req, res) => {
 
   const design = (await db.query('SELECT * FROM designs WHERE id=$1 AND tenant_id=$2 AND anonymous_session_id=$3', [req.params.id, tenant.id, body.anonymousSessionId])).rows[0];
   if (!design) return res.status(404).json({ error: 'Draft not found for this session' });
-  const denied = await savePermission(tenant, design, body.scene);
+  const staff = await authenticatedTenantStaff(req, tenant);
+  const denied = staff ? null : await savePermission(tenant, design, body.scene);
   if (denied) return res.status(402).json(denied);
 
   const result = await db.query(
