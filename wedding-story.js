@@ -265,6 +265,7 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
   }
 
   replay.addEventListener('click',()=>{
+    stop();
     selected='3d';
     modeButtons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.view==='3d')));
     if(view){
@@ -278,7 +279,10 @@ document.querySelectorAll('[data-wedding-story]').forEach(studio=>{
   });
 
   pause.addEventListener('click',()=>{
-    if(playing)stop();
+    // The control is labeled Pause while autoplay is armed. Cancel a pending
+    // delayed start just like an active stage timer; only a subsequent click
+    // after the UI says Play should resume the story.
+    if(playing||autoplayStartTimer)stop();
     else play();
   });
 
