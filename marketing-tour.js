@@ -83,6 +83,8 @@ if(studio){
   studio.classList.add('wedding-building');
   studio.classList.remove('wedding-resetting');
   buildHud.querySelector('.wedding-replay').hidden=true;
+  view.setMarketingBuildStage?.('space');
+  view.fitCamera();
 
   buildCurtain.classList.add('is-visible');
   buildCurtain.querySelector('span').textContent='Empty event space';
@@ -94,13 +96,7 @@ if(studio){
    if(ticket!==buildGeneration||buildStopped||disposed||selected!=='3d')return;
    const stage=stages[index];
    updateBuildHud(stage,index);
-   view.rebuild(stage.scene);
-   view.setScene({
-    motion:stage.key==='evening',
-    guests:stage.key==='evening',
-    styling:stage.styling,
-    night:stage.night
-   });
+   view.setMarketingBuildStage?.(stage.key);
 
    if(index===1){
     view.fitCamera();
@@ -140,15 +136,8 @@ if(studio){
   buildHud.querySelector('.wedding-replay').hidden=false;
   show();
 
-  const held=await pause(2600,ticket);
-  if(!held||buildStopped||disposed||selected!=='3d')return;
-  studio.classList.add('wedding-resetting');
-  buildCurtain.querySelector('span').textContent='Building the next reception…';
-  buildCurtain.classList.add('is-visible');
-  await pause(650,ticket);
-  if(ticket!==buildGeneration||buildStopped||disposed)return;
-  studio.classList.remove('wedding-resetting');
-  startWeddingBuild();
+  buildCurtain.classList.remove('is-visible');
+  updateBuildHud(stages[stages.length-1],stages.length-1);
  }
 
  async function load(){
@@ -160,10 +149,12 @@ if(studio){
    target.classList.add('active');target.style.visibility='hidden';
    const next=renderer.init(target,{registerActive:false});pendingView=next;
    try{
-    const first=cinematic?(reducedMotion?marketingReception():stages[0].scene):marketingReception();
-    next.rebuild(first);
-    next.setScene({motion:false,guests:false,styling:cinematic?reducedMotion:true,night:false});
-    if(cinematic&&reducedMotion)next.reception();else next.fitCamera();
+    next.rebuild(marketingReception());
+    next.setScene({motion:false,guests:false,styling:true,night:false});
+    if(cinematic){
+     next.setMarketingBuildStage?.(reducedMotion?'evening':'space');
+     if(reducedMotion)next.reception();else next.fitCamera();
+    }else next.fitCamera();
     await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
     if(disposed||ticket!==generation){if(pendingView===next){next.destroy();pendingView=null;}return;}
     view=next;pendingView=null;target.style.visibility='';
@@ -214,8 +205,13 @@ if(studio){
  if(autoLoad){
   const start=()=>{
    const run=()=>ensure3D();
-   if('requestIdleCallback' in window)requestIdleCallback(run,{timeout:1200});
-   else setTimeout(run,cinematic?650:0);
+   if(cinematic){
+    setTimeout(()=>{
+     if('requestIdleCallback' in window)requestIdleCallback(run,{timeout:1800});
+     else run();
+    },1800);
+   }else if('requestIdleCallback' in window)requestIdleCallback(run,{timeout:1200});
+   else run();
   };
   if('IntersectionObserver' in window){
    const observer=new IntersectionObserver(entries=>{
