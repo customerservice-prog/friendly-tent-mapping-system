@@ -100,7 +100,8 @@ function loadRoute() {
   assert.equal(fallback.inp_ms, null);
   assert.equal(Number(fallback.fcp_ms), 900);
 
-  server.close();
+  if (typeof server.closeAllConnections === 'function') server.closeAllConnections();
+  await new Promise(resolve => server.close(resolve));
   await pg.close();
   console.log('PASS Web Vitals API: sanitized one-row telemetry, strict origins/paths, bounded metrics, no PII fields.');
 })().catch(err => {
