@@ -55,7 +55,10 @@ for(const file of consumerPages){
 const homeHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.match(homeHtml,/Plan one event · \$9\.99/);
 assert.match(homeHtml,/<title>RentSketch \| 3D Event Design Software for Rental Companies<\/title>/);
-assert.match(homeHtml,/<h1>RentSketch event design software<br><span>built around rental equipment\.<\/span><\/h1>/);
+assert.match(homeHtml,/<h1>Watch a wedding<br><span>come together\.<\/span><\/h1>/);
+assert.match(homeHtml,/data-wedding-story/);
+assert.match(homeHtml,/wedding-story\.js/);
+assert.match(fs.readFileSync(path.join(root,'demo/index.html'),'utf8'),/data-story-scrub/);
 assert.doesNotMatch(homeHtml,/<title>Party Rental Software/,'homepage must not compete with the dedicated party-rental-software title');
 assert.match(homeHtml,/href="\/party-rental-software\/">Rental software<\/a>/);
 assert.match(homeHtml,/Start 14-day business trial/);
