@@ -6,7 +6,7 @@ const settle=(ms=45)=>new Promise(r=>setTimeout(r,ms));
 async function fixture({fail=false,page='index.html',reduced=true}={}){
  const url='https://rentsketch.com/'+(page==='index.html'?'':page.replace(/index\.html$/,''));
  const dom=new JSDOM(fs.readFileSync(path.join(root,page),'utf8'),{url,pretendToBeVisual:true}),w=dom.window;
- let intersect,imports=0,created=0,destroyed=0,rebuilds=[],cameras=[],scenes=[],timelapses=0,itemAnimations=[],cameraTransitions=[];
+ let intersect,imports=0,created=0,destroyed=0,rebuilds=[],cameras=[],scenes=[],timelapses=0,itemAnimations=[],cameraTransitions=[],buildStages=[];
  w.matchMedia=query=>({matches:query.includes('prefers-reduced-motion')?reduced:false});
  w.requestIdleCallback=fn=>setTimeout(()=>fn({didTimeout:false,timeRemaining:()=>20}),0);
  class Observer{constructor(fn){intersect=fn;}observe(){}disconnect(){}}
@@ -15,7 +15,8 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
    window:w,document:w.document,console,IntersectionObserver:Observer,
    requestAnimationFrame:fn=>setTimeout(()=>fn(performance.now()),0),
    cancelAnimationFrame:id=>clearTimeout(id),
-   performance,requestIdleCallback:w.requestIdleCallback,setTimeout,clearTimeout
+   performance,requestIdleCallback:w.requestIdleCallback,
+   setTimeout:(fn,ms,...args)=>setTimeout(fn,Math.min(Number(ms)||0,5),...args),clearTimeout
  });
  const renderer=new vm.SyntheticModule(['init'],function(){
    this.setExport('init',()=>{
@@ -30,6 +31,7 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
        playItemTimelapse(ids){itemAnimations.push(ids);},
        playChairTimelapse(ids){itemAnimations.push(['chairs',...ids]);},
        transitionCamera(mode){cameraTransitions.push(mode);cameras.push(mode);},
+       setMarketingBuildStage(key){buildStages.push(key);},
        destroy(){destroyed++;}
      };
    });
@@ -46,7 +48,7 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
    stages:data.namespace.marketingWeddingBuildStages(),
    finalScene:data.namespace.marketingReception(),
    intersect:()=>{if(intersect)intersect([{isIntersecting:true}]);},
-   metrics:()=>({imports,created,destroyed,rebuilds,cameras,scenes,timelapses,itemAnimations,cameraTransitions})
+   metrics:()=>({imports,created,destroyed,rebuilds,cameras,scenes,timelapses,itemAnimations,cameraTransitions,buildStages})
  };
 }
 
@@ -74,6 +76,7 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
  assert.equal(scene.objects.filter(o=>o.kind==='dance').length,16);
  assert.equal(scene.lightingId,'lighting-bistro');
  assert.equal(f.metrics().timelapses,0,'reduced-motion never animates build');
+ assert.ok(f.metrics().buildStages.includes('evening'),'reduced-motion shows the finished wedding stage');
  assert.equal(f.d.querySelector('.tour-poster').hidden,true);
  assert.equal(f.d.querySelector('.tour-actions').hidden,false);
 
@@ -96,11 +99,13 @@ async function fixture({fail=false,page='index.html',reduced=true}={}){
  assert.ok(tableStage.every(o=>o.hideChairs===true&&o.seatCount===8),'table stage keeps chair count but hides chair meshes');
  assert.ok(chairStage.every(o=>o.hideChairs===false&&o.seatCount===8),'chair stage reveals the 64 chairs');
  assert.equal(autoplay.stages.at(-1).scene.lightingId,'lighting-bistro');
- autoplay.intersect();await settle(100);
- assert.equal(autoplay.metrics().created,1,'homepage auto-loads renderer after hero enters view');
+ autoplay.intersect();await settle(120);
+ assert.equal(autoplay.metrics().created,1,'homepage auto-loads renderer after the deferred critical window');
  assert.ok(autoplay.d.querySelector('.wedding-build-hud'),'cinematic build HUD is created');
  assert.match(autoplay.d.querySelector('.wedding-build-kicker').textContent,/build the wedding/i);
- assert.equal(autoplay.metrics().rebuilds[0].objects.length,0,'cinematic begins from an empty event layout');
+ assert.equal(autoplay.metrics().rebuilds.length,1,'cinematic prebuilds the complete wedding exactly once');
+ assert.ok(autoplay.metrics().rebuilds[0].objects.length>20,'single prebuilt scene contains the complete wedding');
+ assert.ok(autoplay.metrics().buildStages.includes('space'),'cinematic hides the prebuilt scene to begin from empty space');
  autoplay.w.dispatchEvent(new autoplay.w.PageTransitionEvent('pagehide'));
  assert.equal(autoplay.metrics().destroyed,1);
  autoplay.dom.window.close();
