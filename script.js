@@ -287,7 +287,7 @@ function mount3D(){if(view3dMod||view3dMountInProgress)return;var canvas=$('canv
   var matched=$('view3dMatchPhoto'),orbit=$('view3dOrbit360'),isOrbit=mode==='360';
   if(matched){matched.classList.toggle('active',!isOrbit);matched.setAttribute('aria-pressed',String(!isOrbit));}
   if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));}
-  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto)$('canvasHint').textContent=isOrbit?'360 View · drag empty space to orbit · drag a selected rental to move it':'Matched View · calibrated to the original photo perspective';
+  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto)$('canvasHint').textContent=isOrbit?'Smart 360 · orbit around the fixed setup · drag a selected rental to move it':'Matched View · calibrated to the original photo perspective';
 }
 function renderViews(conflicts){
   var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d';
