@@ -27,14 +27,15 @@ window.addEventListener('rentsketch:designStarted',function(){start(true);},{onc
 async function restoreShared(){
   var share=new URLSearchParams(location.hash.slice(1)).get('share');
   if(!share)return false;
-  if(!window.RENTSKETCH_API_URL||!window.RENTSKETCH_CATALOG_READY||!bridge().loadScene)return false;
+  var sharedBridge=window.FriendlyBridge||{};
+  if(!window.RENTSKETCH_API_URL||!window.RENTSKETCH_CATALOG_READY||!sharedBridge.loadScene)return false;
   window.RENTSKETCH_PASS_RESTORING=true;
   try{
     var r=await fetch(window.RENTSKETCH_API_URL+'/api/tenants/'+encodeURIComponent(window.RENTSKETCH_TENANT_SLUG||'generic')+'/shared-design/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:share}),cache:'no-store'});
     var d={};try{d=await r.json();}catch(e){}
     if(!r.ok)throw new Error(d.error||'Shared layout could not be opened');
     window.RENTSKETCH_SHARED_READONLY=true;
-    if(!bridge().loadScene(d.scene||{},{}))throw new Error('Shared layout could not be displayed');
+    if(!sharedBridge.loadScene(d.scene||{},{}))throw new Error('Shared layout could not be displayed');
     history.replaceState(null,'',location.pathname+location.search);
     window.dispatchEvent(new CustomEvent('rentsketch:sharedDesign',{detail:{id:d.id,updatedAt:d.updatedAt||null}}));
     return true;
