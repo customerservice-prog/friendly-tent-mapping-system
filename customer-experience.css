@@ -41,3 +41,28 @@
 .venue-photo-status[data-kind="working"]{display:block;background:#eef5ff;color:#315d86}
 .venue-photo-status[data-kind="success"]{display:block;background:#edf8ef;color:#2f6b40}
 .venue-photo-status[data-kind="error"]{display:block;background:#fff1f0;color:#9d342e}
+
+/* Photo View spatial workspace */
+.photo-view{position:absolute;inset:0;overflow:hidden;background:#111;z-index:2}
+.photo-workspace{display:flex;flex-direction:column;width:100%;height:100%;min-height:420px;background:linear-gradient(180deg,#18231c,#101713);color:#eef5ef}
+.photo-workspace-toolbar{display:grid;grid-template-columns:minmax(190px,.8fr) minmax(420px,2fr);gap:8px 14px;align-items:center;padding:10px 12px;border-bottom:1px solid rgba(255,255,255,.12);background:rgba(18,31,22,.96);box-shadow:0 6px 18px rgba(0,0,0,.16);z-index:5}
+.photo-workspace-title{display:flex;flex-direction:column;gap:1px}.photo-workspace-title strong{font-size:12px;letter-spacing:.12em}.photo-workspace-title span{font-size:11px;color:#b8c8bd}
+.photo-workspace-tools{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end;align-items:center}.photo-workspace-tools .btn-chip{margin:0}.photo-workspace-tools .btn-chip.active{background:#fff;color:#203829;border-color:#fff}
+.photo-geometry-type{height:34px;max-width:160px;border:1px solid rgba(255,255,255,.22);border-radius:9px;background:#243229;color:#fff;padding:0 8px;font:700 11px system-ui}
+.photo-workspace-hint{grid-column:1/-1;font-size:11px;color:#cfdbd1;text-align:center;min-height:15px}
+.photo-workspace-viewport{position:relative;flex:1;display:grid;place-items:center;min-height:0;overflow:auto;padding:10px;background:radial-gradient(circle at 50% 35%,#25352b 0,#131a16 72%)}
+.photo-workspace-stage{position:relative;flex:none;overflow:hidden;border-radius:14px;background:#0a0d0b;box-shadow:0 18px 44px rgba(0,0,0,.38);touch-action:none;user-select:none}
+.photo-workspace-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+.photo-workspace-overlay{position:absolute;inset:0;width:100%;height:100%;overflow:visible;touch-action:none}
+.photo-ground-polygon{fill:rgba(72,168,105,.10);stroke:rgba(221,255,229,.58);stroke-width:3;stroke-dasharray:12 10;vector-effect:non-scaling-stroke}
+.photo-calibration-handle{fill:#fff;stroke:#2f7b48;stroke-width:5;vector-effect:non-scaling-stroke;cursor:grab}
+.photo-horizon-line{stroke:rgba(255,220,121,.82);stroke-width:2;stroke-dasharray:9 8;vector-effect:non-scaling-stroke}
+.photo-rental{cursor:grab}.photo-rental-shape{fill:rgba(245,250,247,.72);stroke:#17492a;stroke-width:3;vector-effect:non-scaling-stroke;filter:drop-shadow(0 3px 4px rgba(0,0,0,.25))}
+.photo-rental.tent .photo-rental-shape{fill:rgba(255,255,255,.36);stroke:#fff;stroke-width:4}
+.photo-rental.inflatable .photo-rental-shape{fill:rgba(113,184,221,.66)}.photo-rental.dance .photo-rental-shape{fill:rgba(215,188,139,.72)}
+.photo-rental.selected .photo-rental-shape{stroke:#ffd66b;stroke-width:6}
+.photo-rental-label,.photo-geometry-label{font:800 19px system-ui;fill:#17241b;stroke:rgba(255,255,255,.82);stroke-width:4;paint-order:stroke;dominant-baseline:middle;text-anchor:middle;pointer-events:none}
+.photo-rotate-line{stroke:#ffd66b;stroke-width:3;vector-effect:non-scaling-stroke}.photo-rotate-handle{fill:#ffd66b;stroke:#44330a;stroke-width:3;vector-effect:non-scaling-stroke;cursor:crosshair}
+.photo-geometry-shape{fill:rgba(95,128,156,.16);stroke:rgba(235,245,250,.7);stroke-width:3;stroke-dasharray:8 6;vector-effect:non-scaling-stroke}.photo-geometry.selected .photo-geometry-shape{stroke:#ffd66b;stroke-width:5}.photo-geometry.no-place .photo-geometry-shape{fill:rgba(180,74,65,.18)}
+.photo-geometry-label{font-size:15px}.photo-geometry-draft{fill:rgba(255,214,107,.14);stroke:#ffd66b;stroke-width:3;stroke-dasharray:8 6;vector-effect:non-scaling-stroke}
+@media(max-width:760px){.photo-workspace-toolbar{grid-template-columns:1fr;padding:8px}.photo-workspace-tools{justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.photo-workspace-hint{text-align:left}.photo-geometry-type{min-width:140px}.photo-workspace-viewport{padding:4px}.photo-workspace-stage{border-radius:8px}}

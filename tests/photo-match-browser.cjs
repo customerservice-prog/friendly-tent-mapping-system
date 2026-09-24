@@ -3,7 +3,7 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'qa-photo-match');fs.mkdirSync(out,{recursive:true});
 const waitServer=server=>new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const tinyJpeg=Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=','base64');
-let webOrigin='',apiOrigin='',uploads=[];
+let webOrigin='',apiOrigin='',uploads=[],savedPatches=[];
 const api=http.createServer((req,res)=>{
   const u=new URL(req.url,'http://api.local');
   const cors=()=>{res.setHeader('Access-Control-Allow-Origin',webOrigin||'*');res.setHeader('Access-Control-Allow-Methods','GET,POST,PATCH,DELETE,OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type,Authorization,X-RentSketch-Session');res.setHeader('Access-Control-Max-Age','60');res.setHeader('Cross-Origin-Resource-Policy','cross-origin');};
@@ -11,8 +11,10 @@ const api=http.createServer((req,res)=>{
   if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
   const json=(status,data)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};
   if(u.pathname==='/api/consumer/event-pass/offer')return json(200,{required:true,available:true,priceCents:999,durationDays:30,renewalPriceCents:499,renewalDurationDays:30,previewDurationSeconds:300,recurring:false});
-  if(u.pathname==='/api/consumer/event-pass/resume')return json(200,{id:'generic-photo-design',tenant:'generic',scene:{tentId:'pole-20x20',objects:[],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},anonymousSessionId:'generic-photo-owner',active:true,renewable:true,expiresAt:'2099-01-01T00:00:00.000Z',customerEmail:'photo@example.invalid',accessUrl:'https://example.invalid/private'});
-  if(u.pathname==='/api/consumer/designs/generic-photo-design'&&req.method==='PATCH'){req.resume();return json(200,{ok:true,id:'generic-photo-design'});}
+  if(u.pathname==='/api/consumer/event-pass/resume')return json(200,{id:'generic-photo-design',tenant:'generic',scene:{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},anonymousSessionId:'generic-photo-owner',active:true,renewable:true,expiresAt:'2099-01-01T00:00:00.000Z',customerEmail:'photo@example.invalid',accessUrl:'https://example.invalid/private'});
+  if(u.pathname==='/api/consumer/designs/generic-photo-design'&&req.method==='PATCH'){
+    const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{try{savedPatches.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));}catch(_){}json(200,{ok:true,id:'generic-photo-design'});});return;
+  }
   if(u.pathname==='/api/consumer/designs/generic-photo-design/background-photo'&&req.method==='POST'){
     const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{
       const body=Buffer.concat(chunks),n=uploads.length+1;
@@ -47,7 +49,7 @@ const web=http.createServer((req,res)=>{
     const context=await browser.newContext({viewport:{width:1648,height:928}});
     await context.addInitScript(()=>{
       localStorage.setItem('rentsketch-anon-session','generic-photo-owner');
-      localStorage.setItem('rentsketch-autosave:generic',JSON.stringify({id:'generic-photo-design',scene:{tentId:'pole-20x20',objects:[],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},savedAt:new Date().toISOString(),tenant:'generic',anonymousSessionId:'generic-photo-owner'}));
+      localStorage.setItem('rentsketch-autosave:generic',JSON.stringify({id:'generic-photo-design',scene:{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},savedAt:new Date().toISOString(),tenant:'generic',anonymousSessionId:'generic-photo-owner'}));
     });
     const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
     await page.goto(webOrigin+'/designer/?tenant=generic&admin=1',{waitUntil:'networkidle'});
@@ -114,11 +116,61 @@ const web=http.createServer((req,res)=>{
     assert.equal(uploads[2].bytes,detachedInfo.bytes);
     assert.equal(uploads[2].contentType,'image/jpeg');
     assert.match(await page.locator('[data-role="venue-photo-status"]').innerText(),/Applied/);
+
+    // Photo View becomes the actual placement workspace.
+    await page.locator('#viewModePhoto').waitFor({state:'visible'});
+    assert.equal(await page.locator('#viewModePhoto').getAttribute('aria-selected'),'true','upload opens Photo View');
+    assert.equal(await page.locator('#drawer').isHidden(),true,'Photo Match closes the setting drawer so the workspace is actually draggable');
+    await page.locator('.photo-workspace').waitFor();
+    assert.equal(await page.locator('[data-photo-item="__photo_tent__"]').count(),1,'tent is independently draggable on the photo');
+    assert.equal(await page.locator('[data-photo-item="qa-photo-table"]').count(),1,'rental is rendered over the real photo');
+
+    // Drag the table somewhere else on the venue.
+    const tableBox=await page.locator('[data-photo-item="qa-photo-table"]').boundingBox();assert.ok(tableBox);
+    await page.mouse.move(tableBox.x+tableBox.width/2,tableBox.y+tableBox.height/2);
+    await page.mouse.down();await page.mouse.move(tableBox.x+tableBox.width/2+115,tableBox.y+tableBox.height/2-55,{steps:8});await page.mouse.up();
+    await page.waitForFunction(()=>!!window.FriendlyBridge.getScene().objects.find(o=>o.id==='qa-photo-table')?.photoPlacement);
+    const tablePlacement=await page.evaluate(()=>window.FriendlyBridge.getScene().objects.find(o=>o.id==='qa-photo-table').photoPlacement);
+    assert.ok(Number.isFinite(tablePlacement.x)&&Number.isFinite(tablePlacement.y),'photo drag writes world-space placement');
+
+    // Drag the tent independently from its normal floor-plan origin.
+    const tentBox=await page.locator('[data-photo-item="__photo_tent__"]').boundingBox();assert.ok(tentBox);
+    await page.mouse.move(tentBox.x+tentBox.width/2,tentBox.y+tentBox.height/2);
+    await page.mouse.down();await page.mouse.move(tentBox.x+tentBox.width/2-85,tentBox.y+tentBox.height/2+40,{steps:8});await page.mouse.up();
+    await page.waitForFunction(()=>!!window.FriendlyBridge.getScene().photoTentPlacement);
+    const tentPlacement=await page.evaluate(()=>window.FriendlyBridge.getScene().photoTentPlacement);
+    assert.ok(Number.isFinite(tentPlacement.x)&&Number.isFinite(tentPlacement.y));
+
+    // Manual calibration changes the ground perspective used by both Photo View and 3D.
+    await page.locator('[data-photo-tool="calibrate"]').click();
+    const calBefore=await page.evaluate(()=>JSON.stringify(window.FriendlyBridge.getScene().photoCalibration));
+    const handle=page.locator('[data-cal-handle="backRight"]');const hb=await handle.boundingBox();assert.ok(hb);
+    await page.mouse.move(hb.x+hb.width/2,hb.y+hb.height/2);await page.mouse.down();await page.mouse.move(hb.x+45,hb.y+28,{steps:6});await page.mouse.up();
+    await page.waitForFunction(before=>JSON.stringify(window.FriendlyBridge.getScene().photoCalibration)!==before,calBefore);
+    assert.equal(await page.evaluate(()=>window.FriendlyBridge.getScene().photoCalibration.autoEstimated),false);
+
+    // Trace a building proxy; it becomes saved scene geometry for the 3D reconstruction.
+    await page.selectOption('[data-photo-geometry-type]','house');await page.locator('[data-photo-tool="geometry"]').click();
+    const stageBox=await page.locator('.photo-workspace-stage').boundingBox();assert.ok(stageBox);
+    await page.mouse.move(stageBox.x+stageBox.width*.48,stageBox.y+stageBox.height*.52);
+    await page.mouse.down();await page.mouse.move(stageBox.x+stageBox.width*.72,stageBox.y+stageBox.height*.66,{steps:8});await page.mouse.up();
+    await page.waitForFunction(()=>window.FriendlyBridge.getScene().photoGeometry?.some(g=>g.type==='house'));
+    const geometry=await page.evaluate(()=>window.FriendlyBridge.getScene().photoGeometry);
+    assert.ok(geometry.some(g=>g.type==='house'&&g.heightFt>=10),'traced house becomes 3D proxy geometry');
+
+    await page.evaluate(()=>window.RentSketchAutosave.flush());await page.waitForTimeout(80);
+    const savedScene=savedPatches.at(-1)?.scene;assert.ok(savedScene,'photo workspace state was PATCH-saved');
+    assert.ok(savedScene.objects.find(o=>o.id==='qa-photo-table')?.photoPlacement,'rental photo placement persists');
+    assert.ok(savedScene.photoTentPlacement,'tent photo placement persists');
+    assert.ok(savedScene.photoCalibration,'calibration persists');
+    assert.ok(savedScene.photoGeometry?.some(g=>g.type==='house'),'traced geometry persists');
+
     await page.locator('#viewMode3d').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
+    assert.equal(await page.locator('#viewMode3d').getAttribute('aria-selected'),'true');
     await page.screenshot({path:path.join(out,'generic-admin-photo-applied.png'),fullPage:true});
     assert.deepEqual(errors,[],'no browser page errors during Photo Match');
-    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,status:'Applied',pageErrors:errors},null,2));
-    console.log('PASS Photo Match Chromium: exact generic&admin=1 returning design, change-event blocked fallback, >3.4 MB JPG resize/compress path, detached native-picker input upload, Applied UI and 3D background state.');
+    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement,tentPlacement,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));
+    console.log('PASS Photo Spatial Chromium: upload resilience, Photo View table/tent drag, calibration, traced geometry, saved state and 3D transition.');
     await context.close();
   }finally{await browser.close();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}
 })().catch(e=>{console.error(e);web.close();api.close();process.exitCode=1;});

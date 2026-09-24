@@ -39,23 +39,35 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  const mod=await load(path.join(root,'js/ui/view3d.js'));await mod.evaluate();
  const view=mod.namespace.init(container,{});
  const data={tent:{id:'frame-20x20',type:'frame',widthFt:20,lengthFt:20,centerPoles:[]},surfaceType:'grass',objects:[],lightingId:'lighting-none'};
- view.rebuild({...data,backgroundPhoto:{id:'p1',url:'https://api.test/background-photo/p1?t=cap',focusX:24,focusY:72,zoom:1.2,shade:.12}});
+ const photoSite={id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:70,lengthFt:90};
+ const photoCalibration={version:1,horizonY:.34,frontLeft:{x:.06,y:.95},frontRight:{x:.94,y:.95},backRight:{x:.72,y:.47},backLeft:{x:.28,y:.47},autoEstimated:false};
+ const photoGeometry=[
+  {id:'house-1',type:'house',x:18,y:56,widthFt:30,depthFt:10,heightFt:12,rotationDeg:0},
+  {id:'fence-1',type:'fence',x:4,y:40,widthFt:40,depthFt:.4,heightFt:6,rotationDeg:0},
+  {id:'tree-1',type:'tree',x:52,y:34,widthFt:5,depthFt:5,heightFt:18,rotationDeg:0}
+ ];
+ view.rebuild({...data,photoSite,photoCalibration,photoGeometry,photoTentPlacement:{x:24,y:28,rotationDeg:15},backgroundPhoto:{id:'p1',url:'https://api.test/background-photo/p1?t=cap',focusX:24,focusY:72,zoom:1.2,shade:.12}});
  view.setScene({night:false,weather:'clear',guests:false,motion:false});
  const scene=renderer.scene;
  assert.ok(scene.getObjectByName('Venue photo shadow catcher'),'photo mode uses a transparent shadow-catching ground');
+ assert.ok(scene.getObjectByName('Photo geometry house'),'traced house becomes 3D proxy geometry');
+ assert.ok(scene.getObjectByName('Photo geometry fence'),'traced fence becomes 3D proxy geometry');
+ assert.ok(scene.getObjectByName('Photo geometry tree'),'traced tree becomes 3D proxy geometry');
+ assert.equal(scene.getObjectByName('Venue photo geometry').userData.calibration.horizonY,.34,'3D environment receives photo calibration');
  assert.equal(scene.getObjectByName('Backyard setting'),undefined,'generated house/fence/yard are removed in photo mode');
  assert.equal(scene.getObjectByName('Visible sun').visible,false,'generated sky decorations do not cover the customer photo');
  assert.equal(scene.fog.density,.00015,'photo mode keeps only minimal depth haze');
  assert.ok(scene.background?.isCanvasTexture,'photo is rendered into the WebGL background so captured output includes it');
  assert.ok(draws>0,'uploaded photo is drawn into the background texture');assert.match(view.captureImage(),/^data:image\/jpeg/,'print/review capture includes the WebGL composition');
- const before=draws;
- view.rebuild({...data,backgroundPhoto:{id:'p1',url:'https://api.test/background-photo/p1?t=cap',focusX:80,focusY:30,zoom:1.5,shade:.2}});
+ const before=draws,cameraBefore=renderer.camera.position.clone();
+ view.rebuild({...data,photoSite,photoGeometry,photoCalibration:{...photoCalibration,horizonY:.25,backLeft:{x:.34,y:.42},backRight:{x:.66,y:.42}},backgroundPhoto:{id:'p1',url:'https://api.test/background-photo/p1?t=cap',focusX:80,focusY:30,zoom:1.5,shade:.2}});
  assert.ok(draws>before,'crop/focus changes repaint the photo without replacing the layout');
+ assert.notDeepEqual(renderer.camera.position.toArray(),cameraBefore.toArray(),'photo calibration reframes the 3D camera');
  view.rebuild(data);view.setScene({night:false,weather:'clear',guests:false,motion:false});
  assert.ok(scene.getObjectByName('Backyard setting'),'removing the photo restores generated scenery');
  assert.equal(scene.getObjectByName('Venue photo shadow catcher'),undefined);
  assert.ok(scene.getObjectByName('Visible sun').visible,'generated weather decorations return with generated scenery');
  view.destroy();assert.ok(renderer.disposed);assert.equal(container.children.length,0);assert.equal(frames.size,0);
  dom.window.close();
- console.log('PASS venue photo renderer: real photo background, no fake yard/sky overlay, crop repaint, shadow catcher and generated-setting restore.');
+ console.log('PASS venue photo renderer: real background, calibrated camera, traced 3D proxy geometry, crop repaint, shadow catcher and generated-setting restore.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
