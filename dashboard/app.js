@@ -220,10 +220,16 @@ function esc(s) {
      var brandingReady=!!(admin.name && (admin.logoUrl || admin.primaryColor) && admin.contactEmail);
      var installReady=Array.isArray(admin.allowedOrigins)&&admin.allowedOrigins.length>0;
      var paymentsReady=connect.status==='active';
+     var recentCutoff=Date.now()-30*86400000;
+     var recentReqs=reqs.filter(function(r){return new Date(r.created_at).getTime()>=recentCutoff;});
+     var recentDesigns=designsList.filter(function(d){return new Date(d.created_at||d.updated_at).getTime()>=recentCutoff;});
+     var conversion=reqs.length?Math.round(bookedCount/reqs.length*100):0;
+     var avgRequest=reqs.length?reqs.reduce(function(sum,r){return sum+Number(r.estimate_total||0);},0)/reqs.length:0;
      var launch=[
        {key:'catalog',label:'Build your catalog',detail:products.length?products.length+' products added':'Add the rentals customers can place',done:products.length>0,href:'#/products'},
        {key:'brand',label:'Finish your branding',detail:brandingReady?'Company identity is configured':'Logo, colors and contact details',done:brandingReady,href:'#/branding'},
        {key:'price',label:'Confirm pricing',detail:pricedProducts+'/'+products.length+' products have pricing',done:products.length>0&&pricedProducts===products.length,href:'#/products'},
+       {key:'visuals',label:'Map product visuals',detail:mappedProducts+'/'+products.length+' products have supported visuals',done:products.length>0&&mappedProducts>0,href:'#/products'},
        {key:'pay',label:'Connect payments',detail:paymentsReady?'Stripe payouts connected':'Connect Stripe for customer deposits',done:paymentsReady,href:'#/branding'},
        {key:'install',label:'Publish your designer',detail:installReady?'Allowed website domain saved':'Add your website and preview the embed',done:installReady,href:'#/install'}
      ];
@@ -254,10 +260,12 @@ function esc(s) {
        launch.map(function(x){return '<a class="tw-check '+(x.done?'done':'')+'" href="'+x.href+'"><i>'+(x.done?'✓':'•')+'</i><span><strong>'+esc(x.label)+'</strong><small>'+esc(x.detail)+'</small></span></a>';}).join('')+
        '</div></section>'+
        '<section class="tw-metrics">'+
-         '<article class="tw-metric"><div class="tw-metric-label">Quote requests</div><div class="tw-metric-value">'+reqs.length+'</div><div class="tw-metric-detail">'+newCount+' new / unread</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Saved designs</div><div class="tw-metric-value">'+designsList.length+'</div><div class="tw-metric-detail">Latest 50 customer layouts</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Booked requests</div><div class="tw-metric-value">'+bookedCount+'</div><div class="tw-metric-detail">Marked booked by your team</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Open estimate pipeline</div><div class="tw-metric-value">'+money(pipeline)+'</div><div class="tw-metric-detail">Non-declined request estimates</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Requests · 30d</div><div class="tw-metric-value">'+recentReqs.length+'</div><div class="tw-metric-detail">'+reqs.length+' all time · '+newCount+' new</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Designs · 30d</div><div class="tw-metric-value">'+recentDesigns.length+'</div><div class="tw-metric-detail">'+designsList.length+' saved layouts in recent history</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Booked conversion</div><div class="tw-metric-value">'+conversion+'%</div><div class="tw-metric-detail">'+bookedCount+' booked of '+reqs.length+' requests</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Average request</div><div class="tw-metric-value">'+money(avgRequest)+'</div><div class="tw-metric-detail">Average estimated rental value</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Open pipeline</div><div class="tw-metric-value">'+money(pipeline)+'</div><div class="tw-metric-detail">Non-declined request estimates</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Catalog readiness</div><div class="tw-metric-value">'+pricedProducts+'/'+products.length+'</div><div class="tw-metric-detail">'+mappedProducts+' visually mapped products</div></article>'+
        '</section>'+
        '<div class="tw-grid"><div class="tw-stack">'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Recent quote requests</h2><p>Newest customer requests and current status.</p></div><a class="tw-btn" href="#/requests">View all</a></div><div class="tw-table-scroll">'+renderRequestsTable(reqs.slice(0,7),false)+'</div></section>'+
