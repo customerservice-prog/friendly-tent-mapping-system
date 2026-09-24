@@ -187,10 +187,19 @@ const web=http.createServer((req,res)=>{
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
     await page.locator('#view3dOrbit360').click();
     assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','user can return to the reconstructed 360 World');
+    await page.locator('#view3dWalk').waitFor({state:'visible'});
+    await page.locator('#view3dWalk').click();
+    assert.equal(await page.locator('#view3dWalk').getAttribute('aria-pressed'),'true','Walk Mode activates from 360 World');
+    assert.match(await page.locator('#view3dWalk').innerText(),/Exit Walk/);
+    assert.match(await page.locator('#canvasHint').innerText(),/WASD/);
+    await page.keyboard.down('w');await page.waitForTimeout(120);await page.keyboard.up('w');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(()=>document.querySelector('#view3dWalk')?.getAttribute('aria-pressed')==='false');
+    assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','Escape leaves Walk Mode in the same reconstructed 360 World');
     await page.screenshot({path:path.join(out,'generic-admin-photo-applied.png'),fullPage:true});
     assert.deepEqual(errors,[],'no browser page errors during Photo Match');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement,tentPlacement,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));
-    console.log('PASS Photo Spatial Chromium: Photo View editing plus default local 360 World with photo-derived depth/parallax and reversible exact photo match.');
+    console.log('PASS Photo Spatial Chromium: property-fit planning, 360 World and first-person Walk Mode all work in the real browser flow.');
     await context.close();
   }finally{await browser.close();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}
 })().catch(e=>{console.error(e);web.close();api.close();process.exitCode=1;});

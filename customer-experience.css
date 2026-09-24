@@ -83,3 +83,13 @@
 .property-fit-panel[data-kind="close"]{border-color:#dab85c}
 .property-fit-panel[data-kind="blocked"]{border-color:#d58379}
 @media(max-width:720px){.property-fit-panel{top:58px;left:8px;width:calc(100% - 16px);box-sizing:border-box}.property-fit-badge{font-size:11px!important}}
+
+
+/* RentSketch first-person Walk Mode */
+.walk-mode-canvas{touch-action:none;cursor:crosshair!important}
+.walk-pad{position:absolute;right:18px;bottom:78px;z-index:24;display:grid;grid-template-columns:52px 52px 52px;grid-template-rows:52px 52px;gap:7px;grid-template-areas:". f ." "l b r";pointer-events:auto;user-select:none;-webkit-user-select:none}
+.walk-pad-btn{display:grid;place-items:center;width:52px;height:52px;border:1px solid rgba(255,255,255,.28);border-radius:16px;background:rgba(16,27,20,.76);color:#fff;font:800 22px/1 system-ui;box-shadow:0 8px 22px rgba(0,0,0,.26);backdrop-filter:blur(10px);touch-action:none}
+.walk-pad-btn.is-pressed,.walk-pad-btn:active{background:rgba(69,124,80,.94);transform:translateY(1px)}
+.walk-forward{grid-area:f}.walk-left{grid-area:l}.walk-back{grid-area:b}.walk-right{grid-area:r}
+@media(min-width:881px){.walk-pad{display:none}}
+@media(max-width:760px){.walk-pad{right:12px;bottom:86px;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px}.walk-pad-btn{width:48px;height:48px;border-radius:14px;font-size:20px}}
