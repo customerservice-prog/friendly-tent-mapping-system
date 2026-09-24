@@ -179,6 +179,17 @@ export function init(container,callbacks={}) {
     state.photoCalibration=normalizePhotoCalibration(state.photoCalibration,state.photoSite);
     state.photoGeometry=normalizePhotoGeometry(state.photoGeometry,state.photoSite);
     const setting=sceneSetting(t,state.surfaceType),photoMode=!!state.backgroundPhoto?.url,nextEnvironment=JSON.stringify([photoMode?'photo':setting,t.widthFt,t.lengthFt,state.photoSite?.widthFt,state.photoSite?.lengthFt,state.photoCalibration,state.photoGeometry]);
+    state.photoMode=photoMode;
+    const sceneSpace=photoMode?(state.photoSite||t):t;
+    const photoTent=state.photoTentPlacement||{x:Math.max(0,(sceneSpace.widthFt-t.widthFt)/2),y:Math.max(0,(sceneSpace.lengthFt-t.lengthFt)/2),rotationDeg:0};
+    const mappedObjects=photoMode?state.objects.map(o=>{
+      const pp=o.photoPlacement;
+      return {...o,
+        x:pp&&Number.isFinite(Number(pp.x))?Number(pp.x):(t.isSite?Number(o.x||0):Number(photoTent.x||0)+Number(o.x||0)),
+        y:pp&&Number.isFinite(Number(pp.y))?Number(pp.y):(t.isSite?Number(o.y||0):Number(photoTent.y||0)+Number(o.y||0)),
+        rotationDeg:pp&&Number.isFinite(Number(pp.rotationDeg))?Number(pp.rotationDeg):(Number(o.rotationDeg||0)+Number(photoTent.rotationDeg||0))
+      };
+    }):state.objects;
     loadVenuePhoto(state.backgroundPhoto);
     if(nextEnvironment!==environmentKey){if(environment){scene.remove(environment);disposeGroup(environment);}environment=photoMode?createPhotoEnvironment(state.photoSite||t,state.photoCalibration,state.photoGeometry):createEnvironment(t,state.surfaceType);environment.userData.setNight(night);scene.add(environment);environmentKey=nextEnvironment;if(weather){scene.remove(weather);disposeGroup(weather);}weather=createWeather(t,{mobile});weather.userData.setNight(night);weather.userData.setWeather(weatherMode);weather.userData.setPhotoMode?.(photoMode);scene.add(weather);}
     else weather?.userData.setPhotoMode?.(photoMode);
@@ -198,37 +209,33 @@ export function init(container,callbacks={}) {
       }
       structureKey=nextStructure;shadows(photoMode?(state.photoSite||t):t);
     }
-    const nextFurniture=JSON.stringify([t.widthFt,t.lengthFt,state.objects,photoMode?state.photoTentPlacement:null,photoMode?state.photoSite:null]);
+    const nextFurniture=JSON.stringify([sceneSpace.widthFt,sceneSpace.lengthFt,mappedObjects,photoMode?state.photoTentPlacement:null]);
     if(nextFurniture!==furnitureKey){
       disposeGroup(furniture);rendered.clear();const df=[];
-      for(const o of state.objects){
-        if(o.kind==='dance'){df.push(o);continue;}if(!['table','inflatable','chair'].includes(o.kind))continue;
+      for(const o of mappedObjects){
+        if(o.kind==='dance'){df.push(o);continue;}
+        if(!['table','inflatable','chair'].includes(o.kind))continue;
         const q=o.kind==='inflatable'?createInflatable(o):o.kind==='chair'?makeStandaloneChair(o):table(o);
-        let px=o.x,py=o.y,rot=Number(o.rotationDeg||0)||0,space=t;
-        if(photoMode){
-          const tp=state.photoTentPlacement||{x:Math.max(0,((state.photoSite?.widthFt||t.widthFt)-t.widthFt)/2),y:Math.max(0,((state.photoSite?.lengthFt||t.lengthFt)-t.lengthFt)/2),rotationDeg:0};
-          const pp=o.photoPlacement;
-          px=pp&&Number.isFinite(Number(pp.x))?Number(pp.x):(t.isSite?o.x:Number(tp.x||0)+o.x);
-          py=pp&&Number.isFinite(Number(pp.y))?Number(pp.y):(t.isSite?o.y:Number(tp.y||0)+o.y);
-          rot=pp&&Number.isFinite(Number(pp.rotationDeg))?Number(pp.rotationDeg):rot+Number(tp.rotationDeg||0);
-          space=state.photoSite||t;
-        }
-        q.position.set(px+o.widthFt/2-space.widthFt/2,0,py+o.depthFt/2-space.lengthFt/2);q.rotation.y=-rot*Math.PI/180;
+        q.position.set(o.x+o.widthFt/2-sceneSpace.widthFt/2,0,o.y+o.depthFt/2-sceneSpace.lengthFt/2);
+        q.rotation.y=-(Number(o.rotationDeg||0)||0)*Math.PI/180;
         furniture.add(q);rendered.set(o.id,q);
       }
-      let danceItems=df;
-      if(photoMode&&df.length){
-        const space=state.photoSite||t,tp=state.photoTentPlacement||{x:0,y:0,rotationDeg:0};
-        danceItems=df.map(o=>{const pp=o.photoPlacement;return {...o,x:pp?.x??(t.isSite?o.x:Number(tp.x||0)+o.x),y:pp?.y??(t.isSite?o.y:Number(tp.y||0)+o.y)};});
-        danceMesh=dance(danceItems,space);
-      }else danceMesh=dance(df,t);
-      if(danceMesh)furniture.add(danceMesh);furnitureKey=nextFurniture;renderer.shadowMap.needsUpdate=true;
+      danceMesh=dance(df,sceneSpace);if(danceMesh)furniture.add(danceMesh);furnitureKey=nextFurniture;renderer.shadowMap.needsUpdate=true;
     }
-    if(stylingKey!==nextFurniture){if(styling){scene.remove(styling);disposeGroup(styling);}styling=createPartyStyling(t,state.objects);scene.add(styling);stylingKey=nextFurniture;}
+    if(stylingKey!==nextFurniture){
+      if(styling){scene.remove(styling);disposeGroup(styling);}
+      styling=createPartyStyling(sceneSpace,mappedObjects);scene.add(styling);stylingKey=nextFurniture;
+    }
     if(styling)styling.visible=showStyling&&!drag;
     const nextGuests=nextFurniture;
-    if(nextGuests!==guestKey){if(guests){scene.remove(guests);disposeGroup(guests);}guests=createGuests(t,state.objects,{mobile});guests.visible=showGuests;scene.add(guests);guestKey=nextGuests;if(inflatableActivity){scene.remove(inflatableActivity);disposeGroup(inflatableActivity);}inflatableActivity=createInflatableActivity(t,state.objects,{mobile});scene.add(inflatableActivity);}
-    if(guests)guests.visible=showGuests&&!drag;if(inflatableActivity)inflatableActivity.visible=showGuests&&!drag&&!state.placement;
+    if(nextGuests!==guestKey){
+      if(guests){scene.remove(guests);disposeGroup(guests);}
+      guests=createGuests(sceneSpace,mappedObjects,{mobile});guests.visible=showGuests;scene.add(guests);guestKey=nextGuests;
+      if(inflatableActivity){scene.remove(inflatableActivity);disposeGroup(inflatableActivity);}
+      inflatableActivity=createInflatableActivity(sceneSpace,mappedObjects,{mobile});scene.add(inflatableActivity);
+    }
+    if(guests)guests.visible=showGuests&&!drag;
+    if(inflatableActivity)inflatableActivity.visible=showGuests&&!drag&&!state.placement;
     const nextGhost=JSON.stringify(data.placement?.objects?.map(({x,y,...rest})=>rest)||[]);
     if(nextGhost!==ghostKey){
       disposeGroup(ghost);
