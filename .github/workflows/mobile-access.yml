@@ -19,8 +19,11 @@ jobs:
       - run: npm install --prefix /tmp/mobile-qa --no-save playwright@1.56.1
       - run: /tmp/mobile-qa/node_modules/.bin/playwright install --with-deps chromium
       - run: NODE_PATH=/tmp/mobile-qa/node_modules node tests/mobile-access-browser.cjs
+      - run: NODE_PATH=/tmp/mobile-qa/node_modules node tests/photo-match-browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: mobile-access-evidence
-          path: qa-mobile-access/
+          path: |
+            qa-mobile-access/
+            qa-photo-match/

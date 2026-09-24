@@ -39,7 +39,7 @@ function allowLayoutMutation(action,next,current){
 var restoringScene=false;
 var NL = String.fromCharCode(10);
 TENTS.forEach(function (t) { t.centerPoles=computeCenterPoles(t.type,t.widthFt,t.lengthFt);t.installationClearanceFt=installationClearanceFt(t.type); });
-var state={siteWidthFt:50,siteLengthFt:60,primaryInflatableId:null,eventType:'wedding',guestCount:50,spaceType:'backyard',surfaceType:'notSure',needDance:false,danceFloorSizeId:'18x18',customDanceFloorFt:null,matchedPackageId:null,tentId:'pole-20x40',chairId:'plastic-white',lightingId:'lighting-none',sidewalls:[],backgroundPhoto:null,selectedId:null,viewMode:'plan',activeDrawer:null,lastTableConfig:null,eventCheckOpen:false,estimateOpen:false,inspectorCollapsed:true};
+var state={siteWidthFt:50,siteLengthFt:60,primaryInflatableId:null,eventType:'wedding',guestCount:50,spaceType:'backyard',surfaceType:'notSure',needDance:false,danceFloorSizeId:'18x18',customDanceFloorFt:null,matchedPackageId:null,tentId:'pole-20x40',chairId:'plastic-white',lightingId:'lighting-none',sidewalls:[],backgroundPhoto:null,venuePhotoStatus:{text:'',kind:''},selectedId:null,viewMode:'plan',activeDrawer:null,lastTableConfig:null,eventCheckOpen:false,estimateOpen:false,inspectorCollapsed:true};
 var nextItemNum=1,tryTheseDismissed=false;function newItemId(){var id;do{id='item-'+(nextItemNum++);}while(store&&store.getState().objects.some(function(o){return o.id===id;}));return id;}var store=createLayoutStore({tentId:state.tentId,objects:[],zones:[],aisles:[]},{canMutate:allowLayoutMutation}),tableDraft=null;function byId(arr,id){return arr.find(function(a){return a.id===id;});}function $(id){return document.getElementById(id);}function showStep(id){document.querySelectorAll('.step').forEach(function(el){el.classList.remove('active');});$(id).classList.add('active');}function money(n){return'$'+n.toFixed(2);}function moneyOrAsk(n){return(n===null||n===undefined)?'Ask for pricing':money(n);}function danceFloorSizeFt(){if(state.danceFloorSizeId==='custom')return state.customDanceFloorFt||18;var sz=byId(DANCE_FLOOR_SIZES,state.danceFloorSizeId);return sz?sz.ft:18;}function recommendDanceFloorFt(){var g=state.guestCount;if(g<=30)return 12;if(g<=60)return 15;if(g<=100)return 18;if(g<=150)return 21;return 24;}function validateLighting(){if(!byId(LIGHTING_OPTIONS,state.lightingId))state.lightingId='lighting-none';}
 
 function layoutSpace(){
@@ -132,26 +132,41 @@ async function ensureVenuePhotoDesign(){
   if(!autosave?.flush)throw new Error('Design saving is still starting. Try the photo again.');
   return await autosave.flush();
 }
+function setVenuePhotoStatus(text,kind){
+  state.venuePhotoStatus={text:String(text||''),kind:String(kind||'')};
+  var el=$('drawerBody')?.querySelector('[data-role="venue-photo-status"]');
+  if(el){el.textContent=state.venuePhotoStatus.text;el.dataset.kind=state.venuePhotoStatus.kind;}
+}
 async function chooseVenuePhoto(file,input){
-  if(!file||!requireEventEditing())return false;
+  if(!file)return false;
+  if(!requireEventEditing()){
+    setVenuePhotoStatus('Photo selected, but this event is not currently unlocked for editing.','error');
+    return false;
+  }
   if(input)input.disabled=true;
   var previous=state.backgroundPhoto;
+  var label=(file.name||'photo').slice(0,120);
   try{
-    showLayoutNotice('Preparing your venue photo…');
+    setVenuePhotoStatus('Selected '+label+' · applying to your 3D background…','working');
+    showLayoutNotice('Applying '+label+' to your venue…',5000);
     var designId=await ensureVenuePhotoDesign();
+    if(!designId)throw new Error('This layout could not be saved before the photo upload.');
+    setVenuePhotoStatus('Uploading '+label+'…','working');
     var photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
     state.backgroundPhoto=photo;
+    state.venuePhotoStatus={text:'Applied · your real venue is now the 3D background.',kind:'success'};
     renderDrawerBody('site');renderViews(getConflicts());setViewMode('3d');
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     var photoSaved=false;
     try{await window.RentSketchAutosave?.flush?.();photoSaved=true;}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
     if(photoSaved&&previous?.id&&previous.id!==photo.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
-    showLayoutNotice('Your real venue photo is now behind the 3D layout. Use the sliders in Setting to line it up.',6500);
+    showLayoutNotice('Photo applied. Your real venue is now showing in 3D.',6500);
     return true;
   }catch(err){
     console.error('[RentSketch] venue photo failed',err);
-    showLayoutNotice(err?.message||'That venue photo could not be added.',6500);
-    if(state.activeDrawer==='site')renderDrawerBody('site');
+    var message=err?.message||'That venue photo could not be added.';
+    setVenuePhotoStatus('Could not apply photo: '+message,'error');
+    showLayoutNotice('Could not apply photo: '+message,8000);
     return false;
   }finally{if(input&&input.isConnected)input.disabled=false;}
 }
