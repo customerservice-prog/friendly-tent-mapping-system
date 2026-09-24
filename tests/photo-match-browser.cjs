@@ -120,6 +120,7 @@ const web=http.createServer((req,res)=>{
     // Photo View becomes the actual placement workspace.
     await page.locator('#viewModePhoto').waitFor({state:'visible'});
     assert.equal(await page.locator('#viewModePhoto').getAttribute('aria-selected'),'true','upload opens Photo View');
+    assert.equal(await page.locator('#drawer').isHidden(),true,'Photo Match closes the setting drawer so the workspace is actually draggable');
     await page.locator('.photo-workspace').waitFor();
     assert.equal(await page.locator('[data-photo-item="__photo_tent__"]').count(),1,'tent is independently draggable on the photo');
     assert.equal(await page.locator('[data-photo-item="qa-photo-table"]').count(),1,'rental is rendered over the real photo');
