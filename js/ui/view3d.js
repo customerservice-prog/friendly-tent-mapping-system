@@ -116,7 +116,7 @@ export function init(container,callbacks={}) {
   let inflatableActivity=null,styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
+  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
   const photoCanvas=document.createElement('canvas'),photoCtx=photoCanvas.getContext('2d',{alpha:false}),photoTexture=new THREE.CanvasTexture(photoCanvas);
   photoTexture.colorSpace=THREE.SRGBColorSpace;photoTexture.minFilter=THREE.LinearFilter;photoTexture.magFilter=THREE.LinearFilter;
   let photoImage=null,photoUrl='',photoLoadSeq=0;
@@ -256,7 +256,7 @@ export function init(container,callbacks={}) {
       scene.add(marketingFootprint);
       marketingDetails=createMarketingDetails(t);scene.add(marketingDetails);
     }
-    if(changed)frame(t);invalidate();
+    const nextPhotoCameraKey=photoMode?JSON.stringify([state.photoSite,state.photoCalibration]):'';if(changed||nextPhotoCameraKey!==photoCameraKey){photoCameraKey=nextPhotoCameraKey;frame(photoMode?(state.photoSite||t):t);}invalidate();
   }
   // Read-only marketing playback uses the same geometry and layout as the
   // designer. This API is available only to the isolated public sample.
