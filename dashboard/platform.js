@@ -7,13 +7,13 @@ var state={user:null,tenants:[],route:'overview',menu:false};
 
 var nav=[
  {label:'Platform',items:[
-  ['overview','Overview','⌂'],['businesses','Businesses','▦'],['analytics','Analytics','▥'],['payments','Payments','＄'],['subscriptions','Subscriptions','↻']
+  ['overview','Overview','⌂'],['businesses','Businesses','▦'],['users','Users','◉'],['onboarding','Onboarding','✓'],['analytics','Analytics','▥'],['payments','Payments','＄'],['subscriptions','Subscriptions','↻']
  ]},
  {label:'Product',items:[
   ['event-pass','Event Pass','◇'],['designs','Saved designs','✦'],['activity','Admin activity','≡']
  ]},
  {label:'Operations',items:[
-  ['system','System health','●']
+  ['alerts','Alerts','!'],['performance','Web performance','↗'],['system','System health','●']
  ]}
 ];
 
@@ -66,31 +66,40 @@ async function render(){
  try{
   if(state.route==='overview')await overview();
   else if(state.route==='businesses')await businesses();
+  else if(state.route==='users')await users();
+  else if(state.route==='onboarding')await onboarding();
   else if(state.route==='analytics')await platformAnalytics();
   else if(state.route==='payments')await payments('all');
   else if(state.route==='subscriptions')await subscriptions();
   else if(state.route==='event-pass')await eventPass();
   else if(state.route==='designs')await designs();
   else if(state.route==='activity')await activity();
+  else if(state.route==='alerts')await alerts();
+  else if(state.route==='performance')await performance();
   else if(state.route==='system')await system();
  }catch(err){if(err.status===401||err.status===403){setToken(null);location.href='/dashboard/#/login';return;}fail(err);}
 }
 
 async function overview(){
  var d=await Promise.all([
-  api('/api/admin/console-overview'),api('/api/admin/payments?limit=7'),api('/api/admin/activity?limit=7'),api('/api/admin/system')
+  api('/api/admin/console-overview'),api('/api/admin/payments?limit=7'),api('/api/admin/activity?limit=7'),api('/api/admin/system'),api('/api/admin/onboarding'),api('/api/admin/alerts')
  ]);
- var o=d[0],p=d[1].payments||[],a=d[2].activity||[],s=d[3];
+ var o=d[0],p=d[1].payments||[],a=d[2].activity||[],s=d[3],onboardingRows=d[4].accounts||[],alertRows=d[5].alerts||[];
+ var readyCount=onboardingRows.filter(function(r){return r.progress===100;}).length;
+ var attentionCount=alertRows.filter(function(r){return r.severity==='high'||r.severity==='medium';}).length;
  var content=head('Platform overview','Your RentSketch business','Revenue, subscriptions, customers, designs, and system activity in one operating view.',
   '<a class="pc-btn" href="#payments">Review payments</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">Use RentSketch now</a>')+
-  '<section class="pc-grid metrics">'+
+  '<section class="pc-grid metrics pc-metrics-wide">'+
    metric('List-price MRR',moneyDollars(o.subscriptions&&o.subscriptions.list_mrr),'Active subscription records at configured list pricing','positive')+
    metric('Event Pass revenue',money(o.eventPassRevenue.cents),o.eventPassRevenue.count+' paid Event Pass transactions','positive')+
    metric('Rental deposit volume',money(o.tenantDepositVolume.cents),o.tenantDepositVolume.count+' tenant deposit payments')+
    metric('Rental businesses',o.tenants,(o.subscriptions.active||0)+' active subscriptions · '+(o.subscriptions.trialing||0)+' trials')+
+   metric('Saved designs',o.designs||0,'Layouts stored across the platform')+
+   metric('Needs attention',attentionCount,readyCount+' of '+onboardingRows.length+' businesses launch-ready')+
   '</section>'+
   '<div class="pc-split"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Recent payments</h2><p>Event Pass sales and tenant rental deposits.</p></div><a class="pc-btn small" href="#payments">All payments</a></div>'+paymentTable(p,false)+'</section>'+
   '<aside class="pc-panel"><div class="pc-panel-head"><div><h2>Admin activity</h2><p>Changes made from the platform console.</p></div><a class="pc-btn small" href="#activity">Audit log</a></div><div class="pc-panel-body">'+activityList(a)+'</div></aside></div>'+
+  '<div class="pc-split" style="margin-top:16px"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Onboarding health</h2><p>How many rental businesses are ready to launch.</p></div><a class="pc-btn small" href="#onboarding">Onboarding</a></div><div class="pc-panel-body"><div class="pc-progress-large"><span style="width:'+(onboardingRows.length?Math.round(readyCount/onboardingRows.length*100):0)+'%"></span></div><div class="pc-list-row"><div><strong>'+readyCount+' launch-ready</strong><p>'+Math.max(0,onboardingRows.length-readyCount)+' still need setup work</p></div><span class="pc-status active">'+(onboardingRows.length?Math.round(readyCount/onboardingRows.length*100):0)+'%</span></div></div></section><aside class="pc-panel"><div class="pc-panel-head"><div><h2>Attention queue</h2><p>Current billing, setup and delivery alerts.</p></div><a class="pc-btn small" href="#alerts">View alerts</a></div><div class="pc-panel-body">'+(alertRows.length?alertRows.slice(0,4).map(function(x){return '<div class="pc-list-row"><div><strong>'+esc(x.title)+'</strong><p>'+esc(x.name)+' · '+esc(x.detail)+'</p></div><span class="pc-status '+(x.severity==='high'?'failed':x.severity==='medium'?'trialing':'')+'">'+esc(x.severity)+'</span></div>';}).join(''):empty('No current alerts.'))+'</div></aside></div>'+
   '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>System snapshot</h2><p>Critical services that keep checkout and access working.</p></div><a class="pc-btn small" href="#system">System health</a></div><div class="pc-panel-body">'+healthCards(s)+'</div></section>';
  document.getElementById('pcContent').innerHTML=content;
 }
@@ -140,12 +149,67 @@ async function tenantModal(slug){
   '<div class="pc-modal-field"><label>Contact email</label><input id="tmEmail" type="email" value="'+esc(t.contact_email||'')+'"></div>'+
   '<div class="pc-modal-field"><label>Trial ends</label><input id="tmTrial" type="date" value="'+esc(t.trial_ends_at?String(t.trial_ends_at).slice(0,10):'')+'"></div>'+
   '<div class="pc-actions"><button class="pc-btn primary" id="tmSave">Save business</button><button class="pc-btn" id="tmWorkspace">Open dashboard</button><button class="pc-btn" id="tmDesigner">Open designer</button></div>'+
-  '<h3 style="margin:24px 0 8px;font-size:14px">Users</h3><div>'+m.map(function(u){return '<div class="pc-list-row"><div><strong>'+esc(u.display_name||u.email)+'</strong><p>'+esc(u.email)+'</p></div><span class="pc-status">'+esc(u.role)+'</span></div>'}).join('')+'</div></div></div>';
+  '<h3 style="margin:24px 0 8px;font-size:14px">Users & roles</h3><div>'+m.map(function(u){return '<div class="pc-member-row" data-member="'+esc(u.id)+'"><div><strong>'+esc(u.display_name||u.email)+'</strong><p>'+esc(u.email)+'</p></div><select class="pc-select pc-role-select" data-user="'+esc(u.id)+'"><option value="owner"'+(u.role==='owner'?' selected':'')+'>Owner</option><option value="admin"'+(u.role==='admin'?' selected':'')+'>Admin</option><option value="staff"'+(u.role==='staff'?' selected':'')+'>Staff</option><option value="viewer"'+(u.role==='viewer'?' selected':'')+'>Viewer</option></select><button class="pc-btn small danger pc-remove-member" data-user="'+esc(u.id)+'">Remove</button></div>';}).join('')+'</div></div></div>';
  document.body.appendChild(backdrop);
  function close(){backdrop.remove()} backdrop.querySelector('.pc-modal-close').onclick=close;backdrop.onclick=function(e){if(e.target===backdrop)close()};
  document.getElementById('tmWorkspace').onclick=function(){setTenant(slug);location.href='/dashboard/?tenantView=1#/overview';};
  document.getElementById('tmDesigner').onclick=function(){setTenant(slug);window.open('/designer/?tenant='+encodeURIComponent(slug)+'&admin=1','_blank','noopener');};
  document.getElementById('tmSave').onclick=async function(){var btn=this;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug),{method:'PATCH',body:{name:document.getElementById('tmName').value,contactEmail:document.getElementById('tmEmail').value,trialEndsAt:document.getElementById('tmTrial').value||null}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">Saved.</div>';setTimeout(function(){close();render()},500);}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
+ backdrop.querySelectorAll('.pc-role-select').forEach(function(sel){sel.onchange=async function(){sel.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members/'+encodeURIComponent(sel.dataset.user),{method:'PATCH',body:{role:sel.value}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">User role updated.</div>';}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';}finally{sel.disabled=false;}};});
+ backdrop.querySelectorAll('.pc-remove-member').forEach(function(btn){btn.onclick=async function(){if(!confirm('Remove this user from '+t.name+'?'))return;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members/'+encodeURIComponent(btn.dataset.user),{method:'DELETE'});btn.closest('.pc-member-row').remove();document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">User removed from this business.</div>';}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};});
+}
+
+
+async function users(){
+ var d=await api('/api/admin/users?limit=500'),rows=d.users||[];
+ var tenantUsers=rows.filter(function(u){return !u.is_platform_admin;}),multi=tenantUsers.filter(function(u){return (u.memberships||[]).length>1;});
+ document.getElementById('pcContent').innerHTML=head('Account access','Users & access','Find every platform and tenant user, see which businesses they belong to, and jump directly into the related workspace.',
+  '<a class="pc-btn" href="#businesses">Businesses</a><a class="pc-btn primary" href="#onboarding">Onboarding</a>')+
+  '<section class="pc-grid metrics">'+
+    metric('Tenant users',tenantUsers.length,'People attached to rental-company workspaces')+
+    metric('Platform admins',rows.filter(function(u){return u.is_platform_admin;}).length,'Full platform access')+
+    metric('Multi-business users',multi.length,'Users attached to more than one tenant')+
+    metric('Accounts total',rows.length,'All login identities')+
+  '</section>'+
+  '<div class="pc-toolbar"><div class="pc-search"><input id="userSearch" type="search" placeholder="Search name, email, business or role…"></div></div>'+
+  '<section class="pc-panel"><div id="usersTable"></div></section>';
+ function paint(){
+  var q=(document.getElementById('userSearch').value||'').toLowerCase();
+  var filtered=rows.filter(function(u){
+    return [u.display_name,u.email,(u.memberships||[]).map(function(m){return m.name+' '+m.slug+' '+m.role}).join(' ')].join(' ').toLowerCase().includes(q);
+  });
+  document.getElementById('usersTable').innerHTML=filtered.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>User</th><th>Access</th><th>Businesses</th><th>Created</th><th>Action</th></tr></thead><tbody>'+
+    filtered.map(function(u){
+      var memberships=u.memberships||[];
+      var business=memberships.length?memberships.map(function(m){return '<span class="pc-chip">'+esc(m.name)+' · '+esc(m.role)+'</span>';}).join(' '):'<span class="pc-subtext">No tenant membership</span>';
+      var first=memberships[0];
+      return '<tr><td><strong>'+esc(u.display_name||u.email)+'</strong><span class="pc-subtext">'+esc(u.email)+'</span></td><td>'+status(u.is_platform_admin?'active':'tenant')+'</td><td><div class="pc-chip-wrap">'+business+'</div></td><td>'+date(u.created_at)+'</td><td>'+(first?'<button class="pc-btn small" data-user-workspace="'+esc(first.slug)+'">Open workspace</button>':'—')+'</td></tr>';
+    }).join('')+
+  '</tbody></table></div>':empty('No users match that search.');
+  document.querySelectorAll('[data-user-workspace]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.userWorkspace);location.href='/dashboard/?tenantView=1#/overview';};});
+ }
+ document.getElementById('userSearch').oninput=paint;paint();
+}
+
+async function onboarding(){
+ var d=await api('/api/admin/onboarding'),rows=d.accounts||[];
+ var ready=rows.filter(function(r){return r.progress===100;}).length;
+ var avg=rows.length?Math.round(rows.reduce(function(s,r){return s+Number(r.progress||0);},0)/rows.length):0;
+ document.getElementById('pcContent').innerHTML=head('Customer success','Tenant onboarding','See exactly where every rental business is stuck between signup and a launch-ready customer designer.',
+  '<a class="pc-btn" href="#alerts">Setup alerts</a><a class="pc-btn primary" href="#businesses">Manage businesses</a>')+
+  '<section class="pc-grid metrics">'+
+    metric('Launch-ready',ready,rows.length+' total businesses')+
+    metric('Average progress',avg+'%','Across catalog, pricing, visuals, branding, install and payments')+
+    metric('No catalog',rows.filter(function(r){return !r.checks.catalog;}).length,'Cannot launch customer designer')+
+    metric('Not installed',rows.filter(function(r){return !r.checks.install;}).length,'No allowed website domain')+
+  '</section>'+
+  '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Onboarding pipeline</h2><p>Six launch checks per business.</p></div></div><div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Progress</th><th>Catalog</th><th>Pricing</th><th>Visuals</th><th>Brand</th><th>Install</th><th>Payments</th><th>Activity</th><th>Open</th></tr></thead><tbody>'+
+    rows.map(function(r){
+      function check(k){return r.checks&&r.checks[k]?'<span class="pc-check yes">✓</span>':'<span class="pc-check no">–</span>';}
+      return '<tr><td><strong>'+esc(r.name)+'</strong><span class="pc-subtext">'+esc(r.slug)+'</span></td><td><div class="pc-progress"><span style="width:'+Number(r.progress||0)+'%"></span></div><span class="pc-subtext">'+Number(r.complete||0)+' / '+Number(r.totalChecks||6)+' · '+Number(r.progress||0)+'%</span></td><td>'+check('catalog')+'</td><td>'+check('pricing')+'</td><td>'+check('visuals')+'</td><td>'+check('branding')+'</td><td>'+check('install')+'</td><td>'+check('payments')+'</td><td>'+datetime(r.latest_activity_at)+'</td><td><button class="pc-btn small" data-onboard="'+esc(r.slug)+'">Workspace</button></td></tr>';
+    }).join('')+
+  '</tbody></table></div></section>';
+ document.querySelectorAll('[data-onboard]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.onboard);location.href='/dashboard/?tenantView=1#/overview';};});
 }
 
 async function platformAnalytics(){
@@ -188,8 +252,17 @@ async function platformAnalytics(){
 
 async function payments(kind){
  var query=kind&&kind!=='all'?'&kind='+encodeURIComponent(kind):'';
- var d=await api('/api/admin/payments?limit=200'+query),rows=d.payments||[];
+ var data=await Promise.all([api('/api/admin/payments?limit=200'+query),api('/api/admin/console-overview')]),rows=data[0].payments||[],overview=data[1];
+ var paid=rows.filter(function(p){return p.status==='paid';}),refunded=rows.filter(function(p){return p.status==='refunded';});
+ var paidTotal=paid.reduce(function(s,p){return s+Number(p.amount_cents||0);},0),refundTotal=refunded.reduce(function(s,p){return s+Number(p.amount_cents||0);},0);
  document.getElementById('pcContent').innerHTML=head('Money','Payments','One ledger for RentSketch Event Pass sales and tenant rental deposits. Refunds are sent through Stripe and recorded here.')+
+  '<section class="pc-grid metrics">'+
+    metric('Paid volume',money(paidTotal),paid.length+' paid transactions','positive')+
+    metric('Event Pass revenue',money(overview.eventPassRevenue.cents),overview.eventPassRevenue.count+' paid Event Pass transactions','positive')+
+    metric('Tenant deposit volume',money(overview.tenantDepositVolume.cents),overview.tenantDepositVolume.count+' paid deposits')+
+    metric('Platform fees',money(overview.platformFeeRevenue.cents),'Recorded Connect application fees')+
+    metric('Refunded ledger value',money(refundTotal),refunded.length+' refunded records')+
+  '</section>'+
   '<div class="pc-toolbar"><div class="pc-search"><input id="paySearch" type="search" placeholder="Search customer, business or payment ID…"></div><select class="pc-select" id="payKind"><option value="all">All payments</option><option value="event_pass">Event Pass</option><option value="deposit">Rental deposits</option></select></div>'+
   '<section class="pc-panel"><div id="payTable">'+paymentTable(rows,true)+'</div></section>'+
   '<div class="pc-callout" style="margin-top:14px"><strong>Refund safety</strong><p>A refund requires an explicit confirmation. Event Pass refunds revoke the linked software entitlement. Rental-deposit refunds do not cancel the tenant’s event/order automatically.</p></div>';
@@ -226,6 +299,40 @@ async function activity(){
  var d=await api('/api/admin/activity?limit=200'),rows=d.activity||[];
  document.getElementById('pcContent').innerHTML=head('Accountability','Admin activity','A record of sensitive actions performed from the RentSketch platform console.')+
   '<section class="pc-panel"><div class="pc-panel-body">'+activityList(rows)+'</div></section>';
+}
+
+
+async function alerts(){
+ var d=await api('/api/admin/alerts'),rows=d.alerts||[];
+ var counts={high:0,medium:0,low:0};rows.forEach(function(a){counts[a.severity]=(counts[a.severity]||0)+1;});
+ document.getElementById('pcContent').innerHTML=head('Operations','Alerts & attention','A prioritized queue of billing, setup, install, and customer-access issues that need a human review.',
+  '<a class="pc-btn" href="#system">System health</a><a class="pc-btn primary" href="#onboarding">Onboarding</a>')+
+  '<section class="pc-grid metrics">'+
+    metric('High priority',counts.high||0,'Billing or platform delivery issues')+
+    metric('Medium priority',counts.medium||0,'Launch blockers')+
+    metric('Low priority',counts.low||0,'Setup improvements')+
+    metric('Open alerts',rows.length,'Current derived attention queue')+
+  '</section>'+
+  '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Needs attention</h2><p>Derived from production account and service state.</p></div></div><div class="pc-panel-body">'+
+    (rows.length?'<div class="pc-alert-list">'+rows.map(function(a){return '<div class="pc-alert '+esc(a.severity)+'"><div class="pc-alert-icon">'+(a.severity==='high'?'!':a.severity==='medium'?'•':'i')+'</div><div class="pc-alert-copy"><strong>'+esc(a.title)+'</strong><p>'+esc(a.name)+' · '+esc(a.detail)+'</p></div>'+(a.slug?'<button class="pc-btn small" data-alert-workspace="'+esc(a.slug)+'">Open workspace</button>':'<a class="pc-btn small" href="#system">System health</a>')+'</div>';}).join('')+'</div>':empty('No current platform alerts.'))+
+  '</div></section>';
+ document.querySelectorAll('[data-alert-workspace]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.alertWorkspace);location.href='/dashboard/?tenantView=1#/overview';};});
+}
+
+async function performance(){
+ var d=await api('/api/admin/web-vitals?days=7'),o=d.overall||{},pages=d.pages||[],th=d.thresholds||{};
+ function quality(value,good){if(value==null)return 'No data';return Number(value)<=Number(good)?'Good':'Review';}
+ document.getElementById('pcContent').innerHTML=head('Experience quality','Web performance','First-party real-user performance from the last 7 days. This is customer traffic, not a synthetic score.',
+  '<a class="pc-btn" href="#system">System health</a><a class="pc-btn primary" href="/">Open public site ↗</a>')+
+  '<section class="pc-grid metrics">'+
+    metric('LCP p75',o.lcp_p75_ms==null?'—':Math.round(o.lcp_p75_ms)+' ms',quality(o.lcp_p75_ms,th.lcpGoodMs||2500))+
+    metric('INP p75',o.inp_p75_ms==null?'—':Math.round(o.inp_p75_ms)+' ms',quality(o.inp_p75_ms,th.inpGoodMs||200))+
+    metric('CLS p75',o.cls_p75==null?'—':Number(o.cls_p75).toFixed(3),quality(o.cls_p75,th.clsGood||.1))+
+    metric('Samples',o.samples||0,'Real-user measurement samples')+
+  '</section>'+
+  '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Performance by page</h2><p>Pages with enough first-party measurements appear below.</p></div></div>'+
+    (pages.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Path</th><th>Samples</th><th>LCP p75</th><th>INP p75</th><th>CLS p75</th><th>FCP p75</th><th>TTFB p75</th></tr></thead><tbody>'+pages.map(function(p){return '<tr><td><strong>'+esc(p.path)+'</strong></td><td>'+Number(p.samples||0)+'</td><td>'+Math.round(Number(p.lcp_p75_ms||0))+' ms</td><td>'+Math.round(Number(p.inp_p75_ms||0))+' ms</td><td>'+Number(p.cls_p75||0).toFixed(3)+'</td><td>'+Math.round(Number(p.fcp_p75_ms||0))+' ms</td><td>'+Math.round(Number(p.ttfb_p75_ms||0))+' ms</td></tr>';}).join('')+'</tbody></table></div>':empty('No recent real-user web-vitals samples.'))+
+  '</section>';
 }
 
 async function system(){

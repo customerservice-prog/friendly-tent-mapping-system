@@ -78,6 +78,8 @@ function esc(s) {
    var tenants = state.tenants || [];
    var platformAdmin = !!(state.user && state.user.isPlatformAdmin);
    var brandSub = platformAdmin ? 'Tenant Workspace · Admin' : 'Business Workspace';
+   var activeTenant = tenants.find(function(t){ return t.slug === state.tenant; }) || tenants[0] || null;
+   var tenantLabel = activeTenant ? activeTenant.name : 'Business workspace';
    var switcher = '';
    if (tenants.length > 1) {
      switcher = '<select id="tenantSwitch" class="tenant-switch" aria-label="Switch business">' + tenants.map(function (t) {
@@ -86,28 +88,35 @@ function esc(s) {
    } else if (tenants.length === 1) {
      switcher = '<span class="tenant-name">' + esc(tenants[0].name) + '</span>';
    }
-   function navLink(r, label) {
-     return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '">' + label + '</a>';
+   function navLink(r, label, icon) {
+     return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '"><span class="tw-nav-icon" aria-hidden="true">' + icon + '</span><span>' + label + '</span></a>';
    }
+   var designerUrl = '/designer/?tenant=' + encodeURIComponent(state.tenant || 'generic') + (platformAdmin ? '&admin=1' : '');
    return '' +
      '<div class="dash-shell" id="tenantShell">' +
      '<button type="button" id="tenantMobileMenu" aria-label="Open workspace menu">☰</button>' +
      '<header class="dash-header">' +
-       '<div class="dash-brand">RentSketch <span class="dash-brand-sub">' + brandSub + '</span></div>' +
+       '<div class="dash-brand"><img src="/assets/brand-mark.svg" alt="" width="38" height="38"><div><strong>RentSketch</strong><span class="dash-brand-sub">' + brandSub + '</span></div></div>' +
+       '<a class="tw-sidebar-launch" href="' + designerUrl + '" target="_blank" rel="noopener">✦ Open RentSketch</a>' +
        '<nav class="dash-nav" aria-label="Business workspace">' +
-         navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
-         navLink('branding', 'Branding') + navLink('analytics', 'Analytics') + navLink('billing', 'Billing') + navLink('install', 'Install') +
-         (platformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link">Platform Console</a>' : '') +
+         '<div class="tw-nav-label">Workspace</div>' +
+         navLink('overview', 'Overview', '⌂') + navLink('requests', 'Requests', '▤') + navLink('products', 'Products', '▦') +
+         navLink('branding', 'Branding & payouts', '◇') + navLink('analytics', 'Analytics', '▥') +
+         '<div class="tw-nav-label tw-nav-label-secondary">Account</div>' +
+         navLink('billing', 'Billing', '$') + navLink('install', 'Install & share', '↗') +
+         (platformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link"><span class="tw-nav-icon">★</span><span>Platform Console</span></a>' : '') +
        '</nav>' +
-       '<div class="dash-account">' + switcher +
-         (platformAdmin ? '<span class="role-pill">Platform Admin</span>' : '') +
+       '<div class="dash-account">' +
+         '<div class="tw-tenant-card"><span class="tw-tenant-avatar">' + esc((tenantLabel||'R').split(/\s+/).slice(0,2).map(function(v){return v[0]||'';}).join('').toUpperCase()) + '</span><div><strong>' + esc(tenantLabel) + '</strong><small>' + (platformAdmin ? 'Platform admin view' : 'Business workspace') + '</small></div></div>' +
+         switcher +
+         (platformAdmin ? '<span class="role-pill">Platform Admin · complimentary</span>' : '') +
          '<button id="btnLogout" class="btn-logout" type="button">Log out</button>' +
        '</div>' +
      '</header>' +
+     '<div class="tw-topbar"><div class="tw-breadcrumb"><strong>' + esc(tenantLabel) + '</strong><span>/</span><span>' + esc(route.charAt(0).toUpperCase()+route.slice(1)) + '</span></div><div class="tw-top-actions"><a href="#/requests">Requests</a><a href="' + designerUrl + '" target="_blank" rel="noopener" class="primary">✦ Open RentSketch</a></div></div>' +
      '<main class="dash-main" id="dashMain">' + inner + '</main>' +
      '</div>';
  }
-
  function loadingHtml(label) { return '<div class="dash-loading">' + esc(label || 'Loading...') + '</div>'; }
  function errorHtml(err) { return '<div class="dash-error">' + esc(err && err.message ? err.message : String(err)) + (err && err.status === 402 ? ' <a href="#/billing">Open Billing to continue →</a>' : '') + '</div>'; }
 
@@ -211,10 +220,16 @@ function esc(s) {
      var brandingReady=!!(admin.name && (admin.logoUrl || admin.primaryColor) && admin.contactEmail);
      var installReady=Array.isArray(admin.allowedOrigins)&&admin.allowedOrigins.length>0;
      var paymentsReady=connect.status==='active';
+     var recentCutoff=Date.now()-30*86400000;
+     var recentReqs=reqs.filter(function(r){return new Date(r.created_at).getTime()>=recentCutoff;});
+     var recentDesigns=designsList.filter(function(d){return new Date(d.created_at||d.updated_at).getTime()>=recentCutoff;});
+     var conversion=reqs.length?Math.round(bookedCount/reqs.length*100):0;
+     var avgRequest=reqs.length?reqs.reduce(function(sum,r){return sum+Number(r.estimate_total||0);},0)/reqs.length:0;
      var launch=[
        {key:'catalog',label:'Build your catalog',detail:products.length?products.length+' products added':'Add the rentals customers can place',done:products.length>0,href:'#/products'},
        {key:'brand',label:'Finish your branding',detail:brandingReady?'Company identity is configured':'Logo, colors and contact details',done:brandingReady,href:'#/branding'},
        {key:'price',label:'Confirm pricing',detail:pricedProducts+'/'+products.length+' products have pricing',done:products.length>0&&pricedProducts===products.length,href:'#/products'},
+       {key:'visuals',label:'Map product visuals',detail:mappedProducts+'/'+products.length+' products have supported visuals',done:products.length>0&&mappedProducts>0,href:'#/products'},
        {key:'pay',label:'Connect payments',detail:paymentsReady?'Stripe payouts connected':'Connect Stripe for customer deposits',done:paymentsReady,href:'#/branding'},
        {key:'install',label:'Publish your designer',detail:installReady?'Allowed website domain saved':'Add your website and preview the embed',done:installReady,href:'#/install'}
      ];
@@ -245,10 +260,12 @@ function esc(s) {
        launch.map(function(x){return '<a class="tw-check '+(x.done?'done':'')+'" href="'+x.href+'"><i>'+(x.done?'✓':'•')+'</i><span><strong>'+esc(x.label)+'</strong><small>'+esc(x.detail)+'</small></span></a>';}).join('')+
        '</div></section>'+
        '<section class="tw-metrics">'+
-         '<article class="tw-metric"><div class="tw-metric-label">Quote requests</div><div class="tw-metric-value">'+reqs.length+'</div><div class="tw-metric-detail">'+newCount+' new / unread</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Saved designs</div><div class="tw-metric-value">'+designsList.length+'</div><div class="tw-metric-detail">Latest 50 customer layouts</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Booked requests</div><div class="tw-metric-value">'+bookedCount+'</div><div class="tw-metric-detail">Marked booked by your team</div></article>'+
-         '<article class="tw-metric"><div class="tw-metric-label">Open estimate pipeline</div><div class="tw-metric-value">'+money(pipeline)+'</div><div class="tw-metric-detail">Non-declined request estimates</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Requests · 30d</div><div class="tw-metric-value">'+recentReqs.length+'</div><div class="tw-metric-detail">'+reqs.length+' all time · '+newCount+' new</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Designs · 30d</div><div class="tw-metric-value">'+recentDesigns.length+'</div><div class="tw-metric-detail">'+designsList.length+' saved layouts in recent history</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Booked conversion</div><div class="tw-metric-value">'+conversion+'%</div><div class="tw-metric-detail">'+bookedCount+' booked of '+reqs.length+' requests</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Average request</div><div class="tw-metric-value">'+money(avgRequest)+'</div><div class="tw-metric-detail">Average estimated rental value</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Open pipeline</div><div class="tw-metric-value">'+money(pipeline)+'</div><div class="tw-metric-detail">Non-declined request estimates</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Catalog readiness</div><div class="tw-metric-value">'+pricedProducts+'/'+products.length+'</div><div class="tw-metric-detail">'+mappedProducts+' visually mapped products</div></article>'+
        '</section>'+
        '<div class="tw-grid"><div class="tw-stack">'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Recent quote requests</h2><p>Newest customer requests and current status.</p></div><a class="tw-btn" href="#/requests">View all</a></div><div class="tw-table-scroll">'+renderRequestsTable(reqs.slice(0,7),false)+'</div></section>'+
@@ -575,46 +592,34 @@ function esc(s) {
      var iframeCode = '<iframe src="' + designerUrl + '&embed=1" style="width:100%;height:820px;border:0" title="' + esc(t.name) + ' Event Designer"></iframe>';
      var loaderCode = '<div id="rentsketch-embed"></div>\n<script src="https://rentsketch.com/embed/v1.js" data-tenant="' + esc(state.tenant) + '" data-embed-key="' + esc(t.embedKey || '') + '" defer></script>';
      var origins = (t.allowedOrigins || []).join('\n');
-     document.getElementById('dashMain').innerHTML = '' +
-       '<div class="tw-page-head"><div><div class="tw-eyebrow">Publish</div><h1 class="dash-title">Install RentSketch</h1><p class="dash-subtitle">Share the hosted designer or add it to your website with an iframe or versioned loader.</p></div><div class="tw-actions"><a class="tw-btn primary" href="' + designerUrl + '" target="_blank" rel="noopener">Open hosted designer</a></div></div>' +
-       '<h2 class="dash-section-title">1. Hosted Designer Link</h2>' +
-       '<p>Share or link directly to your own hosted designer:</p>' +
-       '<textarea class="code-box" rows="1" readonly>' + esc(designerUrl) + '</textarea>' +
-       '<h2 class="dash-section-title">2. Iframe Embed (recommended)</h2>' +
-       '<p>Paste this anywhere on your website, e.g. a "Design Your Event" page:</p>' +
-       '<textarea class="code-box" rows="3" readonly>' + esc(iframeCode) + '</textarea>' +
-       '<h2 class="dash-section-title">3. Loader Script (optional, versioned)</h2>' +
-       '<p>Renders into the placeholder div automatically and supports future updates without changing your code:</p>' +
-       '<textarea class="code-box" rows="3" readonly>' + esc(loaderCode) + '</textarea>' +
-       '<h2 class="dash-section-title">4. Allowed Domains</h2>' +
-       '<p>List the domains allowed to embed your designer (one per line), e.g. www.yourdomain.com</p>' +
-       '<form id="originsForm" class="dash-form">' +
-       '<textarea id="originsBox" rows="4">' + esc(origins) + '</textarea>' +
-       '<div id="originsError" class="dash-error" hidden></div>' +
-       '<div id="originsSaved" class="dash-saved" hidden>Saved.</div>' +
-       '<button type="submit" class="btn-primary">Save Allowed Domains</button>' +
-       '</form>' +
-       '<h2 class="dash-section-title">Embed Identifier</h2>' +
-       '<p class="muted">Public embed key (safe to include in front-end code): <code>' + esc(t.embedKey || '') + '</code></p>';
+     var installed=(t.allowedOrigins||[]).length>0;
+     document.getElementById('dashMain').innerHTML =
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Publish & share</div><h1 class="dash-title">Install RentSketch</h1><p class="dash-subtitle">Launch your hosted designer, embed it on your website, and control which domains are allowed to display it.</p></div><div class="tw-actions"><a class="tw-btn primary" href="' + designerUrl + '" target="_blank" rel="noopener">✦ Open hosted designer</a></div></div>' +
+       '<section class="tw-metrics">'+
+         '<article class="tw-metric"><div class="tw-metric-label">Install status</div><div class="tw-metric-value">'+(installed?'Ready':'Setup')+'</div><div class="tw-metric-detail">'+(installed?(t.allowedOrigins||[]).length+' allowed domain(s)':'Add your website domain')+'</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Hosted designer</div><div class="tw-metric-value">Live</div><div class="tw-metric-detail">Share without embedding</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Embed method</div><div class="tw-metric-value">2</div><div class="tw-metric-detail">Iframe or loader script</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Embed key</div><div class="tw-metric-value">'+(t.embedKey?'Ready':'—')+'</div><div class="tw-metric-detail">Public install identifier</div></article>'+
+       '</section>'+
+       '<div class="tw-install-grid">'+
+         '<section class="tw-install-card"><div class="tw-eyebrow">Option 1</div><h2>Hosted designer link</h2><p>Use this for buttons, texts, QR codes, or anywhere you want customers to open the designer directly.</p><textarea class="code-box" rows="2" readonly>' + esc(designerUrl) + '</textarea></section>'+
+         '<section class="tw-install-card"><div class="tw-eyebrow">Option 2</div><h2>Iframe embed</h2><p>Recommended when you want RentSketch to appear directly inside a page on your existing website.</p><textarea class="code-box" rows="4" readonly>' + esc(iframeCode) + '</textarea></section>'+
+         '<section class="tw-install-card"><div class="tw-eyebrow">Option 3</div><h2>Versioned loader</h2><p>Use the loader when you want a smaller embed snippet that can receive future RentSketch updates automatically.</p><textarea class="code-box" rows="4" readonly>' + esc(loaderCode) + '</textarea></section>'+
+         '<section class="tw-install-card"><div class="tw-eyebrow">Security</div><h2>Allowed website domains</h2><p>Only the domains listed here can embed your tenant designer.</p><form id="originsForm" class="dash-form" style="box-shadow:none;border:0;padding:0"><textarea id="originsBox" rows="5" style="grid-column:1/-1">' + esc(origins) + '</textarea><div id="originsError" class="dash-error" hidden></div><div id="originsSaved" class="dash-saved" hidden>Allowed domains saved.</div><button type="submit" class="btn-primary">Save allowed domains</button></form></section>'+
+         '<section class="tw-install-card full"><div class="tw-eyebrow">Go live checklist</div><h2>Before sharing with customers</h2><div class="tw-checklist"><a class="tw-check '+(installed?'done':'')+'" href="#/install"><i>'+(installed?'✓':'•')+'</i><span><strong>Website domain</strong><small>'+(installed?'Allowed domain saved':'Add the website that will embed RentSketch')+'</small></span></a><a class="tw-check done" href="#/branding"><i>✓</i><span><strong>Hosted link</strong><small>Your tenant link is available now</small></span></a><a class="tw-check" href="#/products"><i>•</i><span><strong>Catalog review</strong><small>Confirm customer-facing products and visuals</small></span></a></div></section>'+
+       '</div>';
      document.getElementById('originsForm').addEventListener('submit', async function (e) {
        e.preventDefault();
-       var errEl = document.getElementById('originsError');
-       var savedEl = document.getElementById('originsSaved');
-       errEl.hidden = true; savedEl.hidden = true;
-       var list = document.getElementById('originsBox').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-       try {
-         await api('/api/tenants/' + state.tenant, { method: 'PATCH', body: { allowedOrigins: list } });
-         savedEl.hidden = false;
-       } catch (err) {
-         errEl.textContent = err.message;
-         errEl.hidden = false;
-       }
+       var errEl = document.getElementById('originsError'),savedEl=document.getElementById('originsSaved');
+       errEl.hidden=true;savedEl.hidden=true;
+       var list=document.getElementById('originsBox').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+       try{await api('/api/tenants/'+state.tenant,{method:'PATCH',body:{allowedOrigins:list}});savedEl.hidden=false;}
+       catch(err){errEl.textContent=err.message;errEl.hidden=false;}
      });
    } catch (err) {
      document.getElementById('dashMain').innerHTML = errorHtml(err);
    }
  }
-
  // Platform-admin only cross-tenant panel. Only ever shown/reachable when
  // state.user.isPlatformAdmin is true (see shellHtml's nav link and the
  // route guard below) - a regular tenant owner can never navigate here
@@ -626,122 +631,84 @@ function esc(s) {
    bindShellEvents();
    if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    if (state.user && state.user.isPlatformAdmin) {
-     document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Platform Billing Access</h1>' +
-       '<p class="dash-subtitle">You are signed in as the RentSketch platform administrator.</p>' +
-       '<div class="dash-saved"><strong>Complimentary platform access is permanent.</strong> Your admin account is not subject to tenant trials, paid plans, cancellations, or past-due billing restrictions.</div>' +
-       '<p class="muted">Use Super Admin to inspect tenant subscription states. Opening a tenant does not change your platform-level access.</p>';
+     document.getElementById('dashMain').innerHTML =
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Account billing</div><h1 class="dash-title">Billing</h1><p class="dash-subtitle">You are viewing this tenant as the RentSketch platform administrator.</p></div><div class="tw-actions"><a class="tw-btn" href="/dashboard/platform.html#subscriptions">Platform subscriptions</a><a class="tw-btn primary" href="/dashboard/platform.html#payments">Payments</a></div></div>'+
+       '<section class="tw-panel"><div class="tw-panel-body"><div class="dash-saved"><strong>Complimentary platform access is permanent.</strong> Your platform-admin account is never blocked by a tenant trial, cancellation, or past-due subscription.</div><p class="dash-subtitle" style="margin-top:14px">This tenant’s customer billing state remains unchanged. Use the Platform Console to inspect or manage the tenant subscription.</p></div></section>';
      return;
    }
    try {
-     var status = await api('/api/business/' + state.tenant + '/billing/status');
-     var plans = await api('/api/business/plans');
+     var data = await Promise.all([
+       api('/api/business/' + state.tenant + '/billing/status'),
+       api('/api/business/plans')
+     ]);
+     var statusData=data[0],plansData=data[1],plansList=plansData.plans||[];
      if (gen !== renderGeneration) return;
-     var plansList = plans.plans || [];
-     var selectedInterval = 'monthly';
-     var planOptions = plansList.filter(function(p) { return p.id !== 'enterprise'; }).map(function(p) {
-       var monthly = (p.monthlyCents || 0) / 100;
-       var annual = (p.annualCents || 0) / 100;
-       return '<div class="plan-option" data-plan="' + esc(p.id) + '"><div class="plan-name">' + esc(p.name) + '</div><div class="plan-price"><span class="monthly-price" style="display:inline">$' + monthly.toFixed(2) + '/mo</span><span class="annual-price" style="display:none">$' + annual.toFixed(2) + '/yr</span></div></div>';
+     var selectedInterval='monthly',selectedPlan=null;
+     var currentPlan=statusData.plan||'None',currentStatus=statusData.status||'unknown';
+     var trialText='';
+     if(statusData.trialEndsAt){
+       var daysLeft=Math.ceil((new Date(statusData.trialEndsAt)-new Date())/86400000);
+       if(currentStatus==='trialing'&&daysLeft>0) trialText='<div class="trial-banner">Trial ends in '+daysLeft+' day'+(daysLeft===1?'':'s')+' · '+fmtDate(statusData.trialEndsAt)+'</div>';
+       else if(currentStatus==='trialing'&&daysLeft<=0) trialText='<div class="trial-banner trial-expired">Your free trial has ended. Choose a plan below to continue.</div>';
+     }
+     var returnMsg=window.location.search.indexOf('billing=success')>-1?'<div class="dash-saved">Checkout returned. RentSketch will confirm the subscription from Stripe before access changes.</div>':
+       window.location.search.indexOf('billing=cancelled')>-1?'<div class="dash-error">Checkout was cancelled. No new subscription was created.</div>':
+       window.location.search.indexOf('billing=portal-return')>-1?'<div class="dash-saved">Returned from the Stripe billing portal.</div>':'';
+     if(statusData.friendlyFree){
+       document.getElementById('dashMain').innerHTML=
+         '<div class="tw-page-head"><div><div class="tw-eyebrow">Account billing</div><h1 class="dash-title">Billing</h1><p class="dash-subtitle">Subscription and payment settings for this workspace.</p></div></div>'+
+         returnMsg+
+         '<section class="tw-panel"><div class="tw-panel-body"><div class="dash-saved"><strong>Complimentary workspace access.</strong> This business does not need a RentSketch subscription.</div></div></section>';
+       return;
+     }
+     var planCards=plansList.filter(function(p){return p.id!=='enterprise';}).map(function(p){
+       return '<button type="button" class="tw-plan-card" data-plan="'+esc(p.id)+'"><h3>'+esc(p.name)+'</h3><div class="price"><span data-month="'+Number((p.monthlyCents||0)/100).toFixed(0)+'" data-year="'+Number((p.annualCents||0)/100).toFixed(0)+'">$'+Number((p.monthlyCents||0)/100).toFixed(0)+'</span><small data-plan-period>/month</small></div><p>'+esc(p.description||'RentSketch business subscription')+'</p></button>';
      }).join('');
-     var currentStatus = status.friendlyFree ? '<span style="background:#e6f7ec;color:#1c7a3f;padding:4px 8px;border-radius:4px">Free Access</span>' : 
-       ('<span style="background:' + (status.status === 'active' ? '#e4edff' : '#fff3d6') + ';color:' + (status.status === 'active' ? '#2748a8' : '#8a6300') + ';padding:4px 8px;border-radius:4px;text-transform:capitalize">' + esc(status.status || 'unknown') + '</span>');
-     var trialText = '';
-     if (status.trialEndsAt) {
-       var end = new Date(status.trialEndsAt);
-       var now = new Date();
-       var daysLeft = Math.ceil((end - now) / (24*60*60*1000));
-       if (status.status === 'trialing' && daysLeft > 0) trialText = '<p class="trial-banner">Trial ends in ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' on ' + fmtDate(status.trialEndsAt) + '</p>';
-       else if (status.status === 'trialing' && daysLeft <= 0) trialText = '<p class="trial-banner trial-expired">Your free trial has ended. Choose a plan below to continue.</p>';
-     }
-     var msg = (window.location.search.indexOf('billing=success') > -1) ? (status.subscription && status.subscription.status === 'active' ? '<div class="dash-saved">Your active subscription has been confirmed.</div>' : '<div class="trial-banner">Checkout returned. Your subscription is not confirmed yet. Refresh billing in a moment; do not start another payment. <button type="button" id="refreshBilling">Refresh billing</button></div>') :
-       (window.location.search.indexOf('billing=cancelled') > -1) ? '<div class="dash-error">Checkout was cancelled.</div>' :
-       (window.location.search.indexOf('billing=portal-return') > -1) ? '<div class="dash-saved">Returned from billing portal.</div>' : '';
-     if (status.friendlyFree) {
-       document.getElementById('dashMain').innerHTML = '' +
-         '<h1 class="dash-title">Billing</h1>' +
-         msg +
-         '<div class="dash-empty"><strong>Friendly Party Rental</strong> has complimentary access to RentSketch. No billing required.</div>';
-     } else {
-       var billingHtml = '<h1 class="dash-title">Billing & Subscription</h1>' + msg + trialText + 
-         '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px;margin-bottom:20px">' +
-         '<h3 style="margin-top:0">Current Status</h3>' +
-         '<p><strong>Plan:</strong> ' + esc(status.plan || 'None') + ' &nbsp; <strong>Status:</strong> ' + currentStatus + '</p>' +
-         (status.subscription ? '<p class="muted">Period: ' + fmtDate(status.subscription.current_period_start) + ' – ' + fmtDate(status.subscription.current_period_end) + '</p>' : '') +
-         '</div>' +
-         '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px;margin-bottom:20px">' +
-         '<h3 style="margin-top:0">Choose Your Plan</h3>' +
-         '<div style="margin-bottom:14px"><label><input type="radio" name="interval" value="monthly" checked> Monthly billing &nbsp; <input type="radio" name="interval" value="annual"> Annual billing (save 2 months!)</label></div>' +
-         '<div id="plansGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">' + planOptions + '</div>' +
-         '<div id="billingError" class="dash-error" hidden></div>' +
-         '<button id="upgradeBtn" class="btn-primary" disabled>Choose Plan</button>' +
-         '</div>' +
-         '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px">' +
-         '<h3 style="margin-top:0">Manage Subscription</h3>' +
-         '<button id="portalBtn" class="btn-primary">Manage Billing in Stripe</button>' +
-         '<p class="muted">Change payment method, view invoices, or cancel your subscription</p>' +
-         '</div>';
-       document.getElementById('dashMain').innerHTML = billingHtml;
-       var refreshBilling = document.getElementById('refreshBilling');
-       if (refreshBilling) refreshBilling.addEventListener('click', function () { render(); });
-       var selectedPlan = null;
-       document.querySelectorAll('.plan-option').forEach(function(el) {
-         el.style.cursor = 'pointer';
-         el.style.border = '1px solid #d3dae4';
-         el.style.borderRadius = '8px';
-         el.style.padding = '12px';
-         el.onclick = function() {
-           document.querySelectorAll('.plan-option').forEach(function(e) { e.style.background = ''; e.style.borderColor = '#d3dae4'; });
-           el.style.background = '#e4edff';
-           el.style.borderColor = '#2748a8';
-           selectedPlan = el.dataset.plan;
-           document.getElementById('upgradeBtn').disabled = false;
-         };
-       });
-       document.querySelectorAll('input[name="interval"]').forEach(function(radio) {
-         radio.addEventListener('change', function() {
-           selectedInterval = this.value;
-           document.querySelectorAll('.monthly-price').forEach(function(p) { p.style.display = selectedInterval === 'monthly' ? 'inline' : 'none'; });
-           document.querySelectorAll('.annual-price').forEach(function(p) { p.style.display = selectedInterval === 'annual' ? 'inline' : 'none'; });
-         });
-       });
-       document.getElementById('upgradeBtn').addEventListener('click', async function() {
-         if (!selectedPlan) { alert('Please choose a plan'); return; }
-         var btn = this;
-         btn.disabled = true;
-         btn.textContent = 'Redirecting to checkout...';
-         try {
-           var session = await api('/api/business/' + state.tenant + '/billing/checkout-session', {
-             method: 'POST',
-             body: { plan: selectedPlan, interval: selectedInterval }
-           });
-           window.location.href = session.url;
-         } catch (err) {
-           document.getElementById('billingError').textContent = err.message;
-           document.getElementById('billingError').hidden = false;
-           btn.disabled = false;
-           btn.textContent = 'Choose Plan';
-         }
-       });
-       document.getElementById('portalBtn').addEventListener('click', async function() {
-         var btn = this;
-         btn.disabled = true;
-         btn.textContent = 'Loading...';
-         try {
-           var portal = await api('/api/business/' + state.tenant + '/billing/portal-session', { method: 'POST' });
-           window.location.href = portal.url;
-         } catch (err) {
-           alert('Error: ' + err.message);
-           btn.disabled = false;
-           btn.textContent = 'Manage Billing in Stripe';
-         }
+     document.getElementById('dashMain').innerHTML=
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Account billing</div><h1 class="dash-title">Billing & subscription</h1><p class="dash-subtitle">Choose your RentSketch business plan, billing interval, payment method and cancellation options.</p></div><div class="tw-actions"><button type="button" class="tw-btn" id="portalBtnTop">Open Stripe billing portal</button></div></div>'+
+       returnMsg+trialText+
+       '<div class="tw-billing-grid">'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Current subscription</h2><p>Your current workspace access.</p></div></div><div class="tw-panel-body">'+
+           '<div class="tw-list"><div class="tw-list-row"><span>Plan</span><strong>'+esc(currentPlan)+'</strong></div><div class="tw-list-row"><span>Status</span><span class="status-badge status-'+esc(currentStatus)+'">'+esc(currentStatus)+'</span></div>'+
+           (statusData.subscription?'<div class="tw-list-row"><span>Current period</span><strong>'+fmtDate(statusData.subscription.current_period_start)+' – '+fmtDate(statusData.subscription.current_period_end)+'</strong></div>':'')+
+           '<div class="tw-list-row"><span>Trial ends</span><strong>'+fmtDate(statusData.trialEndsAt)+'</strong></div></div>'+
+         '</div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Choose a plan</h2><p>Stripe shows the final amount before you pay.</p></div><div class="tw-actions"><label><input type="radio" name="interval" value="monthly" checked> Monthly</label><label><input type="radio" name="interval" value="annual"> Annual</label></div></div><div class="tw-panel-body"><div class="tw-plan-grid">'+planCards+'</div><div id="billingError" class="dash-error" hidden></div><button id="upgradeBtn" class="btn-primary" disabled style="margin-top:14px">Continue to secure checkout</button></div></section>'+
+       '</div>'+
+       '<section class="tw-panel" style="margin-top:15px"><div class="tw-panel-head"><div><h2>Manage payment method & invoices</h2><p>Use Stripe’s secure customer portal to update cards, review invoices, or cancel.</p></div><button id="portalBtn" class="tw-btn">Manage in Stripe</button></div></section>';
+     function syncPlanPrices(){
+       document.querySelectorAll('.tw-plan-card').forEach(function(card){
+         var price=card.querySelector('.price span'),period=card.querySelector('[data-plan-period]');
+         if(!price||!period)return;
+         if(selectedInterval==='annual'){price.textContent='$'+Number(price.dataset.year||0).toLocaleString('en-US');period.textContent='/year';}
+         else{price.textContent='$'+Number(price.dataset.month||0).toLocaleString('en-US');period.textContent='/month';}
        });
      }
+     document.querySelectorAll('.tw-plan-card').forEach(function(card){
+       card.addEventListener('click',function(){
+         document.querySelectorAll('.tw-plan-card').forEach(function(x){x.classList.remove('selected');});
+         card.classList.add('selected');selectedPlan=card.dataset.plan;document.getElementById('upgradeBtn').disabled=false;
+       });
+     });
+     document.querySelectorAll('input[name="interval"]').forEach(function(radio){radio.addEventListener('change',function(){selectedInterval=radio.value;syncPlanPrices();});});
+     async function openPortal(btn){
+       btn.disabled=true;var old=btn.textContent;btn.textContent='Opening…';
+       try{var portal=await api('/api/business/'+state.tenant+'/billing/portal-session',{method:'POST'});window.location.href=portal.url;}
+       catch(err){window.alert('Could not open billing portal: '+err.message);btn.disabled=false;btn.textContent=old;}
+     }
+     var portalTop=document.getElementById('portalBtnTop'),portalBtn=document.getElementById('portalBtn');
+     if(portalTop)portalTop.onclick=function(){openPortal(portalTop);};
+     if(portalBtn)portalBtn.onclick=function(){openPortal(portalBtn);};
+     document.getElementById('upgradeBtn').onclick=async function(){
+       if(!selectedPlan)return;
+       var btn=this,errEl=document.getElementById('billingError');errEl.hidden=true;btn.disabled=true;btn.textContent='Opening Stripe…';
+       try{var session=await api('/api/business/'+state.tenant+'/billing/checkout-session',{method:'POST',body:{plan:selectedPlan,interval:selectedInterval}});window.location.href=session.url;}
+       catch(err){errEl.textContent=err.message;errEl.hidden=false;btn.disabled=false;btn.textContent='Continue to secure checkout';}
+     };
    } catch (err) {
      document.getElementById('dashMain').innerHTML = errorHtml(err);
    }
  }
-
  async function viewSuperAdmin(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading platform overview...'));
    bindShellEvents();

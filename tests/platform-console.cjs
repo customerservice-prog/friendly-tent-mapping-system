@@ -30,14 +30,14 @@ async function req(url,{method='GET',body}={}){
 }
 (async()=>{
  await pg.exec(`
- CREATE TABLE users(id uuid PRIMARY KEY,email text,display_name text,is_platform_admin boolean default false);
+ CREATE TABLE users(id uuid PRIMARY KEY,email text,display_name text,is_platform_admin boolean default false,created_at timestamptz default now());
  CREATE TABLE tenants(
    id uuid PRIMARY KEY,slug text UNIQUE,name text,contact_email text,subscription_plan text,subscription_status text,
-   trial_ends_at timestamptz,stripe_connect_status text,stripe_connect_account_id text,created_at timestamptz default now(),
+   trial_ends_at timestamptz,stripe_connect_status text,stripe_connect_account_id text,logo_url text,allowed_origins jsonb default '[]'::jsonb,created_at timestamptz default now(),
    updated_at timestamptz default now()
  );
- CREATE TABLE products(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid);
- CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text,created_at timestamptz default now());
+ CREATE TABLE products(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,active boolean default true,price_per_day numeric,visual_model_id text);
+ CREATE TABLE tenant_memberships(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,user_id uuid,role text,created_at timestamptz default now());
  CREATE TABLE designs(
    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,event_type text,guest_count int,
    estimate_total numeric,created_at timestamptz default now(),updated_at timestamptz default now()
@@ -67,8 +67,8 @@ async function req(url,{method='GET',body}={}){
  `);
  const admin='00000000-0000-4000-8000-000000000099',tenant='00000000-0000-4000-8000-000000000001';
  await pg.query("INSERT INTO users(id,email,display_name,is_platform_admin) VALUES($1,'owner@example.invalid','Owner',true)",[admin]);
- await pg.query("INSERT INTO tenants(id,slug,name,contact_email,subscription_plan,subscription_status,stripe_connect_status,stripe_connect_account_id) VALUES($1,'friendly','Friendly Fixture','office@example.invalid','pro','active','active','acct_fixture')",[tenant]);
- await pg.query("INSERT INTO products(tenant_id) VALUES($1),($1)",[tenant]);
+ await pg.query("INSERT INTO tenants(id,slug,name,contact_email,subscription_plan,subscription_status,stripe_connect_status,stripe_connect_account_id,logo_url,allowed_origins) VALUES($1,'friendly','Friendly Fixture','office@example.invalid','pro','active','active','acct_fixture','https://example.invalid/logo.png','[\"https://example.invalid\"]'::jsonb)",[tenant]);
+ await pg.query("INSERT INTO products(tenant_id,active,price_per_day,visual_model_id) VALUES($1,true,99,'visual-1'),($1,true,49,'visual-2')",[tenant]);
  await pg.query("INSERT INTO tenant_memberships(tenant_id,user_id,role) VALUES($1,$2,'owner')",[tenant,admin]);
  const design=(await pg.query("INSERT INTO designs(tenant_id,event_type,guest_count,estimate_total) VALUES($1,'wedding',80,1200) RETURNING id",[tenant])).rows[0];
  const ent=(await pg.query("INSERT INTO entitlements(design_id,status,expires_at) VALUES($1,'active',now()+interval '30 days') RETURNING id",[design.id])).rows[0];
@@ -80,7 +80,10 @@ async function req(url,{method='GET',body}={}){
  await pg.query("INSERT INTO processed_stripe_events(id,event_type) VALUES('evt_1','checkout.session.completed')");
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 
- let r=await req('/api/admin/console-overview');assert.equal(r.status,200);assert.equal(r.body.tenants,1);assert.equal(r.body.designs,1);assert.equal(r.body.eventPassRevenue.cents,999);assert.equal(r.body.tenantDepositVolume.cents,2000);assert.equal(r.body.platformFeeRevenue.cents,100);assert.equal(Number(r.body.subscriptions.list_mrr),99);
+ let r=await req('/api/admin/users');assert.equal(r.status,200);assert.equal(r.body.users.length,1);assert.equal(r.body.users[0].memberships[0].slug,'friendly');
+ r=await req('/api/admin/onboarding');assert.equal(r.status,200);assert.equal(r.body.accounts.length,1);assert.equal(r.body.accounts[0].progress,100);
+ r=await req('/api/admin/alerts');assert.equal(r.status,200);assert.ok(Array.isArray(r.body.alerts));
+ r=await req('/api/admin/console-overview');assert.equal(r.status,200);assert.equal(r.body.tenants,1);assert.equal(r.body.designs,1);assert.equal(r.body.eventPassRevenue.cents,999);assert.equal(r.body.tenantDepositVolume.cents,2000);assert.equal(r.body.platformFeeRevenue.cents,100);assert.equal(Number(r.body.subscriptions.list_mrr),99);
  r=await req('/api/admin/payments');assert.equal(r.status,200);assert.equal(r.body.payments.length,2);assert.deepEqual(new Set(r.body.payments.map(p=>p.kind)),new Set(['event_pass','deposit']));
  assert.equal((await req('/api/admin/payments?kind=event_pass')).body.payments.length,1);
  assert.equal((await req('/api/admin/payments/event_pass/'+pass.id+'/refund',{method:'POST',body:{}})).status,400,'refund requires explicit confirmation');
@@ -96,5 +99,5 @@ async function req(url,{method='GET',body}={}){
  r=await req('/api/admin/system');assert.equal(r.status,200);assert.equal(r.body.database.ok,true);assert.equal(r.body.payments.stripeConfigured,true);assert.equal(r.body.email.pending,1);assert.equal(r.body.email.failed,1);
  r=await req('/api/admin/activity');assert.equal(r.status,200);assert.ok(r.body.activity.some(a=>a.action==='payment.refunded'));assert.ok(r.body.activity.some(a=>a.action==='subscription.cancel_scheduled'));
  assert.ok((await pg.query('SELECT COUNT(*)::int AS n FROM platform_admin_audit')).rows[0].n>=3,'sensitive actions are audited');
- console.log('PASS platform console: revenue, payment ledger, guarded Stripe refunds, entitlement revocation, subscription cancellation, designs, health and audit logging.');
+ console.log('PASS platform console: users, onboarding, alerts, revenue, payment ledger, guarded Stripe refunds, entitlement revocation, subscription cancellation, designs, health and audit logging.');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{server?.close();await pg.close();});

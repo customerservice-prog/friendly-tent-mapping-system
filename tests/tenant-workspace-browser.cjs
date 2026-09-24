@@ -16,7 +16,7 @@ const products=[
  {id:'p1',category:'tent',name:'20x40 Pole Tent',price_per_day:400,visual_model_id:'pole-20x40',active:true},
  {id:'p2',category:'chair',name:'White Resin Chair',price_per_day:4.75,visual_model_id:'resin-white',active:true}
 ];
-const admin={slug:tenant,name:'Friendly Party Rental',contactEmail:'office@example.invalid',logoUrl:'https://example.invalid/logo.png',primaryColor:'#2f6fed',secondaryColor:'#0b1b3a',subscriptionPlan:'pro',subscriptionStatus:'active',allowedOrigins:['https://www.example.com'],showPrices:true,poweredByEnabled:true};
+const admin={slug:tenant,name:'Friendly Party Rental',contactEmail:'office@example.invalid',logoUrl:'https://example.invalid/logo.png',primaryColor:'#2f6fed',secondaryColor:'#0b1b3a',subscriptionPlan:'pro',subscriptionStatus:'active',allowedOrigins:['https://www.example.com'],embedKey:'embed_fixture',showPrices:true,poweredByEnabled:true};
 const server=http.createServer((req,res)=>{
  const u=new URL(req.url,'http://localhost');
  if(u.pathname==='/fixture'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(fixture);}
@@ -28,6 +28,8 @@ const server=http.createServer((req,res)=>{
   if(u.pathname===`/api/tenants/${tenant}/quote-requests`)return res.end(JSON.stringify({quoteRequests:requests}));
   if(u.pathname===`/api/tenants/${tenant}/products`)return res.end(JSON.stringify({products}));
   if(u.pathname===`/api/tenants/${tenant}/connect/status`)return res.end(JSON.stringify({status:'active',hasAccount:true}));
+  if(u.pathname===`/api/business/${tenant}/billing/status`)return res.end(JSON.stringify({friendlyFree:false,plan:'pro',status:'active',trialEndsAt:null,subscription:{status:'active',current_period_start:'2026-09-01T00:00:00Z',current_period_end:'2026-10-01T00:00:00Z'}}));
+  if(u.pathname==='/api/business/plans')return res.end(JSON.stringify({plans:[{id:'starter',name:'Starter',monthlyCents:4900,annualCents:49000},{id:'pro',name:'Pro',monthlyCents:9900,annualCents:99000},{id:'commerce',name:'Business',monthlyCents:19900,annualCents:199000}]}));
   if(u.pathname.startsWith(`/api/tenants/${tenant}/quote-requests/`)&&req.method==='PATCH')return res.end(JSON.stringify({ok:true}));
   res.statusCode=404;return res.end(JSON.stringify({error:'fixture API missing '+u.pathname}));
  }
@@ -49,16 +51,19 @@ const server=http.createServer((req,res)=>{
    assert.equal(await page.getByText('Finish your customer designer',{exact:false}).count()+await page.getByText('Your designer is launch-ready',{exact:false}).count()>0,true);
    assert.equal(await page.getByText('Business health',{exact:true}).count(),1);
    assert.equal(await page.getByRole('link',{name:/Open RentSketch/}).count()>=1,true);
+   assert.equal(await page.getByText('Install & share',{exact:true}).count(),1);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'workspace no page overflow '+v.width);
    if(v.name==='mobile'){await page.locator('#tenantMobileMenu').click();assert.equal(await page.locator('#tenantShell').evaluate(el=>el.classList.contains('menu-open')),true);}
    await page.screenshot({path:path.join(out,'tenant-'+v.name+'.png'),fullPage:true});
    await page.evaluate(()=>location.hash='#/analytics');await page.getByRole('heading',{name:'Customer planning activity'}).waitFor();
    assert.equal(await page.getByText('Request → booked',{exact:true}).count(),1);
+   await page.evaluate(()=>location.hash='#/billing');await page.getByRole('heading',{name:'Billing & subscription'}).waitFor();assert.equal(await page.getByText('Current subscription',{exact:true}).count(),1);
+   await page.evaluate(()=>location.hash='#/install');await page.getByRole('heading',{name:'Install RentSketch'}).waitFor();assert.equal(await page.getByText('Iframe embed',{exact:true}).count(),1);
    await page.evaluate(()=>location.hash='#/requests');await page.getByRole('heading',{name:'Quote requests'}).waitFor();
    await page.locator('#requestSearch').fill('Jamie');assert.equal(await page.locator('#requestTable').getByText('Jamie Wedding',{exact:false}).count(),1);assert.equal(await page.locator('#requestTable').getByText('Alex Party',{exact:false}).count(),0);
    assert.deepEqual(errors,[]);
    await ctx.close();
   }
-  console.log('PASS tenant workspace browser: premium overview, health, onboarding, analytics, request search and mobile navigation.');
+  console.log('PASS tenant workspace browser: premium overview, health, onboarding, analytics, billing, install/share, request search and mobile navigation.');
  }finally{await browser.close();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
