@@ -57,7 +57,7 @@ const server=http.createServer((req,res)=>{
     await page.locator('#pcMenu').click();assert.equal(await page.locator('#pcShell').evaluate(el=>el.classList.contains('menu-open')),true);
    }
    await page.screenshot({path:path.join(out,'platform-'+viewport.name+'.png'),fullPage:true});
-   await page.evaluate(()=>{location.hash='onboarding'});await page.getByRole('heading',{name:'Tenant onboarding'}).waitFor();assert.equal(await page.getByText('100%',{exact:true}).count()>0,true);
+   await page.evaluate(()=>{location.hash='onboarding'});await page.getByRole('heading',{name:'Tenant onboarding'}).waitFor();assert.equal(await page.getByText(/6 \/ 6 · 100%/).count()>0,true);
    await page.evaluate(()=>{location.hash='users'});await page.getByRole('heading',{name:'Users & access'}).waitFor();assert.equal(await page.getByText('Tenant Owner',{exact:true}).count(),1);
    await page.evaluate(()=>{location.hash='alerts'});await page.getByRole('heading',{name:'Alerts & attention'}).waitFor();assert.equal(await page.getByText('No products added',{exact:true}).count(),1);
    await page.evaluate(()=>{location.hash='performance'});await page.getByRole('heading',{name:'Web performance'}).waitFor();assert.equal(await page.getByText('120',{exact:true}).count()>0,true);
