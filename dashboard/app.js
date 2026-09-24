@@ -643,122 +643,84 @@ function esc(s) {
    bindShellEvents();
    if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    if (state.user && state.user.isPlatformAdmin) {
-     document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Platform Billing Access</h1>' +
-       '<p class="dash-subtitle">You are signed in as the RentSketch platform administrator.</p>' +
-       '<div class="dash-saved"><strong>Complimentary platform access is permanent.</strong> Your admin account is not subject to tenant trials, paid plans, cancellations, or past-due billing restrictions.</div>' +
-       '<p class="muted">Use Super Admin to inspect tenant subscription states. Opening a tenant does not change your platform-level access.</p>';
+     document.getElementById('dashMain').innerHTML =
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Account billing</div><h1 class="dash-title">Billing</h1><p class="dash-subtitle">You are viewing this tenant as the RentSketch platform administrator.</p></div><div class="tw-actions"><a class="tw-btn" href="/dashboard/platform.html#subscriptions">Platform subscriptions</a><a class="tw-btn primary" href="/dashboard/platform.html#payments">Payments</a></div></div>'+
+       '<section class="tw-panel"><div class="tw-panel-body"><div class="dash-saved"><strong>Complimentary platform access is permanent.</strong> Your platform-admin account is never blocked by a tenant trial, cancellation, or past-due subscription.</div><p class="dash-subtitle" style="margin-top:14px">This tenant’s customer billing state remains unchanged. Use the Platform Console to inspect or manage the tenant subscription.</p></div></section>';
      return;
    }
    try {
-     var status = await api('/api/business/' + state.tenant + '/billing/status');
-     var plans = await api('/api/business/plans');
+     var data = await Promise.all([
+       api('/api/business/' + state.tenant + '/billing/status'),
+       api('/api/business/plans')
+     ]);
+     var statusData=data[0],plansData=data[1],plansList=plansData.plans||[];
      if (gen !== renderGeneration) return;
-     var plansList = plans.plans || [];
-     var selectedInterval = 'monthly';
-     var planOptions = plansList.filter(function(p) { return p.id !== 'enterprise'; }).map(function(p) {
-       var monthly = (p.monthlyCents || 0) / 100;
-       var annual = (p.annualCents || 0) / 100;
-       return '<div class="plan-option" data-plan="' + esc(p.id) + '"><div class="plan-name">' + esc(p.name) + '</div><div class="plan-price"><span class="monthly-price" style="display:inline">$' + monthly.toFixed(2) + '/mo</span><span class="annual-price" style="display:none">$' + annual.toFixed(2) + '/yr</span></div></div>';
+     var selectedInterval='monthly',selectedPlan=null;
+     var currentPlan=statusData.plan||'None',currentStatus=statusData.status||'unknown';
+     var trialText='';
+     if(statusData.trialEndsAt){
+       var daysLeft=Math.ceil((new Date(statusData.trialEndsAt)-new Date())/86400000);
+       if(currentStatus==='trialing'&&daysLeft>0) trialText='<div class="trial-banner">Trial ends in '+daysLeft+' day'+(daysLeft===1?'':'s')+' · '+fmtDate(statusData.trialEndsAt)+'</div>';
+       else if(currentStatus==='trialing'&&daysLeft<=0) trialText='<div class="trial-banner trial-expired">Your free trial has ended. Choose a plan below to continue.</div>';
+     }
+     var returnMsg=window.location.search.indexOf('billing=success')>-1?'<div class="dash-saved">Checkout returned. RentSketch will confirm the subscription from Stripe before access changes.</div>':
+       window.location.search.indexOf('billing=cancelled')>-1?'<div class="dash-error">Checkout was cancelled. No new subscription was created.</div>':
+       window.location.search.indexOf('billing=portal-return')>-1?'<div class="dash-saved">Returned from the Stripe billing portal.</div>':'';
+     if(statusData.friendlyFree){
+       document.getElementById('dashMain').innerHTML=
+         '<div class="tw-page-head"><div><div class="tw-eyebrow">Account billing</div><h1 class="dash-title">Billing</h1><p class="dash-subtitle">Subscription and payment settings for this workspace.</p></div></div>'+
+         returnMsg+
+         '<section class="tw-panel"><div class="tw-panel-body"><div class="dash-saved"><strong>Complimentary workspace access.</strong> This business does not need a RentSketch subscription.</div></div></section>';
+       return;
+     }
+     var planCards=plansList.filter(function(p){return p.id!=='enterprise';}).map(function(p){
+       return '<button type="button" class="tw-plan-card" data-plan="'+esc(p.id)+'"><h3>'+esc(p.name)+'</h3><div class="price"><span data-month="'+Number((p.monthlyCents||0)/100).toFixed(0)+'" data-year="'+Number((p.annualCents||0)/100).toFixed(0)+'">$'+Number((p.monthlyCents||0)/100).toFixed(0)+'</span><small data-plan-period>/month</small></div><p>'+esc(p.description||'RentSketch business subscription')+'</p></button>';
      }).join('');
-     var currentStatus = status.friendlyFree ? '<span style="background:#e6f7ec;color:#1c7a3f;padding:4px 8px;border-radius:4px">Free Access</span>' : 
-       ('<span style="background:' + (status.status === 'active' ? '#e4edff' : '#fff3d6') + ';color:' + (status.status === 'active' ? '#2748a8' : '#8a6300') + ';padding:4px 8px;border-radius:4px;text-transform:capitalize">' + esc(status.status || 'unknown') + '</span>');
-     var trialText = '';
-     if (status.trialEndsAt) {
-       var end = new Date(status.trialEndsAt);
-       var now = new Date();
-       var daysLeft = Math.ceil((end - now) / (24*60*60*1000));
-       if (status.status === 'trialing' && daysLeft > 0) trialText = '<p class="trial-banner">Trial ends in ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + ' on ' + fmtDate(status.trialEndsAt) + '</p>';
-       else if (status.status === 'trialing' && daysLeft <= 0) trialText = '<p class="trial-banner trial-expired">Your free trial has ended. Choose a plan below to continue.</p>';
-     }
-     var msg = (window.location.search.indexOf('billing=success') > -1) ? (status.subscription && status.subscription.status === 'active' ? '<div class="dash-saved">Your active subscription has been confirmed.</div>' : '<div class="trial-banner">Checkout returned. Your subscription is not confirmed yet. Refresh billing in a moment; do not start another payment. <button type="button" id="refreshBilling">Refresh billing</button></div>') :
-       (window.location.search.indexOf('billing=cancelled') > -1) ? '<div class="dash-error">Checkout was cancelled.</div>' :
-       (window.location.search.indexOf('billing=portal-return') > -1) ? '<div class="dash-saved">Returned from billing portal.</div>' : '';
-     if (status.friendlyFree) {
-       document.getElementById('dashMain').innerHTML = '' +
-         '<h1 class="dash-title">Billing</h1>' +
-         msg +
-         '<div class="dash-empty"><strong>Friendly Party Rental</strong> has complimentary access to RentSketch. No billing required.</div>';
-     } else {
-       var billingHtml = '<h1 class="dash-title">Billing & Subscription</h1>' + msg + trialText + 
-         '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px;margin-bottom:20px">' +
-         '<h3 style="margin-top:0">Current Status</h3>' +
-         '<p><strong>Plan:</strong> ' + esc(status.plan || 'None') + ' &nbsp; <strong>Status:</strong> ' + currentStatus + '</p>' +
-         (status.subscription ? '<p class="muted">Period: ' + fmtDate(status.subscription.current_period_start) + ' – ' + fmtDate(status.subscription.current_period_end) + '</p>' : '') +
-         '</div>' +
-         '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px;margin-bottom:20px">' +
-         '<h3 style="margin-top:0">Choose Your Plan</h3>' +
-         '<div style="margin-bottom:14px"><label><input type="radio" name="interval" value="monthly" checked> Monthly billing &nbsp; <input type="radio" name="interval" value="annual"> Annual billing (save 2 months!)</label></div>' +
-         '<div id="plansGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px">' + planOptions + '</div>' +
-         '<div id="billingError" class="dash-error" hidden></div>' +
-         '<button id="upgradeBtn" class="btn-primary" disabled>Choose Plan</button>' +
-         '</div>' +
-         '<div style="background:#fff;border:1px solid #e3e8ee;border-radius:10px;padding:18px">' +
-         '<h3 style="margin-top:0">Manage Subscription</h3>' +
-         '<button id="portalBtn" class="btn-primary">Manage Billing in Stripe</button>' +
-         '<p class="muted">Change payment method, view invoices, or cancel your subscription</p>' +
-         '</div>';
-       document.getElementById('dashMain').innerHTML = billingHtml;
-       var refreshBilling = document.getElementById('refreshBilling');
-       if (refreshBilling) refreshBilling.addEventListener('click', function () { render(); });
-       var selectedPlan = null;
-       document.querySelectorAll('.plan-option').forEach(function(el) {
-         el.style.cursor = 'pointer';
-         el.style.border = '1px solid #d3dae4';
-         el.style.borderRadius = '8px';
-         el.style.padding = '12px';
-         el.onclick = function() {
-           document.querySelectorAll('.plan-option').forEach(function(e) { e.style.background = ''; e.style.borderColor = '#d3dae4'; });
-           el.style.background = '#e4edff';
-           el.style.borderColor = '#2748a8';
-           selectedPlan = el.dataset.plan;
-           document.getElementById('upgradeBtn').disabled = false;
-         };
-       });
-       document.querySelectorAll('input[name="interval"]').forEach(function(radio) {
-         radio.addEventListener('change', function() {
-           selectedInterval = this.value;
-           document.querySelectorAll('.monthly-price').forEach(function(p) { p.style.display = selectedInterval === 'monthly' ? 'inline' : 'none'; });
-           document.querySelectorAll('.annual-price').forEach(function(p) { p.style.display = selectedInterval === 'annual' ? 'inline' : 'none'; });
-         });
-       });
-       document.getElementById('upgradeBtn').addEventListener('click', async function() {
-         if (!selectedPlan) { alert('Please choose a plan'); return; }
-         var btn = this;
-         btn.disabled = true;
-         btn.textContent = 'Redirecting to checkout...';
-         try {
-           var session = await api('/api/business/' + state.tenant + '/billing/checkout-session', {
-             method: 'POST',
-             body: { plan: selectedPlan, interval: selectedInterval }
-           });
-           window.location.href = session.url;
-         } catch (err) {
-           document.getElementById('billingError').textContent = err.message;
-           document.getElementById('billingError').hidden = false;
-           btn.disabled = false;
-           btn.textContent = 'Choose Plan';
-         }
-       });
-       document.getElementById('portalBtn').addEventListener('click', async function() {
-         var btn = this;
-         btn.disabled = true;
-         btn.textContent = 'Loading...';
-         try {
-           var portal = await api('/api/business/' + state.tenant + '/billing/portal-session', { method: 'POST' });
-           window.location.href = portal.url;
-         } catch (err) {
-           alert('Error: ' + err.message);
-           btn.disabled = false;
-           btn.textContent = 'Manage Billing in Stripe';
-         }
+     document.getElementById('dashMain').innerHTML=
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Account billing</div><h1 class="dash-title">Billing & subscription</h1><p class="dash-subtitle">Choose your RentSketch business plan, billing interval, payment method and cancellation options.</p></div><div class="tw-actions"><button type="button" class="tw-btn" id="portalBtnTop">Open Stripe billing portal</button></div></div>'+
+       returnMsg+trialText+
+       '<div class="tw-billing-grid">'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Current subscription</h2><p>Your current workspace access.</p></div></div><div class="tw-panel-body">'+
+           '<div class="tw-list"><div class="tw-list-row"><span>Plan</span><strong>'+esc(currentPlan)+'</strong></div><div class="tw-list-row"><span>Status</span><span class="status-badge status-'+esc(currentStatus)+'">'+esc(currentStatus)+'</span></div>'+
+           (statusData.subscription?'<div class="tw-list-row"><span>Current period</span><strong>'+fmtDate(statusData.subscription.current_period_start)+' – '+fmtDate(statusData.subscription.current_period_end)+'</strong></div>':'')+
+           '<div class="tw-list-row"><span>Trial ends</span><strong>'+fmtDate(statusData.trialEndsAt)+'</strong></div></div>'+
+         '</div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Choose a plan</h2><p>Stripe shows the final amount before you pay.</p></div><div class="tw-actions"><label><input type="radio" name="interval" value="monthly" checked> Monthly</label><label><input type="radio" name="interval" value="annual"> Annual</label></div></div><div class="tw-panel-body"><div class="tw-plan-grid">'+planCards+'</div><div id="billingError" class="dash-error" hidden></div><button id="upgradeBtn" class="btn-primary" disabled style="margin-top:14px">Continue to secure checkout</button></div></section>'+
+       '</div>'+
+       '<section class="tw-panel" style="margin-top:15px"><div class="tw-panel-head"><div><h2>Manage payment method & invoices</h2><p>Use Stripe’s secure customer portal to update cards, review invoices, or cancel.</p></div><button id="portalBtn" class="tw-btn">Manage in Stripe</button></div></section>';
+     function syncPlanPrices(){
+       document.querySelectorAll('.tw-plan-card').forEach(function(card){
+         var price=card.querySelector('.price span'),period=card.querySelector('[data-plan-period]');
+         if(!price||!period)return;
+         if(selectedInterval==='annual'){price.textContent='$'+Number(price.dataset.year||0).toLocaleString('en-US');period.textContent='/year';}
+         else{price.textContent='$'+Number(price.dataset.month||0).toLocaleString('en-US');period.textContent='/month';}
        });
      }
+     document.querySelectorAll('.tw-plan-card').forEach(function(card){
+       card.addEventListener('click',function(){
+         document.querySelectorAll('.tw-plan-card').forEach(function(x){x.classList.remove('selected');});
+         card.classList.add('selected');selectedPlan=card.dataset.plan;document.getElementById('upgradeBtn').disabled=false;
+       });
+     });
+     document.querySelectorAll('input[name="interval"]').forEach(function(radio){radio.addEventListener('change',function(){selectedInterval=radio.value;syncPlanPrices();});});
+     async function openPortal(btn){
+       btn.disabled=true;var old=btn.textContent;btn.textContent='Opening…';
+       try{var portal=await api('/api/business/'+state.tenant+'/billing/portal-session',{method:'POST'});window.location.href=portal.url;}
+       catch(err){window.alert('Could not open billing portal: '+err.message);btn.disabled=false;btn.textContent=old;}
+     }
+     var portalTop=document.getElementById('portalBtnTop'),portalBtn=document.getElementById('portalBtn');
+     if(portalTop)portalTop.onclick=function(){openPortal(portalTop);};
+     if(portalBtn)portalBtn.onclick=function(){openPortal(portalBtn);};
+     document.getElementById('upgradeBtn').onclick=async function(){
+       if(!selectedPlan)return;
+       var btn=this,errEl=document.getElementById('billingError');errEl.hidden=true;btn.disabled=true;btn.textContent='Opening Stripe…';
+       try{var session=await api('/api/business/'+state.tenant+'/billing/checkout-session',{method:'POST',body:{plan:selectedPlan,interval:selectedInterval}});window.location.href=session.url;}
+       catch(err){errEl.textContent=err.message;errEl.hidden=false;btn.disabled=false;btn.textContent='Continue to secure checkout';}
+     };
    } catch (err) {
      document.getElementById('dashMain').innerHTML = errorHtml(err);
    }
  }
-
  async function viewSuperAdmin(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading platform overview...'));
    bindShellEvents();
