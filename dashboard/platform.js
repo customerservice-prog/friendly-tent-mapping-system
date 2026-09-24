@@ -149,12 +149,14 @@ async function tenantModal(slug){
   '<div class="pc-modal-field"><label>Contact email</label><input id="tmEmail" type="email" value="'+esc(t.contact_email||'')+'"></div>'+
   '<div class="pc-modal-field"><label>Trial ends</label><input id="tmTrial" type="date" value="'+esc(t.trial_ends_at?String(t.trial_ends_at).slice(0,10):'')+'"></div>'+
   '<div class="pc-actions"><button class="pc-btn primary" id="tmSave">Save business</button><button class="pc-btn" id="tmWorkspace">Open dashboard</button><button class="pc-btn" id="tmDesigner">Open designer</button></div>'+
-  '<h3 style="margin:24px 0 8px;font-size:14px">Users</h3><div>'+m.map(function(u){return '<div class="pc-list-row"><div><strong>'+esc(u.display_name||u.email)+'</strong><p>'+esc(u.email)+'</p></div><span class="pc-status">'+esc(u.role)+'</span></div>'}).join('')+'</div></div></div>';
+  '<h3 style="margin:24px 0 8px;font-size:14px">Users & roles</h3><div>'+m.map(function(u){return '<div class="pc-member-row" data-member="'+esc(u.id)+'"><div><strong>'+esc(u.display_name||u.email)+'</strong><p>'+esc(u.email)+'</p></div><select class="pc-select pc-role-select" data-user="'+esc(u.id)+'"><option value="owner"'+(u.role==='owner'?' selected':'')+'>Owner</option><option value="admin"'+(u.role==='admin'?' selected':'')+'>Admin</option><option value="staff"'+(u.role==='staff'?' selected':'')+'>Staff</option><option value="viewer"'+(u.role==='viewer'?' selected':'')+'>Viewer</option></select><button class="pc-btn small danger pc-remove-member" data-user="'+esc(u.id)+'">Remove</button></div>';}).join('')+'</div></div></div>';
  document.body.appendChild(backdrop);
  function close(){backdrop.remove()} backdrop.querySelector('.pc-modal-close').onclick=close;backdrop.onclick=function(e){if(e.target===backdrop)close()};
  document.getElementById('tmWorkspace').onclick=function(){setTenant(slug);location.href='/dashboard/?tenantView=1#/overview';};
  document.getElementById('tmDesigner').onclick=function(){setTenant(slug);window.open('/designer/?tenant='+encodeURIComponent(slug)+'&admin=1','_blank','noopener');};
  document.getElementById('tmSave').onclick=async function(){var btn=this;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug),{method:'PATCH',body:{name:document.getElementById('tmName').value,contactEmail:document.getElementById('tmEmail').value,trialEndsAt:document.getElementById('tmTrial').value||null}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">Saved.</div>';setTimeout(function(){close();render()},500);}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
+ backdrop.querySelectorAll('.pc-role-select').forEach(function(sel){sel.onchange=async function(){sel.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members/'+encodeURIComponent(sel.dataset.user),{method:'PATCH',body:{role:sel.value}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">User role updated.</div>';}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';}finally{sel.disabled=false;}};});
+ backdrop.querySelectorAll('.pc-remove-member').forEach(function(btn){btn.onclick=async function(){if(!confirm('Remove this user from '+t.name+'?'))return;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug)+'/members/'+encodeURIComponent(btn.dataset.user),{method:'DELETE'});btn.closest('.pc-member-row').remove();document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">User removed from this business.</div>';}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};});
 }
 
 
@@ -250,8 +252,17 @@ async function platformAnalytics(){
 
 async function payments(kind){
  var query=kind&&kind!=='all'?'&kind='+encodeURIComponent(kind):'';
- var d=await api('/api/admin/payments?limit=200'+query),rows=d.payments||[];
+ var data=await Promise.all([api('/api/admin/payments?limit=200'+query),api('/api/admin/console-overview')]),rows=data[0].payments||[],overview=data[1];
+ var paid=rows.filter(function(p){return p.status==='paid';}),refunded=rows.filter(function(p){return p.status==='refunded';});
+ var paidTotal=paid.reduce(function(s,p){return s+Number(p.amount_cents||0);},0),refundTotal=refunded.reduce(function(s,p){return s+Number(p.amount_cents||0);},0);
  document.getElementById('pcContent').innerHTML=head('Money','Payments','One ledger for RentSketch Event Pass sales and tenant rental deposits. Refunds are sent through Stripe and recorded here.')+
+  '<section class="pc-grid metrics">'+
+    metric('Paid volume',money(paidTotal),paid.length+' paid transactions','positive')+
+    metric('Event Pass revenue',money(overview.eventPassRevenue.cents),overview.eventPassRevenue.count+' paid Event Pass transactions','positive')+
+    metric('Tenant deposit volume',money(overview.tenantDepositVolume.cents),overview.tenantDepositVolume.count+' paid deposits')+
+    metric('Platform fees',money(overview.platformFeeRevenue.cents),'Recorded Connect application fees')+
+    metric('Refunded ledger value',money(refundTotal),refunded.length+' refunded records')+
+  '</section>'+
   '<div class="pc-toolbar"><div class="pc-search"><input id="paySearch" type="search" placeholder="Search customer, business or payment ID…"></div><select class="pc-select" id="payKind"><option value="all">All payments</option><option value="event_pass">Event Pass</option><option value="deposit">Rental deposits</option></select></div>'+
   '<section class="pc-panel"><div id="payTable">'+paymentTable(rows,true)+'</div></section>'+
   '<div class="pc-callout" style="margin-top:14px"><strong>Refund safety</strong><p>A refund requires an explicit confirmation. Event Pass refunds revoke the linked software entitlement. Rental-deposit refunds do not cancel the tenant’s event/order automatically.</p></div>';
