@@ -31,9 +31,13 @@ router.get('/tenants', requirePlatformAdmin, async (req, res) => {
   const result = await db.query(
     `SELECT t.id, t.slug, t.name, t.contact_email, t.subscription_plan,
             t.subscription_status, t.trial_ends_at, t.stripe_connect_status,
-            t.created_at,
+            t.logo_url, t.allowed_origins, t.created_at,
             (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id = t.id) AS product_count,
+            (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id = t.id AND p.active IS TRUE) AS active_product_count,
             (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id = t.id) AS quote_request_count,
+            (SELECT COUNT(*)::int FROM designs d WHERE d.tenant_id = t.id) AS design_count,
+            (SELECT MAX(d.updated_at) FROM designs d WHERE d.tenant_id = t.id) AS latest_design_at,
+            (SELECT MAX(q.created_at) FROM quote_requests q WHERE q.tenant_id = t.id) AS latest_request_at,
             (SELECT COUNT(*)::int FROM tenant_memberships tm WHERE tm.tenant_id = t.id) AS member_count
      FROM tenants t ORDER BY t.created_at DESC`
   );
