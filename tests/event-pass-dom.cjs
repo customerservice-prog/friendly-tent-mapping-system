@@ -19,7 +19,10 @@ async function setup(query, options = {}) {
   w.localStorage.setItem('rentsketch-anon-session', 'existing-browser-owner');
   if (options.adminToken) w.localStorage.setItem('rentsketch_dashboard_token', options.adminToken);
   if (options.previewDeadline) w.localStorage.setItem('rentsketch-preview-deadline:v1', String(options.previewDeadline));
-  if (options.saved) w.localStorage.setItem('rentsketch-autosave:friendly', JSON.stringify(options.saved));
+  if (options.saved) {
+    const savedSlug=new URL(w.location.href).searchParams.get('tenant')||'generic';
+    w.localStorage.setItem('rentsketch-autosave:'+savedSlug, JSON.stringify(options.saved));
+  }
   let draft, checkouts = 0;
   w.fetch = async (url, request = {}) => {
     const rawBody=request.body;
@@ -147,6 +150,35 @@ async function setup(query, options = {}) {
   assert.equal(b.getScene().backgroundPhoto.id,'photo-fixture');
   assert.match(b.getScene().backgroundPhoto.url,/\/api\/consumer\/background-photo\/photo-fixture\?t=capability$/);
   assert.ok(d.querySelector('.venue-photo-card.is-active'),'Photo Match switches to active UI after upload');
+  t.dom.window.close();
+
+  // Exact production-return path from the reported screenshot:
+  // ?tenant=generic&admin=1 with a paid design restored from local autosave.
+  // Windows/Edge may report a .jpg File.type as blank, so extension fallback
+  // must still upload and the panel must show a visible success state.
+  const savedGeneric={
+    id:'generic-photo-design',scene:genericPhotoEvent.scene,savedAt:new Date().toISOString(),
+    tenant:'generic',anonymousSessionId:'generic-photo-owner'
+  };
+  t=await setup('?tenant=generic&admin=1',{saved:savedGeneric,resumed:genericPhotoEvent});
+  w=t.w;d=w.document;b=w.FriendlyBridge;await wait(40);
+  assert.equal(w.location.search,'?tenant=generic&admin=1','returning saved design keeps the reported URL shape');
+  assert.equal(w.RentSketchEventPass.canEdit(),true,'returning generic saved design is restored as editable');
+  assert.equal(w.RentSketchAutosave.getDesignId(),'generic-photo-design');
+  d.querySelector('[data-drawer="site"]').click();
+  const exactInput=d.querySelector('[data-role="venue-photo-file"]');assert.ok(exactInput);
+  const exactBytes=new Uint8Array(1367406);exactBytes[0]=0xff;exactBytes[1]=0xd8;exactBytes[2]=0xff;exactBytes[3]=0xe0;
+  const edgeJpg=new w.File([exactBytes],'1368.jpg',{type:''});
+  Object.defineProperty(exactInput,'files',{configurable:true,value:[edgeJpg]});
+  exactInput.dispatchEvent(new w.Event('change',{bubbles:true}));
+  await wait(100);
+  const exactUpload=t.calls.find(call=>call.url.includes('/api/consumer/designs/generic-photo-design/background-photo')&&call.rawBody===edgeJpg);
+  assert.ok(exactUpload,'exact returning generic/admin page sends background-photo POST for blank-MIME .jpg');
+  assert.equal(exactUpload.headers['Content-Type'],'image/jpeg','blank Windows JPG MIME is normalized to image/jpeg');
+  assert.equal(b.getScene().backgroundPhoto.id,'photo-fixture');
+  assert.match(d.querySelector('[data-role="venue-photo-status"]').textContent,/Applied/,'Photo Match visibly confirms success in-panel');
+  assert.equal(d.querySelector('[data-role="venue-photo-status"]').dataset.kind,'success');
+  assert.ok(d.querySelector('.venue-photo-card.is-active'));
   t.dom.window.close();
 
   // Continue the existing Friendly paid-event regression separately.
