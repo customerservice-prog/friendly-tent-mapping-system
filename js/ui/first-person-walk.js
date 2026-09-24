@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { findSafeWalkStart, resolveWalkStep, walkPositionBlocked, walkSpeedFtPerSecond } from '../core/walk-navigation.js';
 
 /*
  * First-person walk controller for RentSketch's reconstructed venue world.
@@ -10,16 +11,6 @@ import * as THREE from 'three';
  */
 function finite(v,f=0){const n=Number(v);return Number.isFinite(n)?n:f;}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
-
-function pointInRotatedRect(x,z,item,padding=0){
-  const w=Math.max(.1,finite(item?.widthFt,1))+padding*2;
-  const d=Math.max(.1,finite(item?.depthFt??item?.lengthFt,1))+padding*2;
-  const cx=finite(item?.x)+Math.max(.1,finite(item?.widthFt,1))/2;
-  const cz=finite(item?.y)+Math.max(.1,finite(item?.depthFt??item?.lengthFt,1))/2;
-  const a=-finite(item?.rotationDeg)*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
-  const dx=x-cx,dz=z-cz,rx=dx*c-dz*s,rz=dx*s+dz*c;
-  return Math.abs(rx)<=w/2&&Math.abs(rz)<=d/2;
-}
 
 function button(label,dir){
   const b=document.createElement('button');
@@ -50,25 +41,23 @@ export function createFirstPersonWalk({
     const s=getSite?.()||{};
     return {widthFt:Math.max(8,finite(s.widthFt,50)),lengthFt:Math.max(8,finite(s.lengthFt,60))};
   }
+  function navigationContext(){
+    return {
+      site:site(),
+      photoGeometry:getObstacles?.()||[],
+      items:getItems?.()||[],
+      bodyRadiusFt:.85,
+      blockRentalKinds:['inflatable']
+    };
+  }
   function blocksWorldPosition(worldX,worldZ){
-    const s=site(),lx=worldX+s.widthFt/2,lz=worldZ+s.lengthFt/2,padFt=.85;
-    if(lx<padFt||lz<padFt||lx>s.widthFt-padFt||lz>s.lengthFt-padFt)return true;
-    for(const g of getObstacles?.()||[]){
-      if(!g||g.type==='no-place')continue;
-      if(pointInRotatedRect(lx,lz,g,padFt))return true;
-    }
-    for(const item of getItems?.()||[]){
-      if(item?.kind!=='inflatable')continue;
-      if(pointInRotatedRect(lx,lz,item,1))return true;
-    }
-    return false;
+    return walkPositionBlocked({worldX,worldZ,...navigationContext()}).blocked;
   }
   function safeStart(){
-    const s=site(),candidates=[
-      {x:clamp(camera.position.x,-s.widthFt*.45,s.widthFt*.45),z:clamp(camera.position.z,-s.lengthFt*.45,s.lengthFt*.45)},
-      {x:0,z:-s.lengthFt*.34},{x:-s.widthFt*.22,z:-s.lengthFt*.18},{x:s.widthFt*.22,z:-s.lengthFt*.18},{x:0,z:0}
-    ];
-    return candidates.find(p=>!blocksWorldPosition(p.x,p.z))||{x:0,z:-s.lengthFt*.4};
+    return findSafeWalkStart({
+      preferredWorldPoint:{x:camera.position.x,z:camera.position.z},
+      ...navigationContext()
+    });
   }
   function syncRotation(){
     camera.rotation.order='YXZ';camera.rotation.x=pitch;camera.rotation.y=yaw;camera.rotation.z=0;camera.updateMatrixWorld(true);
@@ -152,18 +141,12 @@ export function createFirstPersonWalk({
     right.crossVectors(direction,up).normalize();
     move.set(0,0,0).addScaledVector(direction,fb).addScaledVector(right,lr);
     if(move.lengthSq()>1)move.normalize();
-    const speed=(keys.has('shift')?15:8.5)*Math.max(0,Math.min(.05,finite(dt)));
+    const speed=walkSpeedFtPerSecond({sprint:keys.has('shift'),mobile})*Math.max(0,Math.min(.05,finite(dt)));
     move.multiplyScalar(speed);
-    const ox=camera.position.x,oz=camera.position.z;
-    let nx=ox+move.x,nz=oz+move.z;
-    // Slide along obstacles instead of making the camera feel stuck.
-    if(blocksWorldPosition(nx,nz)){
-      if(!blocksWorldPosition(nx,oz))nz=oz;
-      else if(!blocksWorldPosition(ox,nz))nx=ox;
-      else {nx=ox;nz=oz;}
-    }
-    if(nx===ox&&nz===oz)return false;
-    camera.position.set(nx,eyeHeight,nz);syncRotation();onChange();return true;
+    const from={x:camera.position.x,z:camera.position.z},to={x:from.x+move.x,z:from.z+move.z};
+    const step=resolveWalkStep({from,to,...navigationContext()});
+    if(!step.moved)return false;
+    camera.position.set(step.x,eyeHeight,step.z);syncRotation();onChange();return true;
   }
 
   function destroy(){
