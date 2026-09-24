@@ -25,9 +25,9 @@ export function normalizeVenuePhoto(value,apiBase){
     heightPx:clamp(value.heightPx,1,10000,null)
   };
 }
-export function venuePhotoPanel(photo){
+export function venuePhotoPanel(photo,status){
   photo=normalizeVenuePhoto(photo,window.RENTSKETCH_API_URL);
-  const input='<input class="venue-photo-input" type="file" accept="image/jpeg,image/png,image/webp" data-role="venue-photo-file">';
+  const input='<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-role="venue-photo-file">';
   if(!photo){
     return '<section class="venue-photo-card venue-photo-empty">'+
       '<div class="venue-photo-kicker">PHOTO MATCH</div>'+
@@ -39,6 +39,7 @@ export function venuePhotoPanel(photo){
         '<span>JPG, PNG or WebP · phone photos are resized automatically</span>'+
       '</label>'+
       '<p class="venue-photo-privacy">Saved with this design so you can reopen, print or share the same view later.</p>'+
+      '<p class="venue-photo-status" data-role="venue-photo-status" data-kind="'+esc(status?.kind||'')+'" aria-live="polite">'+esc(status?.text||'')+'</p>'+
     '</section>';
   }
   const pos=esc(photo.focusX+'% '+photo.focusY+'%');
@@ -55,6 +56,7 @@ export function venuePhotoPanel(photo){
       '<label><span>Darken behind layout</span><input type="range" min="0" max=".45" step=".01" value="'+photo.shade+'" data-role="venue-photo-shade"></label>'+
     '</div>'+
     '<button type="button" class="venue-photo-reset" data-role="venue-photo-reset">Reset photo framing</button>'+
+    '<p class="venue-photo-status" data-role="venue-photo-status" data-kind="'+esc(status?.kind||'')+'" aria-live="polite">'+esc(status?.text||'')+'</p>'+
   '</section>';
 }
 
@@ -80,16 +82,28 @@ function canvasBlob(canvas,quality){
     canvas.toBlob(function(blob){blob?resolve(blob):reject(new Error('That photo could not be prepared.'));},'image/jpeg',quality);
   });
 }
+function supportedMime(file){
+  const raw=String(file?.type||'').trim().toLowerCase();
+  if(['image/jpeg','image/jpg','image/pjpeg'].includes(raw))return 'image/jpeg';
+  if(['image/png','image/x-png'].includes(raw))return 'image/png';
+  if(raw==='image/webp')return 'image/webp';
+  const name=String(file?.name||'').trim().toLowerCase();
+  if(/\.(jpe?g|jfif)$/.test(name))return 'image/jpeg';
+  if(/\.png$/.test(name))return 'image/png';
+  if(/\.webp$/.test(name))return 'image/webp';
+  return null;
+}
 export async function prepareVenuePhoto(file){
   if(!file)throw new Error('Choose a photo first.');
-  if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Choose a JPG, PNG or WebP photo.');
+  const mimeType=supportedMime(file);
+  if(!mimeType)throw new Error('That file is not a supported photo. Choose a JPG, PNG or WebP image.');
   if(file.size>MAX_SOURCE_BYTES)throw new Error('That photo is too large. Choose one under 25 MB.');
   // Most phone/web photos are already small enough for the API. Upload them
   // directly instead of decoding + repainting them through a browser canvas.
-  // This avoids browser-specific image decoding/canvas failures and preserves
-  // the original JPEG/PNG/WebP bytes.
+  // Some Windows/Edge file pickers report JPG MIME as blank or image/jpg, so
+  // normalize by MIME + filename rather than rejecting before upload.
   if(file.size<=TARGET_BYTES){
-    return {blob:file,name:(file.name||'Venue photo').slice(0,120),mimeType:file.type};
+    return {blob:file,name:(file.name||'Venue photo').slice(0,120),mimeType};
   }
   const decoded=await decodePhoto(file);
   try{
