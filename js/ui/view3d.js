@@ -4,6 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeTable as table, makeStandaloneChair, makeDanceFloor as dance, mergeParts } from './equipment3d.js';
 import { createEnvironment, createPhotoEnvironment, disposeGroup } from './scene-environment.js';
+import { createPhotoWorld360 } from './photo-world360.js';
 import { createWeather } from './scene-weather.js';
 import { createGuests } from './scene-guests.js';
 import { createPartyStyling } from './party-styling.js';
@@ -245,19 +246,26 @@ export function init(container,callbacks={}) {
   }
   function rebuildLocal360(){
     if(!hasVenuePhoto()||!photoImage||!state?.photoSite){clearLocal360();return false;}
-    const site=state.photoSite,style=sampleLocal360Style(),key=JSON.stringify([photoUrl,site.widthFt,site.lengthFt,state.surfaceType,style]);
+    const site=state.photoSite,cal=normalizePhotoCalibration(state.photoCalibration,site);
+    const key=JSON.stringify([photoUrl,site.widthFt,site.lengthFt,state.surfaceType,cal,state.photoGeometry||[]]);
     if(key===local360Key&&local360.children.length)return true;
     clearLocal360();local360Key=key;
-    const w=Math.max(50,Number(site.widthFt)||50),l=Math.max(60,Number(site.lengthFt)||60),radius=Math.max(w,l)*1.12,height=Math.max(34,radius*.62);
-    addLocal360Wall('Local Smart 360 left',makeLocal360Canvas('left',style),radius*2,height,-radius,height/2,0,Math.PI/2);
-    addLocal360Wall('Local Smart 360 right',makeLocal360Canvas('right',style),radius*2,height,radius,height/2,0,-Math.PI/2);
-    addLocal360Wall('Local Smart 360 rear',makeLocal360Canvas('rear',style),radius*2,height,0,height/2,-radius,0);
-    local360.userData={mode:'browser-local-synthesis',noExternalApi:true,style,sourcePhoto:photoUrl};
-    return true;
+    const world=createPhotoWorld360({
+      image:photoImage,
+      site,
+      calibration:cal,
+      photoGeometry:state.photoGeometry||[],
+      surfaceType:state.surfaceType,
+      mobile
+    });
+    local360.add(world);
+    local360.userData={...world.userData,sourcePhoto:photoUrl};
+    local360.userData.setNight?.(night);
+    return !!world.userData?.ready;
   }
   function syncPhotoPresentation(){
     const photo=hasVenuePhoto(),orbit=photo&&cameraMode==='photo360',matched=photo&&cameraMode==='outside';
-    photoStage.visible=orbit;photoContinuation.visible=orbit;local360.visible=orbit;
+    photoStage.visible=orbit;photoContinuation.visible=false;local360.visible=orbit;
     // Matched View is an exact camera registration, not an orbit mode.
     controls.enabled=!matched;
     controls.enablePan=!matched;
@@ -306,9 +314,13 @@ export function init(container,callbacks={}) {
   function frame(t){
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='photo360'){
       const site=state.photoSite||t,w=Math.max(20,site.widthFt),l=Math.max(20,site.lengthFt),r=Math.max(w,l);
-      camera.fov=44;camera.updateProjectionMatrix();
-      camera.position.set(w*.72,Math.max(16,r*.34),-l*.72);
-      controls.target.set(0,Math.min(5,r*.08),0);controls.maxDistance=Math.max(260,r*4);controls.update();syncPhotoPresentation();invalidate();return;
+      // Eye-level starting height makes the property read like a place you are inside,
+      // rather than a product spinner viewed from above.
+      camera.fov=50;camera.updateProjectionMatrix();
+      camera.position.set(Math.min(w*.38,r*.42),6.1,-Math.min(l*.42,r*.46));
+      controls.target.set(0,3.25,0);
+      controls.minDistance=5.5;controls.maxDistance=Math.max(140,r*2.25);
+      controls.maxPolarAngle=Math.PI*.49;controls.update();syncPhotoPresentation();invalidate();return;
     }
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='outside'){
       const site=state.photoSite||t,estimate=photoCameraEstimate(site,state.photoCalibration);
@@ -339,14 +351,11 @@ export function init(container,callbacks={}) {
     loadVenuePhoto(state.backgroundPhoto);if(photoMode&&photoImage){rebuildPhotoStage();rebuildLocal360();}
     const nextContinuationKey=photoMode?JSON.stringify([state.photoSite?.widthFt,state.photoSite?.lengthFt,state.surfaceType]):'';
     if(nextContinuationKey!==photoContinuationKey){
+      // The old generic RentSketch backyard conflicted visually with the customer's
+      // reconstructed photo world. Keep this group empty: the new local photo world
+      // provides ground, horizon continuation and parallax layers instead.
       disposeGroup(photoContinuation);photoContinuationKey=nextContinuationKey;
-      if(photoMode){
-        const generated=createEnvironment(state.photoSite||t,state.surfaceType);
-        // Keep the familiar no-photo RentSketch yard slightly below the real
-        // projected ground so the customer's photo wins where we have evidence.
-        generated.position.y=-.08;generated.userData.generatedContinuation=true;
-        photoContinuation.add(generated);
-      }
+      photoContinuation.userData={generatedContinuation:false,replacedBy:'photo-world360'};
     }
     if(nextEnvironment!==environmentKey){if(environment){scene.remove(environment);disposeGroup(environment);}environment=photoMode?createPhotoEnvironment(state.photoSite||t,state.photoCalibration,state.photoGeometry):createEnvironment(t,state.surfaceType);environment.userData.setNight(night);scene.add(environment);environmentKey=nextEnvironment;if(weather){scene.remove(weather);disposeGroup(weather);}weather=createWeather(t,{mobile});weather.userData.setNight(night);weather.userData.setWeather(weatherMode);weather.userData.setPhotoMode?.(photoMode);scene.add(weather);}
     else weather?.userData.setPhotoMode?.(photoMode);
@@ -595,7 +604,7 @@ export function init(container,callbacks={}) {
   const ro=new ResizeObserver(resize);ro.observe(container);resize();
   function loop(now=0){if(destroyed)return;raf=requestAnimationFrame(loop);const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;controls.update();if(container.clientWidth&&container.clientHeight&&!document.hidden&&!document.body.classList.contains('table-studio-open')&&!document.body.classList.contains('rs-preview-expired')){if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){weather?.userData.update(animationTime);if(showGuests){guests?.userData.update(animationTime);inflatableActivity?.userData.update(animationTime);renderer.shadowMap.needsUpdate=true;}animationTime=0;dirty=true;}if(dirty){renderer.render(scene,camera);dirty=false;}}}
   loop();document.addEventListener('visibilitychange',invalidate);
-  function setNight(value){night=!!value;generatedBackground();scene.fog.color.set(night?0x203044:weatherMode==='rain'?0x9eafb5:0xdde8df);scene.fog.density=hasVenuePhoto()?(weatherMode==='rain'?.0012:.00015):(weatherMode==='rain'?.004:.002);hemi.intensity=night?.7:weatherMode==='rain'?1.25:1.65;sun.intensity=night?.25:weatherMode==='rain'?.65:3.2;fill.intensity=night?.4:.7;renderer.toneMappingExposure=night?1.18:1.05;weather?.userData.setNight(night);weather?.userData.setPhotoMode?.(hasVenuePhoto());environment?.userData.setNight(night);lightGroup?.userData.setNight?.(night);renderer.shadowMap.needsUpdate=true;invalidate();}
+  function setNight(value){night=!!value;generatedBackground();scene.fog.color.set(night?0x203044:weatherMode==='rain'?0x9eafb5:0xdde8df);scene.fog.density=hasVenuePhoto()?(weatherMode==='rain'?.0012:.00015):(weatherMode==='rain'?.004:.002);hemi.intensity=night?.7:weatherMode==='rain'?1.25:1.65;sun.intensity=night?.25:weatherMode==='rain'?.65:3.2;fill.intensity=night?.4:.7;renderer.toneMappingExposure=night?1.18:1.05;weather?.userData.setNight(night);weather?.userData.setPhotoMode?.(hasVenuePhoto());environment?.userData.setNight(night);local360.userData.setNight?.(night);lightGroup?.userData.setNight?.(night);renderer.shadowMap.needsUpdate=true;invalidate();}
   function setScene(options={}){
     showStyling=options.styling!==false;if(styling)styling.visible=showStyling;
     weatherMode=options.weather==='rain'?'rain':'clear';showGuests=!!options.guests;motion=options.motion!==false;
