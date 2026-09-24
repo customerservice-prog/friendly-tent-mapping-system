@@ -162,7 +162,7 @@ async function chooseVenuePhoto(file,input){
     var snapAfterPhoto=buildSnapshot(getConflicts());
     state.photoCalibration=defaultPhotoCalibration(snapAfterPhoto.photoSite);state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
     state.venuePhotoStatus={text:'Applied · Photo View is ready. Drag rentals directly on your real venue.',kind:'success'};
-    renderDrawerBody('site');renderViews(getConflicts());setViewMode('photo');
+    renderDrawerBody('site');renderViews(getConflicts());closeDrawer();setViewMode('photo');
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     var photoSaved=false;
     try{await window.RentSketchAutosave?.flush?.();photoSaved=true;}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
