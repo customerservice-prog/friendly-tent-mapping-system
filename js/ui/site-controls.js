@@ -1,5 +1,5 @@
 import { escapeHtml as esc } from './equipment-controls.js';
-import { venuePhotoPanel } from './venue-photo.js';
+import { venuePhotoPanel } from './venue-photo.js?v=20260924-generic-photo-1';
 export function sitePanel(state,tent){
  const pole=tent.type==='pole';
  return `<h3>Where is your event?</h3><p class="equipment-note">Choose the actual setup surface. Your equipment stays in place.</p>${venuePhotoPanel(state.backgroundPhoto)}<div class="site-options">${[
