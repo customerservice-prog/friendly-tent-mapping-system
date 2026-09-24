@@ -143,8 +143,9 @@ async function chooseVenuePhoto(file,input){
     state.backgroundPhoto=photo;
     renderDrawerBody('site');renderViews(getConflicts());setViewMode('3d');
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
-    try{await window.RentSketchAutosave?.flush?.();}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
-    if(previous?.id&&previous.id!==photo.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
+    var photoSaved=false;
+    try{await window.RentSketchAutosave?.flush?.();photoSaved=true;}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
+    if(photoSaved&&previous?.id&&previous.id!==photo.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
     showLayoutNotice('Your real venue photo is now behind the 3D layout. Use the sliders in Setting to line it up.',6500);
     return true;
   }catch(err){
@@ -159,8 +160,8 @@ async function removeVenuePhoto(){
   var old=state.backgroundPhoto,designId=window.RentSketchAutosave?.getDesignId?.();
   state.backgroundPhoto=null;renderDrawerBody('site');renderViews(getConflicts());
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
-  try{await window.RentSketchAutosave?.flush?.();}catch(_){}
-  if(designId)deleteVenuePhoto(old,venuePhotoContext(designId));
+  var removalSaved=false;try{await window.RentSketchAutosave?.flush?.();removalSaved=true;}catch(_){}
+  if(removalSaved&&designId)deleteVenuePhoto(old,venuePhotoContext(designId));
   showLayoutNotice('Venue photo removed. RentSketch is showing the generated setting again.',4200);
   return true;
 }
