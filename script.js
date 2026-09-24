@@ -283,11 +283,35 @@ function mountPhoto(){
   return true;
 }
 function mountPlan(){if(planMounted)return;planMounted=true;plan2dMod.mount($('plan2d'),buildSnapshot(getConflicts()),{onSelect:handleSelect,onMove:handleMove,onPlacementMove:movePlacement,onPlace:confirmPlacement});}
-function mount3D(){if(view3dMod||view3dMountInProgress)return;var canvas=$('canvas');if(!canvas){console.warn('3D mount: canvas element not found');return;}var attempt=0;function checkCanvasReady(){attempt++;if(attempt>600){console.warn('3D mount: canvas never became ready');window.__rentsketchLast3dError='canvas-not-ready w='+canvas.offsetWidth+' h='+canvas.offsetHeight+' displayed='+(canvas.offsetParent!==null);return;}var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}view3dMountInProgress=true;import('./js/ui/view3d.js').then(function(mod){var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement});inst.rebuild(snap);inst.setScene(sceneOptions);view3dMod=inst;if(inst.fitCamera)inst.fitCamera();if(inst.inside&&!layoutSpace().isSite&&store.getState().objects.length)inst.inside();view3dPendingSnapshot=null;view3dMountInProgress=false;window.FriendlyBridge.fitTentPreview=inst.fitTentPreview;}).catch(function(e){console.error('3D mount failed:',e);view3dMod=null;view3dMountInProgress=false;});}setTimeout(checkCanvasReady,16);}function setPhoto3dModeUi(mode){
+function mount3D(){
+  if(view3dMod||view3dMountInProgress)return;
+  var canvas=$('canvas');if(!canvas){console.warn('3D mount: canvas element not found');return;}
+  var attempt=0;
+  function checkCanvasReady(){
+    attempt++;
+    if(attempt>600){console.warn('3D mount: canvas never became ready');window.__rentsketchLast3dError='canvas-not-ready w='+canvas.offsetWidth+' h='+canvas.offsetHeight+' displayed='+(canvas.offsetParent!==null);return;}
+    var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
+    if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
+    view3dMountInProgress=true;
+    import('./js/ui/view3d.js?v=20260924-photo-world360-1').then(function(mod){
+      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement});
+      inst.rebuild(snap);inst.setScene(sceneOptions);view3dMod=inst;
+      if(snap.backgroundPhoto&&inst.orbit360){
+        inst.orbit360();setPhoto3dModeUi('360');
+      }else{
+        if(inst.fitCamera)inst.fitCamera();
+        if(inst.inside&&!layoutSpace().isSite&&store.getState().objects.length)inst.inside();
+      }
+      view3dPendingSnapshot=null;view3dMountInProgress=false;window.FriendlyBridge.fitTentPreview=inst.fitTentPreview;
+    }).catch(function(e){console.error('3D mount failed:',e);view3dMod=null;view3dMountInProgress=false;});
+  }
+  setTimeout(checkCanvasReady,16);
+}
+function setPhoto3dModeUi(mode){
   var matched=$('view3dMatchPhoto'),orbit=$('view3dOrbit360'),isOrbit=mode==='360';
   if(matched){matched.classList.toggle('active',!isOrbit);matched.setAttribute('aria-pressed',String(!isOrbit));}
   if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));}
-  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto)$('canvasHint').textContent=isOrbit?'Smart 360 · generated locally from your photo · orbit around the fixed setup':'Matched View · calibrated to the original photo perspective';
+  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto)$('canvasHint').textContent=isOrbit?'360 World · photo-derived ground + depth + parallax · drag to move around the fixed setup':'Matched View · exact calibrated original photo perspective';
 }
 function renderViews(conflicts){
   var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d';
@@ -316,7 +340,7 @@ function setViewMode(mode){
   if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').style.display=mode==='3d'?'':'none';
   if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').style.display=mode==='3d'?'':'none';
   if(mode==='photo')setTimeout(function(){mountPhoto();},0);
-  if(mode==='3d'){setPhoto3dModeUi('matched');setTimeout(function(){mount3D();},16);}
+  if(mode==='3d'){setPhoto3dModeUi(state.backgroundPhoto?'360':'matched');setTimeout(function(){mount3D();if(view3dMod&&state.backgroundPhoto&&view3dMod.orbit360){view3dMod.orbit360();setPhoto3dModeUi('360');}},16);}
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return true;
 }
 function closeDrawer(){state.activeDrawer=null;document.body.classList.remove('drawer-open');document.querySelectorAll('.rail-btn').forEach(function(b){b.classList.remove('active');b.setAttribute('aria-expanded','false');});if($('drawerBackdrop'))$('drawerBackdrop').hidden=true;if($('drawer'))$('drawer').hidden=true;renderEmptyState();}function openDrawer(kind){if(!requireEventEditing())return false;if(pendingPlacement)cancelPlacement();if(state.activeDrawer===kind){closeDrawer();return;}state.selectedId=null;renderInspector([]);state.activeDrawer=kind;document.body.classList.add('drawer-open');document.querySelectorAll('.rail-btn').forEach(function(b){b.classList.toggle('active',b.dataset.drawer===kind);b.setAttribute('aria-expanded',String(b.dataset.drawer===kind));});$('drawerBackdrop').hidden=false;$('drawer').hidden=false;$('drawerTitle').textContent=({site:'Event Setting',inflatables:'Bounce Houses & Waterslides',tables:'Tables & Chairs',tent:'Choose Your Tent',chairs:'Chair Styles',dance:'Dance Floor',lighting:'Lighting',setup:'Suggest a Layout'})[kind]||kind;renderDrawerBody(kind);$('drawerBody').scrollTop=0;renderEmptyState();}function bindVenuePhotoInputs(root){
