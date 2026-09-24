@@ -44,8 +44,8 @@ export function createWeather(tent,{mobile=false}={}) {
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.BufferAttribute(positions,3));
   const rain=new THREE.LineSegments(geometry,new THREE.LineBasicMaterial({color:0xd3e4ef,transparent:true,opacity:.5,depthWrite:false}));
   rain.name='Rain outside the canopy';rain.frustumCulled=false;group.add(rain);
-  let night=false,raining=false,time=0;
-  function paint(){sun.visible=disk.visible=!night&&!raining;moon.visible=night&&!raining;clouds.forEach(c=>{c.material.color.set(night?0x647b9a:raining?0x8d9ba6:0xffffff);c.material.opacity=raining?.95:night?.35:.85;});rain.visible=raining;}
+  let night=false,raining=false,photoMode=false,time=0;
+  function paint(){sun.visible=disk.visible=!photoMode&&!night&&!raining;moon.visible=!photoMode&&night&&!raining;clouds.forEach(c=>{c.visible=!photoMode;c.material.color.set(night?0x647b9a:raining?0x8d9ba6:0xffffff);c.material.opacity=raining?.95:night?.35:.85;});rain.visible=raining;}
   function drops(){
     seeds.forEach((s,i)=>{
       const y=((s.phase*ceiling-time*22)%ceiling+ceiling)%ceiling;
@@ -58,6 +58,7 @@ export function createWeather(tent,{mobile=false}={}) {
   drops();paint();
   group.userData.setNight=value=>{night=!!value;paint();};
   group.userData.setWeather=value=>{raining=value==='rain';paint();};
+  group.userData.setPhotoMode=value=>{photoMode=!!value;paint();};
   group.userData.update=dt=>{time+=dt;clouds.forEach((c,i)=>{c.position.x=c.userData.origin.x+Math.sin(time*.012+i)*8;});if(raining)drops();};
   return group;
 }
