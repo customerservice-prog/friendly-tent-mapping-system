@@ -372,6 +372,7 @@ function renderViews(conflicts){
 }
 function setViewMode(mode){
   if(mode==='photo'&&!state.backgroundPhoto){openDrawer('site');showLayoutNotice('Upload a venue photo first, then Photo View will unlock.',4500);return false;}
+  if(mode!=='3d'&&view3dMod?.isMeasuring?.()){view3dMod.setMeasureMode(false);setMeasureUi(false);}
   if(mode!=='3d'&&view3dMod?.isWalking?.())view3dMod.exitWalk();
   state.viewMode=mode;renderPropertyFit(currentPropertyPlan());
   if($('sceneControls'))$('sceneControls').hidden=mode!=='3d';
