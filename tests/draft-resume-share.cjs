@@ -5,7 +5,7 @@ const root=path.resolve(__dirname,'..'),source=fs.readFileSync(path.join(root,'j
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function localResume(){
  const dom=new JSDOM('<!doctype html><body><div id="designer"></div></body>',{url:'https://rentsketch.com/designer/?tenant=lake',runScripts:'outside-only',pretendToBeVisual:true});
- const w=dom.window,scene={tentId:'frame-20x20',sidewalls:[{id:'front-0',side:'front',startFt:0,lengthFt:10,type:'solid',enabled:true}],objects:[{id:'table-1',kind:'table'}]},loaded=[];
+ const w=dom.window,scene={tentId:'frame-20x20',sidewalls:[{id:'front-0',side:'front',startFt:0,lengthFt:10,type:'solid',enabled:true}],backgroundPhoto:{id:'photo-local',url:'https://api.test/api/tenants/lake/background-photo/photo-local?t=private-local',focusX:42,focusY:61,zoom:1.18,shade:.1},objects:[{id:'table-1',kind:'table'}]},loaded=[];
  w.RENTSKETCH_API_URL='https://api.test';w.RENTSKETCH_TENANT_SLUG='lake';w.RENTSKETCH_CATALOG_READY=true;
  w.FriendlyBridge={getScene:()=>scene,loadScene:s=>{loaded.push(JSON.parse(JSON.stringify(s)));return true;},state:{}};
  w.confirm=()=>{throw Error('resume must not ask for confirmation');};
@@ -17,7 +17,7 @@ async function localResume(){
 }
 async function sharedRestore(){
  const dom=new JSDOM('<!doctype html><body></body>',{url:'https://rentsketch.com/designer/?tenant=lake#share=signed-fixture',runScripts:'outside-only',pretendToBeVisual:true});
- const w=dom.window,scene={tentId:'pole-20x20',sidewalls:[{id:'left-0',side:'left',startFt:0,lengthFt:10,type:'window',enabled:true}],objects:[]},loaded=[];
+ const w=dom.window,scene={tentId:'pole-20x20',sidewalls:[{id:'left-0',side:'left',startFt:0,lengthFt:10,type:'window',enabled:true}],backgroundPhoto:{id:'photo-shared',url:'https://api.test/api/tenants/lake/background-photo/photo-shared?t=private-share',focusX:50,focusY:50,zoom:1,shade:.08},objects:[]},loaded=[];
  w.RENTSKETCH_API_URL='https://api.test';w.RENTSKETCH_TENANT_SLUG='lake';w.RENTSKETCH_CATALOG_READY=true;
  w.FriendlyBridge={getScene:()=>scene,loadScene:s=>{loaded.push(JSON.parse(JSON.stringify(s)));return true;},state:{}};
  w.fetch=async(url,options)=>{assert.match(url,/\/api\/tenants\/lake\/shared-design\/restore$/);assert.equal(JSON.parse(options.body).token,'signed-fixture');return{ok:true,json:async()=>({id:'shared-design',tenant:'lake',scene,readOnly:true,updatedAt:'2026-09-24T00:00:00Z'})};};

@@ -35,7 +35,7 @@ async function req(url,{method='POST',body}={}){
  `);
  const tenant='00000000-0000-4000-8000-000000000001',other='00000000-0000-4000-8000-000000000002';
  await pg.query("INSERT INTO tenants(id,slug) VALUES($1,'friendly'),($2,'other')",[tenant,other]);
- const scene={tentId:'frame-20x20',sidewalls:[{id:'front-0',side:'front',startFt:0,lengthFt:10,type:'window',enabled:true}],objects:[{id:'t1',kind:'table',x:2,y:2,widthFt:5,depthFt:5}]};
+ const scene={tentId:'frame-20x20',sidewalls:[{id:'front-0',side:'front',startFt:0,lengthFt:10,type:'window',enabled:true}],backgroundPhoto:{id:'photo-fixture',url:'https://api.example.invalid/api/tenants/friendly/background-photo/photo-fixture?t=capability',focusX:37,focusY:58,zoom:1.24,shade:.12},objects:[{id:'t1',kind:'table',x:2,y:2,widthFt:5,depthFt:5}]};
  const design=(await pg.query("INSERT INTO designs(tenant_id,anonymous_session_id,event_type,guest_count,scene) VALUES($1,'owner-session','wedding',80,$2) RETURNING id",[tenant,scene])).rows[0];
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 

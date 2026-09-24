@@ -148,6 +148,24 @@ function gardenDetails(group,bounds,setting) {
   }
 }
 
+export function createPhotoEnvironment(tent) {
+  const group=new THREE.Group();
+  group.name='Venue photo shadow catcher';
+  group.userData={setting:'photo',decorative:true,setNight:function(){}};
+  const size=Math.max(180,Number(tent?.widthFt||0)+100,Number(tent?.lengthFt||0)+100);
+  const shadow=new THREE.Mesh(
+    new THREE.PlaneGeometry(size,size),
+    new THREE.ShadowMaterial({color:0x0c1510,opacity:.16,depthWrite:false})
+  );
+  shadow.name='Venue photo shadow catcher';
+  shadow.rotation.x=-Math.PI/2;
+  shadow.position.y=-.025;
+  shadow.receiveShadow=true;
+  shadow.castShadow=false;
+  group.add(shadow);
+  return group;
+}
+
 export function createEnvironment(tent, surface) {
   const group=new THREE.Group(),setting=sceneSetting(tent,surface),bounds=environmentBounds(tent),nightMaterials=[];
   group.name=setting==='backyard'?'Backyard setting':'Paved driveway setting';
