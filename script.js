@@ -2,6 +2,7 @@ import {mountReviewPricing,currentReviewPricing,reviewDeliveryZip,restoreReviewD
 import './js/ui/designer-help.js';
 import { sitePanel } from './js/ui/site-controls.js';
 import { normalizeVenuePhoto, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
+import { defaultPhotoCalibration, normalizePhotoCalibration, normalizePhotoGeometry } from './js/core/photo-geometry.js';
 import { TABLETOP } from './js/data/tabletop.js';
 // Friendly Event Designer - v2 client-side logic
 // Customer-facing designer: contextual drawers, visual cards, a 2D-first
@@ -24,6 +25,7 @@ import { LIGHTING_OPTIONS, tentLightingPriceFor, lightingForTent } from './js/da
 import { DANCE_SECTION, DANCE_FLOOR_SIZES, sectionsForSize, priceForSize } from './js/data/danceFloor.js';
 import { PACKAGES } from './js/data/packages.js';
 import * as plan2dMod from './js/ui/plan2d.js';
+import * as photoViewMod from './js/ui/photo-view.js';
 import { byId as chairVisualById } from './js/data/chairs.js';
 import { FRIENDLY_TENANT, TENTS, TABLES, CHAIRS } from './js/data/tenant.js';
 import { computeCenterPoles, computeSidewallSegments, installationClearanceFt, resolveAnchoringMethod } from './js/data/tentStructure.js';
@@ -39,7 +41,7 @@ function allowLayoutMutation(action,next,current){
 var restoringScene=false;
 var NL = String.fromCharCode(10);
 TENTS.forEach(function (t) { t.centerPoles=computeCenterPoles(t.type,t.widthFt,t.lengthFt);t.installationClearanceFt=installationClearanceFt(t.type); });
-var state={siteWidthFt:50,siteLengthFt:60,primaryInflatableId:null,eventType:'wedding',guestCount:50,spaceType:'backyard',surfaceType:'notSure',needDance:false,danceFloorSizeId:'18x18',customDanceFloorFt:null,matchedPackageId:null,tentId:'pole-20x40',chairId:'plastic-white',lightingId:'lighting-none',sidewalls:[],backgroundPhoto:null,venuePhotoStatus:{text:'',kind:''},selectedId:null,viewMode:'plan',activeDrawer:null,lastTableConfig:null,eventCheckOpen:false,estimateOpen:false,inspectorCollapsed:true};
+var state={siteWidthFt:50,siteLengthFt:60,primaryInflatableId:null,eventType:'wedding',guestCount:50,spaceType:'backyard',surfaceType:'notSure',needDance:false,danceFloorSizeId:'18x18',customDanceFloorFt:null,matchedPackageId:null,tentId:'pole-20x40',chairId:'plastic-white',lightingId:'lighting-none',sidewalls:[],backgroundPhoto:null,photoCalibration:null,photoGeometry:[],photoTentPlacement:null,selectedPhotoId:null,venuePhotoStatus:{text:'',kind:''},selectedId:null,viewMode:'plan',activeDrawer:null,lastTableConfig:null,eventCheckOpen:false,estimateOpen:false,inspectorCollapsed:true};
 var nextItemNum=1,tryTheseDismissed=false;function newItemId(){var id;do{id='item-'+(nextItemNum++);}while(store&&store.getState().objects.some(function(o){return o.id===id;}));return id;}var store=createLayoutStore({tentId:state.tentId,objects:[],zones:[],aisles:[]},{canMutate:allowLayoutMutation}),tableDraft=null;function byId(arr,id){return arr.find(function(a){return a.id===id;});}function $(id){return document.getElementById(id);}function showStep(id){document.querySelectorAll('.step').forEach(function(el){el.classList.remove('active');});$(id).classList.add('active');}function money(n){return'$'+n.toFixed(2);}function moneyOrAsk(n){return(n===null||n===undefined)?'Ask for pricing':money(n);}function danceFloorSizeFt(){if(state.danceFloorSizeId==='custom')return state.customDanceFloorFt||18;var sz=byId(DANCE_FLOOR_SIZES,state.danceFloorSizeId);return sz?sz.ft:18;}function recommendDanceFloorFt(){var g=state.guestCount;if(g<=30)return 12;if(g<=60)return 15;if(g<=100)return 18;if(g<=150)return 21;return 24;}function validateLighting(){if(!byId(LIGHTING_OPTIONS,state.lightingId))state.lightingId='lighting-none';}
 
 function layoutSpace(){
@@ -109,9 +111,12 @@ function loadScene(scene,options){
   }
   if(!scene||typeof scene!=='object'||!Array.isArray(scene.objects)||(!scene.objects.length&&!Object.prototype.hasOwnProperty.call(scene,'tentId')))return false;
   if(pendingPlacement)cancelPlacement();
-  ['eventName','siteWidthFt','siteLengthFt','primaryInflatableId','eventType','guestCount','spaceType','surfaceType','needDance','danceFloorSizeId','customDanceFloorFt','matchedPackageId','tentId','chairId','lightingId','sidewalls','backgroundPhoto','lastTableConfig'].forEach(function(k){if(scene[k]!==undefined&&scene[k]!==null)state[k]=scene[k];});
-  ['tentId','primaryInflatableId','customDanceFloorFt','matchedPackageId','sidewalls','backgroundPhoto','lastTableConfig'].forEach(function(k){if(Object.prototype.hasOwnProperty.call(scene,k))state[k]=scene[k];});
+  ['eventName','siteWidthFt','siteLengthFt','primaryInflatableId','eventType','guestCount','spaceType','surfaceType','needDance','danceFloorSizeId','customDanceFloorFt','matchedPackageId','tentId','chairId','lightingId','sidewalls','backgroundPhoto','photoCalibration','photoGeometry','photoTentPlacement','lastTableConfig'].forEach(function(k){if(scene[k]!==undefined&&scene[k]!==null)state[k]=scene[k];});
+  ['tentId','primaryInflatableId','customDanceFloorFt','matchedPackageId','sidewalls','backgroundPhoto','photoCalibration','photoGeometry','photoTentPlacement','lastTableConfig'].forEach(function(k){if(Object.prototype.hasOwnProperty.call(scene,k))state[k]=scene[k];});
   state.backgroundPhoto=normalizeVenuePhoto(state.backgroundPhoto,window.RENTSKETCH_API_URL);
+  var restoreTent=byId(TENTS,state.tentId),photoSiteForRestore={id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(Number(state.siteWidthFt)||50,(restoreTent?.widthFt||0)+20,50),lengthFt:Math.max(Number(state.siteLengthFt)||60,(restoreTent?.lengthFt||0)+20,60)};
+  state.photoCalibration=state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSiteForRestore):null;
+  state.photoGeometry=state.backgroundPhoto?normalizePhotoGeometry(state.photoGeometry,photoSiteForRestore):[];
   restoreCustomerDetails(scene.customer,options?.customerEmail);
   restoreReviewDeliveryZip(scene.deliveryZip);
   restoreScenePreferences(scene.sceneOptions);
