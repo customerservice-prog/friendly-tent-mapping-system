@@ -41,3 +41,15 @@ test('round and rectangular seat layouts produce the requested count outside the
   for(const p of positions)assert.ok(Math.abs(p.x)>item.widthFt/2 || Math.abs(p.y)>item.depthFt/2);
  }
 });
+
+
+test('review includes independently selected solid and window sidewall segments',()=>{
+ const catalog={tents:[{id:'tent',name:'20×30 Frame',type:'frame',widthFt:20,lengthFt:30,pricePerDay:325}],tables:[],chairs:[],linens:[],lighting:[],danceSection:{pricePerDay:35}};
+ const scene={tentId:'tent',objects:[],sidewalls:{front:'solid',right:'window',back:'none',left:'solid'}};
+ const result=summarizeEvent(scene,catalog);
+ const solid=result.lines.find(x=>x.category==='sidewall'&&/Solid/.test(x.label));
+ const windows=result.lines.find(x=>x.category==='sidewall'&&/Window/.test(x.label));
+ assert.equal(solid.qty,5,'20ft front + 30ft left = five 10ft solid sections');
+ assert.equal(windows.qty,3,'30ft right = three 10ft window sections');
+ assert.equal(solid.amount,null);assert.equal(windows.amount,null);
+});
