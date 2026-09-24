@@ -111,12 +111,12 @@ export function init(container,callbacks={}) {
   controls.enableDamping=true;controls.dampingFactor=.065;controls.minDistance=8;controls.maxDistance=260;controls.maxPolarAngle=Math.PI*.48;controls.target.set(0,4,0);
   controls.touches.ONE=THREE.TOUCH.ROTATE;controls.touches.TWO=THREE.TOUCH.DOLLY_PAN;
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
-  const furniture=new THREE.Group(),structure=new THREE.Group(),photoStage=new THREE.Group(),photoContinuation=new THREE.Group();photoStage.name='Photo 360 stage';photoContinuation.name='Smart 360 continuation';photoStage.visible=false;photoContinuation.visible=false;scene.add(photoContinuation,photoStage,structure,furniture);
+  const furniture=new THREE.Group(),structure=new THREE.Group(),photoStage=new THREE.Group(),photoContinuation=new THREE.Group(),local360=new THREE.Group();photoStage.name='Photo 360 stage';photoContinuation.name='Smart 360 continuation';local360.name='Local Smart 360 synthesis';photoStage.visible=false;photoContinuation.visible=false;local360.visible=false;scene.add(photoContinuation,local360,photoStage,structure,furniture);
   const rendered=new Map(),pointers=new Set();let state=null,night=false,raf=0,drag=null,danceMesh=null,environment=null,lightGroup=null;
   let inflatableActivity=null,styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
+  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',local360Key='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
   const photoCanvas=document.createElement('canvas'),photoCtx=photoCanvas.getContext('2d',{alpha:false}),photoTexture=new THREE.CanvasTexture(photoCanvas);
   photoTexture.colorSpace=THREE.SRGBColorSpace;photoTexture.minFilter=THREE.LinearFilter;photoTexture.magFilter=THREE.LinearFilter;
   let photoImage=null,photoUrl='',photoLoadSeq=0;
@@ -165,9 +165,99 @@ export function init(container,callbacks={}) {
     photoStage.userData={mode:'single-photo-2.5d',calibration:cal,coverage:'visible-ground-and-rear-view'};
     return true;
   }
+  function clearLocal360(){
+    const geometries=new Set(),materials=new Set(),textures=new Set();
+    local360.traverse(o=>{
+      if(o.geometry)geometries.add(o.geometry);
+      (Array.isArray(o.material)?o.material:[o.material]).filter(Boolean).forEach(m=>{
+        materials.add(m);
+        if(m.map)textures.add(m.map);
+      });
+    });
+    local360.clear();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());local360Key='';
+  }
+  function rgbCss(c){return 'rgb('+Math.round(c[0])+','+Math.round(c[1])+','+Math.round(c[2])+')';}
+  function mixRgb(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
+  function sampleLocal360Style(){
+    const fallback={sky:[142,190,219],sky2:[207,226,234],ground:[68,102,55],ground2:[104,127,82],structure:[112,118,112],left:[78,95,72],right:[78,95,72],green:true};
+    if(!photoImage)return fallback;
+    try{
+      const c=document.createElement('canvas'),w=96,h=72;c.width=w;c.height=h;
+      const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(photoImage,0,0,w,h);
+      const image=x.getImageData?.(0,0,w,h),data=image?.data;if(!data||!data.length)return fallback;
+      const avg=(x0,y0,x1,y1)=>{
+        x0=Math.max(0,Math.floor(x0*w));x1=Math.min(w,Math.ceil(x1*w));
+        y0=Math.max(0,Math.floor(y0*h));y1=Math.min(h,Math.ceil(y1*h));
+        let r=0,g=0,b=0,n=0;
+        for(let yy=y0;yy<y1;yy+=2)for(let xx=x0;xx<x1;xx+=2){const i=(yy*w+xx)*4,a=data[i+3]/255;if(a<.2)continue;r+=data[i]*a;g+=data[i+1]*a;b+=data[i+2]*a;n+=a;}
+        return n?[r/n,g/n,b/n]:[120,130,120];
+      };
+      const horizon=Math.max(.18,Math.min(.65,Number(state?.photoCalibration?.horizonY)||.34));
+      const sky=avg(.1,.02,.9,Math.max(.12,horizon*.58)),sky2=avg(.05,Math.max(.08,horizon*.45),.95,Math.max(.18,horizon*.95));
+      const ground=avg(.08,.72,.92,.98),ground2=avg(.08,Math.min(.62,horizon+.17),.92,.78);
+      const structure=avg(.18,Math.max(.18,horizon*.9),.82,.62),left=avg(0,.18,.14,.78),right=avg(.86,.18,1,.78);
+      const green=ground[1]>ground[0]*1.05&&ground[1]>ground[2]*1.08;
+      return {sky,sky2,ground,ground2,structure,left,right,green};
+    }catch(_){return fallback;}
+  }
+  function makeLocal360Canvas(side,style){
+    const c=document.createElement('canvas'),w=mobile?384:640,h=mobile?320:480;c.width=w;c.height=h;const x=c.getContext('2d');
+    const horizon=Math.round(h*.48);
+    const sky=x.createLinearGradient(0,0,0,horizon);sky.addColorStop(0,rgbCss(mixRgb(style.sky,[255,255,255],.12)));sky.addColorStop(1,rgbCss(style.sky2));x.fillStyle=sky;x.fillRect(0,0,w,horizon+4);
+    const ground=x.createLinearGradient(0,horizon,0,h);ground.addColorStop(0,rgbCss(style.ground2));ground.addColorStop(1,rgbCss(mixRgb(style.ground,[20,30,18],.12)));x.fillStyle=ground;x.fillRect(0,horizon,w,h-horizon);
+    // Copy a narrow real edge into the nearest part of each side wall, then blur/fade it.
+    if(photoImage){
+      const iw=photoImage.naturalWidth||photoImage.width,ih=photoImage.naturalHeight||photoImage.height,strip=Math.max(8,Math.round(iw*.16));
+      const sx=side==='left'?0:side==='right'?Math.max(0,iw-strip):Math.max(0,Math.round((iw-strip)/2));
+      x.save();x.globalAlpha=.44;x.filter='blur(2px) saturate(.92)';
+      for(let i=0;i<4;i++){
+        const segW=w*.18,dx=side==='left'?w-i*segW-segW:side==='right'?i*segW:(i%2?0:w-segW);
+        x.globalAlpha=.38-i*.065;
+        x.drawImage(photoImage,sx,0,strip,ih,dx,0,segW,h);
+      }
+      x.restore();
+    }
+    // Horizon/fence continuation.
+    x.fillStyle='rgba('+Math.round(style.structure[0])+','+Math.round(style.structure[1])+','+Math.round(style.structure[2])+',.55)';
+    const fenceY=horizon+Math.round(h*.055);
+    x.fillRect(0,fenceY,w,Math.max(3,Math.round(h*.018)));
+    for(let px=12;px<w;px+=32){x.fillRect(px,fenceY-Math.round(h*.07),5,Math.round(h*.14));}
+    // Local deterministic foliage/structure silhouettes based on the sampled photo palette.
+    const seed=side==='left'?13:side==='right'?29:47;
+    for(let i=0;i<8;i++){
+      const px=((i*97+seed*31)%w),r=18+((i*13+seed)%24),py=fenceY-r*.65;
+      x.fillStyle='rgba('+Math.round(style.green?style.ground[0]*.75:style.left[0])+','+Math.round(style.green?style.ground[1]*.72:style.left[1])+','+Math.round(style.green?style.ground[2]*.68:style.left[2])+',.82)';
+      x.beginPath();x.arc(px,py,r,0,Math.PI*2);x.fill();
+      x.fillStyle='rgba(80,66,49,.7)';x.fillRect(px-3,py+r*.55,6,Math.max(8,r*.9));
+    }
+    // Subtle texture/noise so the continuation does not look like a flat solid wall.
+    for(let yy=horizon;yy<h;yy+=6)for(let xx=0;xx<w;xx+=7){
+      const n=((xx*17+yy*31+seed*19)%23)/23,base=style.ground;
+      x.fillStyle='rgba('+Math.round(base[0]*(.82+n*.25))+','+Math.round(base[1]*(.82+n*.25))+','+Math.round(base[2]*(.82+n*.25))+',.12)';
+      x.fillRect(xx,yy,2,2);
+    }
+    return c;
+  }
+  function addLocal360Wall(name,canvas,width,height,x,y,z,rotY){
+    const tex=new THREE.CanvasTexture(canvas);tex.colorSpace=THREE.SRGBColorSpace;tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;
+    const mat=new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,depthWrite:true});
+    const mesh=new THREE.Mesh(new THREE.PlaneGeometry(width,height),mat);mesh.name=name;mesh.position.set(x,y,z);mesh.rotation.y=rotY;local360.add(mesh);return mesh;
+  }
+  function rebuildLocal360(){
+    if(!hasVenuePhoto()||!photoImage||!state?.photoSite){clearLocal360();return false;}
+    const site=state.photoSite,style=sampleLocal360Style(),key=JSON.stringify([photoUrl,site.widthFt,site.lengthFt,state.surfaceType,style]);
+    if(key===local360Key&&local360.children.length)return true;
+    clearLocal360();local360Key=key;
+    const w=Math.max(50,Number(site.widthFt)||50),l=Math.max(60,Number(site.lengthFt)||60),radius=Math.max(w,l)*1.12,height=Math.max(34,radius*.62);
+    addLocal360Wall('Local Smart 360 left',makeLocal360Canvas('left',style),radius*2,height,-radius,height/2,0,Math.PI/2);
+    addLocal360Wall('Local Smart 360 right',makeLocal360Canvas('right',style),radius*2,height,radius,height/2,0,-Math.PI/2);
+    addLocal360Wall('Local Smart 360 rear',makeLocal360Canvas('rear',style),radius*2,height,0,height/2,-radius,0);
+    local360.userData={mode:'browser-local-synthesis',noExternalApi:true,style,sourcePhoto:photoUrl};
+    return true;
+  }
   function syncPhotoPresentation(){
     const photo=hasVenuePhoto(),orbit=photo&&cameraMode==='photo360',matched=photo&&cameraMode==='outside';
-    photoStage.visible=orbit;photoContinuation.visible=orbit;
+    photoStage.visible=orbit;photoContinuation.visible=orbit;local360.visible=orbit;
     // Matched View is an exact camera registration, not an orbit mode.
     controls.enabled=!matched;
     controls.enablePan=!matched;
@@ -199,10 +289,10 @@ export function init(container,callbacks={}) {
   }
   function loadVenuePhoto(photo){
     const url=photo&&/^https?:\/\//i.test(photo.url||'')?photo.url:'';
-    if(!url){photoUrl='';photoImage=null;clearPhotoStage();return;}
-    if(url===photoUrl&&photoImage){paintVenuePhoto();rebuildPhotoStage();syncPhotoPresentation();return;}
+    if(!url){photoUrl='';photoImage=null;clearPhotoStage();clearLocal360();return;}
+    if(url===photoUrl&&photoImage){paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();syncPhotoPresentation();return;}
     photoUrl=url;photoImage=null;const seq=++photoLoadSeq,img=new Image();img.crossOrigin='anonymous';img.decoding='async';
-    img.onload=function(){if(destroyed||seq!==photoLoadSeq||url!==photoUrl)return;photoImage=img;paintVenuePhoto();rebuildPhotoStage();syncPhotoPresentation();invalidate();};
+    img.onload=function(){if(destroyed||seq!==photoLoadSeq||url!==photoUrl)return;photoImage=img;paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();syncPhotoPresentation();invalidate();};
     img.onerror=function(){if(seq!==photoLoadSeq)return;console.warn('[RentSketch] venue background could not load');};
     img.src=url;
   }
@@ -246,7 +336,7 @@ export function init(container,callbacks={}) {
         rotationDeg:pp&&Number.isFinite(Number(pp.rotationDeg))?Number(pp.rotationDeg):(Number(o.rotationDeg||0)+Number(photoTent.rotationDeg||0))
       };
     }):state.objects;
-    loadVenuePhoto(state.backgroundPhoto);if(photoMode&&photoImage)rebuildPhotoStage();
+    loadVenuePhoto(state.backgroundPhoto);if(photoMode&&photoImage){rebuildPhotoStage();rebuildLocal360();}
     const nextContinuationKey=photoMode?JSON.stringify([state.photoSite?.widthFt,state.photoSite?.lengthFt,state.surfaceType]):'';
     if(nextContinuationKey!==photoContinuationKey){
       disposeGroup(photoContinuation);photoContinuationKey=nextContinuationKey;
@@ -629,7 +719,7 @@ export function init(container,callbacks={}) {
     if(destroyed||!state?.tent)return null;
     try{renderer.render(scene,camera);return renderer.domElement.toDataURL('image/jpeg',.9);}catch(_){return null;}
   }
-  const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,captureImage,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
+  const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,captureImage,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
   // A watch-only sample must not replace the real designer renderer.
   if(callbacks.registerActive !== false)active=api;return api;
 }
