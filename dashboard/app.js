@@ -4,7 +4,7 @@
  var API_BASE = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
   var TOKEN_KEY = 'rentsketch_dashboard_token';
   var TENANT_KEY = 'rentsketch_dashboard_tenant';
-  var ROUTES = ['login', 'overview', 'products', 'branding', 'requests', 'billing', 'install', 'superadmin'];
+  var ROUTES = ['login', 'overview', 'requests', 'products', 'branding', 'analytics', 'billing', 'install', 'superadmin'];
 
  function platformTenantView() { try { return new URLSearchParams(window.location.search).get('tenantView') === '1'; } catch (_) { return false; } }
  function getToken() { return localStorage.getItem(TOKEN_KEY); }
@@ -77,10 +77,10 @@ function esc(s) {
  function shellHtml(route, inner) {
    var tenants = state.tenants || [];
    var platformAdmin = !!(state.user && state.user.isPlatformAdmin);
-   var brandSub = platformAdmin ? (platformTenantView() ? 'Tenant Workspace · Admin' : 'Platform Console') : 'Business Dashboard';
+   var brandSub = platformAdmin ? 'Tenant Workspace · Admin' : 'Business Workspace';
    var switcher = '';
    if (tenants.length > 1) {
-     switcher = '<select id="tenantSwitch" class="tenant-switch">' + tenants.map(function (t) {
+     switcher = '<select id="tenantSwitch" class="tenant-switch" aria-label="Switch business">' + tenants.map(function (t) {
        return '<option value="' + esc(t.slug) + '"' + (t.slug === state.tenant ? ' selected' : '') + '>' + esc(t.name) + '</option>';
      }).join('') + '</select>';
    } else if (tenants.length === 1) {
@@ -90,15 +90,19 @@ function esc(s) {
      return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '">' + label + '</a>';
    }
    return '' +
-     '<div class="dash-shell">' +
+     '<div class="dash-shell" id="tenantShell">' +
+     '<button type="button" id="tenantMobileMenu" aria-label="Open workspace menu">☰</button>' +
      '<header class="dash-header">' +
-     '<div class="dash-brand">RentSketch <span class="dash-brand-sub">' + brandSub + '</span></div>' +
-     '<nav class="dash-nav">' +
-     navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
-     navLink('branding', 'Branding') + navLink('billing', 'Billing') + navLink('install', 'Install') +
-     (state.user && state.user.isPlatformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link">Platform Console</a>' : '') +
-     '</nav>' +
-     '<div class="dash-account">' + switcher + '<button id="btnLogout" class="btn-logout" type="button">Log out</button></div>' +
+       '<div class="dash-brand">RentSketch <span class="dash-brand-sub">' + brandSub + '</span></div>' +
+       '<nav class="dash-nav" aria-label="Business workspace">' +
+         navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
+         navLink('branding', 'Branding') + navLink('analytics', 'Analytics') + navLink('billing', 'Billing') + navLink('install', 'Install') +
+         (platformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link">Platform Console</a>' : '') +
+       '</nav>' +
+       '<div class="dash-account">' + switcher +
+         (platformAdmin ? '<span class="role-pill">Platform Admin</span>' : '') +
+         '<button id="btnLogout" class="btn-logout" type="button">Log out</button>' +
+       '</div>' +
      '</header>' +
      '<main class="dash-main" id="dashMain">' + inner + '</main>' +
      '</div>';
@@ -121,6 +125,12 @@ function esc(s) {
      setActiveTenant(sw.value);
      state.tenant = sw.value;
      render();
+   });
+   var mobile = document.getElementById('tenantMobileMenu');
+   var shell = document.getElementById('tenantShell');
+   if (mobile && shell) mobile.addEventListener('click', function () { shell.classList.toggle('menu-open'); });
+   document.querySelectorAll('.dash-nav a').forEach(function (link) {
+     link.addEventListener('click', function () { if (shell) shell.classList.remove('menu-open'); });
    });
  }
 
@@ -177,52 +187,124 @@ function esc(s) {
  }
 
  async function viewOverview(route, gen) {
-   appEl().innerHTML = shellHtml(route, loadingHtml('Loading overview...'));
+   appEl().innerHTML = shellHtml(route, loadingHtml('Loading workspace...'));
    bindShellEvents();
    if (!state.tenant) {
-     document.getElementById('dashMain').innerHTML = '<div class="dash-empty"><div class="dash-empty-icon">RS</div><h3>No business assigned yet</h3><p>Your account is not a member of any tenant yet. Ask a RentSketch admin to add you.</p></div>';
+     document.getElementById('dashMain').innerHTML = '<div class="dash-empty"><div class="dash-empty-icon">RS</div><h3>No business assigned yet</h3><p>Ask a RentSketch administrator to add this account to a business workspace.</p></div>';
      return;
    }
    try {
-     var admin = await api('/api/tenants/' + state.tenant + '/admin');
-     var designs = await api('/api/tenants/' + state.tenant + '/designs');
-     var requests = await api('/api/tenants/' + state.tenant + '/quote-requests');
-     var reqs = requests.quoteRequests || [];
-     var newCount = reqs.filter(function (r) { return r.status === 'new'; }).length;
-     var bookedCount = reqs.filter(function (r) { return r.status === 'booked'; }).length;
-     if (gen !== renderGeneration) return;
-     var html = '' +
-       '<h1 class="dash-title">' + esc(admin.name) + '</h1>' +
-       '<p class="dash-subtitle">' + ((state.user && state.user.isPlatformAdmin) ? 'Platform Admin · Full complimentary access · Viewing tenant' : ('Plan: ' + esc(admin.subscriptionPlan || 'trial') + ' &middot; Status: ' + esc(admin.subscriptionStatus || 'trialing'))) + '</p>' +
-        (function() {
-          if (state.user && state.user.isPlatformAdmin) return '<div class="dash-saved"><strong>Platform Admin:</strong> unrestricted RentSketch access. Tenant trial and subscription limits do not apply to your account.</div>';
-          if (!admin.trialEndsAt) return '';
-          var end = new Date(admin.trialEndsAt);
-          var now = new Date();
-          var daysLeft = Math.ceil((end - now) / (24*60*60*1000));
-          if (admin.subscriptionStatus === 'trialing' && daysLeft <= 0) {
-            return '<div class="trial-banner trial-expired">Your free trial has ended. Please upgrade to keep using RentSketch.</div>';
-          }
-          if (admin.subscriptionStatus === 'trialing' && daysLeft > 0) {
-            return '<div class="trial-banner">Trial ends in ' + daysLeft + ' day' + (daysLeft === 1 ? '' : 's') + '.</div>';
-          }
-          return '';
-        })() +
-       (!(designs.designs || []).length ? '<section class="dash-onboarding"><h2>Set up your customer designer</h2><p>Your workspace is ready. Complete these steps before sharing it with customers.</p><div class="dash-setup-grid"><a href="#/products"><strong>1. Add your products</strong><span>Set dimensions, prices and visual models.</span></a><a href="#/branding"><strong>2. Add your branding</strong><span>Make the customer experience yours.</span></a><a href="#/install"><strong>3. Preview and install</strong><span>Check your designer, then add it to your website.</span></a></div><p><a href="/help/#business" target="_blank" rel="noopener">Read the getting-started guide ↗</a></p></section>' : '') +
-       '<div class="stat-row">' +
-       '<div class="stat-card"><div class="stat-num">' + reqs.length + '</div><div class="stat-label">Quote Requests</div></div>' +
-       '<div class="stat-card"><div class="stat-num">' + newCount + '</div><div class="stat-label">New / Unread</div></div>' +
-       '<div class="stat-card"><div class="stat-num">' + bookedCount + '</div><div class="stat-label">Booked / Active Orders</div></div>' +
-       '<div class="stat-card"><div class="stat-num">' + (designs.designs || []).length + '</div><div class="stat-label">Saved Designs (last 50)</div></div>' +
-       '</div>' +
-       '<h2 class="dash-section-title">Recent Quote Requests</h2>' +
-       renderRequestsTable(reqs.slice(0, 8), false) +
-       '<p class="dash-more"><a href="#/requests">View all requests &rarr;</a></p>';
-     document.getElementById('dashMain').innerHTML = html;
-   } catch (err) {
-     document.getElementById('dashMain').innerHTML = errorHtml(err);
-   }
+     var results = await Promise.all([
+       api('/api/tenants/' + state.tenant + '/admin'),
+       api('/api/tenants/' + state.tenant + '/designs'),
+       api('/api/tenants/' + state.tenant + '/quote-requests'),
+       api('/api/tenants/' + state.tenant + '/products'),
+       api('/api/tenants/' + state.tenant + '/connect/status').catch(function(){ return {status:'unavailable',hasAccount:false}; })
+     ]);
+     var admin=results[0], designs=results[1], requests=results[2], productsData=results[3], connect=results[4];
+     var reqs=requests.quoteRequests||[], designsList=designs.designs||[], products=productsData.products||[];
+     var newCount=reqs.filter(function(r){return r.status==='new';}).length;
+     var bookedCount=reqs.filter(function(r){return r.status==='booked';}).length;
+     var pipeline=reqs.filter(function(r){return r.status!=='declined';}).reduce(function(sum,r){return sum+Number(r.estimate_total||0);},0);
+     var pricedProducts=products.filter(function(p){return Number(p.price_per_day)>0;}).length;
+     var mappedProducts=products.filter(function(p){return !!p.visual_model_id || ['other','accessory','inflatable'].indexOf(normCategory(p.category))!==-1;}).length;
+     var brandingReady=!!(admin.name && (admin.logoUrl || admin.primaryColor) && admin.contactEmail);
+     var installReady=Array.isArray(admin.allowedOrigins)&&admin.allowedOrigins.length>0;
+     var paymentsReady=connect.status==='active';
+     var launch=[
+       {key:'catalog',label:'Build your catalog',detail:products.length?products.length+' products added':'Add the rentals customers can place',done:products.length>0,href:'#/products'},
+       {key:'brand',label:'Finish your branding',detail:brandingReady?'Company identity is configured':'Logo, colors and contact details',done:brandingReady,href:'#/branding'},
+       {key:'price',label:'Confirm pricing',detail:pricedProducts+'/'+products.length+' products have pricing',done:products.length>0&&pricedProducts===products.length,href:'#/products'},
+       {key:'pay',label:'Connect payments',detail:paymentsReady?'Stripe payouts connected':'Connect Stripe for customer deposits',done:paymentsReady,href:'#/branding'},
+       {key:'install',label:'Publish your designer',detail:installReady?'Allowed website domain saved':'Add your website and preview the embed',done:installReady,href:'#/install'}
+     ];
+     var done=launch.filter(function(x){return x.done;}).length,pct=Math.round(done/launch.length*100);
+     if(gen!==renderGeneration)return;
+     var designerUrl='/designer/?tenant='+encodeURIComponent(state.tenant);
+     var trial='';
+     if(!(state.user&&state.user.isPlatformAdmin)&&admin.trialEndsAt){
+       var daysLeft=Math.ceil((new Date(admin.trialEndsAt)-new Date())/86400000);
+       if(admin.subscriptionStatus==='trialing'&&daysLeft<=0)trial='<div class="trial-banner trial-expired">Your trial has ended. Billing remains available so you can choose a plan.</div>';
+       else if(admin.subscriptionStatus==='trialing')trial='<div class="trial-banner">Trial ends in '+daysLeft+' day'+(daysLeft===1?'':'s')+'.</div>';
+     }
+     var activity=[];
+     reqs.slice(0,8).forEach(function(r){activity.push({type:'request',title:(r.customer_name||'Customer')+' submitted a quote request',detail:(r.event_type||'Event')+(r.estimate_total?' · '+money(r.estimate_total):''),at:r.created_at,status:r.status});});
+     designsList.slice(0,8).forEach(function(d){activity.push({type:'design',title:'A design was saved',detail:(d.event_type||'Event')+(d.guest_count?' · '+d.guest_count+' guests':''),at:d.created_at,status:'active'});});
+     activity.sort(function(a,b){return new Date(b.at)-new Date(a.at);});activity=activity.slice(0,7);
+     var health=[
+       {label:'Catalog',detail:products.length+' products · '+mappedProducts+' visually mapped',ok:products.length>0&&mappedProducts>=Math.min(products.length,1),href:'#/products'},
+       {label:'Branding',detail:brandingReady?'Customer-facing identity ready':'Finish logo/colors/contact info',ok:brandingReady,href:'#/branding'},
+       {label:'Payments',detail:paymentsReady?'Stripe payouts connected':connect.hasAccount?'Stripe onboarding incomplete':'Stripe not connected',ok:paymentsReady,href:'#/branding'},
+       {label:'Website install',detail:installReady?admin.allowedOrigins.length+' allowed domain'+(admin.allowedOrigins.length===1?'':'s'):'No allowed website domain yet',ok:installReady,href:'#/install'}
+     ];
+     var html=
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Business workspace</div><h1 class="dash-title">'+esc(admin.name)+'</h1><p class="dash-subtitle">Customer activity, designer readiness, requests and account health in one place.</p></div><div class="tw-actions"><a class="tw-btn" href="#/requests">Open requests</a><a class="tw-btn" href="'+designerUrl+'" target="_blank" rel="noopener">Preview designer</a><a class="tw-btn primary" href="'+designerUrl+'" target="_blank" rel="noopener">✦ Open RentSketch</a></div></div>'+
+       ((state.user&&state.user.isPlatformAdmin)?'<div class="role-banner"><strong>Platform Admin</strong>&nbsp; You are viewing this tenant with unrestricted platform access. Customer billing rules are unchanged.</div>':'')+
+       trial+
+       '<section class="tw-progress-card"><div class="tw-progress-top"><div><div class="tw-eyebrow">Launch checklist</div><h2>'+ (pct===100?'Your designer is launch-ready':'Finish your customer designer') +'</h2></div><span>'+done+' of '+launch.length+' complete · '+pct+'%</span></div><div class="tw-progress-track"><span style="width:'+pct+'%"></span></div><div class="tw-checklist">'+
+       launch.map(function(x){return '<a class="tw-check '+(x.done?'done':'')+'" href="'+x.href+'"><i>'+(x.done?'✓':'•')+'</i><span><strong>'+esc(x.label)+'</strong><small>'+esc(x.detail)+'</small></span></a>';}).join('')+
+       '</div></section>'+
+       '<section class="tw-metrics">'+
+         '<article class="tw-metric"><div class="tw-metric-label">Quote requests</div><div class="tw-metric-value">'+reqs.length+'</div><div class="tw-metric-detail">'+newCount+' new / unread</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Saved designs</div><div class="tw-metric-value">'+designsList.length+'</div><div class="tw-metric-detail">Latest 50 customer layouts</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Booked requests</div><div class="tw-metric-value">'+bookedCount+'</div><div class="tw-metric-detail">Marked booked by your team</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Open estimate pipeline</div><div class="tw-metric-value">'+money(pipeline)+'</div><div class="tw-metric-detail">Non-declined request estimates</div></article>'+
+       '</section>'+
+       '<div class="tw-grid"><div class="tw-stack">'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Recent quote requests</h2><p>Newest customer requests and current status.</p></div><a class="tw-btn" href="#/requests">View all</a></div><div class="tw-table-scroll">'+renderRequestsTable(reqs.slice(0,7),false)+'</div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Recent activity</h2><p>Customer requests and saved-design activity.</p></div><a class="tw-btn" href="#/analytics">Analytics</a></div><div class="tw-panel-body">'+
+           (activity.length?'<div class="tw-activity-list">'+activity.map(function(a){return '<div class="tw-activity-row"><div><strong>'+esc(a.title)+'</strong><p>'+esc(a.detail)+' · '+fmtDateTime(a.at)+'</p></div><span class="tw-status '+esc(a.status)+'">'+esc(a.type)+'</span></div>';}).join('')+'</div>':'<div class="dash-empty"><h3>No customer activity yet</h3><p>Preview your designer or share its link to start collecting layouts and requests.</p></div>')+
+         '</div></section>'+
+       '</div><aside class="tw-stack">'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Business health</h2><p>What is ready and what still needs attention.</p></div></div><div class="tw-panel-body"><div class="tw-health-list">'+health.map(function(h){return '<a class="tw-health-row" href="'+h.href+'" style="text-decoration:none;color:inherit"><div><strong><i class="tw-dot '+(h.ok?'':'warn')+'"></i>'+esc(h.label)+'</strong><p>'+esc(h.detail)+'</p></div><span class="tw-status '+(h.ok?'ok':'new')+'">'+(h.ok?'Ready':'Review')+'</span></a>';}).join('')+'</div></div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Quick actions</h2><p>Common workspace tasks.</p></div></div><div class="tw-panel-body"><div class="tw-list">'+
+           '<a class="tw-list-row" href="'+designerUrl+'" target="_blank" rel="noopener"><strong>Open customer designer</strong><span>↗</span></a>'+
+           '<a class="tw-list-row" href="#/products"><strong>Manage catalog</strong><span>→</span></a>'+
+           '<a class="tw-list-row" href="#/branding"><strong>Branding & payouts</strong><span>→</span></a>'+
+           '<a class="tw-list-row" href="#/install"><strong>Website install</strong><span>→</span></a>'+
+         '</div></div></section>'+
+       '</aside></div>';
+     document.getElementById('dashMain').innerHTML=html;
+   } catch(err){document.getElementById('dashMain').innerHTML=errorHtml(err);}
  }
+
+ async function viewAnalytics(route,gen){
+   appEl().innerHTML=shellHtml(route,loadingHtml('Loading analytics...'));bindShellEvents();
+   if(!state.tenant){document.getElementById('dashMain').innerHTML='<div class="dash-empty">No tenant access.</div>';return;}
+   try{
+     var data=await Promise.all([
+       api('/api/tenants/'+state.tenant+'/quote-requests'),
+       api('/api/tenants/'+state.tenant+'/designs'),
+       api('/api/tenants/'+state.tenant+'/products')
+     ]);
+     var reqs=data[0].quoteRequests||[],designs=data[1].designs||[],products=data[2].products||[];
+     var now=Date.now(),monthAgo=now-30*86400000;
+     var recentReq=reqs.filter(function(r){return new Date(r.created_at).getTime()>=monthAgo;});
+     var recentDesigns=designs.filter(function(d){return new Date(d.created_at).getTime()>=monthAgo;});
+     var booked=reqs.filter(function(r){return r.status==='booked';}).length;
+     var avg=reqs.length?reqs.reduce(function(s,r){return s+Number(r.estimate_total||0);},0)/reqs.length:0;
+     var avgGuests=reqs.filter(function(r){return Number(r.guest_count)>0;});
+     avgGuests=avgGuests.length?Math.round(avgGuests.reduce(function(s,r){return s+Number(r.guest_count);},0)/avgGuests.length):0;
+     var types={};reqs.forEach(function(r){var k=r.event_type||'Unspecified';types[k]=(types[k]||0)+1;});
+     var statuses={};reqs.forEach(function(r){statuses[r.status]=(statuses[r.status]||0)+1;});
+     var maxStatus=Math.max(1,...Object.values(statuses));
+     if(gen!==renderGeneration)return;
+     document.getElementById('dashMain').innerHTML=
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Workspace analytics</div><h1 class="dash-title">Customer planning activity</h1><p class="dash-subtitle">A practical view of demand coming through your RentSketch designer.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open RentSketch</a></div></div>'+
+       '<section class="tw-metrics">'+
+         '<article class="tw-metric"><div class="tw-metric-label">Requests · 30 days</div><div class="tw-metric-value">'+recentReq.length+'</div><div class="tw-metric-detail">'+reqs.length+' all-time requests</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Designs · 30 days</div><div class="tw-metric-value">'+recentDesigns.length+'</div><div class="tw-metric-detail">'+designs.length+' saved layouts in current history</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Request → booked</div><div class="tw-metric-value">'+(reqs.length?Math.round(booked/reqs.length*100):0)+'%</div><div class="tw-metric-detail">'+booked+' booked of '+reqs.length+' requests</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Average estimate</div><div class="tw-metric-value">'+money(avg)+'</div><div class="tw-metric-detail">'+(avgGuests?avgGuests+' average guests':'Guest count not available')+'</div></article>'+
+       '</section>'+
+       '<div class="tw-analytics-grid">'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Request pipeline</h2><p>Status distribution across customer requests.</p></div></div><div class="tw-panel-body">'+Object.keys(statuses).map(function(k){return '<div class="tw-list-row"><span>'+esc(k)+'</span><strong>'+statuses[k]+'</strong></div><div class="tw-bar"><span style="width:'+Math.round(statuses[k]/maxStatus*100)+'%"></span></div>';}).join('')+(Object.keys(statuses).length?'':emptyAnalytics('No requests yet'))+'</div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Event types</h2><p>What customers are planning.</p></div></div><div class="tw-panel-body">'+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).slice(0,8).map(function(x){return '<div class="tw-list-row"><span>'+esc(x[0])+'</span><strong>'+x[1]+'</strong></div>';}).join('')+(Object.keys(types).length?'':emptyAnalytics('No event-type data yet'))+'</div></section>'+
+         '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Catalog readiness</h2><p>How much of your equipment is customer-ready.</p></div></div><div class="tw-panel-body"><div class="tw-list-row"><span>Total products</span><strong>'+products.length+'</strong></div><div class="tw-list-row"><span>Active</span><strong>'+products.filter(function(p){return p.active;}).length+'</strong></div><div class="tw-list-row"><span>Priced</span><strong>'+products.filter(function(p){return Number(p.price_per_day)>0;}).length+'</strong></div><div class="tw-list-row"><span>Visual model assigned</span><strong>'+products.filter(function(p){return p.visual_model_id;}).length+'</strong></div></div></section>'+
+       '</div>';
+   }catch(err){document.getElementById('dashMain').innerHTML=errorHtml(err);}
+ }
+ function emptyAnalytics(text){return '<div class="dash-empty"><p>'+esc(text)+'</p></div>';}
 
  function renderRequestsTable(rows, withActions) {
    if (!rows.length) return '<div class="dash-empty">No quote requests yet.</div>';
@@ -729,6 +811,7 @@ function esc(s) {
    else if (route === 'requests') viewRequests(route, __gen);
    else if (route === 'products') viewProducts(route, __gen);
    else if (route === 'branding') viewBranding(route, __gen);
+   else if (route === 'analytics') viewAnalytics(route, __gen);
    else if (route === 'billing') viewBilling(route, __gen);
    else if (route === 'install') viewInstall(route, __gen);
    else if (route === 'superadmin') { window.location.replace('/dashboard/platform.html#overview'); }
