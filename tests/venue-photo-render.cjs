@@ -11,13 +11,13 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  },{get:(t,k)=>t[k]||(()=>{})});
  w.HTMLCanvasElement.prototype.getContext=()=>ctx;w.matchMedia=()=>({matches:false});
  Object.defineProperties(container,{clientWidth:{get:()=>900},clientHeight:{get:()=>600}});
- let renderer,clock=0,frames=new Map();
+ let renderer,control,clock=0,frames=new Map();
  class Renderer{
   constructor(){renderer=this;this.domElement=w.document.createElement('canvas');this.domElement.getBoundingClientRect=()=>({left:0,top:0,width:900,height:600});this.domElement.toDataURL=()=> 'data:image/jpeg;base64,venue-fixture';this.shadowMap={};}
   setPixelRatio(){}setSize(){}render(scene,camera){this.scene=scene;this.camera=camera;}dispose(){this.disposed=true;}
  }
  class Controls{
-  constructor(camera){this.camera=camera;this.target=new THREE.Vector3();this.touches={};}
+  constructor(camera){control=this;this.camera=camera;this.target=new THREE.Vector3();this.touches={};}
   addEventListener(){}update(){this.camera.lookAt(this.target);this.camera.updateMatrixWorld(true);}dispose(){}
  }
  class PMREM{fromScene(){return{texture:new THREE.Texture(),dispose(){}};}dispose(){}}
@@ -54,20 +54,28 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  assert.ok(scene.getObjectByName('Photo geometry fence'),'traced fence becomes 3D proxy geometry');
  assert.ok(scene.getObjectByName('Photo geometry tree'),'traced tree becomes 3D proxy geometry');
  assert.equal(scene.getObjectByName('Venue photo geometry').userData.calibration.horizonY,.34,'3D environment receives photo calibration');
- assert.equal(scene.getObjectByName('Backyard setting'),undefined,'generated house/fence/yard are removed in photo mode');
+ const continuation=scene.getObjectByName('Smart 360 continuation'),generatedYard=scene.getObjectByName('Backyard setting');
+ assert.ok(continuation&&!continuation.visible,'generated no-photo yard is prepared but hidden in Matched View');
+ assert.ok(generatedYard,'Smart 360 prepares the normal generated backyard for unseen directions');
  assert.equal(scene.getObjectByName('Visible sun').visible,false,'generated sky decorations do not cover the customer photo');
  assert.equal(scene.fog.density,.00015,'photo mode keeps only minimal depth haze');
  assert.ok(scene.background?.isCanvasTexture,'Matched View uses the uploaded photo as the camera-matched background');
  const matchedBackground=scene.background,photoStage=scene.getObjectByName('Photo 360 stage');
  assert.ok(photoStage&&!photoStage.visible,'world-space photo stage stays hidden in Matched View');
+ assert.equal(control.enabled,false,'Matched View locks orbit controls so the tent cannot slide against a flat photo');
+ assert.equal(control.enableRotate,false,'Matched View specifically disables camera rotation');
  assert.ok(scene.getObjectByName('Photo ground projection'),'calibrated photo pixels are projected onto a 3D ground mesh');
  assert.ok(scene.getObjectByName('Photo backdrop projection'),'upper photo pixels are projected onto a rear world-space backdrop');
  assert.equal(view.orbit360(),true,'360 mode is available when a venue photo exists');
  assert.equal(photoStage.visible,true,'360 View reveals world-space photo geometry');
+ assert.equal(continuation.visible,true,'Smart 360 reveals the generated backyard continuation for unseen directions');
+ assert.equal(control.enabled,true,'Smart 360 enables normal camera orbiting');
  assert.notEqual(scene.background,matchedBackground,'360 View stops pinning the original photo to the camera');
  const orbitCamera=renderer.camera.position.clone();
  assert.equal(view.matchPhoto(),true,'Matched View can be restored');
  assert.equal(photoStage.visible,false,'returning to Matched View hides the 2.5D projection stage');
+ assert.equal(continuation.visible,false,'returning to Matched View hides the generated continuation');
+ assert.equal(control.enabled,false,'returning to Matched View locks the camera again');
  assert.ok(scene.background?.isCanvasTexture,'Matched View restores the exact photo background');
  assert.notDeepEqual(renderer.camera.position.toArray(),orbitCamera.toArray(),'Matched View restores the calibrated camera');
  assert.ok(draws>0,'uploaded photo is drawn into the background texture');assert.match(view.captureImage(),/^data:image\/jpeg/,'print/review capture includes the WebGL composition');
@@ -81,5 +89,5 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  assert.ok(scene.getObjectByName('Visible sun').visible,'generated weather decorations return with generated scenery');
  view.destroy();assert.ok(renderer.disposed);assert.equal(container.children.length,0);assert.equal(frames.size,0);
  dom.window.close();
- console.log('PASS venue photo renderer: Matched View, world-space 360 photo ground/backdrop, calibrated camera, traced geometry and generated-setting restore.');
+ console.log('PASS venue photo renderer: locked Matched View, fixed-world Smart 360 continuation, projected photo stage, calibrated camera and traced geometry.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
