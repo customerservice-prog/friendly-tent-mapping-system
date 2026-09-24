@@ -204,6 +204,41 @@ router.get('/admin/designs/:designId', wrap(async (req, res) => {
     });
 }));
 
+router.post('/designs/:designId/share', wrap(async (req, res) => {
+    const admin = await platformAdminRequest(req);
+    const sid = typeof req.body?.anonymousSessionId === 'string' ? req.body.anonymousSessionId : '';
+    const design = (await query('SELECT * FROM designs WHERE id=$1', [req.params.designId])).rows[0];
+    if (!design) return res.status(404).json({ error: 'Saved design not found' });
+    if (!admin && (!sid || sid !== design.anonymous_session_id)) return res.status(403).json({ error: 'This design does not belong to this browser' });
+    const tenant = await designTenant(design);
+    const token = signToken({ kind: 'design_share', designId: design.id }, { expiresIn: '30d' });
+    const shareUrl = safeOrigin(req) + '/designer/?tenant=' + encodeURIComponent(tenant?.slug || 'generic') + '#shareToken=' + encodeURIComponent(token);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ url: shareUrl, expiresInDays: 30, readOnly: true });
+}));
+
+router.get('/shared/:token', wrap(async (req, res) => {
+    let payload;
+    try { payload = verifyToken(req.params.token); } catch (_) { return res.status(400).json({ error: 'This shared layout link expired' }); }
+    if (payload.kind !== 'design_share' || !payload.designId) return res.status(400).json({ error: 'Invalid shared layout link' });
+    const design = (await query('SELECT * FROM designs WHERE id=$1', [payload.designId])).rows[0];
+    if (!design) return res.status(404).json({ error: 'Shared layout not found' });
+    const tenant = await designTenant(design);
+    const scene = { ...(design.scene || {}) };
+    if (scene.customer) scene.customer = { name: '', email: '', date: scene.customer.date || '' };
+    res.setHeader('Cache-Control', 'private, max-age=60');
+    res.json({
+        id: design.id,
+        tenant: tenant?.slug || 'generic',
+        scene,
+        shared: true,
+        readOnly: true,
+        eventType: design.event_type,
+        guestCount: design.guest_count,
+        estimateTotal: design.estimate_total,
+    });
+}));
+
 // The opaque Checkout Session is the private recovery credential. Stripe,
 // rather than payment=success in a URL, verifies the purchase. No contact
 // details or draft ownership tokens are placed into the return URL.
