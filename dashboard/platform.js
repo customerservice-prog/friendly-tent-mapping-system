@@ -152,6 +152,59 @@ async function tenantModal(slug){
  document.getElementById('tmSave').onclick=async function(){var btn=this;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug),{method:'PATCH',body:{name:document.getElementById('tmName').value,contactEmail:document.getElementById('tmEmail').value,trialEndsAt:document.getElementById('tmTrial').value||null}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">Saved.</div>';setTimeout(function(){close();render()},500);}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
 }
 
+
+async function users(){
+ var d=await api('/api/admin/users?limit=500'),rows=d.users||[];
+ var tenantUsers=rows.filter(function(u){return !u.is_platform_admin;}),multi=tenantUsers.filter(function(u){return (u.memberships||[]).length>1;});
+ document.getElementById('pcContent').innerHTML=head('Account access','Users & access','Find every platform and tenant user, see which businesses they belong to, and jump directly into the related workspace.',
+  '<a class="pc-btn" href="#businesses">Businesses</a><a class="pc-btn primary" href="#onboarding">Onboarding</a>')+
+  '<section class="pc-grid metrics">'+
+    metric('Tenant users',tenantUsers.length,'People attached to rental-company workspaces')+
+    metric('Platform admins',rows.filter(function(u){return u.is_platform_admin;}).length,'Full platform access')+
+    metric('Multi-business users',multi.length,'Users attached to more than one tenant')+
+    metric('Accounts total',rows.length,'All login identities')+
+  '</section>'+
+  '<div class="pc-toolbar"><div class="pc-search"><input id="userSearch" type="search" placeholder="Search name, email, business or role…"></div></div>'+
+  '<section class="pc-panel"><div id="usersTable"></div></section>';
+ function paint(){
+  var q=(document.getElementById('userSearch').value||'').toLowerCase();
+  var filtered=rows.filter(function(u){
+    return [u.display_name,u.email,(u.memberships||[]).map(function(m){return m.name+' '+m.slug+' '+m.role}).join(' ')].join(' ').toLowerCase().includes(q);
+  });
+  document.getElementById('usersTable').innerHTML=filtered.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>User</th><th>Access</th><th>Businesses</th><th>Created</th><th>Action</th></tr></thead><tbody>'+
+    filtered.map(function(u){
+      var memberships=u.memberships||[];
+      var business=memberships.length?memberships.map(function(m){return '<span class="pc-chip">'+esc(m.name)+' · '+esc(m.role)+'</span>';}).join(' '):'<span class="pc-subtext">No tenant membership</span>';
+      var first=memberships[0];
+      return '<tr><td><strong>'+esc(u.display_name||u.email)+'</strong><span class="pc-subtext">'+esc(u.email)+'</span></td><td>'+status(u.is_platform_admin?'active':'tenant')+'</td><td><div class="pc-chip-wrap">'+business+'</div></td><td>'+date(u.created_at)+'</td><td>'+(first?'<button class="pc-btn small" data-user-workspace="'+esc(first.slug)+'">Open workspace</button>':'—')+'</td></tr>';
+    }).join('')+
+  '</tbody></table></div>':empty('No users match that search.');
+  document.querySelectorAll('[data-user-workspace]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.userWorkspace);location.href='/dashboard/?tenantView=1#/overview';};});
+ }
+ document.getElementById('userSearch').oninput=paint;paint();
+}
+
+async function onboarding(){
+ var d=await api('/api/admin/onboarding'),rows=d.accounts||[];
+ var ready=rows.filter(function(r){return r.progress===100;}).length;
+ var avg=rows.length?Math.round(rows.reduce(function(s,r){return s+Number(r.progress||0);},0)/rows.length):0;
+ document.getElementById('pcContent').innerHTML=head('Customer success','Tenant onboarding','See exactly where every rental business is stuck between signup and a launch-ready customer designer.',
+  '<a class="pc-btn" href="#alerts">Setup alerts</a><a class="pc-btn primary" href="#businesses">Manage businesses</a>')+
+  '<section class="pc-grid metrics">'+
+    metric('Launch-ready',ready,rows.length+' total businesses')+
+    metric('Average progress',avg+'%','Across catalog, pricing, visuals, branding, install and payments')+
+    metric('No catalog',rows.filter(function(r){return !r.checks.catalog;}).length,'Cannot launch customer designer')+
+    metric('Not installed',rows.filter(function(r){return !r.checks.install;}).length,'No allowed website domain')+
+  '</section>'+
+  '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Onboarding pipeline</h2><p>Six launch checks per business.</p></div></div><div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Progress</th><th>Catalog</th><th>Pricing</th><th>Visuals</th><th>Brand</th><th>Install</th><th>Payments</th><th>Activity</th><th>Open</th></tr></thead><tbody>'+
+    rows.map(function(r){
+      function check(k){return r.checks&&r.checks[k]?'<span class="pc-check yes">✓</span>':'<span class="pc-check no">–</span>';}
+      return '<tr><td><strong>'+esc(r.name)+'</strong><span class="pc-subtext">'+esc(r.slug)+'</span></td><td><div class="pc-progress"><span style="width:'+Number(r.progress||0)+'%"></span></div><span class="pc-subtext">'+Number(r.complete||0)+' / '+Number(r.totalChecks||6)+' · '+Number(r.progress||0)+'%</span></td><td>'+check('catalog')+'</td><td>'+check('pricing')+'</td><td>'+check('visuals')+'</td><td>'+check('branding')+'</td><td>'+check('install')+'</td><td>'+check('payments')+'</td><td>'+datetime(r.latest_activity_at)+'</td><td><button class="pc-btn small" data-onboard="'+esc(r.slug)+'">Workspace</button></td></tr>';
+    }).join('')+
+  '</tbody></table></div></section>';
+ document.querySelectorAll('[data-onboard]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.onboard);location.href='/dashboard/?tenantView=1#/overview';};});
+}
+
 async function platformAnalytics(){
  var d=await Promise.all([
   api('/api/admin/console-overview'),
@@ -230,6 +283,40 @@ async function activity(){
  var d=await api('/api/admin/activity?limit=200'),rows=d.activity||[];
  document.getElementById('pcContent').innerHTML=head('Accountability','Admin activity','A record of sensitive actions performed from the RentSketch platform console.')+
   '<section class="pc-panel"><div class="pc-panel-body">'+activityList(rows)+'</div></section>';
+}
+
+
+async function alerts(){
+ var d=await api('/api/admin/alerts'),rows=d.alerts||[];
+ var counts={high:0,medium:0,low:0};rows.forEach(function(a){counts[a.severity]=(counts[a.severity]||0)+1;});
+ document.getElementById('pcContent').innerHTML=head('Operations','Alerts & attention','A prioritized queue of billing, setup, install, and customer-access issues that need a human review.',
+  '<a class="pc-btn" href="#system">System health</a><a class="pc-btn primary" href="#onboarding">Onboarding</a>')+
+  '<section class="pc-grid metrics">'+
+    metric('High priority',counts.high||0,'Billing or platform delivery issues')+
+    metric('Medium priority',counts.medium||0,'Launch blockers')+
+    metric('Low priority',counts.low||0,'Setup improvements')+
+    metric('Open alerts',rows.length,'Current derived attention queue')+
+  '</section>'+
+  '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Needs attention</h2><p>Derived from production account and service state.</p></div></div><div class="pc-panel-body">'+
+    (rows.length?'<div class="pc-alert-list">'+rows.map(function(a){return '<div class="pc-alert '+esc(a.severity)+'"><div class="pc-alert-icon">'+(a.severity==='high'?'!':a.severity==='medium'?'•':'i')+'</div><div class="pc-alert-copy"><strong>'+esc(a.title)+'</strong><p>'+esc(a.name)+' · '+esc(a.detail)+'</p></div>'+(a.slug?'<button class="pc-btn small" data-alert-workspace="'+esc(a.slug)+'">Open workspace</button>':'<a class="pc-btn small" href="#system">System health</a>')+'</div>';}).join('')+'</div>':empty('No current platform alerts.'))+
+  '</div></section>';
+ document.querySelectorAll('[data-alert-workspace]').forEach(function(b){b.onclick=function(){setTenant(b.dataset.alertWorkspace);location.href='/dashboard/?tenantView=1#/overview';};});
+}
+
+async function performance(){
+ var d=await api('/api/admin/web-vitals?days=7'),o=d.overall||{},pages=d.pages||[],th=d.thresholds||{};
+ function quality(value,good){if(value==null)return 'No data';return Number(value)<=Number(good)?'Good':'Review';}
+ document.getElementById('pcContent').innerHTML=head('Experience quality','Web performance','First-party real-user performance from the last 7 days. This is customer traffic, not a synthetic score.',
+  '<a class="pc-btn" href="#system">System health</a><a class="pc-btn primary" href="/">Open public site ↗</a>')+
+  '<section class="pc-grid metrics">'+
+    metric('LCP p75',o.lcp_p75_ms==null?'—':Math.round(o.lcp_p75_ms)+' ms',quality(o.lcp_p75_ms,th.lcpGoodMs||2500))+
+    metric('INP p75',o.inp_p75_ms==null?'—':Math.round(o.inp_p75_ms)+' ms',quality(o.inp_p75_ms,th.inpGoodMs||200))+
+    metric('CLS p75',o.cls_p75==null?'—':Number(o.cls_p75).toFixed(3),quality(o.cls_p75,th.clsGood||.1))+
+    metric('Samples',o.samples||0,'Real-user measurement samples')+
+  '</section>'+
+  '<section class="pc-panel"><div class="pc-panel-head"><div><h2>Performance by page</h2><p>Pages with enough first-party measurements appear below.</p></div></div>'+
+    (pages.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Path</th><th>Samples</th><th>LCP p75</th><th>INP p75</th><th>CLS p75</th><th>FCP p75</th><th>TTFB p75</th></tr></thead><tbody>'+pages.map(function(p){return '<tr><td><strong>'+esc(p.path)+'</strong></td><td>'+Number(p.samples||0)+'</td><td>'+Math.round(Number(p.lcp_p75_ms||0))+' ms</td><td>'+Math.round(Number(p.inp_p75_ms||0))+' ms</td><td>'+Number(p.cls_p75||0).toFixed(3)+'</td><td>'+Math.round(Number(p.fcp_p75_ms||0))+' ms</td><td>'+Math.round(Number(p.ttfb_p75_ms||0))+' ms</td></tr>';}).join('')+'</tbody></table></div>':empty('No recent real-user web-vitals samples.'))+
+  '</section>';
 }
 
 async function system(){
