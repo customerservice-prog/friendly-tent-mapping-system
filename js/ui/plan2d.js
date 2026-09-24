@@ -226,6 +226,21 @@ function buildChandelier(layer, tent) {
   layer.appendChild(el);
 }
 
+function renderSidewalls(data, tent) {
+  if (!data.sidewalls || tent.isSite) return;
+  const styles = Object.assign({front:'none',right:'none',back:'none',left:'none'}, data.sidewalls);
+  const map = {front:'top',right:'right',back:'bottom',left:'left'};
+  Object.keys(map).forEach(function(side) {
+    const style = styles[side];
+    if (style !== 'solid' && style !== 'window') return;
+    const el = document.createElement('div');
+    el.className = 'plan2d-sidewall ' + map[side] + ' ' + style;
+    el.dataset.side = side;
+    el.title = (style === 'window' ? 'Window' : 'Solid') + ' sidewall — ' + side;
+    stageEl.appendChild(el);
+  });
+}
+
 function renderLighting(data, tent) {
   if (!data.lightingOn) return;
   const opt = lightingById(data.lightingId);
@@ -276,6 +291,7 @@ function render(data) {
   stageEl.appendChild(pole);
 });
 
+renderSidewalls(data, tent);
 renderLighting(data, tent);
   
   if (data.anchoringMethod) {
