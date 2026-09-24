@@ -254,9 +254,8 @@ export function init(container,callbacks={}) {
         const generated=createEnvironment(state.photoSite||t,state.surfaceType);
         // Keep the familiar no-photo RentSketch yard slightly below the real
         // projected ground so the customer's photo wins where we have evidence.
-        generated.position.y=-.08;generated.name='Generated unseen venue continuation';
-        while(generated.children.length)photoContinuation.add(generated.children[0]);
-        generated.clear();
+        generated.position.y=-.08;generated.userData.generatedContinuation=true;
+        photoContinuation.add(generated);
       }
     }
     if(nextEnvironment!==environmentKey){if(environment){scene.remove(environment);disposeGroup(environment);}environment=photoMode?createPhotoEnvironment(state.photoSite||t,state.photoCalibration,state.photoGeometry):createEnvironment(t,state.surfaceType);environment.userData.setNight(night);scene.add(environment);environmentKey=nextEnvironment;if(weather){scene.remove(weather);disposeGroup(weather);}weather=createWeather(t,{mobile});weather.userData.setNight(night);weather.userData.setWeather(weatherMode);weather.userData.setPhotoMode?.(photoMode);scene.add(weather);}
