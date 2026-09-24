@@ -30,7 +30,7 @@ async function req(url,{method='GET',body}={}){
 }
 (async()=>{
  await pg.exec(`
- CREATE TABLE users(id uuid PRIMARY KEY,email text,display_name text,is_platform_admin boolean default false);
+ CREATE TABLE users(id uuid PRIMARY KEY,email text,display_name text,is_platform_admin boolean default false,created_at timestamptz default now());
  CREATE TABLE tenants(
    id uuid PRIMARY KEY,slug text UNIQUE,name text,contact_email text,subscription_plan text,subscription_status text,
    trial_ends_at timestamptz,stripe_connect_status text,stripe_connect_account_id text,logo_url text,allowed_origins jsonb default '[]'::jsonb,created_at timestamptz default now(),
