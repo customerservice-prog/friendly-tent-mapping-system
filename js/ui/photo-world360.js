@@ -34,10 +34,13 @@ function photoCanvas(image,w=160,h=120){
   const c=document.createElement('canvas');c.width=w;c.height=h;
   const x=c.getContext('2d',{willReadFrequently:true});
   x.drawImage(image,0,0,w,h);
-  return {canvas:c,ctx:x,data:x.getImageData(0,0,w,h).data,w,h};
+  let data=null;
+  try{data=x.getImageData?.(0,0,w,h)?.data||null;}catch(_){data=null;}
+  return {canvas:c,ctx:x,data,w,h};
 }
 function averageRegion(sample,x0,y0,x1,y1){
   const {data,w,h}=sample;
+  if(!data||!data.length)return [128,128,128];
   const ax=Math.max(0,Math.floor(x0*w)),bx=Math.min(w,Math.ceil(x1*w));
   const ay=Math.max(0,Math.floor(y0*h)),by=Math.min(h,Math.ceil(y1*h));
   let r=0,g=0,b=0,n=0;
@@ -160,7 +163,10 @@ function cutoutCanvas(image,style,side,index,{mobile=false}={}){
   const sy=Math.max(0,Math.round(ih*Math.max(.08,style.horizon*.42))),cropH=Math.max(8,ih-sy);
   x.save();if(index%2){x.translate(w,0);x.scale(-1,1);}x.filter='saturate(.9) contrast(.97)';
   x.drawImage(image,sx,sy,cropW,cropH,0,0,w,h);x.restore();
-  const img=x.getImageData(0,0,w,h),d=img.data,sky=style.skyNear;
+  let img=null;
+  try{img=x.getImageData?.(0,0,w,h)||null;}catch(_){img=null;}
+  if(!img?.data)return c;
+  const d=img.data,sky=style.skyNear;
   for(let yy=0;yy<h;yy++)for(let xx=0;xx<w;xx++){
     const i=(yy*w+xx)*4,rgb=[d[i],d[i+1],d[i+2]],dist=colorDistance(rgb,sky);
     const yn=yy/(h-1),edge=Math.min(1,Math.min(xx,w-1-xx)/(w*.13));
@@ -178,7 +184,7 @@ function cutoutCanvas(image,style,side,index,{mobile=false}={}){
 
 function addPanorama(group,image,style,radius,height,mobile,materials){
   const canvas=panoramaCanvas(image,style,{mobile}),map=canvasTexture(canvas);
-  const geo=new THREE.CylinderGeometry(radius,height,radius/22,64,1,true);
+  const geo=new THREE.CylinderGeometry(radius,radius,height,64,1,true);
   const mat=new THREE.MeshBasicMaterial({map,side:THREE.BackSide,depthWrite:false,toneMapped:true});
   const shell=new THREE.Mesh(geo,mat);shell.name='Photo world panoramic shell';shell.position.y=height/2-1;
   // Three's cylinder UV seam is at +X; rotate so the photographed front is centered
