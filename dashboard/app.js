@@ -592,46 +592,34 @@ function esc(s) {
      var iframeCode = '<iframe src="' + designerUrl + '&embed=1" style="width:100%;height:820px;border:0" title="' + esc(t.name) + ' Event Designer"></iframe>';
      var loaderCode = '<div id="rentsketch-embed"></div>\n<script src="https://rentsketch.com/embed/v1.js" data-tenant="' + esc(state.tenant) + '" data-embed-key="' + esc(t.embedKey || '') + '" defer></script>';
      var origins = (t.allowedOrigins || []).join('\n');
-     document.getElementById('dashMain').innerHTML = '' +
-       '<div class="tw-page-head"><div><div class="tw-eyebrow">Publish</div><h1 class="dash-title">Install RentSketch</h1><p class="dash-subtitle">Share the hosted designer or add it to your website with an iframe or versioned loader.</p></div><div class="tw-actions"><a class="tw-btn primary" href="' + designerUrl + '" target="_blank" rel="noopener">Open hosted designer</a></div></div>' +
-       '<h2 class="dash-section-title">1. Hosted Designer Link</h2>' +
-       '<p>Share or link directly to your own hosted designer:</p>' +
-       '<textarea class="code-box" rows="1" readonly>' + esc(designerUrl) + '</textarea>' +
-       '<h2 class="dash-section-title">2. Iframe Embed (recommended)</h2>' +
-       '<p>Paste this anywhere on your website, e.g. a "Design Your Event" page:</p>' +
-       '<textarea class="code-box" rows="3" readonly>' + esc(iframeCode) + '</textarea>' +
-       '<h2 class="dash-section-title">3. Loader Script (optional, versioned)</h2>' +
-       '<p>Renders into the placeholder div automatically and supports future updates without changing your code:</p>' +
-       '<textarea class="code-box" rows="3" readonly>' + esc(loaderCode) + '</textarea>' +
-       '<h2 class="dash-section-title">4. Allowed Domains</h2>' +
-       '<p>List the domains allowed to embed your designer (one per line), e.g. www.yourdomain.com</p>' +
-       '<form id="originsForm" class="dash-form">' +
-       '<textarea id="originsBox" rows="4">' + esc(origins) + '</textarea>' +
-       '<div id="originsError" class="dash-error" hidden></div>' +
-       '<div id="originsSaved" class="dash-saved" hidden>Saved.</div>' +
-       '<button type="submit" class="btn-primary">Save Allowed Domains</button>' +
-       '</form>' +
-       '<h2 class="dash-section-title">Embed Identifier</h2>' +
-       '<p class="muted">Public embed key (safe to include in front-end code): <code>' + esc(t.embedKey || '') + '</code></p>';
+     var installed=(t.allowedOrigins||[]).length>0;
+     document.getElementById('dashMain').innerHTML =
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Publish & share</div><h1 class="dash-title">Install RentSketch</h1><p class="dash-subtitle">Launch your hosted designer, embed it on your website, and control which domains are allowed to display it.</p></div><div class="tw-actions"><a class="tw-btn primary" href="' + designerUrl + '" target="_blank" rel="noopener">✦ Open hosted designer</a></div></div>' +
+       '<section class="tw-metrics">'+
+         '<article class="tw-metric"><div class="tw-metric-label">Install status</div><div class="tw-metric-value">'+(installed?'Ready':'Setup')+'</div><div class="tw-metric-detail">'+(installed?(t.allowedOrigins||[]).length+' allowed domain(s)':'Add your website domain')+'</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Hosted designer</div><div class="tw-metric-value">Live</div><div class="tw-metric-detail">Share without embedding</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Embed method</div><div class="tw-metric-value">2</div><div class="tw-metric-detail">Iframe or loader script</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Embed key</div><div class="tw-metric-value">'+(t.embedKey?'Ready':'—')+'</div><div class="tw-metric-detail">Public install identifier</div></article>'+
+       '</section>'+
+       '<div class="tw-install-grid">'+
+         '<section class="tw-install-card"><div class="tw-eyebrow">Option 1</div><h2>Hosted designer link</h2><p>Use this for buttons, texts, QR codes, or anywhere you want customers to open the designer directly.</p><textarea class="code-box" rows="2" readonly>' + esc(designerUrl) + '</textarea></section>'+
+         '<section class="tw-install-card"><div class="tw-eyebrow">Option 2</div><h2>Iframe embed</h2><p>Recommended when you want RentSketch to appear directly inside a page on your existing website.</p><textarea class="code-box" rows="4" readonly>' + esc(iframeCode) + '</textarea></section>'+
+         '<section class="tw-install-card"><div class="tw-eyebrow">Option 3</div><h2>Versioned loader</h2><p>Use the loader when you want a smaller embed snippet that can receive future RentSketch updates automatically.</p><textarea class="code-box" rows="4" readonly>' + esc(loaderCode) + '</textarea></section>'+
+         '<section class="tw-install-card"><div class="tw-eyebrow">Security</div><h2>Allowed website domains</h2><p>Only the domains listed here can embed your tenant designer.</p><form id="originsForm" class="dash-form" style="box-shadow:none;border:0;padding:0"><textarea id="originsBox" rows="5" style="grid-column:1/-1">' + esc(origins) + '</textarea><div id="originsError" class="dash-error" hidden></div><div id="originsSaved" class="dash-saved" hidden>Allowed domains saved.</div><button type="submit" class="btn-primary">Save allowed domains</button></form></section>'+
+         '<section class="tw-install-card full"><div class="tw-eyebrow">Go live checklist</div><h2>Before sharing with customers</h2><div class="tw-checklist"><a class="tw-check '+(installed?'done':'')+'" href="#/install"><i>'+(installed?'✓':'•')+'</i><span><strong>Website domain</strong><small>'+(installed?'Allowed domain saved':'Add the website that will embed RentSketch')+'</small></span></a><a class="tw-check done" href="#/branding"><i>✓</i><span><strong>Hosted link</strong><small>Your tenant link is available now</small></span></a><a class="tw-check" href="#/products"><i>•</i><span><strong>Catalog review</strong><small>Confirm customer-facing products and visuals</small></span></a></div></section>'+
+       '</div>';
      document.getElementById('originsForm').addEventListener('submit', async function (e) {
        e.preventDefault();
-       var errEl = document.getElementById('originsError');
-       var savedEl = document.getElementById('originsSaved');
-       errEl.hidden = true; savedEl.hidden = true;
-       var list = document.getElementById('originsBox').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-       try {
-         await api('/api/tenants/' + state.tenant, { method: 'PATCH', body: { allowedOrigins: list } });
-         savedEl.hidden = false;
-       } catch (err) {
-         errEl.textContent = err.message;
-         errEl.hidden = false;
-       }
+       var errEl = document.getElementById('originsError'),savedEl=document.getElementById('originsSaved');
+       errEl.hidden=true;savedEl.hidden=true;
+       var list=document.getElementById('originsBox').value.split('\n').map(function(s){return s.trim();}).filter(Boolean);
+       try{await api('/api/tenants/'+state.tenant,{method:'PATCH',body:{allowedOrigins:list}});savedEl.hidden=false;}
+       catch(err){errEl.textContent=err.message;errEl.hidden=false;}
      });
    } catch (err) {
      document.getElementById('dashMain').innerHTML = errorHtml(err);
    }
  }
-
  // Platform-admin only cross-tenant panel. Only ever shown/reachable when
  // state.user.isPlatformAdmin is true (see shellHtml's nav link and the
  // route guard below) - a regular tenant owner can never navigate here
