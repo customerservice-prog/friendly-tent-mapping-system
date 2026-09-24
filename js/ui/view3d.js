@@ -320,27 +320,76 @@ export function init(container,callbacks={}) {
   function pointerRay(e){const r=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);raycaster.setFromCamera(pointer,camera);return raycaster;}
   function groundPoint(e){const v=new THREE.Vector3();return pointerRay(e).ray.intersectPlane(groundPlane,v)?v:null;}
   function hit(e){pointerRay(e);return raycaster.intersectObjects(furniture.children,true).find(h=>h.object.userData.itemId||h.object.userData.kind==='danceGroup');}
+  function photoPlacementFor(o){
+    if(!o)return {x:0,y:0,rotationDeg:0};
+    if(o.photoPlacement&&Number.isFinite(Number(o.photoPlacement.x))&&Number.isFinite(Number(o.photoPlacement.y))){
+      return {x:Number(o.photoPlacement.x),y:Number(o.photoPlacement.y),rotationDeg:Number(o.photoPlacement.rotationDeg||0)||0};
+    }
+    const t=state.tent,site=state.photoSite||t,tp=state.photoTentPlacement||{x:Math.max(0,(site.widthFt-t.widthFt)/2),y:Math.max(0,(site.lengthFt-t.lengthFt)/2),rotationDeg:0};
+    return {x:t.isSite?Number(o.x||0):Number(tp.x||0)+Number(o.x||0),y:t.isSite?Number(o.y||0):Number(tp.y||0)+Number(o.y||0),rotationDeg:Number(o.rotationDeg||0)+Number(tp.rotationDeg||0)};
+  }
   function down(e){
     if(callbacks.marketingOnly)return;
     if(e.button!==undefined&&e.button!==0)return;
     pointers.add(e.pointerId);
-    if(pointers.size>1){placementPointer=null;if(drag){const originals=drag.kind==='item'?[drag.orig]:drag.orig;state.objects=state.objects.map(o=>({...o,...originals.find(a=>a.id===o.id)}));furnitureKey='';}drag=null;controls.enableRotate=true;rebuild(state);return;}
-    if(state?.placement){placementPointer={id:e.pointerId,x:e.clientX,y:e.clientY};const p=groundPoint(e);if(p)callbacks.onPlacementMove?.(p.x+state.tent.widthFt/2,p.z+state.tent.lengthFt/2);return;}
+    if(pointers.size>1){
+      placementPointer=null;
+      if(drag){
+        if(state.photoMode){
+          if(drag.kind==='item'){
+            const o=state.objects.find(x=>x.id===drag.id);if(o)o.photoPlacement=drag.origPhoto?{...drag.origPhoto}:o.photoPlacement;
+          }else for(const a of drag.origPhoto||[]){const o=state.objects.find(x=>x.id===a.id);if(o)o.photoPlacement={x:a.x,y:a.y,rotationDeg:a.rotationDeg||0};}
+        }else{
+          const originals=drag.kind==='item'?[drag.orig]:drag.orig;
+          state.objects=state.objects.map(o=>({...o,...originals.find(a=>a.id===o.id)}));
+        }
+        furnitureKey='';
+      }
+      drag=null;controls.enableRotate=true;rebuild(state);return;
+    }
+    if(state?.placement){
+      placementPointer={id:e.pointerId,x:e.clientX,y:e.clientY};const p=groundPoint(e);
+      const space=state.photoMode?(state.photoSite||state.tent):state.tent;
+      if(p)callbacks.onPlacementMove?.(p.x+space.widthFt/2,p.z+space.lengthFt/2);return;
+    }
     const h=hit(e),point=groundPoint(e);if(!h||!point||!state)return;
-    const u=h.object.userData;
-    // Select first; dragging an already selected item avoids stealing one-finger orbit.
-    const id=u.itemId||u.itemIds?.[0];
+    const u=h.object.userData,id=u.itemId||u.itemIds?.[0];
     if(state.selectedId!==id){callbacks.onSelect?.(id);return;}
-    if(u.kind==='danceGroup')drag={kind:'dance',ids:u.itemIds,start:point.clone(),orig:state.objects.filter(o=>u.itemIds.includes(o.id)).map(o=>({...o})),mesh:danceMesh.position.clone()};
-    else{const o=state.objects.find(x=>x.id===id);if(!o)return;drag={kind:'item',id,start:point.clone(),orig:{...o}};}
+    if(u.kind==='danceGroup'){
+      const originals=state.objects.filter(o=>u.itemIds.includes(o.id)).map(o=>({...o}));
+      drag={kind:'dance',ids:u.itemIds,start:point.clone(),orig:originals,origPhoto:state.photoMode?originals.map(o=>({id:o.id,...photoPlacementFor(o)})):null,mesh:danceMesh.position.clone()};
+    }else{
+      const o=state.objects.find(x=>x.id===id);if(!o)return;
+      drag={kind:'item',id,start:point.clone(),orig:{...o},origPhoto:state.photoMode?photoPlacementFor(o):null};
+    }
     if(guests)guests.visible=false;if(styling)styling.visible=false;controls.enableRotate=false;renderer.domElement.setPointerCapture?.(e.pointerId);
   }
   function move(e){
-    if(state?.placement&&pointers.size<2&&(e.pointerType==='mouse'||placementPointer)){const p=groundPoint(e);if(p)callbacks.onPlacementMove?.(p.x+state.tent.widthFt/2,p.z+state.tent.lengthFt/2);return;}
+    if(state?.placement&&pointers.size<2&&(e.pointerType==='mouse'||placementPointer)){
+      const p=groundPoint(e),space=state.photoMode?(state.photoSite||state.tent):state.tent;
+      if(p)callbacks.onPlacementMove?.(p.x+space.widthFt/2,p.z+space.lengthFt/2);return;
+    }
     if(!drag||!state||pointers.size>1)return;
-    const p=groundPoint(e);if(!p)return;const t=state.tent,dx=p.x-drag.start.x,dz=p.z-drag.start.z;
-    if(drag.kind==='item'){const o=state.objects.find(x=>x.id===drag.id),a=drag.orig;o.x=Math.max(0,Math.min(t.widthFt-a.widthFt,a.x+dx));o.y=Math.max(0,Math.min(t.lengthFt-a.depthFt,a.y+dz));rendered.get(o.id)?.position.set(o.x+o.widthFt/2-t.widthFt/2,0,o.y+o.depthFt/2-t.lengthFt/2);selection.box.setFromObject(rendered.get(o.id)).expandByScalar(.12);}
-    else{
+    const p=groundPoint(e);if(!p)return;
+    const t=state.tent,space=state.photoMode?(state.photoSite||t):t,dx=p.x-drag.start.x,dz=p.z-drag.start.z;
+    if(drag.kind==='item'){
+      const o=state.objects.find(x=>x.id===drag.id);if(!o)return;
+      if(state.photoMode){
+        const a=drag.origPhoto,px=Math.max(0,Math.min(space.widthFt-o.widthFt,a.x+dx)),py=Math.max(0,Math.min(space.lengthFt-o.depthFt,a.y+dz));
+        o.photoPlacement={x:px,y:py,rotationDeg:a.rotationDeg||0};
+        rendered.get(o.id)?.position.set(px+o.widthFt/2-space.widthFt/2,0,py+o.depthFt/2-space.lengthFt/2);
+      }else{
+        const a=drag.orig;o.x=Math.max(0,Math.min(t.widthFt-a.widthFt,a.x+dx));o.y=Math.max(0,Math.min(t.lengthFt-a.depthFt,a.y+dz));
+        rendered.get(o.id)?.position.set(o.x+o.widthFt/2-t.widthFt/2,0,o.y+o.depthFt/2-t.lengthFt/2);
+      }
+      selection.box.setFromObject(rendered.get(o.id)).expandByScalar(.12);
+    }else if(state.photoMode){
+      const originals=drag.origPhoto||[],minX=Math.min(...originals.map(o=>o.x)),minY=Math.min(...originals.map(o=>o.y));
+      const maxX=Math.max(...originals.map(a=>{const o=state.objects.find(x=>x.id===a.id);return a.x+(o?.widthFt||0);})),maxY=Math.max(...originals.map(a=>{const o=state.objects.find(x=>x.id===a.id);return a.y+(o?.depthFt||0);}));
+      const sx=Math.max(-minX,Math.min(space.widthFt-maxX,dx)),sy=Math.max(-minY,Math.min(space.lengthFt-maxY,dz));
+      for(const a of originals){const o=state.objects.find(item=>item.id===a.id);if(o)o.photoPlacement={x:a.x+sx,y:a.y+sy,rotationDeg:a.rotationDeg||0};}
+      danceMesh.position.set(drag.mesh.x+sx,drag.mesh.y,drag.mesh.z+sy);selection.box.setFromObject(danceMesh).expandByScalar(.12);
+    }else{
       const minX=Math.min(...drag.orig.map(o=>o.x)),minY=Math.min(...drag.orig.map(o=>o.y)),maxX=Math.max(...drag.orig.map(o=>o.x+o.widthFt)),maxY=Math.max(...drag.orig.map(o=>o.y+o.depthFt));
       const x=Math.max(-minX,Math.min(t.widthFt-maxX,dx)),y=Math.max(-minY,Math.min(t.lengthFt-maxY,dz));
       for(const a of drag.orig){const o=state.objects.find(item=>item.id===a.id);o.x=a.x+x;o.y=a.y+y;}
@@ -349,10 +398,40 @@ export function init(container,callbacks={}) {
     renderer.shadowMap.needsUpdate=true;invalidate();
   }
   function up(e){
-    pointers.delete(e.pointerId);if(placementPointer?.id===e.pointerId){placementPointer=null;if(e.type!=='pointercancel'){const p=groundPoint(e);if(p){callbacks.onPlacementMove?.(p.x+state.tent.widthFt/2,p.z+state.tent.lengthFt/2);callbacks.onPlace?.();}}return;}if(!drag)return;const finished=drag;drag=null;if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;if(styling)styling.visible=showStyling;controls.enableRotate=true;
-    if(e.type==='pointercancel'){const originals=finished.kind==='item'?[finished.orig]:finished.orig;state.objects=state.objects.map(o=>({...o,...originals.find(a=>a.id===o.id)}));furnitureKey='';rebuild(state);return;}
-    if(finished.kind==='item'){const o=state.objects.find(x=>x.id===finished.id);if(o)callbacks.onMove?.(o.id,o.x,o.y);}
-    else{const updates=state.objects.filter(o=>finished.ids.includes(o.id)).map(o=>({id:o.id,x:o.x,y:o.y}));const first=updates[0];if(first)callbacks.onMove?.(first.id,first.x,first.y);}
+    pointers.delete(e.pointerId);
+    if(placementPointer?.id===e.pointerId){
+      placementPointer=null;
+      if(e.type!=='pointercancel'){
+        const p=groundPoint(e),space=state.photoMode?(state.photoSite||state.tent):state.tent;
+        if(p){callbacks.onPlacementMove?.(p.x+space.widthFt/2,p.z+space.lengthFt/2);callbacks.onPlace?.();}
+      }
+      return;
+    }
+    if(!drag)return;
+    const finished=drag;drag=null;
+    if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;if(styling)styling.visible=showStyling;controls.enableRotate=true;
+    if(e.type==='pointercancel'){
+      if(state.photoMode){
+        if(finished.kind==='item'){
+          const o=state.objects.find(x=>x.id===finished.id);if(o)o.photoPlacement=finished.origPhoto?{...finished.origPhoto}:o.photoPlacement;
+        }else for(const a of finished.origPhoto||[]){const o=state.objects.find(x=>x.id===a.id);if(o)o.photoPlacement={x:a.x,y:a.y,rotationDeg:a.rotationDeg||0};}
+      }else{
+        const originals=finished.kind==='item'?[finished.orig]:finished.orig;
+        state.objects=state.objects.map(o=>({...o,...originals.find(a=>a.id===o.id)}));
+      }
+      furnitureKey='';rebuild(state);return;
+    }
+    if(state.photoMode){
+      if(finished.kind==='item'){
+        const o=state.objects.find(x=>x.id===finished.id);if(o?.photoPlacement)callbacks.onPhotoMove?.(o.id,{...o.photoPlacement});
+      }else{
+        for(const id of finished.ids){const o=state.objects.find(x=>x.id===id);if(o?.photoPlacement)callbacks.onPhotoMove?.(o.id,{...o.photoPlacement});}
+      }
+    }else if(finished.kind==='item'){
+      const o=state.objects.find(x=>x.id===finished.id);if(o)callbacks.onMove?.(o.id,o.x,o.y);
+    }else{
+      const updates=state.objects.filter(o=>finished.ids.includes(o.id)).map(o=>({id:o.id,x:o.x,y:o.y}));const first=updates[0];if(first)callbacks.onMove?.(first.id,first.x,first.y);
+    }
     try{renderer.domElement.releasePointerCapture?.(e.pointerId);}catch{}
   }
   renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',up);
