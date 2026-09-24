@@ -373,4 +373,80 @@ router.get('/system', requirePlatformAdmin, async (req, res) => {
   });
 });
 
+router.get('/users', requirePlatformAdmin, async (req, res) => {
+  const limit = safeLimit(req.query.limit, 250, 500);
+  const result = await db.query(
+    `SELECT u.id::text,u.email,u.display_name,u.is_platform_admin,u.created_at,
+            COALESCE(jsonb_agg(jsonb_build_object(
+              'tenantId',t.id,'slug',t.slug,'name',t.name,'role',tm.role
+            ) ORDER BY tm.created_at) FILTER (WHERE tm.id IS NOT NULL),'[]'::jsonb) AS memberships
+     FROM users u
+     LEFT JOIN tenant_memberships tm ON tm.user_id=u.id
+     LEFT JOIN tenants t ON t.id=tm.tenant_id
+     GROUP BY u.id
+     ORDER BY u.created_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  res.setHeader('Cache-Control','no-store');
+  res.json({ users: result.rows });
+});
+
+router.get('/onboarding', requirePlatformAdmin, async (req, res) => {
+  const result = await db.query(
+    `SELECT t.id::text,t.slug,t.name,t.contact_email,t.created_at,t.trial_ends_at,
+            t.subscription_plan,t.subscription_status,t.stripe_connect_status,t.logo_url,t.allowed_origins,
+            (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id=t.id) AS product_count,
+            (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id=t.id AND p.active IS TRUE) AS active_product_count,
+            (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id=t.id AND p.price_per_day IS NOT NULL AND p.price_per_day>0) AS priced_product_count,
+            (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id=t.id AND p.visual_model_id IS NOT NULL) AS mapped_product_count,
+            (SELECT COUNT(*)::int FROM quote_requests q WHERE q.tenant_id=t.id) AS request_count,
+            (SELECT COUNT(*)::int FROM designs d WHERE d.tenant_id=t.id) AS design_count,
+            (SELECT MAX(d.updated_at) FROM designs d WHERE d.tenant_id=t.id) AS latest_design_at,
+            (SELECT MAX(q.created_at) FROM quote_requests q WHERE q.tenant_id=t.id) AS latest_request_at
+     FROM tenants t
+     ORDER BY t.created_at DESC`
+  );
+  const accounts=result.rows.map(row=>{
+    const origins=Array.isArray(row.allowed_origins)?row.allowed_origins:[];
+    const checks={
+      catalog:Number(row.product_count||0)>0,
+      pricing:Number(row.product_count||0)>0 && Number(row.priced_product_count||0)===Number(row.product_count||0),
+      visuals:Number(row.product_count||0)>0 && Number(row.mapped_product_count||0)>0,
+      branding:Boolean(row.logo_url&&row.contact_email),
+      install:origins.length>0,
+      payments:row.stripe_connect_status==='active'
+    };
+    const complete=Object.values(checks).filter(Boolean).length;
+    const timestamps=[row.latest_design_at,row.latest_request_at].filter(Boolean).map(v=>new Date(v).getTime());
+    return {...row,checks,complete,totalChecks:Object.keys(checks).length,progress:Math.round(complete/Object.keys(checks).length*100),
+      latest_activity_at:timestamps.length?new Date(Math.max(...timestamps)).toISOString():null};
+  });
+  res.setHeader('Cache-Control','no-store');
+  res.json({ accounts });
+});
+
+router.get('/alerts', requirePlatformAdmin, async (req, res) => {
+  const [tenants, failedEmail] = await Promise.all([
+    db.query(
+      `SELECT t.id::text,t.slug,t.name,t.subscription_status,t.trial_ends_at,t.stripe_connect_status,t.logo_url,t.allowed_origins,
+              (SELECT COUNT(*)::int FROM products p WHERE p.tenant_id=t.id) AS product_count,
+              (SELECT MAX(d.updated_at) FROM designs d WHERE d.tenant_id=t.id) AS latest_design_at,
+              (SELECT MAX(q.created_at) FROM quote_requests q WHERE q.tenant_id=t.id) AS latest_request_at
+       FROM tenants t ORDER BY t.created_at DESC`
+    ),
+    db.query("SELECT COUNT(*)::int AS count FROM event_pass_emails WHERE status='failed'")
+  ]);
+  const alerts=[];
+  tenants.rows.forEach(t=>{
+    if(['past_due','unpaid','incomplete','paused'].includes(t.subscription_status)) alerts.push({severity:'high',type:'billing',slug:t.slug,name:t.name,title:'Subscription needs attention',detail:t.subscription_status});
+    if(Number(t.product_count||0)===0) alerts.push({severity:'medium',type:'setup',slug:t.slug,name:t.name,title:'No products added',detail:'Customer designer cannot launch without a catalog.'});
+    if(!t.logo_url) alerts.push({severity:'low',type:'setup',slug:t.slug,name:t.name,title:'Branding incomplete',detail:'No logo configured.'});
+    if(!(Array.isArray(t.allowed_origins)&&t.allowed_origins.length)) alerts.push({severity:'low',type:'install',slug:t.slug,name:t.name,title:'Designer not installed',detail:'No allowed website domain configured.'});
+  });
+  if(Number(failedEmail.rows[0]?.count||0)>0) alerts.unshift({severity:'high',type:'email',slug:null,name:'Platform',title:'Access email delivery failures',detail:String(failedEmail.rows[0].count)+' failed email(s) need attention.'});
+  res.setHeader('Cache-Control','no-store');
+  res.json({ alerts });
+});
+
 module.exports = router;
