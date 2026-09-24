@@ -82,19 +82,24 @@ async function render(){
 
 async function overview(){
  var d=await Promise.all([
-  api('/api/admin/console-overview'),api('/api/admin/payments?limit=7'),api('/api/admin/activity?limit=7'),api('/api/admin/system')
+  api('/api/admin/console-overview'),api('/api/admin/payments?limit=7'),api('/api/admin/activity?limit=7'),api('/api/admin/system'),api('/api/admin/onboarding'),api('/api/admin/alerts')
  ]);
- var o=d[0],p=d[1].payments||[],a=d[2].activity||[],s=d[3];
+ var o=d[0],p=d[1].payments||[],a=d[2].activity||[],s=d[3],onboardingRows=d[4].accounts||[],alertRows=d[5].alerts||[];
+ var readyCount=onboardingRows.filter(function(r){return r.progress===100;}).length;
+ var attentionCount=alertRows.filter(function(r){return r.severity==='high'||r.severity==='medium';}).length;
  var content=head('Platform overview','Your RentSketch business','Revenue, subscriptions, customers, designs, and system activity in one operating view.',
   '<a class="pc-btn" href="#payments">Review payments</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">Use RentSketch now</a>')+
-  '<section class="pc-grid metrics">'+
+  '<section class="pc-grid metrics pc-metrics-wide">'+
    metric('List-price MRR',moneyDollars(o.subscriptions&&o.subscriptions.list_mrr),'Active subscription records at configured list pricing','positive')+
    metric('Event Pass revenue',money(o.eventPassRevenue.cents),o.eventPassRevenue.count+' paid Event Pass transactions','positive')+
    metric('Rental deposit volume',money(o.tenantDepositVolume.cents),o.tenantDepositVolume.count+' tenant deposit payments')+
    metric('Rental businesses',o.tenants,(o.subscriptions.active||0)+' active subscriptions · '+(o.subscriptions.trialing||0)+' trials')+
+   metric('Saved designs',o.designs||0,'Layouts stored across the platform')+
+   metric('Needs attention',attentionCount,readyCount+' of '+onboardingRows.length+' businesses launch-ready')+
   '</section>'+
   '<div class="pc-split"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Recent payments</h2><p>Event Pass sales and tenant rental deposits.</p></div><a class="pc-btn small" href="#payments">All payments</a></div>'+paymentTable(p,false)+'</section>'+
   '<aside class="pc-panel"><div class="pc-panel-head"><div><h2>Admin activity</h2><p>Changes made from the platform console.</p></div><a class="pc-btn small" href="#activity">Audit log</a></div><div class="pc-panel-body">'+activityList(a)+'</div></aside></div>'+
+  '<div class="pc-split" style="margin-top:16px"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Onboarding health</h2><p>How many rental businesses are ready to launch.</p></div><a class="pc-btn small" href="#onboarding">Onboarding</a></div><div class="pc-panel-body"><div class="pc-progress-large"><span style="width:'+(onboardingRows.length?Math.round(readyCount/onboardingRows.length*100):0)+'%"></span></div><div class="pc-list-row"><div><strong>'+readyCount+' launch-ready</strong><p>'+Math.max(0,onboardingRows.length-readyCount)+' still need setup work</p></div><span class="pc-status active">'+(onboardingRows.length?Math.round(readyCount/onboardingRows.length*100):0)+'%</span></div></div></section><aside class="pc-panel"><div class="pc-panel-head"><div><h2>Attention queue</h2><p>Current billing, setup and delivery alerts.</p></div><a class="pc-btn small" href="#alerts">View alerts</a></div><div class="pc-panel-body">'+(alertRows.length?alertRows.slice(0,4).map(function(x){return '<div class="pc-list-row"><div><strong>'+esc(x.title)+'</strong><p>'+esc(x.name)+' · '+esc(x.detail)+'</p></div><span class="pc-status '+(x.severity==='high'?'failed':x.severity==='medium'?'trialing':'')+'">'+esc(x.severity)+'</span></div>';}).join(''):empty('No current alerts.'))+'</div></aside></div>'+
   '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>System snapshot</h2><p>Critical services that keep checkout and access working.</p></div><a class="pc-btn small" href="#system">System health</a></div><div class="pc-panel-body">'+healthCards(s)+'</div></section>';
  document.getElementById('pcContent').innerHTML=content;
 }
