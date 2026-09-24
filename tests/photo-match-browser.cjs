@@ -167,10 +167,18 @@ const web=http.createServer((req,res)=>{
 
     await page.locator('#viewMode3d').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
     assert.equal(await page.locator('#viewMode3d').getAttribute('aria-selected'),'true');
+    await page.locator('#view3dMatchPhoto').waitFor({state:'visible'});
+    await page.locator('#view3dOrbit360').waitFor({state:'visible'});
+    assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','3D opens in Matched View');
+    await page.locator('#view3dOrbit360').click();
+    assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','360 View activates explicitly');
+    assert.match(await page.locator('#canvasHint').innerText(),/360 View/);
+    await page.locator('#view3dMatchPhoto').click();
+    assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
     await page.screenshot({path:path.join(out,'generic-admin-photo-applied.png'),fullPage:true});
     assert.deepEqual(errors,[],'no browser page errors during Photo Match');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement,tentPlacement,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));
-    console.log('PASS Photo Spatial Chromium: upload resilience, Photo View table/tent drag, calibration, traced geometry, saved state and 3D transition.');
+    console.log('PASS Photo Spatial Chromium: upload resilience, Photo View editing, saved calibration/geometry, Matched View and explicit 360 View transition.');
     await context.close();
   }finally{await browser.close();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}
 })().catch(e=>{console.error(e);web.close();api.close();process.exitCode=1;});
