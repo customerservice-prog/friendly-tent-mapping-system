@@ -83,10 +83,15 @@ test('walk step slides along an obstacle instead of freezing movement',()=>{
 });
 
 test('walk step stays put when both slide axes are blocked',()=>{
-  const block={id:'block',type:'house',x:32,y:42,widthFt:8,depthFt:8};
+  const blockers=[
+    // Blocks the target and the X-only slide path (layout x=35,y=40).
+    {id:'vertical',type:'fence',x:34,y:39,widthFt:2,depthFt:9},
+    // Blocks the target and the Z-only slide path (layout x=30,y=45).
+    {id:'horizontal',type:'fence',x:29,y:44,widthFt:9,depthFt:2},
+  ];
   const start={x:-5,z:-5};
   const target={x:0,z:0};
-  const step=resolveWalkStep({from:start,to:target,site,photoGeometry:[block],bodyRadiusFt:1});
+  const step=resolveWalkStep({from:start,to:target,site,photoGeometry:blockers,bodyRadiusFt:.5});
   assert.equal(step.blocked,true);
   assert.equal(step.moved,false);
   assert.deepEqual({x:step.x,z:step.z},start);
