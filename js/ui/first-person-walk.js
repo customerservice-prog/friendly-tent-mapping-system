@@ -149,7 +149,7 @@ export function createFirstPersonWalk({
     const fb=forward-back,lr=strafeRight-left;
     if(!fb&&!lr)return false;
     direction.set(-Math.sin(yaw),0,-Math.cos(yaw));
-    right.crossVectors(direction,up).negate().normalize();
+    right.crossVectors(direction,up).normalize();
     move.set(0,0,0).addScaledVector(direction,fb).addScaledVector(right,lr);
     if(move.lengthSq()>1)move.normalize();
     const speed=(keys.has('shift')?15:8.5)*Math.max(0,Math.min(.05,finite(dt)));
