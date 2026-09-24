@@ -55,7 +55,7 @@ const server=http.createServer((req,res)=>{
    await page.evaluate(()=>location.hash='#/analytics');await page.getByRole('heading',{name:'Customer planning activity'}).waitFor();
    assert.equal(await page.getByText('Request → booked',{exact:true}).count(),1);
    await page.evaluate(()=>location.hash='#/requests');await page.getByRole('heading',{name:'Quote requests'}).waitFor();
-   await page.locator('#requestSearch').fill('Jamie');assert.equal(await page.getByText('Jamie Wedding',{exact:true}).count(),1);assert.equal(await page.getByText('Alex Party',{exact:true}).count(),0);
+   await page.locator('#requestSearch').fill('Jamie');assert.equal(await page.locator('#requestTable').getByText('Jamie Wedding',{exact:false}).count(),1);assert.equal(await page.locator('#requestTable').getByText('Alex Party',{exact:false}).count(),0);
    assert.deepEqual(errors,[]);
    await ctx.close();
   }
