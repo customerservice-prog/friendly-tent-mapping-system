@@ -337,22 +337,31 @@ function esc(s) {
      var requests = await api('/api/tenants/' + state.tenant + '/quote-requests');
      var reqs = requests.quoteRequests || [];
      if (gen !== renderGeneration) return;
-     document.getElementById('dashMain').innerHTML = '<h1 class="dash-title">Quote Requests</h1>' + renderRequestsTable(reqs, true);
-     Array.prototype.forEach.call(document.querySelectorAll('.status-select'), function (sel) {
-       sel.addEventListener('change', async function () {
-         sel.disabled = true;
-         try {
-           await api('/api/tenants/' + state.tenant + '/quote-requests/' + sel.getAttribute('data-id'), { method: 'PATCH', body: { status: sel.value } });
-         } catch (err) {
-           window.alert('Could not update status: ' + err.message);
-         } finally {
-           sel.disabled = false;
-         }
+     var pipeline=reqs.filter(function(r){return r.status!=='declined';}).reduce(function(s,r){return s+Number(r.estimate_total||0);},0);
+     document.getElementById('dashMain').innerHTML =
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Customer pipeline</div><h1 class="dash-title">Quote requests</h1><p class="dash-subtitle">Search, review and move customer requests through your sales process.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Preview customer designer</a></div></div>'+
+       '<section class="tw-metrics">'+
+         '<article class="tw-metric"><div class="tw-metric-label">All requests</div><div class="tw-metric-value">'+reqs.length+'</div><div class="tw-metric-detail">Total request records</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">New</div><div class="tw-metric-value">'+reqs.filter(function(r){return r.status==="new";}).length+'</div><div class="tw-metric-detail">Needs your attention</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Booked</div><div class="tw-metric-value">'+reqs.filter(function(r){return r.status==="booked";}).length+'</div><div class="tw-metric-detail">Converted requests</div></article>'+
+         '<article class="tw-metric"><div class="tw-metric-label">Open estimate pipeline</div><div class="tw-metric-value">'+money(pipeline)+'</div><div class="tw-metric-detail">Excludes declined requests</div></article>'+
+       '</section>'+
+       '<div class="tw-panel"><div class="tw-panel-head"><div><h2>Request inbox</h2><p>Filter by customer, event or status. Changes save immediately.</p></div></div><div class="tw-panel-body"><div style="display:flex;gap:8px;flex-wrap:wrap"><input id="requestSearch" type="search" placeholder="Search customer, email, event…" style="flex:1;min-width:220px;border:1px solid #d7e0eb;border-radius:9px;padding:9px 10px"><select id="requestStatus" style="border:1px solid #d7e0eb;border-radius:9px;padding:9px 10px"><option value="">All statuses</option><option>new</option><option>contacted</option><option>quoted</option><option>booked</option><option>declined</option></select></div></div><div id="requestTable" class="tw-table-scroll"></div></div>';
+     function paint(){
+       var q=(document.getElementById('requestSearch').value||'').toLowerCase(),st=document.getElementById('requestStatus').value;
+       var rows=reqs.filter(function(r){return (!st||r.status===st)&&(!q||[r.customer_name,r.customer_email,r.event_type,r.customer_phone].join(' ').toLowerCase().includes(q));});
+       document.getElementById('requestTable').innerHTML=renderRequestsTable(rows,true);
+       Array.prototype.forEach.call(document.querySelectorAll('.status-select'), function (sel) {
+         sel.addEventListener('change', async function () {
+           sel.disabled=true;
+           try { await api('/api/tenants/'+state.tenant+'/quote-requests/'+sel.getAttribute('data-id'),{method:'PATCH',body:{status:sel.value}}); var row=reqs.find(function(r){return String(r.id)===String(sel.getAttribute('data-id'));});if(row)row.status=sel.value; }
+           catch(err){window.alert('Could not update status: '+err.message);}
+           finally{sel.disabled=false;}
+         });
        });
-     });
-   } catch (err) {
-     document.getElementById('dashMain').innerHTML = errorHtml(err);
-   }
+     }
+     document.getElementById('requestSearch').oninput=paint;document.getElementById('requestStatus').onchange=paint;paint();
+   } catch (err) { document.getElementById('dashMain').innerHTML = errorHtml(err); }
  }
 
  async function viewProducts(route, gen) {
