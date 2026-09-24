@@ -1,25 +1,21 @@
 import * as THREE from 'three';
+import {
+  walkPositionBlocked,
+  resolveWalkStep,
+  findSafeWalkStart,
+  walkSpeedFtPerSecond,
+} from '../core/walk-navigation.js';
 
 /*
  * First-person walk controller for RentSketch's reconstructed venue world.
  *
- * Camera movement is separate from rental placement. Walking can never mutate
- * tent/table/chair coordinates. Collision here is intentionally conservative:
- * traced property geometry and large inflatables block the viewer, while chairs
- * and tables stay passable so a customer cannot become trapped in a dense layout.
+ * Camera movement never mutates rental placement. All world-boundary,
+ * reconstructed-property, no-place, inflatable, sliding and safe-spawn rules
+ * are delegated to the shared world-space navigation core so Walk Mode uses
+ * the exact same spatial contract as property fit planning.
  */
 function finite(v,f=0){const n=Number(v);return Number.isFinite(n)?n:f;}
 function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
-
-function pointInRotatedRect(x,z,item,padding=0){
-  const w=Math.max(.1,finite(item?.widthFt,1))+padding*2;
-  const d=Math.max(.1,finite(item?.depthFt??item?.lengthFt,1))+padding*2;
-  const cx=finite(item?.x)+Math.max(.1,finite(item?.widthFt,1))/2;
-  const cz=finite(item?.y)+Math.max(.1,finite(item?.depthFt??item?.lengthFt,1))/2;
-  const a=-finite(item?.rotationDeg)*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
-  const dx=x-cx,dz=z-cz,rx=dx*c-dz*s,rz=dx*s+dz*c;
-  return Math.abs(rx)<=w/2&&Math.abs(rz)<=d/2;
-}
 
 function button(label,dir){
   const b=document.createElement('button');
@@ -50,25 +46,27 @@ export function createFirstPersonWalk({
     const s=getSite?.()||{};
     return {widthFt:Math.max(8,finite(s.widthFt,50)),lengthFt:Math.max(8,finite(s.lengthFt,60))};
   }
+  function navigationArgs(){
+    return {
+      site:site(),
+      photoGeometry:getObstacles?.()||[],
+      items:getItems?.()||[],
+      bodyRadiusFt:.85,
+      blockRentalKinds:['inflatable'],
+    };
+  }
   function blocksWorldPosition(worldX,worldZ){
-    const s=site(),lx=worldX+s.widthFt/2,lz=worldZ+s.lengthFt/2,padFt=.85;
-    if(lx<padFt||lz<padFt||lx>s.widthFt-padFt||lz>s.lengthFt-padFt)return true;
-    for(const g of getObstacles?.()||[]){
-      if(!g||g.type==='no-place')continue;
-      if(pointInRotatedRect(lx,lz,g,padFt))return true;
-    }
-    for(const item of getItems?.()||[]){
-      if(item?.kind!=='inflatable')continue;
-      if(pointInRotatedRect(lx,lz,item,1))return true;
-    }
-    return false;
+    return walkPositionBlocked({worldX,worldZ,...navigationArgs()}).blocked;
   }
   function safeStart(){
-    const s=site(),candidates=[
-      {x:clamp(camera.position.x,-s.widthFt*.45,s.widthFt*.45),z:clamp(camera.position.z,-s.lengthFt*.45,s.lengthFt*.45)},
-      {x:0,z:-s.lengthFt*.34},{x:-s.widthFt*.22,z:-s.lengthFt*.18},{x:s.widthFt*.22,z:-s.lengthFt*.18},{x:0,z:0}
-    ];
-    return candidates.find(p=>!blocksWorldPosition(p.x,p.z))||{x:0,z:-s.lengthFt*.4};
+    const s=site();
+    return findSafeWalkStart({
+      preferredWorldPoint:{
+        x:clamp(camera.position.x,-s.widthFt*.45,s.widthFt*.45),
+        z:clamp(camera.position.z,-s.lengthFt*.45,s.lengthFt*.45),
+      },
+      ...navigationArgs(),
+    });
   }
   function syncRotation(){
     camera.rotation.order='YXZ';camera.rotation.x=pitch;camera.rotation.y=yaw;camera.rotation.z=0;camera.updateMatrixWorld(true);
@@ -142,28 +140,30 @@ export function createFirstPersonWalk({
   }
   function update(dt){
     if(!active)return false;
-    const forward= wanted('forward',['w','arrowup'])?1:0;
-    const back= wanted('back',['s','arrowdown'])?1:0;
-    const left= wanted('left',['a','arrowleft'])?1:0;
-    const strafeRight= wanted('right',['d','arrowright'])?1:0;
+    const forward=wanted('forward',['w','arrowup'])?1:0;
+    const back=wanted('back',['s','arrowdown'])?1:0;
+    const left=wanted('left',['a','arrowleft'])?1:0;
+    const strafeRight=wanted('right',['d','arrowright'])?1:0;
     const fb=forward-back,lr=strafeRight-left;
     if(!fb&&!lr)return false;
+
     direction.set(-Math.sin(yaw),0,-Math.cos(yaw));
     right.crossVectors(direction,up).normalize();
     move.set(0,0,0).addScaledVector(direction,fb).addScaledVector(right,lr);
     if(move.lengthSq()>1)move.normalize();
-    const speed=(keys.has('shift')?15:8.5)*Math.max(0,Math.min(.05,finite(dt)));
-    move.multiplyScalar(speed);
-    const ox=camera.position.x,oz=camera.position.z;
-    let nx=ox+move.x,nz=oz+move.z;
-    // Slide along obstacles instead of making the camera feel stuck.
-    if(blocksWorldPosition(nx,nz)){
-      if(!blocksWorldPosition(nx,oz))nz=oz;
-      else if(!blocksWorldPosition(ox,nz))nx=ox;
-      else {nx=ox;nz=oz;}
-    }
-    if(nx===ox&&nz===oz)return false;
-    camera.position.set(nx,eyeHeight,nz);syncRotation();onChange();return true;
+
+    const elapsed=Math.max(0,Math.min(.05,finite(dt)));
+    const speed=walkSpeedFtPerSecond({sprint:keys.has('shift'),mobile});
+    move.multiplyScalar(speed*elapsed);
+
+    const from={x:camera.position.x,z:camera.position.z};
+    const resolved=resolveWalkStep({
+      from,
+      to:{x:from.x+move.x,z:from.z+move.z},
+      ...navigationArgs(),
+    });
+    if(!resolved.moved)return false;
+    camera.position.set(resolved.x,eyeHeight,resolved.z);syncRotation();onChange();return true;
   }
 
   function destroy(){
