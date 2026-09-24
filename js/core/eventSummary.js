@@ -34,6 +34,15 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
     const lighting=catalog.lightingForTent?catalog.lightingForTent(scene.lightingId,tent):find(catalog.lighting,scene.lightingId);
     add(lighting,1,'lighting','Lighting — confirm selection',null,lighting && lighting.dynamic ? catalog.tentLightingPrice(tent) : undefined);
   }
+  if(includeTent && tent && scene.sidewalls && !tent.isSite) {
+    const counts={solid:0,window:0},dims={front:tent.widthFt,back:tent.widthFt,left:tent.lengthFt,right:tent.lengthFt};
+    for(const side of ['front','right','back','left']){
+      const style=scene.sidewalls[side];
+      if(style==='solid'||style==='window') counts[style]+=Math.max(1,Math.ceil(Number(dims[side]||0)/10));
+    }
+    if(counts.solid)add(null,counts.solid,'sidewall','10 ft Solid Sidewall — confirm pricing');
+    if(counts.window)add(null,counts.window,'sidewall','10 ft Window Sidewall — confirm pricing');
+  }
   if(includeTent&&tent?.type!=='pole'&&tent&&!tent.isSite&&['concrete','asphalt','deck'].includes(scene.surfaceType))add(null,1,'installation','Concrete ballast setup — confirm quantity and pricing');
   const knownSubtotal=lines.reduce((n,line)=>n+Math.round((line.amount || 0)*100),0)/100;
   return {lines,knownSubtotal,total:lines.some(line=>line.amount == null) ? null : knownSubtotal,seats:[...chairs.values()].reduce((a,b)=>a+b,0),tableCount:[...tables.values()].reduce((a,b)=>a+b,0)};
