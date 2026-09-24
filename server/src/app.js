@@ -42,6 +42,7 @@ app.use('/api/tenants',connectRoutes);
 app.use('/api/business',businessSignupRoutes);
 app.use('/api/business',businessBillingRoutes);
 app.use('/api/visual-library',visualLibraryRoutes);
+app.use('/api/consumer',designBackgroundsRoutes);
 app.use('/api/consumer',consumerEventPassRoutes);
 app.use('/api/analytics/web-vitals',webVitalsRoutes);
 app.use('/api/admin',adminRoutes);

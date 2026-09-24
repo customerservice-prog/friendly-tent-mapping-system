@@ -16,7 +16,7 @@ const routes=load('server/src/routes/designBackgrounds.js',{
  '../middleware/requireAuth':{isConfiguredPlatformAdmin:async()=>false},
  '../eventPassAccess':{savePermission:async()=>null}
 });
-const app=express();app.use('/api/tenants',routes);app.use((err,req,res,next)=>{console.error(err);if(err?.type==='entity.too.large')return res.status(413).json({error:'Request too large'});res.status(500).json({error:err.message});});
+const app=express();app.use('/api/tenants',routes);app.use('/api/consumer',routes);app.use((err,req,res,next)=>{console.error(err);if(err?.type==='entity.too.large')return res.status(413).json({error:'Request too large'});res.status(500).json({error:err.message});});
 let server,base;
 async function send(url,{method='GET',session,body,type}={}){
  const headers={};if(session)headers['X-RentSketch-Session']=session;if(type)headers['Content-Type']=type;
@@ -31,9 +31,11 @@ async function send(url,{method='GET',session,body,type}={}){
   CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text);
  `);
  await pg.exec(fs.readFileSync(path.join(root,'server/migrations/018_design_background_photos.sql'),'utf8'));
+ await pg.exec(fs.readFileSync(path.join(root,'server/migrations/019_generic_design_background_photos.sql'),'utf8'));
  const tenant='00000000-0000-4000-8000-000000000001';
  await pg.query("INSERT INTO tenants(id,slug) VALUES($1,'friendly')",[tenant]);
  const design=(await pg.query("INSERT INTO designs(tenant_id,anonymous_session_id,scene) VALUES($1,'owner-session',$2) RETURNING id",[tenant,{tentId:'frame-20x20',objects:[]}])).rows[0];
+ const generic=(await pg.query("INSERT INTO designs(tenant_id,anonymous_session_id,scene) VALUES(NULL,'generic-owner-session',$1) RETURNING id",[{tentId:'frame-20x20',objects:[]}])).rows[0];
  server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 
  const jpeg=Buffer.from([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0xff,0xd9]);
@@ -53,5 +55,16 @@ async function send(url,{method='GET',session,body,type}={}){
  assert.equal((await send('/api/tenants/friendly/designs/'+design.id+'/background-photo/'+r.body.id,{method:'DELETE',session:'wrong-session'})).status,403);
  assert.equal((await send('/api/tenants/friendly/designs/'+design.id+'/background-photo/'+r.body.id,{method:'DELETE',session:'owner-session'})).status,200);
  assert.equal((await send(r.body.path)).status,404,'removed venue photo is no longer retrievable');
- console.log('PASS venue photo API: design ownership, private capability URL, binary round-trip, tamper rejection and owner-only removal.');
+ // Reproduce the public RentSketch/Event Pass path: design is saved under /api/consumer with tenant_id NULL.
+ r=await send('/api/consumer/designs/'+generic.id+'/background-photo',{method:'POST',session:'wrong-session',type:'image/jpeg',body:jpeg});
+ assert.equal(r.status,403,'generic design still requires the owning browser session');
+ r=await send('/api/consumer/designs/'+generic.id+'/background-photo',{method:'POST',session:'generic-owner-session',type:'image/jpeg',body:jpeg});
+ assert.equal(r.status,201,'generic/Event Pass design accepts a venue photo');
+ assert.match(r.body.path,/^\/api\/consumer\/background-photo\//,'generic photo returns consumer capability URL');
+ const genericPath=r.body.path,genericPhotoId=r.body.id;
+ img=await send(genericPath);assert.equal(img.status,200);assert.deepEqual(img.body,jpeg);
+ assert.equal((await send('/api/consumer/designs/'+generic.id+'/background-photo/'+genericPhotoId,{method:'DELETE',session:'wrong-session'})).status,403);
+ assert.equal((await send('/api/consumer/designs/'+generic.id+'/background-photo/'+genericPhotoId,{method:'DELETE',session:'generic-owner-session'})).status,200);
+ assert.equal((await send(genericPath)).status,404);
+  console.log('PASS venue photo API: tenant + generic/Event Pass, design ownership, private capability URL, binary round-trip, tamper rejection and owner-only removal.');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{server?.close();await pg.close();});
