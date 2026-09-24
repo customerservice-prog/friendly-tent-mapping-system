@@ -12,6 +12,7 @@ import { byId as lightingById } from '../data/lighting.js';
 import { fitTentCamera } from './view3d-framing.js';
 import { createMarketingDetails } from './marketing-details.js';
 import { structuralProfile, computePerimeterStations } from '../data/tentStructure.js';
+import { normalizePhotoCalibration, normalizePhotoGeometry, photoCameraEstimate } from '../core/photo-geometry.js';
 
 let active=null;
 const UP=new THREE.Vector3(0,1,0);
@@ -162,24 +163,66 @@ export function init(container,callbacks={}) {
   }
   controls.addEventListener('change',invalidate);
   function shadows(t){const radius=Math.max(t.widthFt,t.lengthFt)/2+18;sun.shadow.camera.left=-radius;sun.shadow.camera.right=radius;sun.shadow.camera.top=radius;sun.shadow.camera.bottom=-radius;sun.shadow.camera.far=radius*4+120;sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;}
-  function frame(t){if(t.isSite){camera.fov=42;camera.updateProjectionMatrix();const box=new THREE.Box3().setFromObject(furniture);const center=box.isEmpty()?new THREE.Vector3(0,3,0):box.getCenter(new THREE.Vector3()),size=box.isEmpty()?new THREE.Vector3(t.widthFt,10,t.lengthFt):box.getSize(new THREE.Vector3());const fit=fitTentCamera({widthFt:Math.max(8,size.x),lengthFt:Math.max(8,size.z)},Math.max(6,size.y),camera.aspect,camera.fov,2);const shift=center.clone().sub(new THREE.Vector3(...fit.target));camera.position.set(...fit.position).add(shift);controls.target.copy(center);controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*1.8);controls.update();invalidate();return;}if(cameraMode==='reception'){camera.fov=camera.aspect<1?65:52;camera.updateProjectionMatrix();camera.position.set(t.widthFt*.28,5.6,t.lengthFt*.46);controls.target.set(-t.widthFt*.08,2.2,-t.lengthFt*.18);controls.update();invalidate();return;}if(cameraMode==='inside'){camera.fov=50;camera.updateProjectionMatrix();const f=fitTentCamera(t,7,camera.aspect,camera.fov,0);camera.position.set(f.position[0],5.6,f.position[2]);controls.target.set(0,3.5,0);controls.update();invalidate();return;}camera.fov=36;camera.updateProjectionMatrix();const p=structuralProfile(t.type,t.widthFt,t.lengthFt),anchor=state?.anchoringMethod||(t.type==='pole'?'stake':'ballast'),f=fitTentCamera(t,p.peakHeightFt,camera.aspect,camera.fov,anchor==='stake'?(t.installationClearanceFt||5):2);camera.position.set(...f.position);controls.target.set(...f.target);controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*1.8);controls.update();invalidate();}
+  function frame(t){
+    if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='outside'){
+      const site=state.photoSite||t,estimate=photoCameraEstimate(site,state.photoCalibration);
+      camera.fov=estimate.fov;camera.updateProjectionMatrix();
+      camera.position.set(...estimate.position);controls.target.set(...estimate.target);
+      controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*2.2);controls.update();invalidate();return;
+    }
+    if(t.isSite){camera.fov=42;camera.updateProjectionMatrix();const box=new THREE.Box3().setFromObject(furniture);const center=box.isEmpty()?new THREE.Vector3(0,3,0):box.getCenter(new THREE.Vector3()),size=box.isEmpty()?new THREE.Vector3(t.widthFt,10,t.lengthFt):box.getSize(new THREE.Vector3());const fit=fitTentCamera({widthFt:Math.max(8,size.x),lengthFt:Math.max(8,size.z)},Math.max(6,size.y),camera.aspect,camera.fov,2);const shift=center.clone().sub(new THREE.Vector3(...fit.target));camera.position.set(...fit.position).add(shift);controls.target.copy(center);controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*1.8);controls.update();invalidate();return;}if(cameraMode==='reception'){camera.fov=camera.aspect<1?65:52;camera.updateProjectionMatrix();camera.position.set(t.widthFt*.28,5.6,t.lengthFt*.46);controls.target.set(-t.widthFt*.08,2.2,-t.lengthFt*.18);controls.update();invalidate();return;}if(cameraMode==='inside'){camera.fov=50;camera.updateProjectionMatrix();const f=fitTentCamera(t,7,camera.aspect,camera.fov,0);camera.position.set(f.position[0],5.6,f.position[2]);controls.target.set(0,3.5,0);controls.update();invalidate();return;}camera.fov=36;camera.updateProjectionMatrix();const p=structuralProfile(t.type,t.widthFt,t.lengthFt),anchor=state?.anchoringMethod||(t.type==='pole'?'stake':'ballast'),f=fitTentCamera(t,p.peakHeightFt,camera.aspect,camera.fov,anchor==='stake'?(t.installationClearanceFt||5):2);camera.position.set(...f.position);controls.target.set(...f.target);controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*1.8);controls.update();invalidate();}
   function rebuild(data){
     if(!data?.tent||destroyed)return;
     const previous=state?.tent,changed=!previous||previous.id!==data.tent.id||previous.widthFt!==data.tent.widthFt||previous.lengthFt!==data.tent.lengthFt;
     state={...data,objects:(data.objects||[]).map(o=>({...o}))};const t=state.tent;
-    const setting=sceneSetting(t,state.surfaceType),photoMode=!!state.backgroundPhoto?.url,nextEnvironment=[photoMode?'photo':setting,t.widthFt,t.lengthFt].join(':');
+    state.photoSite=state.photoSite||{id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(50,t.widthFt+20),lengthFt:Math.max(60,t.lengthFt+20)};
+    state.photoCalibration=normalizePhotoCalibration(state.photoCalibration,state.photoSite);
+    state.photoGeometry=normalizePhotoGeometry(state.photoGeometry,state.photoSite);
+    const setting=sceneSetting(t,state.surfaceType),photoMode=!!state.backgroundPhoto?.url,nextEnvironment=JSON.stringify([photoMode?'photo':setting,t.widthFt,t.lengthFt,state.photoSite?.widthFt,state.photoSite?.lengthFt,state.photoCalibration,state.photoGeometry]);
     loadVenuePhoto(state.backgroundPhoto);
-    if(nextEnvironment!==environmentKey){if(environment){scene.remove(environment);disposeGroup(environment);}environment=photoMode?createPhotoEnvironment(t):createEnvironment(t,state.surfaceType);environment.userData.setNight(night);scene.add(environment);environmentKey=nextEnvironment;if(weather){scene.remove(weather);disposeGroup(weather);}weather=createWeather(t,{mobile});weather.userData.setNight(night);weather.userData.setWeather(weatherMode);weather.userData.setPhotoMode?.(photoMode);scene.add(weather);}
+    if(nextEnvironment!==environmentKey){if(environment){scene.remove(environment);disposeGroup(environment);}environment=photoMode?createPhotoEnvironment(state.photoSite||t,state.photoCalibration,state.photoGeometry):createEnvironment(t,state.surfaceType);environment.userData.setNight(night);scene.add(environment);environmentKey=nextEnvironment;if(weather){scene.remove(weather);disposeGroup(weather);}weather=createWeather(t,{mobile});weather.userData.setNight(night);weather.userData.setWeather(weatherMode);weather.userData.setPhotoMode?.(photoMode);scene.add(weather);}
     else weather?.userData.setPhotoMode?.(photoMode);
     if(photoMode)paintVenuePhoto();else generatedBackground();
     const anchor=state.anchoringMethod||(t.type==='pole'?'stake':setting==='driveway'?'ballast':'stake');
-    const nextStructure=JSON.stringify([t.id,t.type,t.widthFt,t.lengthFt,t.centerPoles,anchor,state.sidewalls||[]]);
-    if(nextStructure!==structureKey){disposeGroup(structure);if(!t.isSite)structure.add(makeTent(t,anchor,state.sidewalls||[]));structureKey=nextStructure;shadows(t);}
-    const nextFurniture=JSON.stringify([t.widthFt,t.lengthFt,state.objects]);
+    const nextStructure=JSON.stringify([t.id,t.type,t.widthFt,t.lengthFt,t.centerPoles,anchor,state.sidewalls||[],photoMode?state.photoTentPlacement:null,photoMode?state.photoSite:null]);
+    if(nextStructure!==structureKey){
+      disposeGroup(structure);
+      if(!t.isSite){
+        const tentMesh=makeTent(t,anchor,state.sidewalls||[]);
+        if(photoMode){
+          const site=state.photoSite||t,tp=state.photoTentPlacement||{x:Math.max(0,(site.widthFt-t.widthFt)/2),y:Math.max(0,(site.lengthFt-t.lengthFt)/2),rotationDeg:0};
+          tentMesh.position.set(Number(tp.x||0)+t.widthFt/2-site.widthFt/2,0,Number(tp.y||0)+t.lengthFt/2-site.lengthFt/2);
+          tentMesh.rotation.y=-Number(tp.rotationDeg||0)*Math.PI/180;
+        }
+        structure.add(tentMesh);
+      }
+      structureKey=nextStructure;shadows(photoMode?(state.photoSite||t):t);
+    }
+    const nextFurniture=JSON.stringify([t.widthFt,t.lengthFt,state.objects,photoMode?state.photoTentPlacement:null,photoMode?state.photoSite:null]);
     if(nextFurniture!==furnitureKey){
       disposeGroup(furniture);rendered.clear();const df=[];
-      for(const o of state.objects){if(o.kind==='dance'){df.push(o);continue;}if(!['table','inflatable','chair'].includes(o.kind))continue;const q=o.kind==='inflatable'?createInflatable(o):o.kind==='chair'?makeStandaloneChair(o):table(o);q.position.set(o.x+o.widthFt/2-t.widthFt/2,0,o.y+o.depthFt/2-t.lengthFt/2);furniture.add(q);rendered.set(o.id,q);}
-      danceMesh=dance(df,t);if(danceMesh)furniture.add(danceMesh);furnitureKey=nextFurniture;renderer.shadowMap.needsUpdate=true;
+      for(const o of state.objects){
+        if(o.kind==='dance'){df.push(o);continue;}if(!['table','inflatable','chair'].includes(o.kind))continue;
+        const q=o.kind==='inflatable'?createInflatable(o):o.kind==='chair'?makeStandaloneChair(o):table(o);
+        let px=o.x,py=o.y,rot=Number(o.rotationDeg||0)||0,space=t;
+        if(photoMode){
+          const tp=state.photoTentPlacement||{x:Math.max(0,((state.photoSite?.widthFt||t.widthFt)-t.widthFt)/2),y:Math.max(0,((state.photoSite?.lengthFt||t.lengthFt)-t.lengthFt)/2),rotationDeg:0};
+          const pp=o.photoPlacement;
+          px=pp&&Number.isFinite(Number(pp.x))?Number(pp.x):(t.isSite?o.x:Number(tp.x||0)+o.x);
+          py=pp&&Number.isFinite(Number(pp.y))?Number(pp.y):(t.isSite?o.y:Number(tp.y||0)+o.y);
+          rot=pp&&Number.isFinite(Number(pp.rotationDeg))?Number(pp.rotationDeg):rot+Number(tp.rotationDeg||0);
+          space=state.photoSite||t;
+        }
+        q.position.set(px+o.widthFt/2-space.widthFt/2,0,py+o.depthFt/2-space.lengthFt/2);q.rotation.y=-rot*Math.PI/180;
+        furniture.add(q);rendered.set(o.id,q);
+      }
+      let danceItems=df;
+      if(photoMode&&df.length){
+        const space=state.photoSite||t,tp=state.photoTentPlacement||{x:0,y:0,rotationDeg:0};
+        danceItems=df.map(o=>{const pp=o.photoPlacement;return {...o,x:pp?.x??(t.isSite?o.x:Number(tp.x||0)+o.x),y:pp?.y??(t.isSite?o.y:Number(tp.y||0)+o.y)};});
+        danceMesh=dance(danceItems,space);
+      }else danceMesh=dance(df,t);
+      if(danceMesh)furniture.add(danceMesh);furnitureKey=nextFurniture;renderer.shadowMap.needsUpdate=true;
     }
     if(stylingKey!==nextFurniture){if(styling){scene.remove(styling);disposeGroup(styling);}styling=createPartyStyling(t,state.objects);scene.add(styling);stylingKey=nextFurniture;}
     if(styling)styling.visible=showStyling&&!drag;
