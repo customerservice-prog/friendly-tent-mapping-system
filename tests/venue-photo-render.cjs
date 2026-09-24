@@ -13,7 +13,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  Object.defineProperties(container,{clientWidth:{get:()=>900},clientHeight:{get:()=>600}});
  let renderer,clock=0,frames=new Map();
  class Renderer{
-  constructor(){renderer=this;this.domElement=w.document.createElement('canvas');this.domElement.getBoundingClientRect=()=>({left:0,top:0,width:900,height:600});this.shadowMap={};}
+  constructor(){renderer=this;this.domElement=w.document.createElement('canvas');this.domElement.getBoundingClientRect=()=>({left:0,top:0,width:900,height:600});this.domElement.toDataURL=()=> 'data:image/jpeg;base64,venue-fixture';this.shadowMap={};}
   setPixelRatio(){}setSize(){}render(scene,camera){this.scene=scene;this.camera=camera;}dispose(){this.disposed=true;}
  }
  class Controls{
@@ -47,7 +47,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  assert.equal(scene.getObjectByName('Visible sun').visible,false,'generated sky decorations do not cover the customer photo');
  assert.equal(scene.fog.density,.00015,'photo mode keeps only minimal depth haze');
  assert.ok(scene.background?.isCanvasTexture,'photo is rendered into the WebGL background so captured output includes it');
- assert.ok(draws>0,'uploaded photo is drawn into the background texture');
+ assert.ok(draws>0,'uploaded photo is drawn into the background texture');assert.match(view.captureImage(),/^data:image\/jpeg/,'print/review capture includes the WebGL composition');
  const before=draws;
  view.rebuild({...data,backgroundPhoto:{id:'p1',url:'https://api.test/background-photo/p1?t=cap',focusX:80,focusY:30,zoom:1.5,shade:.2}});
  assert.ok(draws>before,'crop/focus changes repaint the photo without replacing the layout');
