@@ -11,6 +11,12 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
   }
   const tent = find(catalog.tents,scene.tentId);
   if(includeTent && scene.tentId) add(tent,1,'tent','Tent — confirm selection');
+  if(includeTent && scene.tentId && Array.isArray(scene.sidewalls)) {
+    const wallCounts={solid:0,window:0};
+    scene.sidewalls.forEach(w=>{if(w&&wallCounts[w.type]!==undefined)wallCounts[w.type]++;});
+    if(wallCounts.solid) add(null,wallCounts.solid,'sidewall','Solid 10 ft Sidewall — confirm pricing','Solid 10 ft Sidewall');
+    if(wallCounts.window) add(null,wallCounts.window,'sidewall','Window 10 ft Sidewall — confirm pricing','Window 10 ft Sidewall');
+  }
   const inflatables=new Map();for(const o of objects)if(o.kind==='inflatable')inflatables.set(o.inflatableId,(inflatables.get(o.inflatableId)||0)+1);inflatables.forEach((qty,id)=>add(find(catalog.inflatables,id),qty,'inflatable','Inflatable — confirm selection'));
   const tables = new Map(), chairs = new Map(), linens = new Map();
   for(const object of objects) {

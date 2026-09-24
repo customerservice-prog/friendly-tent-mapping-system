@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { requireTenantAccess } = require('../middleware/requireAuth');
 const { savePermission } = require('../eventPassAccess');
+const { signToken, verifyToken } = require('../auth');
 
 const router = express.Router();
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
@@ -109,6 +110,40 @@ router.patch('/:slug/designs/:id', wrap(async (req, res) => {
   );
   if (!result.rows[0]) return res.status(404).json({ error: 'Draft not found for this session' });
   res.json({ id: result.rows[0].id, updated: true });
+}));
+
+
+router.post('/:slug/designs/:id/share', wrap(async (req, res) => {
+  const tenant = await tenantForSlug(req.params.slug);
+  if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+  const owner = text(req.body?.anonymousSessionId, 160);
+  if (!owner) return res.status(400).json({ error: 'anonymousSessionId is required' });
+  const design = (await db.query(
+    'SELECT id FROM designs WHERE id=$1 AND tenant_id=$2 AND anonymous_session_id=$3',
+    [req.params.id, tenant.id, owner]
+  )).rows[0];
+  if (!design) return res.status(404).json({ error: 'Draft not found for this session' });
+  const token = signToken({ kind: 'tenant_design_share', designId: design.id, tenantSlug: tenant.slug }, { expiresIn: '180d' });
+  res.setHeader('Cache-Control','no-store');
+  res.json({ url: 'https://rentsketch.com/designer/?tenant=' + encodeURIComponent(tenant.slug) + '#share=' + encodeURIComponent(token), expiresInDays: 180 });
+}));
+
+router.post('/:slug/shared-design/restore', wrap(async (req, res) => {
+  const tenant = await tenantForSlug(req.params.slug);
+  if (!tenant) return res.status(404).json({ error: 'Tenant not found' });
+  let payload;
+  try { payload = verifyToken(String(req.body?.token || '')); }
+  catch (_) { return res.status(400).json({ error: 'This shared layout link is invalid or expired' }); }
+  if (payload.kind !== 'tenant_design_share' || payload.tenantSlug !== tenant.slug || !payload.designId) {
+    return res.status(400).json({ error: 'Invalid shared layout link' });
+  }
+  const design = (await db.query(
+    'SELECT id,event_type,guest_count,scene,estimate_total,updated_at FROM designs WHERE id=$1 AND tenant_id=$2',
+    [payload.designId, tenant.id]
+  )).rows[0];
+  if (!design) return res.status(404).json({ error: 'Shared layout not found' });
+  res.setHeader('Cache-Control','no-store');
+  res.json({ id: design.id, tenant: tenant.slug, scene: design.scene, eventType: design.event_type, guestCount: design.guest_count, estimateTotal: design.estimate_total, updatedAt: design.updated_at, readOnly: true });
 }));
 
 // GET /api/tenants/:slug/designs
