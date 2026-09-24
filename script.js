@@ -354,7 +354,7 @@ function renderViews(conflicts){
 }
 function setViewMode(mode){
   if(mode==='photo'&&!state.backgroundPhoto){openDrawer('site');showLayoutNotice('Upload a venue photo first, then Photo View will unlock.',4500);return false;}
-  state.viewMode=mode;
+  state.viewMode=mode;renderPropertyFit(currentPropertyPlan());
   if($('sceneControls'))$('sceneControls').hidden=mode!=='3d';
   if($('sceneSettingLabel'))$('sceneSettingLabel').hidden=mode!=='3d';
   [['plan','viewModePlan'],['photo','viewModePhoto'],['3d','viewMode3d']].forEach(function(pair){var b=$(pair[1]);if(!b)return;b.classList.toggle('active',mode===pair[0]);b.setAttribute('aria-selected',String(mode===pair[0]));});
