@@ -84,6 +84,13 @@ export async function prepareVenuePhoto(file){
   if(!file)throw new Error('Choose a photo first.');
   if(!['image/jpeg','image/png','image/webp'].includes(file.type))throw new Error('Choose a JPG, PNG or WebP photo.');
   if(file.size>MAX_SOURCE_BYTES)throw new Error('That photo is too large. Choose one under 25 MB.');
+  // Most phone/web photos are already small enough for the API. Upload them
+  // directly instead of decoding + repainting them through a browser canvas.
+  // This avoids browser-specific image decoding/canvas failures and preserves
+  // the original JPEG/PNG/WebP bytes.
+  if(file.size<=TARGET_BYTES){
+    return {blob:file,name:(file.name||'Venue photo').slice(0,120),mimeType:file.type};
+  }
   const decoded=await decodePhoto(file);
   try{
     if(!decoded.width||!decoded.height)throw new Error('That photo has invalid dimensions.');
@@ -100,7 +107,7 @@ export async function prepareVenuePhoto(file){
       edge=Math.max(1200,Math.round(edge*.82));quality=Math.max(.68,quality-.07);
     }
     if(!blob||blob.size>4*1024*1024)throw new Error('That photo is still too large after resizing. Try a smaller image.');
-    return {blob,width,height,name:(file.name||'Venue photo').slice(0,120)};
+    return {blob,width,height,name:(file.name||'Venue photo').slice(0,120),mimeType:'image/jpeg'};
   }finally{decoded.close?.();}
 }
 function adminToken(){
@@ -125,7 +132,7 @@ export async function uploadVenuePhoto(file,context){
   const api=String(context.api||'').replace(/\/$/,'');
   if(!api||!context.slug||!context.designId)throw new Error('Save the layout before adding a venue photo.');
   const routes=venuePhotoRoutes(context);if(!routes)throw new Error('Photo upload route is unavailable.');
-  const headers={'Content-Type':'image/jpeg'};
+  const headers={'Content-Type':prepared.mimeType||'image/jpeg'};
   if(context.sessionId)headers['X-RentSketch-Session']=context.sessionId;
   const token=adminToken();if(token)headers.Authorization='Bearer '+token;
   const controller=new AbortController(),timer=setTimeout(function(){controller.abort();},30000);

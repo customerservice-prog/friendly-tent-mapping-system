@@ -22,7 +22,12 @@ async function setup(query, options = {}) {
   if (options.saved) w.localStorage.setItem('rentsketch-autosave:friendly', JSON.stringify(options.saved));
   let draft, checkouts = 0;
   w.fetch = async (url, request = {}) => {
-    const body = request.body && JSON.parse(request.body); calls.push({ url, body, method: request.method || 'GET', headers: request.headers || {} });
+    const rawBody=request.body;
+    let body=rawBody;
+    if(typeof rawBody==='string'){
+      try{body=JSON.parse(rawBody);}catch(_){body=rawBody;}
+    }
+    calls.push({ url, body, rawBody, method: request.method || 'GET', headers: request.headers || {} });
     let data;
     if (url.endsWith('/api/tenants/friendly')) data = { slug: 'friendly', name: 'Friendly Party Rental', showPrices: true };
     else if (url.endsWith('/products')) data = { products };
@@ -35,7 +40,15 @@ async function setup(query, options = {}) {
     else if (url.includes('/review-pricing')) data = { available: true, zip: new URL(url).searchParams.get('zip'), deliveryFee: new URL(url).searchParams.has('zip') ? 49.99 : null, taxRate: 8, taxDelivery: true };
     else if (url.endsWith('/quote-requests')) data = { id: 'isolated-quote', notificationSent: true };
     else if (url.endsWith('/event-pass/checkout-session') || url.endsWith('/event-pass/renewal-checkout-session')) { checkouts++; data = { url: 'https://checkout.stripe.com/c/pay/cs_live_fixturecheckout' }; }
-    else if (/\/designs(?:\/draft-owned)?$/.test(url)) { draft = { id: 'draft-owned', scene: body.scene, tenant: 'friendly', anonymousSessionId: body.anonymousSessionId, active: false }; data = { id: draft.id }; }
+    else if (url.includes('/background-photo') && (request.method || 'GET') === 'POST') {
+      const generic=url.includes('/api/consumer/designs/');
+      data={id:'photo-fixture',path:(generic?'/api/consumer/background-photo/photo-fixture?t=capability':'/api/tenants/friendly/background-photo/photo-fixture?t=capability'),mimeType:'image/jpeg',byteSize:Number(rawBody&&rawBody.size)||0};
+    }
+    else if (/\/designs(?:\/[^/]+)?$/.test(url)) {
+      const id=(url.match(/\/designs\/([^/?#]+)$/)||[])[1]||'draft-owned';
+      draft = { id, scene: body.scene, tenant: new URL(w.location.href).searchParams.get('tenant')||'generic', anonymousSessionId: body.anonymousSessionId, active: false };
+      data = { id: draft.id };
+    }
     else throw Error('Unexpected API request ' + url);
     return { ok: true, status: 200, json: async () => data };
   };
@@ -104,6 +117,41 @@ async function setup(query, options = {}) {
   assert.equal(gaPurchase[2].items[0].item_id, 'event_pass_30_day'); assert.doesNotMatch(JSON.stringify(gaPurchase), /cs_live_fixturecheckout|paid@example\.invalid/);
   assert.equal(JSON.parse(w.localStorage.getItem('rentsketch-ga4-purchase:ep_0123456789abcdef01234567')), true, 'purchase is locally deduplicated');
   assert.equal(d.getElementById('customerEmail').value, 'paid@example.invalid', 'checkout email fills an empty saved contact email');
+  d.querySelector('.pass-close').click();
+
+  // Real Photo Match browser flow: paid generic/Event Pass design -> file input change ->
+  // direct small-JPEG upload -> scene backgroundPhoto update. This is the production
+  // path that previously no-op'd before any background-photo request reached the API.
+  t.dom.window.close();
+  const genericPhotoEvent={
+    id:'generic-photo-design',tenant:'generic',
+    scene:{tentId:'frame-20x20',objects:[],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},
+    anonymousSessionId:'generic-photo-owner',active:true,renewable:true,
+    expiresAt:new Date(Date.now()+30*86400000).toISOString(),customerEmail:'photo@example.invalid',
+    accessUrl:'https://rentsketch.com/designer/?tenant=generic#recoveryToken=generic.photo.token'
+  };
+  t=await setup('?tenant=generic#recoveryToken=generic.photo.token',{restored:genericPhotoEvent});
+  w=t.w;d=w.document;b=w.FriendlyBridge;await wait(30);
+  assert.equal(w.RentSketchEventPass.canEdit(),true,'generic paid design is editable before Photo Match');
+  d.querySelector('[data-drawer="site"]').click();
+  const photoInput=d.querySelector('[data-role="venue-photo-file"]');assert.ok(photoInput,'Photo Match file input is rendered');
+  const jpegBytes=new Uint8Array([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0xff,0xd9]);
+  const backyard=new w.File([jpegBytes],'backyard.jpg',{type:'image/jpeg'});
+  Object.defineProperty(photoInput,'files',{configurable:true,value:[backyard]});
+  photoInput.dispatchEvent(new w.Event('change',{bubbles:true}));
+  await wait(80);
+  const photoUpload=t.calls.find(call=>call.url.includes('/api/consumer/designs/generic-photo-design/background-photo'));
+  assert.ok(photoUpload,'choosing a generic/Event Pass venue photo sends the consumer background-photo POST');
+  assert.equal(photoUpload.method,'POST');assert.equal(photoUpload.rawBody,backyard,'small JPG uploads directly without canvas recompression');
+  assert.equal(photoUpload.headers['Content-Type'],'image/jpeg');
+  assert.equal(b.getScene().backgroundPhoto.id,'photo-fixture');
+  assert.match(b.getScene().backgroundPhoto.url,/\/api\/consumer\/background-photo\/photo-fixture\?t=capability$/);
+  assert.ok(d.querySelector('.venue-photo-card.is-active'),'Photo Match switches to active UI after upload');
+  t.dom.window.close();
+
+  // Continue the existing Friendly paid-event regression separately.
+  t = await setup('?tenant=friendly&payment=success&checkout_session_id=cs_live_fixturecheckout', { restored: paidReturn, analytics: true });
+  w = t.w; d = w.document; b = w.FriendlyBridge;
   d.querySelector('.pass-close').click(); d.querySelector('[data-drawer="tables"]').click(); assert.equal(d.getElementById('drawer').hidden, false);
   // Save real edits, then reopen the server snapshot on a separate device.
   b.loadScene({ ...b.getScene(), surfaceType: 'grass', objects: [{ id: 'dining', kind: 'table', tableId: 'round-5ft', shape: 'round', widthFt: 5, depthFt: 5, x: 2, y: 2, seatCount: 8, chairId: 'resin-white', linenId: null }] });
