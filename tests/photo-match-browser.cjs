@@ -94,11 +94,31 @@ const web=http.createServer((req,res)=>{
     assert.ok(uploads[1].bytes<=3.4*1024*1024,'compressed JPG stays under target upload size');
     assert.equal(uploads[1].contentType,'image/jpeg');
     assert.match(await page.locator('[data-role="venue-photo-status"]').innerText(),/Applied/);
+
+    // Reproduce the live failure signature: the file input is replaced/detached
+    // while the native Windows picker is open. A delegated drawer listener
+    // cannot receive that event, but a listener bound directly to the original
+    // input must still process the chosen file.
+    const detachedInfo=await page.evaluate(()=>{
+      const input=document.querySelector('[data-role="venue-photo-file"]');
+      const bytes=new Uint8Array(2400000);bytes[0]=0xff;bytes[1]=0xd8;bytes[2]=0xff;bytes[3]=0xe0;
+      const file=new File([bytes],'detached-picker.jpg',{type:'image/jpeg',lastModified:Date.now()});
+      const dt=new DataTransfer();dt.items.add(file);input.files=dt.files;
+      input.remove();
+      input.dispatchEvent(new Event('input')); // intentionally non-bubbling on a detached node
+      return {bytes:file.size,isConnected:input.isConnected};
+    });
+    assert.equal(detachedInfo.isConnected,false,'test really detaches the original file input');
+    await page.waitForFunction(()=>window.FriendlyBridge.getScene().backgroundPhoto?.id==='photo-browser-fixture-3',{timeout:10000});
+    assert.equal(uploads.length,3,'detached native-picker input still produces exactly one upload');
+    assert.equal(uploads[2].bytes,detachedInfo.bytes);
+    assert.equal(uploads[2].contentType,'image/jpeg');
+    assert.match(await page.locator('[data-role="venue-photo-status"]').innerText(),/Applied/);
     await page.locator('#viewMode3d').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
     await page.screenshot({path:path.join(out,'generic-admin-photo-applied.png'),fullPage:true});
     assert.deepEqual(errors,[],'no browser page errors during Photo Match');
-    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,status:'Applied',pageErrors:errors},null,2));
-    console.log('PASS Photo Match Chromium: exact generic&admin=1 returning design, change-event blocked fallback, 1.37 MB direct JPG, >3.4 MB JPG resize/compress path, cross-origin binary uploads, Applied UI and 3D background state.');
+    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,status:'Applied',pageErrors:errors},null,2));
+    console.log('PASS Photo Match Chromium: exact generic&admin=1 returning design, change-event blocked fallback, >3.4 MB JPG resize/compress path, detached native-picker input upload, Applied UI and 3D background state.');
     await context.close();
   }finally{await browser.close();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}
 })().catch(e=>{console.error(e);web.close();api.close();process.exitCode=1;});
