@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeTable as table, makeStandaloneChair, makeDanceFloor as dance, mergeParts } from './equipment3d.js';
 import { createEnvironment, createPhotoEnvironment, disposeGroup } from './scene-environment.js';
-import { createPhotoWorld360 } from './photo-world360.js?v=20260924-photo-world360-1';
+import { createPhotoWorld360 } from './photo-world360.js';
 import { createWeather } from './scene-weather.js';
 import { createGuests } from './scene-guests.js';
 import { createPartyStyling } from './party-styling.js';
