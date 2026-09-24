@@ -82,6 +82,10 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   const adminAccess=await request('/api/consumer/designs/'+adminSaved.body.id+'/access',null,null,'GET',platformAdminToken); assert.equal(adminAccess.status,200); assert.equal(adminAccess.body.reason,'platform_admin'); assert.equal(adminAccess.body.paymentRequired,false);
   const adminReopen=await request('/api/consumer/admin/designs/'+adminSaved.body.id,null,null,'GET',platformAdminToken); assert.equal(adminReopen.status,200); assert.equal(adminReopen.body.adminAccess,true); assert.deepEqual(adminReopen.body.scene,adminFurnished);
   assert.equal((await request('/api/consumer/admin/designs/'+adminSaved.body.id)).status,403,'saved design admin reopen never works without platform authentication');
+  const adminShare=await request('/api/consumer/designs/'+adminSaved.body.id+'/share',{anonymousSessionId:'wrong'},null,'POST',platformAdminToken); assert.equal(adminShare.status,200);assert.equal(adminShare.body.readOnly,true);
+  const adminShareToken=new URLSearchParams(new URL(adminShare.body.url).hash.slice(1)).get('shareToken');const adminSharePayload=auth.verifyToken(adminShareToken);assert.equal(adminSharePayload.kind,'design_share');assert.equal(adminSharePayload.designId,adminSaved.body.id);assert.equal(adminSharePayload.anonymousSessionId,undefined,'share token never contains the private edit session');
+  const adminShared=await request('/api/consumer/shared/'+encodeURIComponent(adminShareToken));assert.equal(adminShared.status,200);assert.equal(adminShared.body.readOnly,true);assert.deepEqual(adminShared.body.scene,adminFurnished);
+
   env.EVENT_PASS_ENABLED = 'false'; assert.equal((await request('/api/consumer/event-pass/offer?tenant=friendly')).body.required, false); env.EVENT_PASS_ENABLED = 'true';
   assert.equal((await request('/api/consumer/event-pass/offer?tenant=lakeside')).body.required, false);
   const previewSession = { tenant: 'friendly', anonymousSessionId: 'isolated-preview-session' };
@@ -144,6 +148,12 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal((await buy(d)).body.active, true, 'already paid never charged again'); assert.equal(creates, 1);
   assert.equal((await request('/api/consumer/event-pass/resume', { designId: d.id, anonymousSessionId: 'wrong' })).status, 404);
   assert.equal(r.body.customerEmail, 'paid@example.invalid', 'email follows the verified Stripe checkout');
+  await pg.query("UPDATE designs SET scene=jsonb_set(scene,'{customer}', $1::jsonb, true) WHERE id=$2",[JSON.stringify({name:'Private Name',email:'private@example.invalid',date:'2027-06-01'}),d.id]);
+  const ownerShare=await request('/api/consumer/designs/'+d.id+'/share',{anonymousSessionId:'owner-private-token'});assert.equal(ownerShare.status,200);assert.equal(ownerShare.body.readOnly,true);
+  assert.equal((await request('/api/consumer/designs/'+d.id+'/share',{anonymousSessionId:'wrong'})).status,403,'another browser cannot create a share link for someone else’s design');
+  const ownerShareToken=new URLSearchParams(new URL(ownerShare.body.url).hash.slice(1)).get('shareToken'),sharedView=await request('/api/consumer/shared/'+encodeURIComponent(ownerShareToken));
+  assert.equal(sharedView.status,200);assert.equal(sharedView.body.scene.customer.name,'');assert.equal(sharedView.body.scene.customer.email,'');assert.equal(sharedView.body.scene.customer.date,'2027-06-01','shared view may keep event date but strips private contact details');
+
   assert.ok(Math.abs(Date.parse(r.body.expiresAt) - Date.now() - 30*86400000) < 10000, 'new purchase grants exactly 30 days');
   assert.equal((await pg.query('SELECT * FROM event_pass_emails')).rows.length, 1, 'duplicate fulfillment queues one receipt');
   const privateLink = new URL(r.body.accessUrl), recoveryToken = new URLSearchParams(privateLink.hash.slice(1)).get('recoveryToken');
