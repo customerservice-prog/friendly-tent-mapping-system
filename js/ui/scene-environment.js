@@ -148,10 +148,42 @@ function gardenDetails(group,bounds,setting) {
   }
 }
 
-export function createPhotoEnvironment(tent) {
+function photoGeometryMaterial(type){
+  const settings={
+    house:{color:0x7890a3,opacity:.14},
+    fence:{color:0x9a876d,opacity:.22},
+    tree:{color:0x71866b,opacity:.16},
+    obstacle:{color:0x887a92,opacity:.18},
+    'no-place':{color:0xa55d55,opacity:.10}
+  }[type]||{color:0x87909a,opacity:.16};
+  return new THREE.MeshStandardMaterial({color:settings.color,transparent:true,opacity:settings.opacity,roughness:.88,metalness:0,depthWrite:false,side:THREE.DoubleSide});
+}
+function addPhotoProxy(group,tent,g){
+  const w=Math.max(.2,Number(g.widthFt)||1),d=Math.max(.2,Number(g.depthFt)||1),h=Math.max(.1,Number(g.heightFt)||1);
+  const x=Number(g.x||0)+w/2-Number(tent.widthFt||0)/2,z=Number(g.y||0)+d/2-Number(tent.lengthFt||0)/2;
+  if(g.type==='tree'){
+    const trunk=new THREE.Mesh(new THREE.CylinderGeometry(Math.max(.18,w*.09),Math.max(.25,w*.13),Math.max(3,h*.42),10),photoGeometryMaterial('fence'));
+    trunk.position.set(x,Math.max(3,h*.42)/2,z);trunk.name='Photo geometry tree trunk';trunk.castShadow=true;group.add(trunk);
+    const crown=new THREE.Mesh(new THREE.IcosahedronGeometry(Math.max(1.5,Math.max(w,d)*.75),1),photoGeometryMaterial('tree'));
+    crown.position.set(x,Math.max(3,h*.42)+Math.max(1.4,h*.18),z);crown.scale.y=Math.max(1,Math.min(2,h/Math.max(6,w*2)));crown.name='Photo geometry tree';crown.castShadow=true;group.add(crown);return;
+  }
+  if(g.type==='no-place'){
+    const zone=new THREE.Mesh(new THREE.PlaneGeometry(w,d),photoGeometryMaterial('no-place'));zone.rotation.x=-Math.PI/2;zone.position.set(x,.03,z);zone.name='Photo no-place zone';group.add(zone);return;
+  }
+  let bw=w,bd=d,bh=h;
+  if(g.type==='fence'){
+    if(w>=d)bd=Math.min(d,.35);else bw=Math.min(w,.35);
+  }
+  const box=new THREE.Mesh(new THREE.BoxGeometry(bw,bh,bd),photoGeometryMaterial(g.type));
+  box.position.set(x,bh/2,z);box.rotation.y=-(Number(g.rotationDeg||0)||0)*Math.PI/180;box.name='Photo geometry '+g.type;box.castShadow=true;box.receiveShadow=true;group.add(box);
+  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(box.geometry),new THREE.LineBasicMaterial({color:0x4b5964,transparent:true,opacity:.38}));
+  edge.position.copy(box.position);edge.rotation.copy(box.rotation);edge.name='Photo geometry edge';group.add(edge);
+}
+
+export function createPhotoEnvironment(tent,calibration,photoGeometry=[]) {
   const group=new THREE.Group();
-  group.name='Venue photo shadow catcher';
-  group.userData={setting:'photo',decorative:true,setNight:function(){}};
+  group.name='Venue photo geometry';
+  group.userData={setting:'photo',decorative:true,setNight:function(){},calibration:calibration||null};
   const size=Math.max(180,Number(tent?.widthFt||0)+100,Number(tent?.lengthFt||0)+100);
   const shadow=new THREE.Mesh(
     new THREE.PlaneGeometry(size,size),
@@ -163,6 +195,7 @@ export function createPhotoEnvironment(tent) {
   shadow.receiveShadow=true;
   shadow.castShadow=false;
   group.add(shadow);
+  (Array.isArray(photoGeometry)?photoGeometry:[]).forEach(g=>addPhotoProxy(group,tent,g));
   return group;
 }
 
