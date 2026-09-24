@@ -106,16 +106,31 @@ export async function prepareVenuePhoto(file){
 function adminToken(){
   try{return localStorage.getItem('rentsketch_dashboard_token')||'';}catch(_){return '';}
 }
+export function venuePhotoRoutes(context){
+  const api=String(context?.api||'').replace(/\/$/,'');
+  const slug=String(context?.slug||'generic');
+  const designId=encodeURIComponent(String(context?.designId||''));
+  if(!api||!designId)return null;
+  if(slug==='generic'){
+    return {
+      upload:api+'/api/consumer/designs/'+designId+'/background-photo',
+      remove:function(photoId){return api+'/api/consumer/designs/'+designId+'/background-photo/'+encodeURIComponent(String(photoId||''));}
+    };
+  }
+  const tenantBase=api+'/api/tenants/'+encodeURIComponent(slug)+'/designs/'+designId+'/background-photo';
+  return {upload:tenantBase,remove:function(photoId){return tenantBase+'/'+encodeURIComponent(String(photoId||''));}};
+}
 export async function uploadVenuePhoto(file,context){
   const prepared=await prepareVenuePhoto(file);
   const api=String(context.api||'').replace(/\/$/,'');
   if(!api||!context.slug||!context.designId)throw new Error('Save the layout before adding a venue photo.');
+  const routes=venuePhotoRoutes(context);if(!routes)throw new Error('Photo upload route is unavailable.');
   const headers={'Content-Type':'image/jpeg'};
   if(context.sessionId)headers['X-RentSketch-Session']=context.sessionId;
   const token=adminToken();if(token)headers.Authorization='Bearer '+token;
   const controller=new AbortController(),timer=setTimeout(function(){controller.abort();},30000);
   try{
-    const r=await fetch(api+'/api/tenants/'+encodeURIComponent(context.slug)+'/designs/'+encodeURIComponent(context.designId)+'/background-photo',{method:'POST',headers,body:prepared.blob,signal:controller.signal});
+    const r=await fetch(routes.upload,{method:'POST',headers,body:prepared.blob,signal:controller.signal});
     let data={};try{data=await r.json();}catch(_){}
     if(!r.ok)throw new Error(data.error||('Venue photo upload failed ('+r.status+')'));
     return normalizeVenuePhoto({
@@ -131,5 +146,6 @@ export async function deleteVenuePhoto(photo,context){
   photo=normalizeVenuePhoto(photo,context.api);if(!photo?.id||!context.designId)return;
   const headers={};if(context.sessionId)headers['X-RentSketch-Session']=context.sessionId;
   const token=adminToken();if(token)headers.Authorization='Bearer '+token;
-  try{await fetch(String(context.api||'').replace(/\/$/,'')+'/api/tenants/'+encodeURIComponent(context.slug)+'/designs/'+encodeURIComponent(context.designId)+'/background-photo/'+encodeURIComponent(photo.id),{method:'DELETE',headers});}catch(_){}
+  const routes=venuePhotoRoutes(context);if(!routes)return;
+  try{await fetch(routes.remove(photo.id),{method:'DELETE',headers});}catch(_){}
 }
