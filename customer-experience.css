@@ -66,3 +66,20 @@
 .photo-geometry-shape{fill:rgba(95,128,156,.16);stroke:rgba(235,245,250,.7);stroke-width:3;stroke-dasharray:8 6;vector-effect:non-scaling-stroke}.photo-geometry.selected .photo-geometry-shape{stroke:#ffd66b;stroke-width:5}.photo-geometry.no-place .photo-geometry-shape{fill:rgba(180,74,65,.18)}
 .photo-geometry-label{font-size:15px}.photo-geometry-draft{fill:rgba(255,214,107,.14);stroke:#ffd66b;stroke-width:3;stroke-dasharray:8 6;vector-effect:non-scaling-stroke}
 @media(max-width:760px){.photo-workspace-toolbar{grid-template-columns:1fr;padding:8px}.photo-workspace-tools{justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.photo-workspace-hint{text-align:left}.photo-geometry-type{min-width:140px}.photo-workspace-viewport{padding:4px}.photo-workspace-stage{border-radius:8px}}
+
+/* Reconstructed property fit status */
+.property-fit-badge{font-weight:850!important;border-width:1.5px!important}
+.property-fit-badge[data-kind="fits"]{background:#e8f6eb!important;border-color:#4b8a5a!important;color:#285c36!important}
+.property-fit-badge[data-kind="close"]{background:#fff5d8!important;border-color:#c89f38!important;color:#72550b!important}
+.property-fit-badge[data-kind="blocked"]{background:#fff0ed!important;border-color:#c85b4f!important;color:#8b2f27!important}
+.property-fit-badge[data-kind="neutral"]{background:#f4f5f3!important;color:#536056!important}
+.property-fit-panel{position:absolute;top:62px;left:18px;z-index:28;width:min(390px,calc(100% - 36px));padding:14px 15px 13px;border:1px solid #d7dfd7;border-radius:14px;background:rgba(255,255,255,.97);box-shadow:0 16px 40px rgba(18,35,24,.20);color:#26382c;backdrop-filter:blur(10px)}
+.property-fit-panel strong{display:block;margin:0 0 5px;font-size:16px;line-height:1.25}
+.property-fit-panel p{margin:0 0 8px;font-size:12px;line-height:1.45;color:#56665b}
+.property-fit-panel ul{margin:8px 0 10px;padding-left:18px;font-size:12px;line-height:1.45;color:#374a3d}
+.property-fit-panel li+li{margin-top:4px}
+.property-fit-panel small{display:block;padding-top:8px;border-top:1px solid #e4e9e4;font-size:10px;line-height:1.45;color:#718078}
+.property-fit-panel[data-kind="fits"]{border-color:#8db99a}
+.property-fit-panel[data-kind="close"]{border-color:#dab85c}
+.property-fit-panel[data-kind="blocked"]{border-color:#d58379}
+@media(max-width:720px){.property-fit-panel{top:58px;left:8px;width:calc(100% - 16px);box-sizing:border-box}.property-fit-badge{font-size:11px!important}}

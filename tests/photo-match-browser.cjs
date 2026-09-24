@@ -172,6 +172,15 @@ const web=http.createServer((req,res)=>{
     await page.waitForFunction(()=>document.querySelector('#view3dOrbit360')?.getAttribute('aria-pressed')==='true');
     assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','a venue photo opens directly as the 360 World');
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'false','exact Matched View stays available but is not the default 3D experience');
+    await page.locator('#propertyFitBadge').waitFor({state:'visible'});
+    const livePlan=await page.evaluate(()=>window.FriendlyBridge.getPropertyPlan());
+    assert.equal(livePlan.active,true,'FriendlyBridge exposes reconstructed property planning result');
+    const fitKind=await page.locator('#propertyFitBadge').getAttribute('data-kind');
+    const expectedKind=livePlan.overall==='fits'?'fits':livePlan.overall==='close'?'close':'blocked';
+    assert.equal(fitKind,expectedKind,'3D property-fit badge matches exact planning engine');
+    await page.locator('#propertyFitBadge').click();
+    assert.equal(await page.locator('#propertyFitPanel').isHidden(),false,'fit reasoning panel opens');
+    assert.match(await page.locator('#propertyFitPanel').innerText(),/Planning check only/);
     assert.match(await page.locator('#view3dOrbit360').innerText(),/360 World/);
     assert.match(await page.locator('#canvasHint').innerText(),/360 World/);assert.match(await page.locator('#canvasHint').innerText(),/parallax/);
     await page.locator('#view3dMatchPhoto').click();
