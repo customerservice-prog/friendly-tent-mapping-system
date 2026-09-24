@@ -7,13 +7,13 @@ var state={user:null,tenants:[],route:'overview',menu:false};
 
 var nav=[
  {label:'Platform',items:[
-  ['overview','Overview','⌂'],['businesses','Businesses','▦'],['analytics','Analytics','▥'],['payments','Payments','＄'],['subscriptions','Subscriptions','↻']
+  ['overview','Overview','⌂'],['businesses','Businesses','▦'],['users','Users','◉'],['onboarding','Onboarding','✓'],['analytics','Analytics','▥'],['payments','Payments','＄'],['subscriptions','Subscriptions','↻']
  ]},
  {label:'Product',items:[
   ['event-pass','Event Pass','◇'],['designs','Saved designs','✦'],['activity','Admin activity','≡']
  ]},
  {label:'Operations',items:[
-  ['system','System health','●']
+  ['alerts','Alerts','!'],['performance','Web performance','↗'],['system','System health','●']
  ]}
 ];
 
@@ -66,12 +66,16 @@ async function render(){
  try{
   if(state.route==='overview')await overview();
   else if(state.route==='businesses')await businesses();
+  else if(state.route==='users')await users();
+  else if(state.route==='onboarding')await onboarding();
   else if(state.route==='analytics')await platformAnalytics();
   else if(state.route==='payments')await payments('all');
   else if(state.route==='subscriptions')await subscriptions();
   else if(state.route==='event-pass')await eventPass();
   else if(state.route==='designs')await designs();
   else if(state.route==='activity')await activity();
+  else if(state.route==='alerts')await alerts();
+  else if(state.route==='performance')await performance();
   else if(state.route==='system')await system();
  }catch(err){if(err.status===401||err.status===403){setToken(null);location.href='/dashboard/#/login';return;}fail(err);}
 }
