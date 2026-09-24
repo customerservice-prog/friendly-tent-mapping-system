@@ -226,6 +226,26 @@ function buildChandelier(layer, tent) {
   layer.appendChild(el);
 }
 
+function renderSidewalls(data,tent){
+  const walls=Array.isArray(data.sidewalls)?data.sidewalls:[];
+  if(!walls.length||tent.isSite)return;
+  const layer=document.createElement('div');layer.className='plan2d-sidewall-layer';stageEl.appendChild(layer);
+  walls.forEach(function(seg){
+    if(!seg||!['solid','window'].includes(seg.type))return;
+    const start=Number(seg.startFt)||0,len=Math.max(.1,Number(seg.lengthFt)||10);
+    let a,b;
+    if(seg.side==='front'){a={x:start,y:0};b={x:start+len,y:0};}
+    else if(seg.side==='back'){a={x:start,y:tent.lengthFt};b={x:start+len,y:tent.lengthFt};}
+    else if(seg.side==='left'){a={x:0,y:start};b={x:0,y:start+len};}
+    else if(seg.side==='right'){a={x:tent.widthFt,y:start};b={x:tent.widthFt,y:start+len};}
+    else return;
+    const p1=toDispXY(a.x,a.y),p2=toDispXY(b.x,b.y),x1=p1.x*pxPerFt,y1=p1.y*pxPerFt,x2=p2.x*pxPerFt,y2=p2.y*pxPerFt;
+    const line=document.createElement('div');line.className='plan2d-sidewall '+(seg.type==='window'?'window':'solid');
+    const dx=x2-x1,dy=y2-y1;line.style.width=Math.hypot(dx,dy)+'px';line.style.left=x1+'px';line.style.top=y1+'px';line.style.transform='rotate('+(Math.atan2(dy,dx)*180/Math.PI)+'deg)';line.title=(seg.type==='window'?'Window':'Solid')+' sidewall';
+    layer.appendChild(line);
+  });
+}
+
 function renderLighting(data, tent) {
   if (!data.lightingOn) return;
   const opt = lightingById(data.lightingId);
@@ -276,6 +296,7 @@ function render(data) {
   stageEl.appendChild(pole);
 });
 
+renderSidewalls(data,tent);
 renderLighting(data, tent);
   
   if (data.anchoringMethod) {
