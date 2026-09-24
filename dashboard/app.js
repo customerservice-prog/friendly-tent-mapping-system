@@ -398,9 +398,9 @@ function esc(s) {
      }).join('');
      var table = products.length ? ('<table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>In Designer</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>') : '<div class="dash-empty">No products yet. Add your first one below.</div>';
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Products</h1>' +
-       '<p class="dash-subtitle">These are the real items customers see in your designer. Changes appear immediately. Pick a Visual for each tent, table, and chair so it renders correctly on the design canvas. Items without one are automatically hidden from the customer designer (not shown as a generic shape) until mapped &mdash; see the "In Designer" column below.</p>' +
-       table +
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Customer catalog</div><h1 class="dash-title">Products</h1><p class="dash-subtitle">Control the rentals customers can place in layouts, including pricing, dimensions and visual mapping.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant=' + encodeURIComponent(state.tenant) + '" target="_blank" rel="noopener">Preview catalog</a></div></div>' +
+       '<section class="tw-metrics"><article class="tw-metric"><div class="tw-metric-label">Products</div><div class="tw-metric-value">' + products.length + '</div><div class="tw-metric-detail">Catalog records</div></article><article class="tw-metric"><div class="tw-metric-label">Active</div><div class="tw-metric-value">' + products.filter(function(p){return p.active;}).length + '</div><div class="tw-metric-detail">Available in workspace</div></article><article class="tw-metric"><div class="tw-metric-label">Priced</div><div class="tw-metric-value">' + products.filter(function(p){return Number(p.price_per_day)>0;}).length + '</div><div class="tw-metric-detail">Have customer pricing</div></article><article class="tw-metric"><div class="tw-metric-label">Visual mapped</div><div class="tw-metric-value">' + products.filter(function(p){return p.visual_model_id;}).length + '</div><div class="tw-metric-detail">Assigned a supported visual</div></article></section>' +
+       '<div class="tw-panel"><div class="tw-panel-head"><div><h2>Rental catalog</h2><p>Items without a required visual mapping stay hidden from the customer designer.</p></div></div><div class="tw-table-scroll">' + table + '</div></div>' +
        '<h2 class="dash-section-title">Add a Product</h2>' +
        '<form id="productForm" class="dash-form">' +
        '<label>Category<select id="pCategory" required><option value="">Select a category</option><option value="tent">Tent</option><option value="table">Table</option><option value="chair">Chair</option><option value="dance_floor">Dance Floor</option><option value="lighting">Lighting</option><option value="linen">Linen</option></select></label>' +
@@ -483,8 +483,7 @@ function esc(s) {
      var t = await api('/api/tenants/' + state.tenant + '/admin');
      if (gen !== renderGeneration) return;
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Branding &amp; Settings</h1>' +
-       '<p class="dash-subtitle">This controls how your hosted designer looks to your customers.</p>' +
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Customer experience</div><h1 class="dash-title">Branding &amp; payouts</h1><p class="dash-subtitle">Control how your designer looks, how customers contact you, and where deposit payouts are sent.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant=' + encodeURIComponent(state.tenant) + '" target="_blank" rel="noopener">Preview live designer</a></div></div>' +
        '<form id="brandingForm" class="dash-form">' +
        '<label>Company Name<input type="text" id="bName" value="' + esc(t.name || '') + '"></label>' +
        '<label>Logo URL<input type="text" id="bLogo" value="' + esc(t.logoUrl || '') + '"></label>' +
@@ -577,8 +576,7 @@ function esc(s) {
      var loaderCode = '<div id="rentsketch-embed"></div>\n<script src="https://rentsketch.com/embed/v1.js" data-tenant="' + esc(state.tenant) + '" data-embed-key="' + esc(t.embedKey || '') + '" defer></script>';
      var origins = (t.allowedOrigins || []).join('\n');
      document.getElementById('dashMain').innerHTML = '' +
-       '<h1 class="dash-title">Install RentSketch</h1>' +
-       '<p class="dash-subtitle">Add your event designer to your own website. No RentSketch source code needed.</p>' +
+       '<div class="tw-page-head"><div><div class="tw-eyebrow">Publish</div><h1 class="dash-title">Install RentSketch</h1><p class="dash-subtitle">Share the hosted designer or add it to your website with an iframe or versioned loader.</p></div><div class="tw-actions"><a class="tw-btn primary" href="' + designerUrl + '" target="_blank" rel="noopener">Open hosted designer</a></div></div>' +
        '<h2 class="dash-section-title">1. Hosted Designer Link</h2>' +
        '<p>Share or link directly to your own hosted designer:</p>' +
        '<textarea class="code-box" rows="1" readonly>' + esc(designerUrl) + '</textarea>' +
