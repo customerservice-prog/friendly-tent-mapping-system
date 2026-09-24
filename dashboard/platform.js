@@ -7,7 +7,7 @@ var state={user:null,tenants:[],route:'overview',menu:false};
 
 var nav=[
  {label:'Platform',items:[
-  ['overview','Overview','⌂'],['businesses','Businesses','▦'],['payments','Payments','＄'],['subscriptions','Subscriptions','↻']
+  ['overview','Overview','⌂'],['businesses','Businesses','▦'],['analytics','Analytics','▥'],['payments','Payments','＄'],['subscriptions','Subscriptions','↻']
  ]},
  {label:'Product',items:[
   ['event-pass','Event Pass','◇'],['designs','Saved designs','✦'],['activity','Admin activity','≡']
@@ -66,6 +66,7 @@ async function render(){
  try{
   if(state.route==='overview')await overview();
   else if(state.route==='businesses')await businesses();
+  else if(state.route==='analytics')await platformAnalytics();
   else if(state.route==='payments')await payments('all');
   else if(state.route==='subscriptions')await subscriptions();
   else if(state.route==='event-pass')await eventPass();
@@ -121,7 +122,7 @@ async function businesses(){
  function paint(){
   var q=(document.getElementById('tenantSearch').value||'').toLowerCase();
   var rows=state.tenants.filter(function(t){return [t.name,t.slug,t.contact_email,t.subscription_plan,t.subscription_status].join(' ').toLowerCase().includes(q)});
-  document.getElementById('tenantTable').innerHTML=rows.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Plan</th><th>Status</th><th>Products</th><th>Requests</th><th>Users</th><th>Actions</th></tr></thead><tbody>'+rows.map(function(t){return '<tr><td><strong>'+esc(t.name)+'</strong><span class="pc-subtext">'+esc(t.slug)+(t.contact_email?' · '+esc(t.contact_email):'')+'</span></td><td>'+esc(t.subscription_plan||'trial')+'</td><td>'+status(t.subscription_status)+'</td><td>'+Number(t.product_count||0)+'</td><td>'+Number(t.quote_request_count||0)+'</td><td>'+Number(t.member_count||0)+'</td><td><div class="pc-actions"><button class="pc-btn small" data-workspace="'+esc(t.slug)+'">Dashboard</button><button class="pc-btn small primary" data-designer="'+esc(t.slug)+'">Open designer</button><button class="pc-btn small" data-manage="'+esc(t.slug)+'">Manage</button></div></td></tr>'}).join('')+'</tbody></table></div>':empty('No businesses match that search.');
+  document.getElementById('tenantTable').innerHTML=rows.length?'<div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Plan</th><th>Status</th><th>Setup</th><th>Usage</th><th>Last activity</th><th>Users</th><th>Actions</th></tr></thead><tbody>'+rows.map(function(t){var setup=[Number(t.product_count||0)>0,!!t.logo_url,Array.isArray(t.allowed_origins)&&t.allowed_origins.length>0,t.stripe_connect_status==="active"];var ready=setup.filter(Boolean).length;var last=[t.latest_design_at,t.latest_request_at].filter(Boolean).sort().at(-1);return '<tr><td><strong>'+esc(t.name)+'</strong><span class="pc-subtext">'+esc(t.slug)+(t.contact_email?' · '+esc(t.contact_email):'')+'</span></td><td>'+esc(t.subscription_plan||'trial')+'</td><td>'+status(t.subscription_status)+'</td><td><strong>'+ready+'/4 ready</strong><span class="pc-subtext">'+Number(t.active_product_count||0)+' active products · '+(Array.isArray(t.allowed_origins)?t.allowed_origins.length:0)+' domains</span></td><td><strong>'+Number(t.design_count||0)+' designs</strong><span class="pc-subtext">'+Number(t.quote_request_count||0)+' requests</span></td><td>'+datetime(last)+'</td><td>'+Number(t.member_count||0)+'</td><td><div class="pc-actions"><button class="pc-btn small" data-workspace="'+esc(t.slug)+'">Dashboard</button><button class="pc-btn small primary" data-designer="'+esc(t.slug)+'">Designer</button><button class="pc-btn small" data-manage="'+esc(t.slug)+'">Manage</button></div></td></tr>'}).join('')+'</tbody></table></div>':empty('No businesses match that search.');
   bindTenantActions();
  }
  document.getElementById('tenantSearch').oninput=paint;paint();
@@ -145,6 +146,44 @@ async function tenantModal(slug){
  document.getElementById('tmWorkspace').onclick=function(){setTenant(slug);location.href='/dashboard/?tenantView=1#/overview';};
  document.getElementById('tmDesigner').onclick=function(){setTenant(slug);window.open('/designer/?tenant='+encodeURIComponent(slug)+'&admin=1','_blank','noopener');};
  document.getElementById('tmSave').onclick=async function(){var btn=this;btn.disabled=true;try{await api('/api/admin/tenants/'+encodeURIComponent(slug),{method:'PATCH',body:{name:document.getElementById('tmName').value,contactEmail:document.getElementById('tmEmail').value,trialEndsAt:document.getElementById('tmTrial').value||null}});document.getElementById('tenantMsg').innerHTML='<div class="pc-message success">Saved.</div>';setTimeout(function(){close();render()},500);}catch(err){document.getElementById('tenantMsg').innerHTML='<div class="pc-message error">'+esc(err.message)+'</div>';btn.disabled=false;}};
+}
+
+async function platformAnalytics(){
+ var d=await Promise.all([
+  api('/api/admin/console-overview'),
+  api('/api/admin/tenants'),
+  api('/api/admin/payments?limit=250'),
+  api('/api/admin/designs?limit=250'),
+  api('/api/admin/subscriptions?limit=250')
+ ]);
+ var o=d[0],tenants=d[1].tenants||[],payments=d[2].payments||[],designs=d[3].designs||[],subs=d[4].subscriptions||[];
+ var now=Date.now(),monthAgo=now-30*86400000,weekAgo=now-7*86400000;
+ var active30=tenants.filter(function(t){var ts=[t.latest_design_at,t.latest_request_at].filter(Boolean).map(function(v){return new Date(v).getTime()});return ts.length&&Math.max.apply(Math,ts)>=monthAgo;}).length;
+ var active7=tenants.filter(function(t){var ts=[t.latest_design_at,t.latest_request_at].filter(Boolean).map(function(v){return new Date(v).getTime()});return ts.length&&Math.max.apply(Math,ts)>=weekAgo;}).length;
+ var installed=tenants.filter(function(t){return Array.isArray(t.allowed_origins)&&t.allowed_origins.length>0;}).length;
+ var connected=tenants.filter(function(t){return t.stripe_connect_status==='active';}).length;
+ var ready=tenants.filter(function(t){return Number(t.product_count||0)>0&&!!t.logo_url&&Array.isArray(t.allowed_origins)&&t.allowed_origins.length>0;}).length;
+ var eventPass=payments.filter(function(p){return p.kind==='event_pass'&&p.status==='paid';}),deposits=payments.filter(function(p){return p.kind==='deposit'&&p.status==='paid';});
+ var monthPass=eventPass.filter(function(p){return new Date(p.created_at).getTime()>=monthAgo;}).reduce(function(s,p){return s+Number(p.amount_cents||0);},0);
+ var monthDeposits=deposits.filter(function(p){return new Date(p.created_at).getTime()>=monthAgo;}).reduce(function(s,p){return s+Number(p.amount_cents||0);},0);
+ var top=tenants.slice().sort(function(a,b){return (Number(b.design_count||0)+Number(b.quote_request_count||0))-(Number(a.design_count||0)+Number(a.quote_request_count||0));}).slice(0,8);
+ var byPlan={};tenants.forEach(function(t){var k=t.subscription_plan||'trial';byPlan[k]=(byPlan[k]||0)+1;});
+ var maxTop=Math.max(1,...top.map(function(t){return Number(t.design_count||0)+Number(t.quote_request_count||0);}));
+ document.getElementById('pcContent').innerHTML=head('Platform intelligence','Analytics & adoption','See which businesses are set up, active, installed, and using RentSketch—not just how many accounts exist.',
+  '<a class="pc-btn" href="#businesses">Review businesses</a><a class="pc-btn primary" href="/designer/?tenant=generic&admin=1" target="_blank" rel="noopener">Open RentSketch</a>')+
+  '<section class="pc-grid metrics">'+
+    metric('Active businesses · 30d',active30,active7+' active in the last 7 days')+
+    metric('Launch-ready',ready,installed+' installed · '+connected+' Stripe-connected')+
+    metric('Design activity',designs.length,'Recent saved designs in platform history')+
+    metric('Revenue · 30d',money(monthPass+monthDeposits),money(monthPass)+' Event Pass · '+money(monthDeposits)+' deposits','positive')+
+  '</section>'+
+  '<div class="pc-split"><section class="pc-panel"><div class="pc-panel-head"><div><h2>Most active businesses</h2><p>Saved designs plus quote requests.</p></div></div><div class="pc-panel-body">'+
+    (top.length?top.map(function(t){var total=Number(t.design_count||0)+Number(t.quote_request_count||0);return '<div class="pc-list-row"><div style="min-width:0;flex:1"><strong>'+esc(t.name)+'</strong><p>'+Number(t.design_count||0)+' designs · '+Number(t.quote_request_count||0)+' requests</p><div style="height:6px;background:#edf1f6;border-radius:999px;margin-top:7px;overflow:hidden"><span style="display:block;height:100%;width:'+Math.round(total/maxTop*100)+'%;background:#2f6fed"></span></div></div><span class="pc-status '+(total?'active':'')+'">'+total+'</span></div>';}).join(''):empty('No tenant usage yet.'))+
+  '</div></section><aside class="pc-panel"><div class="pc-panel-head"><div><h2>Plan mix</h2><p>Current tenant plan labels.</p></div></div><div class="pc-panel-body">'+Object.keys(byPlan).sort().map(function(k){return '<div class="pc-list-row"><div><strong>'+esc(k)+'</strong><p>Tenant accounts</p></div><span class="pc-status">'+byPlan[k]+'</span></div>';}).join('')+'</div></aside></div>'+
+  '<section class="pc-panel" style="margin-top:16px"><div class="pc-panel-head"><div><h2>Accounts needing setup attention</h2><p>Businesses missing products, branding, installation, or recent usage.</p></div></div><div class="pc-table-wrap"><table class="pc-table"><thead><tr><th>Business</th><th>Catalog</th><th>Branding</th><th>Installed</th><th>Stripe</th><th>Last activity</th><th>Open</th></tr></thead><tbody>'+
+    tenants.filter(function(t){return Number(t.product_count||0)===0||!t.logo_url||!(Array.isArray(t.allowed_origins)&&t.allowed_origins.length)||t.stripe_connect_status!=='active';}).slice(0,30).map(function(t){var last=[t.latest_design_at,t.latest_request_at].filter(Boolean).sort().at(-1);return '<tr><td><strong>'+esc(t.name)+'</strong><span class="pc-subtext">'+esc(t.slug)+'</span></td><td>'+status(Number(t.product_count||0)>0?'active':'trialing')+'</td><td>'+status(t.logo_url?'active':'trialing')+'</td><td>'+status(Array.isArray(t.allowed_origins)&&t.allowed_origins.length?'active':'trialing')+'</td><td>'+status(t.stripe_connect_status==='active'?'active':'trialing')+'</td><td>'+datetime(last)+'</td><td><button class="pc-btn small" data-workspace="'+esc(t.slug)+'">Workspace</button></td></tr>';}).join('')+
+  '</tbody></table></div></section>';
+ bindTenantActions();
 }
 
 async function payments(kind){
