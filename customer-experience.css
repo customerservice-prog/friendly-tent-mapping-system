@@ -66,3 +66,13 @@
 .photo-geometry-shape{fill:rgba(95,128,156,.16);stroke:rgba(235,245,250,.7);stroke-width:3;stroke-dasharray:8 6;vector-effect:non-scaling-stroke}.photo-geometry.selected .photo-geometry-shape{stroke:#ffd66b;stroke-width:5}.photo-geometry.no-place .photo-geometry-shape{fill:rgba(180,74,65,.18)}
 .photo-geometry-label{font-size:15px}.photo-geometry-draft{fill:rgba(255,214,107,.14);stroke:#ffd66b;stroke-width:3;stroke-dasharray:8 6;vector-effect:non-scaling-stroke}
 @media(max-width:760px){.photo-workspace-toolbar{grid-template-columns:1fr;padding:8px}.photo-workspace-tools{justify-content:flex-start;overflow-x:auto;flex-wrap:nowrap;padding-bottom:2px}.photo-workspace-hint{text-align:left}.photo-geometry-type{min-width:140px}.photo-workspace-viewport{padding:4px}.photo-workspace-stage{border-radius:8px}}
+
+
+/* RentSketch first-person Walk Mode */
+.walk-mode-canvas{touch-action:none;cursor:crosshair!important}
+.walk-pad{position:absolute;right:18px;bottom:78px;z-index:24;display:grid;grid-template-columns:52px 52px 52px;grid-template-rows:52px 52px;gap:7px;grid-template-areas:". f ." "l b r";pointer-events:auto;user-select:none;-webkit-user-select:none}
+.walk-pad-btn{display:grid;place-items:center;width:52px;height:52px;border:1px solid rgba(255,255,255,.28);border-radius:16px;background:rgba(16,27,20,.76);color:#fff;font:800 22px/1 system-ui;box-shadow:0 8px 22px rgba(0,0,0,.26);backdrop-filter:blur(10px);touch-action:none}
+.walk-pad-btn.is-pressed,.walk-pad-btn:active{background:rgba(69,124,80,.94);transform:translateY(1px)}
+.walk-forward{grid-area:f}.walk-left{grid-area:l}.walk-back{grid-area:b}.walk-right{grid-area:r}
+@media(min-width:881px){.walk-pad{display:none}}
+@media(max-width:760px){.walk-pad{right:12px;bottom:86px;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px}.walk-pad-btn{width:48px;height:48px;border-radius:14px;font-size:20px}}
