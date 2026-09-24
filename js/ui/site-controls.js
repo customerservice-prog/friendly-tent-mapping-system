@@ -1,7 +1,8 @@
 import { escapeHtml as esc } from './equipment-controls.js';
+import { venuePhotoPanel } from './venue-photo.js';
 export function sitePanel(state,tent){
  const pole=tent.type==='pole';
- return `<h3>Where is your event?</h3><p class="equipment-note">Choose the actual setup surface. Your equipment stays in place.</p><div class="site-options">${[
+ return `<h3>Where is your event?</h3><p class="equipment-note">Choose the actual setup surface. Your equipment stays in place.</p>${venuePhotoPanel(state.backgroundPhoto)}<div class="site-options">${[
   ['grass','Backyard / grass','Grass setting with staked tent anchors.'],
   ['concrete','Concrete / pavement',pole?'Choose a frame tent for concrete ballast.':'Paved driveway with concrete tent blocks.'],
   ['asphalt','Asphalt driveway',pole?'Choose a frame tent for concrete ballast.':'Paved driveway with concrete tent blocks.'],
