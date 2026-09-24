@@ -93,3 +93,8 @@
 .walk-forward{grid-area:f}.walk-left{grid-area:l}.walk-back{grid-area:b}.walk-right{grid-area:r}
 @media(min-width:881px){.walk-pad{display:none}}
 @media(max-width:760px){.walk-pad{right:12px;bottom:86px;grid-template-columns:48px 48px 48px;grid-template-rows:48px 48px}.walk-pad-btn{width:48px;height:48px;border-radius:14px;font-size:20px}}
+
+/* 3D point-to-point Measurement Mode */
+.measure-mode-btn.active{background:#fff4bf!important;border-color:#d3a92d!important;color:#594100!important;box-shadow:0 0 0 2px rgba(211,169,45,.16)}
+.measure-clear-btn{background:rgba(255,255,255,.94)!important;border-color:#d9dfd9!important;color:#425047!important;font-weight:800!important}
+.measure-clear-btn:hover{border-color:#aeb9b0!important;background:#fff!important}
