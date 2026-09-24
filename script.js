@@ -28,7 +28,7 @@ import { FRIENDLY_TENANT, TENTS, TABLES, CHAIRS } from './js/data/tenant.js';
 import { computeCenterPoles, computeSidewallSegments, installationClearanceFt, resolveAnchoringMethod } from './js/data/tentStructure.js';
 
 // Preview is view-only even when an editing control is reached indirectly.
-function canEditEvent(){var slug=new URLSearchParams(location.search).get('tenant')||'generic';return !['friendly','generic'].includes(slug)||window.RentSketchEventPass?.canEdit()===true;}
+function canEditEvent(){if(window.RENTSKETCH_SHARED_READONLY===true)return false;var slug=new URLSearchParams(location.search).get('tenant')||'generic';return !['friendly','generic'].includes(slug)||window.RentSketchEventPass?.canEdit()===true;}
 function requireEventEditing(){if(canEditEvent())return true;window.RentSketchEventPass?.requestAccess();return false;}
 function bareRental(layout){return !(layout.zones?.length||layout.aisles?.length)&&(!layout.objects.length||(layout.tentId==null&&layout.objects.length===1&&layout.objects[0].kind==='inflatable'));}
 function allowLayoutMutation(action,next,current){
