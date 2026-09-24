@@ -78,6 +78,8 @@ function esc(s) {
    var tenants = state.tenants || [];
    var platformAdmin = !!(state.user && state.user.isPlatformAdmin);
    var brandSub = platformAdmin ? 'Tenant Workspace · Admin' : 'Business Workspace';
+   var activeTenant = tenants.find(function(t){ return t.slug === state.tenant; }) || tenants[0] || null;
+   var tenantLabel = activeTenant ? activeTenant.name : 'Business workspace';
    var switcher = '';
    if (tenants.length > 1) {
      switcher = '<select id="tenantSwitch" class="tenant-switch" aria-label="Switch business">' + tenants.map(function (t) {
@@ -86,28 +88,35 @@ function esc(s) {
    } else if (tenants.length === 1) {
      switcher = '<span class="tenant-name">' + esc(tenants[0].name) + '</span>';
    }
-   function navLink(r, label) {
-     return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '">' + label + '</a>';
+   function navLink(r, label, icon) {
+     return '<a href="#/' + r + '" class="nav-link' + (route === r ? ' active' : '') + '"><span class="tw-nav-icon" aria-hidden="true">' + icon + '</span><span>' + label + '</span></a>';
    }
+   var designerUrl = '/designer/?tenant=' + encodeURIComponent(state.tenant || 'generic') + (platformAdmin ? '&admin=1' : '');
    return '' +
      '<div class="dash-shell" id="tenantShell">' +
      '<button type="button" id="tenantMobileMenu" aria-label="Open workspace menu">☰</button>' +
      '<header class="dash-header">' +
-       '<div class="dash-brand">RentSketch <span class="dash-brand-sub">' + brandSub + '</span></div>' +
+       '<div class="dash-brand"><img src="/assets/brand-mark.svg" alt="" width="38" height="38"><div><strong>RentSketch</strong><span class="dash-brand-sub">' + brandSub + '</span></div></div>' +
+       '<a class="tw-sidebar-launch" href="' + designerUrl + '" target="_blank" rel="noopener">✦ Open RentSketch</a>' +
        '<nav class="dash-nav" aria-label="Business workspace">' +
-         navLink('overview', 'Overview') + navLink('requests', 'Requests') + navLink('products', 'Products') +
-         navLink('branding', 'Branding') + navLink('analytics', 'Analytics') + navLink('billing', 'Billing') + navLink('install', 'Install') +
-         (platformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link">Platform Console</a>' : '') +
+         '<div class="tw-nav-label">Workspace</div>' +
+         navLink('overview', 'Overview', '⌂') + navLink('requests', 'Requests', '▤') + navLink('products', 'Products', '▦') +
+         navLink('branding', 'Branding & payouts', '◇') + navLink('analytics', 'Analytics', '▥') +
+         '<div class="tw-nav-label tw-nav-label-secondary">Account</div>' +
+         navLink('billing', 'Billing', '$') + navLink('install', 'Install & share', '↗') +
+         (platformAdmin ? '<a href="/dashboard/platform.html#overview" class="nav-link"><span class="tw-nav-icon">★</span><span>Platform Console</span></a>' : '') +
        '</nav>' +
-       '<div class="dash-account">' + switcher +
-         (platformAdmin ? '<span class="role-pill">Platform Admin</span>' : '') +
+       '<div class="dash-account">' +
+         '<div class="tw-tenant-card"><span class="tw-tenant-avatar">' + esc((tenantLabel||'R').split(/\s+/).slice(0,2).map(function(v){return v[0]||'';}).join('').toUpperCase()) + '</span><div><strong>' + esc(tenantLabel) + '</strong><small>' + (platformAdmin ? 'Platform admin view' : 'Business workspace') + '</small></div></div>' +
+         switcher +
+         (platformAdmin ? '<span class="role-pill">Platform Admin · complimentary</span>' : '') +
          '<button id="btnLogout" class="btn-logout" type="button">Log out</button>' +
        '</div>' +
      '</header>' +
+     '<div class="tw-topbar"><div class="tw-breadcrumb"><strong>' + esc(tenantLabel) + '</strong><span>/</span><span>' + esc(route.charAt(0).toUpperCase()+route.slice(1)) + '</span></div><div class="tw-top-actions"><a href="#/requests">Requests</a><a href="' + designerUrl + '" target="_blank" rel="noopener" class="primary">✦ Open RentSketch</a></div></div>' +
      '<main class="dash-main" id="dashMain">' + inner + '</main>' +
      '</div>';
  }
-
  function loadingHtml(label) { return '<div class="dash-loading">' + esc(label || 'Loading...') + '</div>'; }
  function errorHtml(err) { return '<div class="dash-error">' + esc(err && err.message ? err.message : String(err)) + (err && err.status === 402 ? ' <a href="#/billing">Open Billing to continue →</a>' : '') + '</div>'; }
 
