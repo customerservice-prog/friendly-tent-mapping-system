@@ -1,7 +1,7 @@
 import {mountReviewPricing,currentReviewPricing,reviewDeliveryZip,restoreReviewDeliveryZip} from './js/ui/review-pricing.js';
 import './js/ui/designer-help.js';
 import { sitePanel } from './js/ui/site-controls.js';
-import { normalizeVenuePhoto, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
+import { normalizeVenuePhoto, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js?v=20260924-generic-photo-1';
 import { TABLETOP } from './js/data/tabletop.js';
 // Friendly Event Designer - v2 client-side logic
 // Customer-facing designer: contextual drawers, visual cards, a 2D-first
