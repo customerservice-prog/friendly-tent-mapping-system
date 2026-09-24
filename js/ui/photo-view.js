@@ -239,6 +239,7 @@ export function mount(containerEl,data,cbs){
   renderToolbar();renderImage();
   img.addEventListener('load',()=>{fitStage();if(!data.photoCalibration){const cal=defaultPhotoCalibration(photoSpace());currentData={...currentData,photoCalibration:cal};callbacks.onCalibration?.(cal);}renderOverlay();});
   stage.addEventListener('pointerdown',pointerDown);stage.addEventListener('pointermove',pointerMove);stage.addEventListener('pointerup',pointerUp);stage.addEventListener('pointercancel',pointerUp);
+  window.addEventListener('pointerup',pointerUp,true);window.addEventListener('pointercancel',pointerUp,true);
   if(window.ResizeObserver){resizeObserver=new ResizeObserver(()=>{fitStage();renderOverlay();});resizeObserver.observe(viewport);}
   fitStage();renderOverlay();
 }
@@ -247,6 +248,7 @@ export function update(data){
   renderImage();fitStage();renderOverlay();
 }
 export function unmount(){
+  window.removeEventListener('pointerup',pointerUp,true);window.removeEventListener('pointercancel',pointerUp,true);
   resizeObserver?.disconnect();resizeObserver=null;if(container)container.replaceChildren();
   container=root=stage=img=svg=toolbar=null;currentData=null;callbacks={};drag=draftGeom=null;selectedGeomId=null;tool='move';
 }
