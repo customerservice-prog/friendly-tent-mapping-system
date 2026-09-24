@@ -2,6 +2,7 @@
 // Pricing and access always come from the API, never a local "paid" flag.
 (function () {
   'use strict';
+  if (window.RENTSKETCH_SHARED_VIEW) return;
   var params = new URLSearchParams(location.search);
   var slug = params.get('tenant') || 'generic';
   if (!['friendly', 'generic'].includes(slug)) return;
