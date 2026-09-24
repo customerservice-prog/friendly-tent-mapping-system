@@ -116,18 +116,18 @@ export function createFirstPersonWalk({
     if(!active||e.target.closest?.('.walk-pad'))return;
     if(e.button!==undefined&&e.button!==0)return;
     drag={id:e.pointerId,x:e.clientX,y:e.clientY};
-    domElement.setPointerCapture?.(e.pointerId);e.preventDefault();e.stopPropagation();
+    domElement.setPointerCapture?.(e.pointerId);e.preventDefault();e.stopImmediatePropagation();
   }
   function pointerMove(e){
     if(!active||!drag||drag.id!==e.pointerId)return;
     const dx=e.clientX-drag.x,dy=e.clientY-drag.y;drag.x=e.clientX;drag.y=e.clientY;
     yaw-=dx*(mobile?.006:.0042);pitch=clamp(pitch-dy*(mobile?.005:.0036),-1.28,1.28);
-    syncRotation();onChange();e.preventDefault();e.stopPropagation();
+    syncRotation();onChange();e.preventDefault();e.stopImmediatePropagation();
   }
   function pointerUp(e){
     if(!active||!drag||drag.id!==e.pointerId)return;
     drag=null;try{domElement.releasePointerCapture?.(e.pointerId);}catch{}
-    e.preventDefault();e.stopPropagation();
+    e.preventDefault();e.stopImmediatePropagation();
   }
 
   window.addEventListener('keydown',keyDown,{passive:false});
