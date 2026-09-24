@@ -19,7 +19,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  function moduleFor(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,m);return m;}
  async function load(file){const m=moduleFor(file);if(m.status==='unlinked')await m.link((s,ref)=>s==='three'?three:s.endsWith('/OrbitControls.js')?orbit:moduleFor(s.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',s.slice(13)):path.resolve(path.dirname(ref.identifier),s)));return m;}
  const mod=await load(path.join(root,'js/ui/view3d.js'));await mod.evaluate();
- const view=mod.namespace.init(container,{onPlacementMove:(x,y)=>callbacks.push(['move',x,y]),onPlace:()=>callbacks.push(['place'])});
+ const view=mod.namespace.init(container,{onPlacementMove:(x,y)=>callbacks.push(['move',x,y]),onPlace:()=>callbacks.push(['place']),onPhotoMove:(id,p)=>callbacks.push(['photoMove',id,p])});
  const table={id:'t1',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:1,y:1,seatCount:8,chairId:'resin-white'};
  const data={tent:{id:'pole-20x20',type:'pole',widthFt:20,lengthFt:20,centerPoles:[{x:10,y:10}]},surfaceType:'notSure',objects:[table],lightingId:'lighting-bistro'};
  view.rebuild(data);view.setScene({night:true,weather:'rain',guests:true,motion:true});
@@ -41,6 +41,25 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  callbacks=[];pointer('pointerdown');pointer('pointerdown',2);pointer('pointerup',2);pointer('pointerup');assert.ok(!callbacks.some(c=>c[0]==='place'),'pinch does not place');
  callbacks=[];pointer('pointerdown');pointer('pointerup');assert.equal(callbacks.filter(c=>c[0]==='place').length,1);
  view.rebuild(data);assert.equal(control.enableRotate,true);
+
+ // In Photo Match mode, dragging in 360 writes photo-space placement rather than
+ // mutating the old tent-floor x/y coordinates.
+ callbacks=[];
+ const photoSite={id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:70,lengthFt:90};
+ const photoCalibration={version:1,horizonY:.34,frontLeft:{x:.06,y:.95},frontRight:{x:.94,y:.95},backRight:{x:.72,y:.47},backLeft:{x:.28,y:.47},autoEstimated:false};
+ const photoTable={...table,photoPlacement:{x:18,y:24,rotationDeg:10}};
+ view.rebuild({...data,objects:[photoTable],selectedId:'t1',photoSite,photoCalibration,photoGeometry:[],photoTentPlacement:{x:20,y:20,rotationDeg:0},backgroundPhoto:{id:'p',url:'https://api.test/photo?t=x'}});
+ view.fitCamera();
+ let hitMesh=null;scene.traverse(o=>{if(!hitMesh&&o.isMesh&&o.userData?.itemId==='t1')hitMesh=o;});assert.ok(hitMesh,'photo table is raycastable');
+ const hitBox=new THREE.Box3().setFromObject(hitMesh),center=hitBox.getCenter(new THREE.Vector3()).project(renderer.camera);
+ const sx=(center.x+1)*400,sy=(1-center.y)*300;
+ function pointerAt(type,x,y,id=7){const event=new w.MouseEvent(type,{clientX:x,clientY:y,button:0});Object.defineProperties(event,{pointerId:{value:id},pointerType:{value:'mouse'}});canvas.dispatchEvent(event);}
+ pointerAt('pointerdown',sx,sy);pointerAt('pointermove',sx+90,sy-25);pointerAt('pointerup',sx+90,sy-25);
+ const photoMove=callbacks.find(c=>c[0]==='photoMove'&&c[1]==='t1');assert.ok(photoMove,'360 drag emits photo placement save callback');
+ assert.ok(Math.abs(photoMove[2].x-18)>.05||Math.abs(photoMove[2].y-24)>.05,'360 drag changes photo-space coordinates');
+ assert.equal(photoTable.x,1,'source floor-plan x remains unchanged by 360 Photo Match drag');
+ assert.equal(photoTable.y,1,'source floor-plan y remains unchanged by 360 Photo Match drag');
+
  const catalog=await load(path.join(root,'js/data/tents.js'));await catalog.evaluate();
  const partyModule=await load(path.join(root,'js/core/party-scene.js'));await partyModule.evaluate();
  const tableModule=await load(path.join(root,'js/data/tables.js'));await tableModule.evaluate();
