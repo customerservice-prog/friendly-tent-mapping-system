@@ -19,7 +19,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  function moduleFor(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,m);return m;}
  async function load(file){const m=moduleFor(file);if(m.status==='unlinked')await m.link((s,ref)=>s==='three'?three:s.endsWith('/OrbitControls.js')?orbit:moduleFor(s.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',s.slice(13)):path.resolve(path.dirname(ref.identifier),s)));return m;}
  const mod=await load(path.join(root,'js/ui/view3d.js'));await mod.evaluate();
- const view=mod.namespace.init(container,{onPlacementMove:(x,y)=>callbacks.push(['move',x,y]),onPlace:()=>callbacks.push(['place']),onPhotoMove:(id,p)=>callbacks.push(['photoMove',id,p])});
+ const view=mod.namespace.init(container,{onPlacementMove:(x,y)=>callbacks.push(['move',x,y]),onPlace:()=>callbacks.push(['place']),onPhotoMove:(id,p)=>callbacks.push(['photoMove',id,p]),onMeasureMode:value=>callbacks.push(['measureMode',value]),onMeasurement:value=>callbacks.push(['measurement',value])});
  const table={id:'t1',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:1,y:1,seatCount:8,chairId:'resin-white'};
  const data={tent:{id:'pole-20x20',type:'pole',widthFt:20,lengthFt:20,centerPoles:[{x:10,y:10}]},surfaceType:'notSure',objects:[table],lightingId:'lighting-bistro'};
  view.rebuild(data);view.setScene({night:true,weather:'rain',guests:true,motion:true});
@@ -41,6 +41,26 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  callbacks=[];pointer('pointerdown');pointer('pointerdown',2);pointer('pointerup',2);pointer('pointerup');assert.ok(!callbacks.some(c=>c[0]==='place'),'pinch does not place');
  callbacks=[];pointer('pointerdown');pointer('pointerup');assert.equal(callbacks.filter(c=>c[0]==='place').length,1);
  view.rebuild(data);assert.equal(control.enableRotate,true);
+
+ // Measurement Mode: two ground clicks create a persistent world-space ruler
+ // without changing rental placement or camera coordinates.
+ callbacks=[];
+ const cameraBeforeMeasure=renderer.camera.position.clone();
+ const tableBeforeMeasure={x:table.x,y:table.y};
+ assert.equal(view.setMeasureMode(true),true,'measurement mode activates');
+ assert.equal(view.isMeasuring(),true);assert.equal(control.enabled,false,'measurement mode locks orbit controls while choosing points');
+ function measurePointer(type,x,y,id=31){const event=new w.MouseEvent(type,{clientX:x,clientY:y,button:0});Object.defineProperties(event,{pointerId:{value:id},pointerType:{value:'mouse'}});canvas.dispatchEvent(event);}
+ measurePointer('pointerdown',330,360);measurePointer('pointerup',330,360);
+ assert.equal(view.getMeasurement(),null,'first point alone does not produce a distance');
+ measurePointer('pointerdown',520,360);measurePointer('pointerup',520,360);
+ const measured=view.getMeasurement();assert.ok(measured&&measured.feet>0,'second point creates a world measurement');
+ assert.match(measured.formatted,/ft/,'measurement is formatted in feet/inches');
+ assert.ok(scene.getObjectByName('Measurement point A'));assert.ok(scene.getObjectByName('Measurement point B'));assert.ok(scene.getObjectByName('Measurement line'));assert.ok(scene.getObjectByName('Measurement label'));
+ assert.ok(callbacks.some(c=>c[0]==='measurement'&&c[1]?.formatted===measured.formatted),'measurement callback exposes the same result to the UI');
+ assert.deepEqual({x:table.x,y:table.y},tableBeforeMeasure,'measuring does not move rental data');
+ assert.deepEqual(renderer.camera.position.toArray(),cameraBeforeMeasure.toArray(),'measuring does not move the camera');
+ view.clearMeasurement();assert.equal(view.getMeasurement(),null);assert.equal(scene.getObjectByName('Measurement line'),undefined);
+ view.setMeasureMode(false);assert.equal(view.isMeasuring(),false);
 
  // In Photo Match mode, dragging in 360 writes photo-space placement rather than
  // mutating the old tent-floor x/y coordinates.
@@ -98,5 +118,5 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  const jump={x:0,z:0,w:10,d:10,floor:1.35};for(let t=0;t<12;t+=.1){const pose=inflatable3d.namespace.childPose(jump,'jump',0,t);assert.ok(pose.y+pose.jump>=jump.floor);assert.ok(Math.abs(pose.x)<jump.w/2&&Math.abs(pose.z)<jump.d/2);}
  console.log('PASS all 11 inflatable models: no tent geometry, camera fits both rotations at phone/desktop sizes, child motion and visibility controls.');
  view.destroy();assert.equal(container.children.length,0);assert.ok(renderer.disposed);assert.equal(frames.size,0);
- console.log('PASS 3D controller: all 16 tent sizes at phone/desktop dimensions, actual scene assembly, day/night/rain/guest preferences survive edits, placement/cancel/pinch gestures, cleanup (renderer stub, not GPU QA)');w.close();
+ console.log('PASS 3D controller: tents, scene preferences, placement gestures, 360 photo drag, exact world Measurement Mode, and cleanup (renderer stub, not GPU QA)');w.close();
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -187,6 +187,24 @@ const web=http.createServer((req,res)=>{
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
     await page.locator('#view3dOrbit360').click();
     assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','user can return to the reconstructed 360 World');
+    await page.locator('#view3dMeasure').waitFor({state:'visible'});
+    await page.locator('#view3dMeasure').click();
+    assert.equal(await page.locator('#view3dMeasure').getAttribute('aria-pressed'),'true','Measurement Mode activates from 360 World');
+    assert.match(await page.locator('#canvasHint').innerText(),/Measurement Mode/);
+    const canvasBox=await page.locator('#canvas canvas').boundingBox();assert.ok(canvasBox);
+    await page.mouse.click(canvasBox.x+canvasBox.width*.34,canvasBox.y+canvasBox.height*.72);
+    await page.mouse.click(canvasBox.x+canvasBox.width*.68,canvasBox.y+canvasBox.height*.72);
+    await page.waitForFunction(()=>window.FriendlyBridge.getMeasurement?.()?.feet>0);
+    const measurement=await page.evaluate(()=>window.FriendlyBridge.getMeasurement());
+    assert.ok(measurement.feet>0,'two 3D ground clicks produce a distance');
+    assert.match(measurement.formatted,/ft/,'measurement is formatted in feet/inches');
+    await page.locator('#view3dMeasureClear').waitFor({state:'visible'});
+    assert.match(await page.locator('#view3dMeasureClear').innerText(),/Clear/);
+    await page.locator('#view3dMeasureClear').click();
+    assert.equal(await page.evaluate(()=>window.FriendlyBridge.getMeasurement()),null,'Clear Measure removes the ruler');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(()=>document.querySelector('#view3dMeasure')?.getAttribute('aria-pressed')==='false');
+
     await page.locator('#view3dWalk').waitFor({state:'visible'});
     await page.locator('#view3dWalk').click();
     assert.equal(await page.locator('#view3dWalk').getAttribute('aria-pressed'),'true','Walk Mode activates from 360 World');
@@ -199,7 +217,7 @@ const web=http.createServer((req,res)=>{
     await page.screenshot({path:path.join(out,'generic-admin-photo-applied.png'),fullPage:true});
     assert.deepEqual(errors,[],'no browser page errors during Photo Match');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement,tentPlacement,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));
-    console.log('PASS Photo Spatial Chromium: property-fit planning, 360 World and first-person Walk Mode all work in the real browser flow.');
+    console.log('PASS Photo Spatial Chromium: property-fit planning, exact 3D Measurement Mode, 360 World and first-person Walk Mode all work in the real browser flow.');
     await context.close();
   }finally{await browser.close();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}
 })().catch(e=>{console.error(e);web.close();api.close();process.exitCode=1;});
