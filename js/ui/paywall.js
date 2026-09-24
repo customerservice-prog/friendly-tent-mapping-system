@@ -357,6 +357,10 @@
     if (event.target.closest('#plan2d [data-item-id],#inspectorPanel,#drawer')) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
   document.addEventListener('change', function (event) {
+    // Let the Photo Match file control reach its own guarded handler. That
+    // handler calls requireEventEditing(), so access is still enforced, but
+    // the browser file selection can never be silently swallowed here.
+    if (event.target.closest('[data-role="venue-photo-file"]')) return;
     if (canEdit() || !event.target.closest('#drawer,#inspectorPanel,#step-review')) return;
     event.preventDefault(); event.stopImmediatePropagation(); requestAccess();
   }, true);
