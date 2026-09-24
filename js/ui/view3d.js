@@ -111,12 +111,12 @@ export function init(container,callbacks={}) {
   controls.enableDamping=true;controls.dampingFactor=.065;controls.minDistance=8;controls.maxDistance=260;controls.maxPolarAngle=Math.PI*.48;controls.target.set(0,4,0);
   controls.touches.ONE=THREE.TOUCH.ROTATE;controls.touches.TWO=THREE.TOUCH.DOLLY_PAN;
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
-  const furniture=new THREE.Group(),structure=new THREE.Group();scene.add(structure,furniture);
+  const furniture=new THREE.Group(),structure=new THREE.Group(),photoStage=new THREE.Group();photoStage.name='Photo 360 stage';photoStage.visible=false;scene.add(photoStage,structure,furniture);
   const rendered=new Map(),pointers=new Set();let state=null,night=false,raf=0,drag=null,danceMesh=null,environment=null,lightGroup=null;
   let inflatableActivity=null,styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
+  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
   const photoCanvas=document.createElement('canvas'),photoCtx=photoCanvas.getContext('2d',{alpha:false}),photoTexture=new THREE.CanvasTexture(photoCanvas);
   photoTexture.colorSpace=THREE.SRGBColorSpace;photoTexture.minFilter=THREE.LinearFilter;photoTexture.magFilter=THREE.LinearFilter;
   let photoImage=null,photoUrl='',photoLoadSeq=0;
@@ -130,6 +130,51 @@ export function init(container,callbacks={}) {
   const selection=new THREE.Box3Helper(new THREE.Box3(),0x43775a);selection.visible=false;scene.add(selection);
   function invalidate(){dirty=true;}
   function hasVenuePhoto(){return !!(state?.backgroundPhoto&&/^https?:\/\//i.test(state.backgroundPhoto.url||''));}
+  function clearPhotoStage(){
+    const geometries=new Set(),materials=new Set();
+    photoStage.traverse(o=>{
+      if(o.geometry)geometries.add(o.geometry);
+      (Array.isArray(o.material)?o.material:[o.material]).filter(Boolean).forEach(m=>materials.add(m));
+    });
+    photoStage.clear();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());
+    if(photoStageTexture){photoStageTexture.dispose();photoStageTexture=null;}
+    photoStageKey='';
+  }
+  function photoUv(p){return [Math.max(0,Math.min(1,Number(p?.x)||0)),1-Math.max(0,Math.min(1,Number(p?.y)||0))];}
+  function photoQuad(name,positions,uvs,material){
+    const g=new THREE.BufferGeometry();
+    g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+    g.setIndex([0,1,2,0,2,3]);g.computeVertexNormals();
+    const mesh=new THREE.Mesh(g,material);mesh.name=name;return mesh;
+  }
+  function rebuildPhotoStage(){
+    if(!hasVenuePhoto()||!photoImage||!state?.photoSite||!state?.photoCalibration){clearPhotoStage();return false;}
+    const site=state.photoSite,cal=normalizePhotoCalibration(state.photoCalibration,site),key=JSON.stringify([photoUrl,site.widthFt,site.lengthFt,cal]);
+    if(key===photoStageKey&&photoStage.children.length)return true;
+    clearPhotoStage();photoStageKey=key;
+    const tex=new THREE.Texture(photoImage);tex.needsUpdate=true;tex.colorSpace=THREE.SRGBColorSpace;tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;photoStageTexture=tex;
+    const w=Math.max(1,Number(site.widthFt)||50),l=Math.max(1,Number(site.lengthFt)||60),fl=photoUv(cal.frontLeft),fr=photoUv(cal.frontRight),br=photoUv(cal.backRight),bl=photoUv(cal.backLeft);
+    const groundMat=new THREE.MeshStandardMaterial({map:tex,roughness:1,metalness:0,side:THREE.FrontSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
+    const ground=photoQuad('Photo ground projection',[-w/2,-.04,-l/2,w/2,-.04,-l/2,w/2,-.04,l/2,-w/2,-.04,l/2],[...fl,...fr,...br,...bl],groundMat);
+    ground.receiveShadow=true;photoStage.add(ground);
+    const estimate=photoCameraEstimate(site,cal),h=Math.max(18,Math.min(70,Math.max(l*.42,estimate.position[1]*1.3)));
+    const backMat=new THREE.MeshBasicMaterial({map:tex,side:THREE.FrontSide,transparent:true,opacity:.98,depthWrite:true});
+    const backdrop=photoQuad('Photo backdrop projection',[-w/2,0,l/2+.02,w/2,0,l/2+.02,w/2,h,l/2+.02,-w/2,h,l/2+.02],[...bl,...br,br[0],1,bl[0],1],backMat);
+    backdrop.receiveShadow=false;photoStage.add(backdrop);
+    photoStage.userData={mode:'single-photo-2.5d',calibration:cal,coverage:'visible-ground-and-rear-view'};
+    return true;
+  }
+  function syncPhotoPresentation(){
+    const orbit=hasVenuePhoto()&&cameraMode==='photo360';
+    photoStage.visible=orbit;
+    if(orbit){
+      if(scene.background===photoTexture)scene.background=null;
+      scene.background=sky(night,weatherMode==='rain');
+    }else if(hasVenuePhoto())paintVenuePhoto();
+    else generatedBackground();
+    invalidate();
+  }
   function paintVenuePhoto(){
     if(!hasVenuePhoto()||!photoImage||photoUrl!==state.backgroundPhoto.url)return false;
     const p=state.backgroundPhoto,wCss=Math.max(320,container.clientWidth||800),hCss=Math.max(240,container.clientHeight||600),aspect=wCss/hCss;
@@ -144,26 +189,32 @@ export function init(container,callbacks={}) {
     const baseShade=Math.max(0,Math.min(.45,Number(p.shade)||0)),shade=Math.min(.62,baseShade+(night?.16:0));
     if(shade>0){photoCtx.fillStyle='rgba(0,0,0,'+shade+')';photoCtx.fillRect(0,0,w,h);}
     photoTexture.needsUpdate=true;
-    if(scene.background!==photoTexture){if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();scene.background=photoTexture;}
+    if(cameraMode!=='photo360'&&scene.background!==photoTexture){if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();scene.background=photoTexture;}
     return true;
   }
   function loadVenuePhoto(photo){
     const url=photo&&/^https?:\/\//i.test(photo.url||'')?photo.url:'';
-    if(!url){photoUrl='';photoImage=null;return;}
-    if(url===photoUrl&&photoImage){paintVenuePhoto();return;}
+    if(!url){photoUrl='';photoImage=null;clearPhotoStage();return;}
+    if(url===photoUrl&&photoImage){paintVenuePhoto();rebuildPhotoStage();syncPhotoPresentation();return;}
     photoUrl=url;photoImage=null;const seq=++photoLoadSeq,img=new Image();img.crossOrigin='anonymous';img.decoding='async';
-    img.onload=function(){if(destroyed||seq!==photoLoadSeq||url!==photoUrl)return;photoImage=img;paintVenuePhoto();invalidate();};
+    img.onload=function(){if(destroyed||seq!==photoLoadSeq||url!==photoUrl)return;photoImage=img;paintVenuePhoto();rebuildPhotoStage();syncPhotoPresentation();invalidate();};
     img.onerror=function(){if(seq!==photoLoadSeq)return;console.warn('[RentSketch] venue background could not load');};
     img.src=url;
   }
   function generatedBackground(){
-    if(hasVenuePhoto()){paintVenuePhoto();return;}
+    if(hasVenuePhoto()&&cameraMode!=='photo360'){paintVenuePhoto();return;}
     if(scene.background===photoTexture)scene.background=null;else scene.background?.dispose?.();
     scene.background=sky(night,weatherMode==='rain');
   }
   controls.addEventListener('change',invalidate);
   function shadows(t){const radius=Math.max(t.widthFt,t.lengthFt)/2+18;sun.shadow.camera.left=-radius;sun.shadow.camera.right=radius;sun.shadow.camera.top=radius;sun.shadow.camera.bottom=-radius;sun.shadow.camera.far=radius*4+120;sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;}
   function frame(t){
+    if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='photo360'){
+      const site=state.photoSite||t,w=Math.max(20,site.widthFt),l=Math.max(20,site.lengthFt),r=Math.max(w,l);
+      camera.fov=44;camera.updateProjectionMatrix();
+      camera.position.set(w*.72,Math.max(16,r*.34),-l*.72);
+      controls.target.set(0,Math.min(5,r*.08),0);controls.maxDistance=Math.max(260,r*4);controls.update();syncPhotoPresentation();invalidate();return;
+    }
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='outside'){
       const site=state.photoSite||t,estimate=photoCameraEstimate(site,state.photoCalibration);
       camera.fov=estimate.fov;camera.updateProjectionMatrix();
@@ -190,10 +241,10 @@ export function init(container,callbacks={}) {
         rotationDeg:pp&&Number.isFinite(Number(pp.rotationDeg))?Number(pp.rotationDeg):(Number(o.rotationDeg||0)+Number(photoTent.rotationDeg||0))
       };
     }):state.objects;
-    loadVenuePhoto(state.backgroundPhoto);
+    loadVenuePhoto(state.backgroundPhoto);if(photoMode&&photoImage)rebuildPhotoStage();
     if(nextEnvironment!==environmentKey){if(environment){scene.remove(environment);disposeGroup(environment);}environment=photoMode?createPhotoEnvironment(state.photoSite||t,state.photoCalibration,state.photoGeometry):createEnvironment(t,state.surfaceType);environment.userData.setNight(night);scene.add(environment);environmentKey=nextEnvironment;if(weather){scene.remove(weather);disposeGroup(weather);}weather=createWeather(t,{mobile});weather.userData.setNight(night);weather.userData.setWeather(weatherMode);weather.userData.setPhotoMode?.(photoMode);scene.add(weather);}
     else weather?.userData.setPhotoMode?.(photoMode);
-    if(photoMode)paintVenuePhoto();else generatedBackground();
+    if(photoMode)syncPhotoPresentation();else generatedBackground();
     const anchor=state.anchoringMethod||(t.type==='pole'?'stake':setting==='driveway'?'ballast':'stake');
     const nextStructure=JSON.stringify([t.id,t.type,t.widthFt,t.lengthFt,t.centerPoles,anchor,state.sidewalls||[],photoMode?state.photoTentPlacement:null,photoMode?state.photoSite:null]);
     if(nextStructure!==structureKey){
@@ -445,10 +496,12 @@ export function init(container,callbacks={}) {
     weather?.userData.setWeather(weatherMode);if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;
     setNight(!!options.night);invalidate();
   }
-  function inside(){if(state?.tent){cameraMode='inside';frame(state.tent);}}
+  function inside(){if(state?.tent){cameraMode='inside';syncPhotoPresentation();frame(state.tent);}}
   // An eye-level reception view for the public tour; other designer views keep their existing framing.
-  function reception(){if(state?.tent){cameraMode='reception';frame(state.tent);}}
-  function fitCamera(){if(state?.tent){cameraMode='outside';frame(state.tent);return true;}return false;}
+  function reception(){if(state?.tent){cameraMode='reception';syncPhotoPresentation();frame(state.tent);}}
+  function fitCamera(){if(state?.tent){cameraMode='outside';syncPhotoPresentation();frame(state.tent);return true;}return false;}
+  function matchPhoto(){if(!state?.tent||!hasVenuePhoto())return false;cameraMode='outside';syncPhotoPresentation();frame(state.photoSite||state.tent);return true;}
+  function orbit360(){if(!state?.tent||!hasVenuePhoto())return false;cameraMode='photo360';rebuildPhotoStage();syncPhotoPresentation();frame(state.photoSite||state.tent);return true;}
   function setMarketingBuildStage(key){
     const order={space:0,tent:1,tables:2,chairs:3,sweetheart:4,dance:5,style:6,lighting:7,reception:8,evening:9};
     const stage=order[key] ?? 9;
@@ -560,7 +613,7 @@ export function init(container,callbacks={}) {
     if(destroyed||!state?.tent)return null;
     try{renderer.render(scene,camera);return renderer.domElement.toDataURL('image/jpeg',.9);}catch(_){return null;}
   }
-  const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,captureImage,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
+  const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,captureImage,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();sun.shadow.dispose();renderer.dispose();env.dispose();container.replaceChildren();}};
   // A watch-only sample must not replace the real designer renderer.
   if(callbacks.registerActive !== false)active=api;return api;
 }
