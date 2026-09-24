@@ -343,7 +343,7 @@
       return false;
     }
   }
-  window.RentSketchEventPass = { requestAccess: requestAccess, canEdit: canEdit, hasPaidEvent: function () { return !!(verified && (verified.renewable || verified.includedWithOrder)); }, includedWithOrder: function () { return !!verified?.includedWithOrder; }, showRecovery: showRecovery };
+  window.RentSketchEventPass = { requestAccess: requestAccess, canEdit: canEdit, hasPaidEvent: function () { return !!(verified && (verified.renewable || verified.includedWithOrder)); }, includedWithOrder: function () { return !!verified?.includedWithOrder; }, getAccessUrl: function () { return verified?.accessUrl || null; }, showRecovery: showRecovery };
   // Current entry points call the existing designer directly; wrapping only
   // the old recommendation bridge misses these controls completely.
   document.addEventListener('click', function (event) {
