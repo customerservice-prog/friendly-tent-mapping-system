@@ -15,7 +15,7 @@ function waitForActiveSave(){return new Promise(function(resolve,reject){var sta
 function readOnly(){return ['friendly','generic'].includes(slug)&&window.RentSketchEventPass?.canEdit()!==true;}
 async function save(strict){if(!strict&&readOnly())return lastId;if(window.RENTSKETCH_PASS_RESTORING){if(strict)throw new Error('Your paid design is still being restored.');return lastId;}if(saving){pending=true;var existing=await waitForActiveSave();if(strict){var current=scene(),currentJson='';try{currentJson=current?JSON.stringify(current):'';}catch(e){}if(currentJson&&currentJson!==lastJson)return save(true);}return existing;}var sc=scene();if(!sc||!Array.isArray(sc.objects)){if(strict)throw new Error('The current design is not available to save.');return lastId;}var json;try{json=JSON.stringify(sc);}catch(e){if(strict)throw e;return lastId;}if(json===lastJson&&lastId)return lastId;if(!readOnly())snapshotLocal(sc,lastId);if(Date.now()<retryAfter){if(strict)throw new Error('Design saving is temporarily rate limited. Please wait a moment and try again.');return lastId;}saving=true;try{var m=meta(),sid=sessionId(),r=await sendSave(sc,m,sid,lastId);if(r.status===429){retryAfter=Date.now()+60000;throw new Error('Design saving is temporarily rate limited. Please wait a moment and try again.');}var d={};try{d=await r.json();}catch(e){}if(r.status===402)window.dispatchEvent(new CustomEvent('rentsketch:accessRequired'));if(!r.ok)throw new Error(d.error||('autosave '+r.status));lastId=d.id||lastId;lastJson=json;snapshotLocal(sc,lastId);window.dispatchEvent(new CustomEvent('rentsketch:autosaved',{detail:{id:lastId,updated:!!d.updated}}));if(window.parent!==window)window.parent.postMessage({type:'rentsketch.designSaved',tenant:slug,designId:lastId},'*');return lastId;}catch(e){console.warn('[RentSketch] autosave failed; local recovery retained',e);if(strict)throw e;return lastId;}finally{saving=false;if(pending){pending=false;schedule();}}}
 function schedule(){clearTimeout(timer);timer=setTimeout(function(){save(false);},1500);}
-function restorePrompt(){if(window.RENTSKETCH_PASS_RESTORING||readOnly())return;var saved=read(),b=bridge();if(!saved||saved.tenant!==slug||!saved.scene||!b.loadScene)return;var age=Date.now()-Date.parse(saved.savedAt||0);if(!Number.isFinite(age)||age>30*24*60*60*1000)return;var hasObjects=Array.isArray(saved.scene.objects)&&saved.scene.objects.length>0;if(!hasObjects)return;setTimeout(function(){if(window.RENTSKETCH_TENT_PREVIEW)return;if(confirm('Continue your saved RentSketch design?\n\nChoose Cancel to start a fresh design.')){if(b.loadScene(saved.scene)){lastJson=JSON.stringify(saved.scene);lastId=saved.id||null;ownedSession=saved.anonymousSessionId||null;window.dispatchEvent(new CustomEvent('rentsketch:draftResumed'));}}else{try{localStorage.removeItem(KEY);}catch(e){}}},350);}
+function restorePrompt(){if(window.RENTSKETCH_PASS_RESTORING||readOnly())return;var saved=read(),b=bridge();if(!saved||saved.tenant!==slug||!saved.scene||!b.loadScene)return;var age=Date.now()-Date.parse(saved.savedAt||0);if(!Number.isFinite(age)||age>180*24*60*60*1000)return;var hasLayout=(Array.isArray(saved.scene.objects)&&saved.scene.objects.length>0)||!!saved.scene.tentId;if(!hasLayout)return;setTimeout(function(){if(window.RENTSKETCH_TENT_PREVIEW)return;if(b.loadScene(saved.scene)){lastJson=JSON.stringify(saved.scene);lastId=saved.id||null;ownedSession=saved.anonymousSessionId||null;window.dispatchEvent(new CustomEvent('rentsketch:draftResumed',{detail:{savedAt:saved.savedAt||null,id:lastId}}));}},180);}
 function restoreWhenAllowed(){var entry=document.querySelector('.rs-entry');if(!entry){restorePrompt();return;}var done=false;function resume(){if(done)return;done=true;window.removeEventListener('rentsketch:entryAccepted',resume);restorePrompt();}window.addEventListener('rentsketch:entryAccepted',resume,{once:true});}
 function emergencyLocalSave(){if(window.RENTSKETCH_PASS_RESTORING||readOnly())return;var sc=scene();if(!sc||!Array.isArray(sc.objects))return;snapshotLocal(sc,lastId);}
 window.RentSketchAutosave={start:function(){return this;},flush:function(){return save(true);},getDesignId:function(){return lastId;},getSessionId:sessionId,adopt:function(saved){if(saved.tenant!==slug)throw new Error('This design belongs to a different rental company.');clearTimeout(timer);lastId=saved.id;lastJson=JSON.stringify(saved.scene);ownedSession=saved.anonymousSessionId||null;snapshotLocal(saved.scene,lastId);}};
@@ -24,6 +24,23 @@ bind();
 }
 window.RentSketchStartAutosave=function(){start(true);return window.RentSketchAutosave;};
 window.addEventListener('rentsketch:designStarted',function(){start(true);},{once:true});
-function boot(){if(window.RENTSKETCH_PASS_RESTORING)return;if(['tent','inflatable'].includes(params.get('focus'))&&params.get('autoplace')==='1')return;if(!window.RENTSKETCH_CATALOG_READY){window.addEventListener('rentsketch:catalogReady',function(){start(false);},{once:true});return;}start(false);}
+async function restoreShared(){
+  var share=new URLSearchParams(location.hash.slice(1)).get('share');
+  if(!share)return false;
+  if(!window.RENTSKETCH_API_URL||!window.RENTSKETCH_CATALOG_READY||!bridge().loadScene)return false;
+  window.RENTSKETCH_PASS_RESTORING=true;
+  try{
+    var r=await fetch(window.RENTSKETCH_API_URL+'/api/tenants/'+encodeURIComponent(window.RENTSKETCH_TENANT_SLUG||'generic')+'/shared-design/restore',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token:share}),cache:'no-store'});
+    var d={};try{d=await r.json();}catch(e){}
+    if(!r.ok)throw new Error(d.error||'Shared layout could not be opened');
+    window.RENTSKETCH_SHARED_READONLY=true;
+    if(!bridge().loadScene(d.scene||{},{}))throw new Error('Shared layout could not be displayed');
+    history.replaceState(null,'',location.pathname+location.search);
+    window.dispatchEvent(new CustomEvent('rentsketch:sharedDesign',{detail:{id:d.id,updatedAt:d.updatedAt||null}}));
+    return true;
+  }catch(e){console.warn('[RentSketch] shared layout restore failed',e);alert(e.message||'This shared layout could not be opened.');return true;}
+  finally{window.RENTSKETCH_PASS_RESTORING=false;}
+}
+async function boot(){if(window.RENTSKETCH_PASS_RESTORING)return;if(['tent','inflatable'].includes(params.get('focus'))&&params.get('autoplace')==='1')return;if(!window.RENTSKETCH_CATALOG_READY){window.addEventListener('rentsketch:catalogReady',function(){boot();},{once:true});return;}if(await restoreShared())return;start(false);}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',boot);else boot();
 })();
