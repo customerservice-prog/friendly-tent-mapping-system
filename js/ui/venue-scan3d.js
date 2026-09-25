@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { reconstructStereoGrid, reconstructMultiViewGrid, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
+import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
 
 function loadImage(url){
   return new Promise((resolve,reject)=>{
@@ -59,7 +59,7 @@ export async function createVenueScanWorld({
   const frames=normalizedFrames(scan),samples=normalizedSamples(scan);
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   const requestedBaselineFt=Math.max(1,Math.min(30,Number(scan.baselineFt)||6)),baselineFactor=Math.max(.4,Math.min(1.05,Number(scan.baselineFactor)||1)),baselineFt=requestedBaselineFt*baselineFactor;
-  let centerImage,centerData,result,reconstructionMode='stereo-3',sourceFrameIds=[];
+  let centerImage,centerData,result,fusion=null,reconstructionMode='stereo-3',sourceFrameIds=[];
   if(samples.length>=5){
     const images=await Promise.all(samples.map(sample=>loadImage(sample.url)));
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
@@ -68,10 +68,11 @@ export async function createVenueScanWorld({
     centerImage=images[centerIndex];
     const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
     const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
-    centerData=imageData(centerImage,width,height);const center=centerData,views=[];
-    for(let i=0;i<images.length;i++){
+    const working=images.map(image=>imageData(image,width,height));
+    centerData=working[centerIndex];const center=centerData,views=[];
+    for(let i=0;i<working.length;i++){
       if(i===centerIndex)continue;
-      views.push({image:imageData(images[i],width,height),offsetFt:samples[i].offsetFactor*baselineFt});
+      views.push({image:working[i],offsetFt:samples[i].offsetFactor*baselineFt});
     }
     result=reconstructMultiViewGrid({
       center,views,
@@ -84,7 +85,23 @@ export async function createVenueScanWorld({
       verticalSearch:3,
       maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
     });
-    reconstructionMode='multiview-'+samples.length;
+    fusion=fuseMultiReferenceSurfels({
+      captures:working.map((image,i)=>({image,offsetFt:samples[i].offsetFactor*baselineFt})),
+      primaryIndex:centerIndex,
+      primaryResult:result,
+      referenceIndices:[centerIndex-2,centerIndex,centerIndex+2],
+      fovDeg:Number(scan.fovDeg)||62,
+      horizonY:Number(calibration?.horizonY)||.34,
+      eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
+      step:mobile?7:6,
+      maxDisparity:mobile?20:28,
+      patchRadius:2,
+      verticalSearch:3,
+      minConfidence:.10,
+      maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
+      voxelFt:mobile?.56:.42
+    });
+    reconstructionMode='multireference-'+samples.length;
     sourceFrameIds=samples.map(s=>s.id).filter(Boolean);
   }else{
     const [leftImage,centerLoaded,rightImage]=await Promise.all([
@@ -143,22 +160,37 @@ export async function createVenueScanWorld({
   mesh.renderOrder=-2;
   group.add(mesh);
 
-  // Use a sparse surfel layer to keep thin depth features (tree branches,
-  // fence posts) visible even when the conservative mesh refuses triangles
-  // across a depth discontinuity.
-  const pts=[],cols=[];
-  for(let i=0;i<result.valid.length;i++){
-    if(!result.valid[i]||result.confidence[i]<.20)continue;
-    pts.push(result.positions[i*3],result.positions[i*3+1],result.positions[i*3+2]);
-    cols.push(result.colors[i*3],result.colors[i*3+1],result.colors[i*3+2]);
+  // A center-reference mesh gives continuous surfaces. For video scans,
+  // additional reference viewpoints are voxel-fused into a shared surfel cloud
+  // so surfaces that were hidden from the center frame can still appear when
+  // the viewer moves laterally.
+  const pointSource=fusion?.surfelCount?fusion:null;
+  const pts=[],cols=[],strongPts=[],strongCols=[];
+  if(pointSource){
+    for(let i=0;i<pointSource.valid.length;i++){
+      if(!pointSource.valid[i]||pointSource.confidence[i]<.11)continue;
+      const target=pointSource.supportReferences?.[i]>=2?strongPts:pts;
+      const targetColor=pointSource.supportReferences?.[i]>=2?strongCols:cols;
+      target.push(pointSource.positions[i*3],pointSource.positions[i*3+1],pointSource.positions[i*3+2]);
+      targetColor.push(pointSource.colors[i*3],pointSource.colors[i*3+1],pointSource.colors[i*3+2]);
+    }
+  }else{
+    for(let i=0;i<result.valid.length;i++){
+      if(!result.valid[i]||result.confidence[i]<.20)continue;
+      pts.push(result.positions[i*3],result.positions[i*3+1],result.positions[i*3+2]);
+      cols.push(result.colors[i*3],result.colors[i*3+1],result.colors[i*3+2]);
+    }
   }
-  if(pts.length){
+  function addSurfelCloud(name,positions,colors,size,opacity,order){
+    if(!positions.length)return null;
     const pg=new THREE.BufferGeometry();
-    pg.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
-    pg.setAttribute('color',new THREE.Float32BufferAttribute(cols,3));
-    const pm=new THREE.PointsMaterial({size:mobile?.32:.24,sizeAttenuation:true,vertexColors:true,transparent:true,opacity:.72,depthWrite:true});
-    const points=new THREE.Points(pg,pm);points.name='Metric venue reconstruction surfels';points.position.copy(mesh.position);points.renderOrder=-1;group.add(points);
+    pg.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    pg.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+    const pm=new THREE.PointsMaterial({size,sizeAttenuation:true,vertexColors:true,transparent:true,opacity,depthWrite:true});
+    const points=new THREE.Points(pg,pm);points.name=name;points.position.copy(mesh.position);points.renderOrder=order;group.add(points);return points;
   }
+  addSurfelCloud('Metric venue reconstruction surfels',pts,cols,mobile?.28:.20,.48,-1);
+  addSurfelCloud('Metric venue reconstruction strong surfels',strongPts,strongCols,mobile?.36:.27,.80,-.5);
 
   geometry.computeBoundingBox();
   const worldBounds=geometry.boundingBox?{
@@ -166,13 +198,14 @@ export async function createVenueScanWorld({
     max:{x:geometry.boundingBox.max.x,y:geometry.boundingBox.max.y,z:geometry.boundingBox.max.z-siteLength/2-8}
   }:null;
   const summary=stereoReconstructionSummary(result);
-  const obstacles=stereoObstacleRects(result,{
+  const obstacleSource=fusion?.surfelCount?fusion:result;
+  const obstacles=stereoObstacleRects(obstacleSource,{
     siteWidthFt:siteWidth,
     siteLengthFt:siteLength,
     cameraOffsetZ:-siteLength/2-8,
     cellFt:mobile?2.5:2,
     minHeightFt:1.4,
-    minConfidence:.16
+    minConfidence:fusion?.surfelCount ? .12 : .16
   });
   group.userData={
     mode:'metric-stereo-scan',
@@ -185,7 +218,7 @@ export async function createVenueScanWorld({
     captureConeDeg:118,
     knownBounds:worldBounds,
     obstacles,
-    metrics:{...summary,autoObstacleCount:obstacles.length},
+    metrics:{...summary,autoObstacleCount:obstacles.length,referenceCount:fusion?.metrics?.referenceCount||1,fusedSurfels:fusion?.surfelCount||0,multiReferenceAgreementPct:fusion?Math.round((fusion.metrics.multiReferenceAgreement||0)*100):null,fusedConfidencePct:fusion?Math.round((fusion.metrics.averageConfidence||0)*100):null},
     sourceFrames:sourceFrameIds,
     reconstructionMode,
     cameraOrigin:{x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8},

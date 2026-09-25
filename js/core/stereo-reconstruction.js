@@ -349,6 +349,102 @@ export function reconstructMultiViewGrid({
   };
 }
 
+
+
+export function fuseMultiReferenceSurfels({
+  captures=[],
+  primaryIndex,
+  primaryResult,
+  referenceIndices,
+  fovDeg=62,
+  horizonY=.34,
+  eyeHeightFt=5.6,
+  step=6,
+  maxDisparity=28,
+  patchRadius=2,
+  verticalSearch=3,
+  minConfidence=.10,
+  maxDepthFt=150,
+  minDepthFt=3,
+  voxelFt=.42,
+}={}){
+  const ordered=(Array.isArray(captures)?captures:[]).map((capture,index)=>{
+    const image=capture?.image,offsetFt=finite(capture?.offsetFt,0);
+    if(!image||!image.width||!image.height||!Number.isFinite(offsetFt))return null;
+    return {image,offsetFt,index};
+  }).filter(Boolean).sort((a,b)=>a.offsetFt-b.offsetFt);
+  if(ordered.length<3)throw new Error('Multi-reference fusion needs at least three captures.');
+  const w=ordered[0].image.width,h=ordered[0].image.height;
+  if(ordered.some(c=>c.image.width!==w||c.image.height!==h))throw new Error('All multi-reference captures must use the same working resolution.');
+  const primary=Number.isFinite(Number(primaryIndex))?clamp(Math.round(Number(primaryIndex)),0,ordered.length-1):Math.floor(ordered.length/2);
+  let refs=Array.isArray(referenceIndices)&&referenceIndices.length?referenceIndices.map(Number):[primary-2,primary,primary+2];
+  refs=Array.from(new Set(refs.map(i=>clamp(Math.round(i),0,ordered.length-1)))).filter(i=>{
+    const x=ordered[i].offsetFt;
+    return ordered.some(c=>c.offsetFt<x-.15)&&ordered.some(c=>c.offsetFt>x+.15);
+  });
+  if(!refs.includes(primary)&&ordered.some(c=>c.offsetFt<ordered[primary].offsetFt-.15)&&ordered.some(c=>c.offsetFt>ordered[primary].offsetFt+.15))refs.splice(Math.floor(refs.length/2),0,primary);
+  if(!refs.length)throw new Error('No interior reference viewpoints were available for fusion.');
+
+  voxelFt=clamp(finite(voxelFt,.42),.16,1.25);
+  const voxels=new Map(),referenceMetrics=[];
+  function addPoint(x,y,z,r,g,b,confidence,refSlot,supportViews){
+    if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(z)||z<=0)return;
+    const kx=Math.round(x/voxelFt),ky=Math.round(y/voxelFt),kz=Math.round(z/voxelFt),key=kx+'|'+ky+'|'+kz;
+    const weight=Math.max(.02,finite(confidence,.1))*(1+.10*Math.max(0,finite(supportViews,1)-1));
+    let cell=voxels.get(key);
+    if(!cell){cell={x:0,y:0,z:0,r:0,g:0,b:0,w:0,confidence:0,refs:new Set(),points:0};voxels.set(key,cell);}
+    cell.x+=x*weight;cell.y+=y*weight;cell.z+=z*weight;cell.r+=r*weight;cell.g+=g*weight;cell.b+=b*weight;
+    cell.confidence+=finite(confidence,.1)*weight;cell.w+=weight;cell.refs.add(refSlot);cell.points++;
+  }
+
+  for(let slot=0;slot<refs.length;slot++){
+    const refIndex=refs[slot],ref=ordered[refIndex];
+    const relativeViews=ordered.map((capture,index)=>index===refIndex?null:{image:capture.image,offsetFt:capture.offsetFt-ref.offsetFt}).filter(Boolean);
+    let result=null;
+    if(refIndex===primary&&primaryResult)result=primaryResult;
+    else{
+      result=reconstructMultiViewGrid({
+        center:ref.image,
+        views:relativeViews,
+        fovDeg,horizonY,eyeHeightFt,step,maxDisparity,patchRadius,verticalSearch,minConfidence,maxDepthFt,minDepthFt
+      });
+    }
+    referenceMetrics.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,...result.metrics});
+    for(let i=0;i<result.valid.length;i++){
+      if(!result.valid[i]||result.confidence[i]<minConfidence*.72)continue;
+      const x=result.positions[i*3]+ref.offsetFt,y=result.positions[i*3+1],z=result.positions[i*3+2];
+      addPoint(
+        x,y,z,
+        result.colors[i*3],result.colors[i*3+1],result.colors[i*3+2],
+        result.confidence[i],slot,result.supportViews?.[i]||1
+      );
+    }
+  }
+
+  const cells=Array.from(voxels.values()).filter(cell=>cell.w>0);
+  const positions=new Float32Array(cells.length*3),colors=new Float32Array(cells.length*3),confidence=new Float32Array(cells.length),supportReferences=new Uint8Array(cells.length),valid=new Uint8Array(cells.length);
+  let multiRefCount=0,confidenceSum=0;
+  cells.forEach((cell,i)=>{
+    positions[i*3]=cell.x/cell.w;positions[i*3+1]=cell.y/cell.w;positions[i*3+2]=cell.z/cell.w;
+    colors[i*3]=clamp(cell.r/cell.w,0,1);colors[i*3+1]=clamp(cell.g/cell.w,0,1);colors[i*3+2]=clamp(cell.b/cell.w,0,1);
+    confidence[i]=clamp(cell.confidence/Math.max(.0001,cell.w),0,1);
+    supportReferences[i]=Math.min(255,cell.refs.size);valid[i]=1;
+    if(cell.refs.size>=2)multiRefCount++;confidenceSum+=confidence[i];
+  });
+  const surfelCount=cells.length,agreement=surfelCount?multiRefCount/surfelCount:0,avgConfidence=surfelCount?confidenceSum/surfelCount:0;
+  return {
+    positions,colors,confidence,supportReferences,valid,surfelCount,voxelFt,
+    referenceMetrics,
+    metrics:{
+      referenceCount:refs.length,
+      surfelCount,
+      multiReferenceAgreement:agreement,
+      averageConfidence:avgConfidence,
+      quality:surfelCount>650&&agreement>.24&&avgConfidence>.16?'good':surfelCount>220&&avgConfidence>.10?'usable':'weak'
+    }
+  };
+}
+
 export function stereoReconstructionSummary(result){
   const m=result?.metrics||{};
   return {
