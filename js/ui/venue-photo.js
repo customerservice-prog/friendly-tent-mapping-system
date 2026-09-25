@@ -40,6 +40,8 @@ export function normalizeVenueScan(value,apiBase){
     baselineFt:clamp(value.baselineFt,2,20,6),
     eyeHeightFt:clamp(value.eyeHeightFt,4,7,5.6),
     fovDeg:clamp(value.fovDeg,40,90,62),
+    captureMethod:value.captureMethod==='video'?'video':'manual',
+    baselineFactor:clamp(value.baselineFactor,.4,1.05,1),
     frames
   };
 }
@@ -181,7 +183,7 @@ export async function extractVenueScanVideo(file,{maxEdge=1600,quality=.86}={}){
       if(!('name' in frame))Object.defineProperty(frame,'name',{value:frameName});
       frames.push({role:roles[i],file:frame,time:times[i],width,height});
     }
-    return {duration,width,height,frames};
+    return {duration,width,height,frames,baselineFactor:clamp((times[2]-times[0])/duration,.4,1.05)};
   }finally{
     try{video.pause();video.removeAttribute('src');video.load();}catch(_){}
     URL.revokeObjectURL(url);
