@@ -160,6 +160,8 @@ const web=http.createServer((req,res)=>{
     assert.ok(scanRuntime.metrics.coveragePct>0,'Space Scan reports real depth coverage');
     if(!(await page.locator('#drawer').isHidden()))await page.locator('#drawerClose').click();
 
+    // Return to the center photo workspace after the scan auto-opens metric 3D.
+    await page.locator('#viewModePhoto').click();
     // Photo View becomes the actual placement workspace.
     await page.locator('#viewModePhoto').waitFor({state:'visible'});
     assert.equal(await page.locator('#viewModePhoto').getAttribute('aria-selected'),'true','upload opens Photo View');
