@@ -183,7 +183,16 @@ function addPhotoProxy(group,tent,g){
 export function createPhotoEnvironment(tent,calibration,photoGeometry=[]) {
   const group=new THREE.Group();
   group.name='Venue photo geometry';
-  group.userData={setting:'photo',decorative:true,setNight:function(){},calibration:calibration||null};
+  group.userData={
+    setting:'photo',decorative:true,calibration:calibration||null,
+    setNight:function(){},
+    setImmersive:function(value){
+      const immersive=!!value;
+      group.children.forEach(child=>{
+        if(child.name?.startsWith('Photo geometry')||child.name==='Photo no-place zone')child.visible=!immersive;
+      });
+    }
+  };
   const size=Math.max(180,Number(tent?.widthFt||0)+100,Number(tent?.lengthFt||0)+100);
   const shadow=new THREE.Mesh(
     new THREE.PlaneGeometry(size,size),
