@@ -5,7 +5,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeTable as table, makeStandaloneChair, makeDanceFloor as dance, mergeParts } from './equipment3d.js';
 import { createEnvironment, createPhotoEnvironment, disposeGroup } from './scene-environment.js';
 import { createPhotoWorld360 } from './photo-world360.js';
-import { createVenueScanWorld, disposeVenueScanWorld, hasMetricSpaceScan } from './venue-scan3d.js?v=20260925-space-scan-4';
+import { createVenueScanWorld, disposeVenueScanWorld, hasMetricSpaceScan } from './venue-scan3d.js';
 import { createFirstPersonWalk } from './first-person-walk.js';
 import { createWeather } from './scene-weather.js';
 import { createGuests } from './scene-guests.js';
