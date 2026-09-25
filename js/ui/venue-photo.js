@@ -67,9 +67,9 @@ export function venuePhotoPanel(photo,status){
   const input='<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-role="venue-photo-file">';
   if(!photo){
     return '<section class="venue-photo-card venue-photo-empty">'+
-      '<div class="venue-photo-kicker">PHOTO MATCH</div>'+
+      '<div class="venue-photo-kicker">QUICK PHOTO MATCH</div>'+
       '<h4>Use the real backyard or venue</h4>'+
-      '<p>Upload a photo and RentSketch will replace the generated house/scenery behind your 3D layout with the real space.</p>'+
+      '<p>Use one real photo for a camera-matched placement preview. One photo stays in its known viewpoint; use Space Scan below when you want navigable 3D depth.</p>'+
       '<label class="venue-photo-drop">'+input+
         '<span class="venue-photo-camera" aria-hidden="true">▣</span>'+
         '<strong>Choose a venue photo</strong>'+
@@ -84,7 +84,7 @@ export function venuePhotoPanel(photo,status){
   return '<section class="venue-photo-card is-active">'+
     '<div class="venue-photo-kicker">PHOTO MATCH · ACTIVE</div>'+
     '<div class="venue-photo-preview-wrap"><img class="venue-photo-preview" src="'+esc(photo.url)+'" alt="Uploaded venue background" style="object-position:'+pos+';transform:'+transform+'"></div>'+
-    '<div class="venue-photo-copy"><h4>Your real venue is the 3D background</h4><p>Fine-tune the crop so the tent sits naturally in the picture.</p></div>'+
+    '<div class="venue-photo-copy"><h4>Your real venue is matched to this camera view</h4><p>Fine-tune the crop for Photo Match, or capture Left + Center + Right below to reconstruct metric 3D depth.</p></div>'+
     '<div class="venue-photo-actions"><label class="btn-secondary venue-photo-replace">Replace photo'+input+'</label><button type="button" class="btn-secondary" data-role="venue-photo-remove">Remove</button></div>'+
     '<div class="venue-photo-tuning">'+
       '<label><span>Move left / right</span><input type="range" min="0" max="100" step="1" value="'+photo.focusX+'" data-role="venue-photo-focus-x"></label>'+
