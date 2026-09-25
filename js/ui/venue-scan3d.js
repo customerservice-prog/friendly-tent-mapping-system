@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { reconstructStereoGrid, stereoReconstructionSummary } from '../core/stereo-reconstruction.js';
+import { reconstructStereoGrid, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
 
 function loadImage(url){
   return new Promise((resolve,reject)=>{
@@ -133,6 +133,14 @@ export async function createVenueScanWorld({
     max:{x:geometry.boundingBox.max.x,y:geometry.boundingBox.max.y,z:geometry.boundingBox.max.z-siteLength/2-8}
   }:null;
   const summary=stereoReconstructionSummary(result);
+  const obstacles=stereoObstacleRects(result,{
+    siteWidthFt:siteWidth,
+    siteLengthFt:siteLength,
+    cameraOffsetZ:-siteLength/2-8,
+    cellFt:mobile?2.5:2,
+    minHeightFt:1.4,
+    minConfidence:.16
+  });
   group.userData={
     mode:'metric-stereo-scan',
     ready:true,
@@ -140,7 +148,8 @@ export async function createVenueScanWorld({
     baselineFt,
     captureConeDeg:118,
     knownBounds:worldBounds,
-    metrics:summary,
+    obstacles,
+    metrics:{...summary,autoObstacleCount:obstacles.length},
     sourceFrames:[frames.left.id,frames.center.id,frames.right.id].filter(Boolean),
     cameraOrigin:{x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8},
     setNight(value){
