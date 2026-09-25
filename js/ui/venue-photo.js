@@ -33,16 +33,22 @@ export function normalizeVenueScan(value,apiBase){
     const photo=normalizeVenuePhoto(frame,apiBase);if(!photo)return null;
     return {...photo,role:frame.role};
   }).filter(Boolean);
+  const samples=(Array.isArray(value.samples)?value.samples:[]).map((sample,index)=>{
+    if(!sample||typeof sample!=='object')return null;
+    const photo=normalizeVenuePhoto(sample,apiBase);if(!photo)return null;
+    return {...photo,sampleIndex:Number.isFinite(Number(sample.sampleIndex))?Number(sample.sampleIndex):index,offsetFactor:clamp(sample.offsetFactor,-.55,.55,0)};
+  }).filter(Boolean).sort((a,b)=>a.offsetFactor-b.offsetFactor);
   const roles=new Set(frames.map(f=>f.role));
   return {
-    version:1,
+    version:samples.length>=5?2:1,
     status:roles.size===3?'ready':frames.length?'capturing':'empty',
     baselineFt:clamp(value.baselineFt,2,20,6),
     eyeHeightFt:clamp(value.eyeHeightFt,4,7,5.6),
     fovDeg:clamp(value.fovDeg,40,90,62),
     captureMethod:value.captureMethod==='video'?'video':'manual',
     baselineFactor:clamp(value.baselineFactor,.4,1.05,1),
-    frames
+    frames,
+    samples
   };
 }
 function scanFrame(scan,role){return (scan.frames||[]).find(f=>f.role===role)||null;}
@@ -62,7 +68,7 @@ export function venueScanPanel(value){
       '<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-role="venue-scan-file" data-scan-role="'+role+'">'+
     '</label>';}).join('')+'</div>'+
     '<label class="venue-scan-baseline"><span>Distance from left photo to right photo</span><div><input type="number" min="2" max="20" step=".5" value="'+scan.baselineFt+'" data-role="venue-scan-baseline"><strong>ft</strong></div><small>For best results, move about 6 ft total. This known distance gives the reconstruction a real-world scale.</small></label>'+
-    (ready?'<div class="venue-scan-ready"><strong>3D depth scan ready</strong><span>Open 3D View to use the reconstructed metric venue.</span></div>':'<p class="equipment-note">Capture all three positions to unlock the metric 3D reconstruction.</p>')+
+    (ready?'<div class="venue-scan-ready"><strong>'+((scan.samples?.length||0)>=5?(scan.samples.length+'-view'):'3-view')+' depth scan ready</strong><span>Open 3D View to use the reconstructed metric venue.</span></div>':'<p class="equipment-note">Capture all three positions to unlock the metric 3D reconstruction.</p>')+
     (scan.frames.length?'<button type="button" class="btn-tertiary venue-scan-clear" data-role="venue-scan-clear">Clear Space Scan</button>':'')+
   '</section>';
 }
@@ -131,6 +137,13 @@ export function venueScanFrameTimes(duration){
   const start=pad,end=Math.max(start,duration-pad),span=Math.max(.001,end-start);
   return [start+span*.12,start+span*.50,start+span*.88];
 }
+export function venueScanBurstTimes(duration,count=7){
+  duration=Number(duration);count=Math.max(5,Math.min(9,Math.round(Number(count)||7)));
+  if(!Number.isFinite(duration)||duration<=0)return [];
+  const pad=Math.min(.35,Math.max(.06,duration*.04)),start=pad,end=Math.max(start,duration-pad),span=Math.max(.001,end-start);
+  const left=start+span*.08,right=start+span*.92;
+  return Array.from({length:count},(_,i)=>left+(right-left)*(i/(count-1)));
+}
 function waitForVideoEvent(video,event,timeoutMs=12000){
   return new Promise(function(resolve,reject){
     let timer;
@@ -173,17 +186,20 @@ export async function extractVenueScanVideo(file,{maxEdge=1600,quality=.86}={}){
     const scale=Math.min(1,maxEdge/Math.max(vw,vh)),width=Math.max(1,Math.round(vw*scale)),height=Math.max(1,Math.round(vh*scale));
     const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
     const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';
-    const roles=['left','center','right'],times=venueScanFrameTimes(duration),frames=[];
-    for(let i=0;i<roles.length;i++){
+    const times=venueScanBurstTimes(duration,7),samples=[],mid=Math.floor(times.length/2);
+    for(let i=0;i<times.length;i++){
       await seekVideoFrame(video,times[i]);
       ctx.fillRect(0,0,width,height);ctx.drawImage(video,0,0,width,height);
-      const blob=await canvasBlob(canvas,quality);
-      const frameName='space-scan-'+roles[i]+'.jpg';
+      const blob=await canvasBlob(canvas,i===mid?quality:Math.max(.74,quality-.07));
+      const role=i===0?'left':i===mid?'center':i===times.length-1?'right':null;
+      const frameName='space-scan-'+(role||('sample-'+i))+'.jpg';
       const frame=typeof File==='function'?new File([blob],frameName,{type:'image/jpeg',lastModified:Date.now()+i}):blob;
       if(!('name' in frame))Object.defineProperty(frame,'name',{value:frameName});
-      frames.push({role:roles[i],file:frame,time:times[i],width,height});
+      const offsetFactor=(i-mid)/(times.length-1);
+      samples.push({role,file:frame,time:times[i],width,height,sampleIndex:i,offsetFactor});
     }
-    return {duration,width,height,frames,baselineFactor:clamp((times[2]-times[0])/duration,.4,1.05)};
+    const frames=samples.filter(s=>s.role);
+    return {duration,width,height,frames,samples,baselineFactor:clamp((times.at(-1)-times[0])/duration,.4,1.05)};
   }finally{
     try{video.pause();video.removeAttribute('src');video.load();}catch(_){}
     URL.revokeObjectURL(url);
