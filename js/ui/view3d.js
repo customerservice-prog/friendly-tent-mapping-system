@@ -362,7 +362,7 @@ export function init(container,callbacks={}) {
     // A completed Space Scan replaces the flat photo planes in immersive mode.
     // The single photo remains available for Matched View and as a fallback while
     // reconstruction is still loading.
-    photoStage.visible=immersive&&!metric;photoContinuation.visible=false;local360.visible=immersive;scanWorld.visible=metric;
+    photoStage.visible=immersive&&!metric;photoContinuation.visible=false;local360.visible=immersive&&!metric;scanWorld.visible=metric;
     // Matched View is an exact camera registration. Walk Mode owns the camera directly.
     controls.enabled=!matched&&!walking;
     controls.enablePan=!matched&&!walking;
@@ -411,6 +411,7 @@ export function init(container,callbacks={}) {
   controls.addEventListener('change',()=>{updatePhotoStageViewFade();invalidate();});
   function shadows(t){const radius=Math.max(t.widthFt,t.lengthFt)/2+18;sun.shadow.camera.left=-radius;sun.shadow.camera.right=radius;sun.shadow.camera.top=radius;sun.shadow.camera.bottom=-radius;sun.shadow.camera.far=radius*4+120;sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;}
   function frame(t){
+    controls.minAzimuthAngle=-Infinity;controls.maxAzimuthAngle=Infinity;
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='photo360'){
       const site=state.photoSite||t,r=Math.max(Math.max(20,site.widthFt),Math.max(20,site.lengthFt));
       if(hasReadyMetricScan()){
@@ -418,7 +419,13 @@ export function init(container,callbacks={}) {
         camera.fov=Number(state.venueScan?.fovDeg)||62;camera.updateProjectionMatrix();
         camera.position.set(origin.x,origin.y,origin.z);controls.target.set(0,Math.min(5,origin.y*.62),Math.min(site.lengthFt*.08,7));
         controls.minDistance=4;controls.maxDistance=Math.max(72,r*1.28);controls.maxPolarAngle=Math.PI*.49;
-        controls.update();syncPhotoPresentation();invalidate();return;
+        controls.update();
+        // This three-view scan contains measured geometry in the photographed
+        // forward sector, not behind the photographer. Keep orbiting inside the
+        // captured cone instead of exposing invented 360 scenery.
+        const theta=controls.getAzimuthalAngle?.()||0,half=(Number(scanWorld.userData.captureConeDeg)||118)*Math.PI/360;
+        controls.minAzimuthAngle=theta-half;controls.maxAzimuthAngle=theta+half;
+        syncPhotoPresentation();invalidate();return;
       }
       const view=immersivePhotoCamera(site,state.photoCalibration);
       // Open 360 World in the photographed direction at human eye height.
@@ -624,6 +631,7 @@ export function init(container,callbacks={}) {
   }
   function setMeasureMode(value){
     const next=!!value;
+    if(next&&state?.photoMode&&!hasReadyMetricScan())return false;
     if(next&&walk.isActive())exitWalk();
     measureMode=next;
     if(measureMode){controls.enabled=false;controls.enableRotate=false;controls.enablePan=false;controls.enableZoom=false;renderer.domElement.style.cursor='crosshair';}
@@ -773,10 +781,10 @@ export function init(container,callbacks={}) {
   function reception(){if(state?.tent){stopWalk();cameraMode='reception';syncPhotoPresentation();frame(state.tent);}}
   function fitCamera(){if(state?.tent){if(measureMode)setMeasureMode(false);stopWalk();cameraMode='outside';syncPhotoPresentation();frame(state.tent);return true;}return false;}
   function matchPhoto(){if(!state?.tent||!hasVenuePhoto())return false;if(measureMode)setMeasureMode(false);stopWalk();cameraMode='outside';syncPhotoPresentation();frame(state.photoSite||state.tent);return true;}
-  function orbit360(){if(!state?.tent||!hasVenuePhoto())return false;if(measureMode)setMeasureMode(false);stopWalk();cameraMode='photo360';rebuildPhotoStage();syncPhotoPresentation();frame(state.photoSite||state.tent);return true;}
+  function orbit360(){if(!state?.tent||!hasVenuePhoto()||!hasReadyMetricScan())return false;if(measureMode)setMeasureMode(false);stopWalk();cameraMode='photo360';rebuildPhotoStage();syncPhotoPresentation();frame(state.photoSite||state.tent);return true;}
   function walkWorld(){
     if(measureMode)setMeasureMode(false);
-    if(!state?.tent||!hasVenuePhoto())return false;
+    if(!state?.tent||!hasVenuePhoto()||!hasReadyMetricScan())return false;
     cameraMode='walk';rebuildPhotoStage();syncPhotoPresentation();
     const ok=walk.enter();syncPhotoPresentation();invalidate();return ok;
   }
