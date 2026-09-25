@@ -1,9 +1,9 @@
 import {mountReviewPricing,currentReviewPricing,reviewDeliveryZip,restoreReviewDeliveryZip} from './js/ui/review-pricing.js';
 import './js/ui/designer-help.js';
-import { sitePanel } from './js/ui/site-controls.js?v=20260925-space-scan-4';
-import { normalizeVenuePhoto, normalizeVenueScan, extractVenueScanVideo, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js?v=20260925-space-scan-4';
+import { sitePanel } from './js/ui/site-controls.js';
+import { normalizeVenuePhoto, normalizeVenueScan, extractVenueScanVideo, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
 import { defaultPhotoCalibration, normalizePhotoCalibration, normalizePhotoGeometry } from './js/core/photo-geometry.js';
-import { evaluatePropertyScene, summarizePropertyFit } from './js/core/property-planning.js?v=20260925-space-scan-4';
+import { evaluatePropertyScene, summarizePropertyFit } from './js/core/property-planning.js';
 import { TABLETOP } from './js/data/tabletop.js';
 // Friendly Event Designer - v2 client-side logic
 // Customer-facing designer: contextual drawers, visual cards, a 2D-first
