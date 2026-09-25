@@ -363,7 +363,7 @@ function propertyFitDetails(plan){
 function renderPropertyFit(plan){
   var button=$('propertyFitBadge'),panel=$('propertyFitPanel');
   if(!button||!panel)return;
-  var show=state.viewMode==='3d'&&!!state.backgroundPhoto&&!!plan?.active;
+  var show=state.viewMode==='3d'&&!!state.backgroundPhoto&&(!!plan?.active||plan?.source==='metric-scan-needs-boundaries');
   button.hidden=!show;
   if(!show){panel.hidden=true;return;}
   var summary=summarizePropertyFit(plan),kind=summary.kind||'neutral';
