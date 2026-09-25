@@ -83,6 +83,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  assert.equal(photoStage.visible,true,'360 World reveals the calibrated front photo geometry');
  const photoGround=scene.getObjectByName('Photo ground projection'),photoBackdrop=scene.getObjectByName('Photo backdrop projection');
  assert.equal(photoGround.material.side,THREE.DoubleSide,'trusted photo ground renders from the human-height 360 camera');
+ assert.equal(photoGround.visible,true,'the real photographed ground remains visible when 360 World first opens');
  assert.equal(photoBackdrop.material.side,THREE.DoubleSide,'trusted venue backdrop renders from the photographed side instead of being back-face culled');
  assert.equal(photoBackdrop.visible,true,'the real venue photo remains visible when 360 World first opens');
  assert.ok(photoBackdrop.material.opacity>.5,'the trusted venue photo dominates the initial 360 view before fading at side angles');
