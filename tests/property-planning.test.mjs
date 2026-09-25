@@ -70,6 +70,18 @@ test('property scene maps rental photoPlacement into property coordinates',()=>{
 });
 
 
+test('metric depth obstacles participate in exact tent fit checks',()=>{
+  const plan=evaluatePropertyScene(snapshot({
+    venueScan:{status:'ready'},
+    scanGeometry:[{id:'depth-house',type:'obstacle',source:'metric-depth',x:30,y:35,widthFt:20,depthFt:20,heightFt:12,rotationDeg:0}],
+  }));
+  assert.equal(plan.active,true);
+  assert.equal(plan.source,'metric-scan-property');
+  assert.equal(plan.obstacleSources.metricDepth,1);
+  assert.equal(plan.tent.status,'blocked');
+  assert.equal(plan.overall,'blocked');
+});
+
 test('metric depth alone stays neutral until property boundaries are traced',()=>{
   const plan=evaluatePropertyScene(snapshot({venueScan:{status:'ready',frames:[{role:'left'},{role:'center'},{role:'right'}]}}));
   assert.equal(plan.active,false);
