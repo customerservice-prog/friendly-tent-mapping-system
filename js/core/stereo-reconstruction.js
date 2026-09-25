@@ -386,7 +386,7 @@ export function fuseMultiReferenceSurfels({
   if(!refs.length)throw new Error('No interior reference viewpoints were available for fusion.');
 
   voxelFt=clamp(finite(voxelFt,.42),.16,1.25);
-  const voxels=new Map(),referenceMetrics=[];
+  const voxels=new Map(),referenceMetrics=[],referenceResults=[];
   function addPoint(x,y,z,r,g,b,confidence,refSlot,supportViews){
     if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(z)||z<=0)return;
     const kx=Math.round(x/voxelFt),ky=Math.round(y/voxelFt),kz=Math.round(z/voxelFt),key=kx+'|'+ky+'|'+kz;
@@ -410,6 +410,7 @@ export function fuseMultiReferenceSurfels({
       });
     }
     referenceMetrics.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,...result.metrics});
+    referenceResults.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,result});
     for(let i=0;i<result.valid.length;i++){
       if(!result.valid[i]||result.confidence[i]<minConfidence*.72)continue;
       const x=result.positions[i*3]+ref.offsetFt,y=result.positions[i*3+1],z=result.positions[i*3+2];
@@ -435,6 +436,7 @@ export function fuseMultiReferenceSurfels({
   return {
     positions,colors,confidence,supportReferences,valid,surfelCount,voxelFt,
     referenceMetrics,
+    referenceResults,
     metrics:{
       referenceCount:refs.length,
       surfelCount,
