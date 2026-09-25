@@ -142,16 +142,33 @@ export function init(container,callbacks={}) {
     onMode:value=>callbacks.onWalkMode?.(value)
   });
   function clearPhotoStage(){
-    const geometries=new Set(),materials=new Set();
+    const geometries=new Set(),materials=new Set(),masks=new Set();
     photoStage.traverse(o=>{
       if(o.geometry)geometries.add(o.geometry);
-      (Array.isArray(o.material)?o.material:[o.material]).filter(Boolean).forEach(m=>materials.add(m));
+      (Array.isArray(o.material)?o.material:[o.material]).filter(Boolean).forEach(m=>{
+        materials.add(m);
+        if(m.alphaMap)masks.add(m.alphaMap);
+      });
     });
-    photoStage.clear();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());
+    photoStage.clear();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());masks.forEach(t=>t.dispose());
     if(photoStageTexture){photoStageTexture.dispose();photoStageTexture=null;}
     photoStageKey='';
   }
   function photoUv(p){return [Math.max(0,Math.min(1,Number(p?.x)||0)),1-Math.max(0,Math.min(1,Number(p?.y)||0))];}
+  function photoEvidenceMask(points,feather=11,size=256){
+    const c=document.createElement('canvas'),shape=document.createElement('canvas');c.width=c.height=shape.width=shape.height=size;
+    const out=c.getContext('2d'),x=shape.getContext('2d');
+    out.fillStyle='#000';out.fillRect(0,0,size,size);
+    x.fillStyle='#fff';x.beginPath();
+    points.forEach((p,i)=>{
+      const px=Math.max(0,Math.min(1,Number(p?.[0])||0))*size;
+      const py=(1-Math.max(0,Math.min(1,Number(p?.[1])||0)))*size;
+      if(i)x.lineTo(px,py);else x.moveTo(px,py);
+    });
+    x.closePath();x.fill();
+    out.save();out.filter='blur('+Math.max(2,feather)+'px)';out.drawImage(shape,0,0);out.restore();
+    const tex=new THREE.CanvasTexture(c);tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.needsUpdate=true;return tex;
+  }
   function photoQuad(name,positions,uvs,material){
     const g=new THREE.BufferGeometry();
     g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
@@ -166,13 +183,15 @@ export function init(container,callbacks={}) {
     clearPhotoStage();photoStageKey=key;
     const tex=new THREE.Texture(photoImage);tex.needsUpdate=true;tex.colorSpace=THREE.SRGBColorSpace;tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;photoStageTexture=tex;
     const w=Math.max(1,Number(site.widthFt)||50),l=Math.max(1,Number(site.lengthFt)||60),fl=photoUv(cal.frontLeft),fr=photoUv(cal.frontRight),br=photoUv(cal.backRight),bl=photoUv(cal.backLeft);
-    const groundMat=new THREE.MeshStandardMaterial({map:tex,roughness:1,metalness:0,side:THREE.DoubleSide,transparent:true,opacity:1,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
+    const groundMask=photoEvidenceMask([fl,fr,br,bl],10);
+    const groundMat=new THREE.MeshStandardMaterial({map:tex,alphaMap:groundMask,roughness:1,metalness:0,side:THREE.DoubleSide,transparent:true,opacity:1,depthWrite:false,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
     const ground=photoQuad('Photo ground projection',[-w/2,-.04,-l/2,w/2,-.04,-l/2,w/2,-.04,l/2,-w/2,-.04,l/2],[...fl,...fr,...br,...bl],groundMat);
-    ground.receiveShadow=true;ground.userData.photoEvidenceGround=true;ground.userData.baseOpacity=1;photoStage.add(ground);
+    ground.receiveShadow=true;ground.renderOrder=-7;ground.userData.photoEvidenceGround=true;ground.userData.baseOpacity=1;photoStage.add(ground);
     const estimate=photoCameraEstimate(site,cal),h=Math.max(18,Math.min(70,Math.max(l*.42,estimate.position[1]*1.3)));
-    const backMat=new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,transparent:true,opacity:.98,depthWrite:true});
+    const backTop=.985,backMask=photoEvidenceMask([bl,br,[br[0],backTop],[bl[0],backTop]],12);
+    const backMat=new THREE.MeshBasicMaterial({map:tex,alphaMap:backMask,side:THREE.DoubleSide,transparent:true,opacity:.98,depthWrite:false});
     const backdrop=photoQuad('Photo backdrop projection',[-w/2,0,l/2+.02,w/2,0,l/2+.02,w/2,h,l/2+.02,-w/2,h,l/2+.02],[...bl,...br,br[0],1,bl[0],1],backMat);
-    backdrop.receiveShadow=false;backdrop.userData.photoEvidenceBackdrop=true;backdrop.userData.baseOpacity=.98;photoStage.add(backdrop);
+    backdrop.receiveShadow=false;backdrop.renderOrder=-6;backdrop.userData.photoEvidenceBackdrop=true;backdrop.userData.baseOpacity=.98;photoStage.add(backdrop);
     photoStage.userData={mode:'single-photo-2.5d',calibration:cal,coverage:'visible-ground-and-rear-view'};
     return true;
   }
