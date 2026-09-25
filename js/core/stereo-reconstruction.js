@@ -356,7 +356,10 @@ export function stereoReconstructionSummary(result){
     coveragePct:Math.round((m.validRatio||0)*100),
     medianDepthFt:m.medianDepthFt==null?null:Math.round(m.medianDepthFt*10)/10,
     confidencePct:Math.round((m.averageConfidence||0)*100),
-    triangles:Math.round(m.triangleCount||0)
+    triangles:Math.round(m.triangleCount||0),
+    viewCount:Math.round(m.viewCount||result?.viewCount||3),
+    averageViewsPerPoint:m.averageViewsPerPoint==null?null:Math.round(m.averageViewsPerPoint*10)/10,
+    multiViewAgreementPct:m.multiViewAgreement==null?null:Math.round(m.multiViewAgreement*100)
   };
 }
 
