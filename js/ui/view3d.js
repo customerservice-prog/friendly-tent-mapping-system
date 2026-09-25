@@ -176,11 +176,21 @@ export function init(container,callbacks={}) {
     photoStage.userData={mode:'single-photo-2.5d',calibration:cal,coverage:'visible-ground-and-rear-view'};
     return true;
   }
+  function immersivePhotoCamera(site,calibration){
+    const estimate=photoCameraEstimate(site,calibration);
+    const target=new THREE.Vector3(...estimate.target);target.y=3.25;
+    const flat=new THREE.Vector3(estimate.position[0]-target.x,0,estimate.position[2]-target.z);
+    if(flat.lengthSq()<1e-5)flat.set(0,0,-1);flat.normalize();
+    const r=Math.max(Math.max(20,Number(site?.widthFt)||50),Math.max(20,Number(site?.lengthFt)||60));
+    const radius=Math.max(26,Math.min(62,r*.62));
+    const position=target.clone().addScaledVector(flat,radius);position.y=6.15;
+    return {position,target,fov:46};
+  }
   function updatePhotoStageViewFade(){
     if(!photoStage.visible||!state?.photoSite||!state?.photoCalibration)return;
-    const estimate=photoCameraEstimate(state.photoSite,state.photoCalibration);
-    const reference=new THREE.Vector3(...estimate.position).sub(new THREE.Vector3(...estimate.target)).normalize();
-    const current=camera.position.clone().sub(new THREE.Vector3(...estimate.target)).normalize();
+    const estimate=immersivePhotoCamera(state.photoSite,state.photoCalibration);
+    const reference=estimate.position.clone().sub(estimate.target).normalize();
+    const current=camera.position.clone().sub(estimate.target).normalize();
     const alignment=THREE.MathUtils.clamp(reference.dot(current),-1,1);
     // Keep the real photo dominant near the original calibrated camera direction.
     // Fade it only as the user leaves the direction that was actually photographed.
@@ -350,13 +360,12 @@ export function init(container,callbacks={}) {
   function frame(t){
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='photo360'){
       const site=state.photoSite||t,r=Math.max(Math.max(20,site.widthFt),Math.max(20,site.lengthFt));
-      const estimate=photoCameraEstimate(site,state.photoCalibration);
-      // 360 World now begins from the same calibrated camera that matches the
-      // customer's real photo. Orbiting then transitions into the reconstructed
-      // side/rear world instead of immediately replacing the real venue.
-      camera.fov=estimate.fov;camera.updateProjectionMatrix();
-      camera.position.set(...estimate.position);controls.target.set(...estimate.target);
-      controls.minDistance=5.5;controls.maxDistance=Math.max(78,Math.min(r*1.45,camera.position.distanceTo(controls.target)*1.5));
+      const view=immersivePhotoCamera(site,state.photoCalibration);
+      // Begin in the photographed direction at human eye height. The real photo
+      // is visible here; orbiting away progressively reveals the solid 3D context.
+      camera.fov=view.fov;camera.updateProjectionMatrix();
+      camera.position.copy(view.position);controls.target.copy(view.target);
+      controls.minDistance=5.5;controls.maxDistance=Math.max(78,r*1.35);
       controls.maxPolarAngle=Math.PI*.49;controls.update();syncPhotoPresentation();updatePhotoStageViewFade();invalidate();return;
     }
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='outside'){
