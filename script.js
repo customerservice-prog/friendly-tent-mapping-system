@@ -151,7 +151,7 @@ async function chooseVenuePhoto(file,input){
     return false;
   }
   if(input)input.disabled=true;
-  var previous=state.backgroundPhoto;
+  var previous=state.backgroundPhoto,previousScan=currentVenueScan();
   var label=(file.name||'photo').slice(0,120);
   try{
     setVenuePhotoStatus('Selected '+label+' · applying to your 3D background…','working');
@@ -160,7 +160,7 @@ async function chooseVenuePhoto(file,input){
     if(!designId)throw new Error('This layout could not be saved before the photo upload.');
     setVenuePhotoStatus('Uploading '+label+'…','working');
     var photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
-    state.backgroundPhoto=photo;
+    state.backgroundPhoto=photo;state.venueScan=null;
     var snapAfterPhoto=buildSnapshot(getConflicts());
     state.photoCalibration=defaultPhotoCalibration(snapAfterPhoto.photoSite);state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
     state.venuePhotoStatus={text:'Applied · Photo View is ready. Drag rentals directly on your real venue.',kind:'success'};
@@ -169,6 +169,7 @@ async function chooseVenuePhoto(file,input){
     var photoSaved=false;
     try{await window.RentSketchAutosave?.flush?.();photoSaved=true;}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
     if(photoSaved&&previous?.id&&previous.id!==photo.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
+    if(photoSaved)previousScan.frames.filter(f=>f.id&&f.id!==photo.id&&f.id!==previous?.id).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
     showLayoutNotice('Photo applied. Your real venue is now showing in 3D.',6500);
     return true;
   }catch(err){
@@ -182,6 +183,7 @@ async function chooseVenuePhoto(file,input){
 function currentVenueScan(){
   return normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
 }
+function metricScanReady(){return currentVenueScan().status==='ready';}
 async function chooseVenueScanPhoto(role,file,input){
   if(!file||!['left','center','right'].includes(role))return false;
   if(!requireEventEditing())return false;
@@ -239,12 +241,15 @@ async function clearVenueScan(){
 }
 async function removeVenuePhoto(){
   if(!requireEventEditing()||!state.backgroundPhoto)return false;
-  var old=state.backgroundPhoto,designId=window.RentSketchAutosave?.getDesignId?.();
-  state.backgroundPhoto=null;state.photoCalibration=null;state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;if(state.viewMode==='photo')state.viewMode='plan';renderDrawerBody('site');renderViews(getConflicts());setViewMode(state.viewMode);
+  var old=state.backgroundPhoto,oldScan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
+  state.backgroundPhoto=null;state.venueScan=null;state.photoCalibration=null;state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;if(state.viewMode==='photo')state.viewMode='plan';renderDrawerBody('site');renderViews(getConflicts());setViewMode(state.viewMode);
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
   var removalSaved=false;try{await window.RentSketchAutosave?.flush?.();removalSaved=true;}catch(_){}
-  if(removalSaved&&designId)deleteVenuePhoto(old,venuePhotoContext(designId));
-  showLayoutNotice('Venue photo removed. RentSketch is showing the generated setting again.',4200);
+  if(removalSaved&&designId){
+    const unique=new Map([[old.id,old],...oldScan.frames.filter(f=>f.id).map(f=>[f.id,f])]);
+    unique.forEach(photo=>deleteVenuePhoto(photo,venuePhotoContext(designId)));
+  }
+  showLayoutNotice('Venue photo and Space Scan removed. RentSketch is showing the generated setting again.',4200);
   return true;
 }
 function resetVenuePhotoFraming(){
