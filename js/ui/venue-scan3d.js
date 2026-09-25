@@ -63,7 +63,7 @@ export async function createVenueScanWorld({
   const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
   const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
   const left=imageData(leftImage,width,height),center=imageData(centerImage,width,height),right=imageData(rightImage,width,height);
-  const baselineFt=Math.max(1,Math.min(30,Number(scan.baselineFt)||6));
+  const requestedBaselineFt=Math.max(1,Math.min(30,Number(scan.baselineFt)||6)),baselineFactor=Math.max(.4,Math.min(1.05,Number(scan.baselineFactor)||1)),baselineFt=requestedBaselineFt*baselineFactor;
   const result=reconstructStereoGrid({
     left,center,right,baselineFt,
     fovDeg:Number(scan.fovDeg)||62,
@@ -146,6 +146,9 @@ export async function createVenueScanWorld({
     ready:true,
     metric:true,
     baselineFt,
+    requestedBaselineFt,
+    baselineFactor,
+    captureMethod:scan.captureMethod||'manual',
     captureConeDeg:118,
     knownBounds:worldBounds,
     obstacles,
