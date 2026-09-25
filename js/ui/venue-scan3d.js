@@ -20,6 +20,17 @@ function textureFromImage(image){
   tex.minFilter=THREE.LinearMipmapLinearFilter;tex.magFilter=THREE.LinearFilter;tex.anisotropy=4;
   return tex;
 }
+function averageLowerColor(imageDataValue){
+  const {data,width,height}=imageDataValue||{};
+  if(!data||!width||!height)return new THREE.Color(0x6f805e);
+  const y0=Math.max(0,Math.floor(height*.77)),y1=Math.min(height,Math.ceil(height*.98));
+  let r=0,g=0,b=0,n=0;
+  for(let y=y0;y<y1;y+=2)for(let x=0;x<width;x+=2){
+    const i=(y*width+x)*4,a=data[i+3]/255;if(a<.2)continue;
+    r+=data[i]*a;g+=data[i+1]*a;b+=data[i+2]*a;n+=a;
+  }
+  return n?new THREE.Color(r/n/255,g/n/255,b/n/255):new THREE.Color(0x6f805e);
+}
 function normalizedFrames(scan){
   const frames=Array.isArray(scan?.frames)?scan.frames:[];
   const out={};
@@ -70,6 +81,15 @@ export async function createVenueScanWorld({
     return group;
   }
 
+  // Use the real lower-image palette only as a neutral support surface for
+  // holes outside the reconstructed mesh. No invented trees/houses are added.
+  const siteWidth=Math.max(20,Number(site.widthFt)||50),siteLength=Math.max(20,Number(site.lengthFt)||60);
+  const groundColor=averageLowerColor(center),groundDay=groundColor.clone();
+  const groundMaterial=new THREE.MeshStandardMaterial({color:groundColor,roughness:1,metalness:0});
+  const supportGround=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(80,siteWidth*1.45),Math.max(100,siteLength*1.5)),groundMaterial);
+  supportGround.name='Metric scan support ground';supportGround.rotation.x=-Math.PI/2;supportGround.position.y=-.10;supportGround.receiveShadow=true;supportGround.renderOrder=-10;
+  group.add(supportGround);
+
   const geometry=new THREE.BufferGeometry();
   geometry.setAttribute('position',new THREE.BufferAttribute(result.positions,3));
   geometry.setAttribute('uv',new THREE.BufferAttribute(result.uvs,2));
@@ -86,7 +106,6 @@ export async function createVenueScanWorld({
   // The reconstruction is solved in the center camera's coordinate system.
   // Register it to RentSketch's feet-based world with the camera just outside
   // the near edge of the calibrated photo site, facing +Z.
-  const siteLength=Math.max(20,Number(site.lengthFt)||60);
   mesh.position.set(0,0,-siteLength/2-8);
   mesh.renderOrder=-2;
   group.add(mesh);
@@ -108,17 +127,25 @@ export async function createVenueScanWorld({
     const points=new THREE.Points(pg,pm);points.name='Metric venue reconstruction surfels';points.position.copy(mesh.position);points.renderOrder=-1;group.add(points);
   }
 
+  geometry.computeBoundingBox();
+  const worldBounds=geometry.boundingBox?{
+    min:{x:geometry.boundingBox.min.x,y:geometry.boundingBox.min.y,z:geometry.boundingBox.min.z-siteLength/2-8},
+    max:{x:geometry.boundingBox.max.x,y:geometry.boundingBox.max.y,z:geometry.boundingBox.max.z-siteLength/2-8}
+  }:null;
   const summary=stereoReconstructionSummary(result);
   group.userData={
     mode:'metric-stereo-scan',
     ready:true,
     metric:true,
     baselineFt,
+    captureConeDeg:118,
+    knownBounds:worldBounds,
     metrics:summary,
     sourceFrames:[frames.left.id,frames.center.id,frames.right.id].filter(Boolean),
     cameraOrigin:{x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8},
     setNight(value){
       material.color.setScalar(value?.48:1);
+      groundMaterial.color.copy(groundDay).multiplyScalar(value?.48:1);
       for(const child of group.children){
         if(child.isPoints&&child.material)child.material.opacity=value?.44:.72;
       }
