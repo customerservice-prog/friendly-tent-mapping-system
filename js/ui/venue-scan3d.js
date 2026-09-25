@@ -205,7 +205,7 @@ export async function createVenueScanWorld({
     cameraOffsetZ:-siteLength/2-8,
     cellFt:mobile?2.5:2,
     minHeightFt:1.4,
-    minConfidence:fusion?.surfelCount?.12:.16
+    minConfidence:fusion?.surfelCount ? .12 : .16
   });
   group.userData={
     mode:'metric-stereo-scan',
