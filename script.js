@@ -198,6 +198,10 @@ async function chooseVenueScanPhoto(role,file,input){
     state.venueScan=normalizeVenueScan({...before,frames},window.RENTSKETCH_API_URL);
     if(role==='center'){
       state.backgroundPhoto={...photo};
+      // A new center viewpoint changes the Photo Match camera itself. Recreate
+      // the Photo View workspace instead of carrying stale pointer/selection
+      // state from the previous single-photo image.
+      if(photoMounted){photoViewMod.unmount();photoMounted=false;}
       const snap=buildSnapshot(getConflicts());
       state.photoCalibration=defaultPhotoCalibration(snap.photoSite);
       state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
