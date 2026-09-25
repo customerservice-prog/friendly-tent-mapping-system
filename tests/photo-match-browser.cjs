@@ -132,6 +132,34 @@ const web=http.createServer((req,res)=>{
     assert.equal(uploads[2].contentType,'image/jpeg');
     assert.match(await page.locator('[data-role="venue-photo-status"]').innerText(),/Applied/);
 
+    // A single photo is no longer pretended to be a true 360 reconstruction.
+    await page.locator('#viewMode3d').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
+    await page.locator('#view3dMatchPhoto').waitFor({state:'visible'});
+    assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','one photo opens as camera-matched 2.5D instead of fake 360');
+    assert.equal(await page.locator('#view3dOrbit360').isHidden(),true,'360 controls stay locked until a multi-view scan exists');
+    assert.equal(await page.locator('#view3dWalk').isHidden(),true,'Walk is not offered for one flat photo');
+    assert.match(await page.locator('#canvasHint').innerText(),/Space Scan/);
+
+    // Build an actual metric scan from left / center / right viewpoints.
+    await page.locator('[data-drawer="site"]').click();
+    const scanPayload=Buffer.from([0xff,0xd8,0xff,0xe0,1,2,3,4,5,6,7,8]);
+    for(const role of ['left','center','right']){
+      const scanInput=page.locator('[data-role="venue-scan-file"][data-scan-role="'+role+'"]');await scanInput.waitFor();
+      await scanInput.setInputFiles({name:'scan-'+role+'.jpg',mimeType:'image/jpeg',buffer:scanPayload});
+      await page.waitForFunction(r=>window.FriendlyBridge.getScene().venueScan?.frames?.some(f=>f.role===r),role,{timeout:10000});
+    }
+    await page.waitForFunction(()=>window.FriendlyBridge.getScene().venueScan?.status==='ready',{timeout:10000});
+    assert.equal(uploads.length,6,'three Space Scan viewpoints add exactly three uploads');
+    const scanScene=await page.evaluate(()=>window.FriendlyBridge.getScene());
+    assert.equal(scanScene.venueScan.frames.length,3);
+    assert.equal(scanScene.backgroundPhoto.id,'photo-browser-fixture-5','center scan capture becomes the trusted matched photo');
+    await page.waitForFunction(()=>window.RENTSKETCH_SCAN_RECONSTRUCTION?.ready===true,{timeout:20000});
+    const scanRuntime=await page.evaluate(()=>window.RENTSKETCH_SCAN_RECONSTRUCTION);
+    assert.equal(scanRuntime.metric,true,'Space Scan produces metric reconstruction metadata');
+    assert.ok(scanRuntime.metrics.triangles>0,'Space Scan produces connected 3D surface triangles');
+    assert.ok(scanRuntime.metrics.coveragePct>0,'Space Scan reports real depth coverage');
+    if(!(await page.locator('#drawer').isHidden()))await page.locator('#drawerClose').click();
+
     // Photo View becomes the actual placement workspace.
     await page.locator('#viewModePhoto').waitFor({state:'visible'});
     assert.equal(await page.locator('#viewModePhoto').getAttribute('aria-selected'),'true','upload opens Photo View');
