@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reconstructStereoGrid, stereoReconstructionSummary } from '../js/core/stereo-reconstruction.js';
+import { reconstructStereoGrid, stereoReconstructionSummary, stereoObstacleRects } from '../js/core/stereo-reconstruction.js';
 
 function image(width,height,fn){
   const data=new Uint8ClampedArray(width*height*4);
@@ -47,4 +47,27 @@ test('a textureless capture is not pretended to be a 3D scan',()=>{
   assert.equal(result.metrics.validCount,0);
   assert.equal(result.metrics.quality,'weak');
   assert.equal(result.indices.length,0);
+});
+
+
+test('elevated metric depth clusters become conservative property obstacles',()=>{
+  const positions=new Float32Array([
+    -1.5,4,20, -1.2,4.5,20.2,
+      .4,5,20,   .7,5.5,20.2,
+      .8,4.2,20.4, -1.1,3.8,20.4
+  ]);
+  const valid=new Uint8Array([1,1,1,1,1,1]);
+  const confidence=new Float32Array([.8,.82,.84,.81,.79,.83]);
+  const rects=stereoObstacleRects({positions,valid,confidence},{siteWidthFt:20,siteLengthFt:20,cameraOffsetZ:-18,cellFt:2});
+  assert.ok(rects.length>=1);
+  assert.equal(rects[0].source,'metric-depth');
+  assert.ok(rects[0].heightFt>=4);
+  assert.ok(rects[0].widthFt>0&&rects[0].depthFt>0);
+});
+
+test('ground-height depth samples are not turned into blocking geometry',()=>{
+  const positions=new Float32Array([-1,.2,20,-.8,.3,20.1,1,.1,20,1.2,.2,20.1]);
+  const valid=new Uint8Array([1,1,1,1]),confidence=new Float32Array([.9,.9,.9,.9]);
+  const rects=stereoObstacleRects({positions,valid,confidence},{siteWidthFt:20,siteLengthFt:20,cameraOffsetZ:-18,cellFt:2});
+  assert.deepEqual(rects,[]);
 });
