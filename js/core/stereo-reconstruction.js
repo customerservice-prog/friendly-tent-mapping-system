@@ -533,7 +533,11 @@ export function stereoReconstructionSummary(result){
     triangles:Math.round(m.triangleCount||0),
     viewCount:Math.round(m.viewCount||result?.viewCount||3),
     averageViewsPerPoint:m.averageViewsPerPoint==null?null:Math.round(m.averageViewsPerPoint*10)/10,
-    multiViewAgreementPct:m.multiViewAgreement==null?null:Math.round(m.multiViewAgreement*100)
+    multiViewAgreementPct:m.multiViewAgreement==null?null:Math.round(m.multiViewAgreement*100),
+    alignmentQualityPct:m.averageAlignmentQuality==null?null:Math.round(m.averageAlignmentQuality*100),
+    verticalDriftPx:m.maxVerticalDriftPx==null?null:Math.round(m.maxVerticalDriftPx*10)/10,
+    rollDriftPx:m.maxRollSlopePx==null?null:Math.round(m.maxRollSlopePx*10)/10,
+    alignmentRmsPx:m.alignmentRmsPx==null?null:Math.round(m.alignmentRmsPx*10)/10
   };
 }
 
