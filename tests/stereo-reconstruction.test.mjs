@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reconstructStereoGrid, reconstructMultiViewGrid, stereoReconstructionSummary, stereoObstacleRects } from '../js/core/stereo-reconstruction.js';
+import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../js/core/stereo-reconstruction.js';
 
 function image(width,height,fn){
   const data=new Uint8ClampedArray(width*height*4);
@@ -104,4 +104,35 @@ test('seven-view fusion increases support and keeps metric depth consistent',()=
   assert.equal(summary.viewCount,7);
   assert.ok(summary.averageViewsPerPoint>1);
   assert.ok(summary.multiViewAgreementPct>0);
+});
+
+
+test('multi-reference fusion combines spatial support from several reference cameras',()=>{
+  const scene=shiftedMultiView();
+  const captures=[
+    {image:scene.views[0].image,offsetFt:-3},
+    {image:scene.views[1].image,offsetFt:-2},
+    {image:scene.views[2].image,offsetFt:-1},
+    {image:scene.center,offsetFt:0},
+    {image:scene.views[3].image,offsetFt:1},
+    {image:scene.views[4].image,offsetFt:2},
+    {image:scene.views[5].image,offsetFt:3}
+  ];
+  const primary=reconstructMultiViewGrid({
+    center:scene.center,
+    views:captures.filter(c=>c.offsetFt!==0),
+    fovDeg:60,horizonY:.35,step:4,maxDisparity:12,minConfidence:.05
+  });
+  const fused=fuseMultiReferenceSurfels({
+    captures,
+    primaryIndex:3,
+    primaryResult:primary,
+    referenceIndices:[1,3,5],
+    fovDeg:60,horizonY:.35,step:5,maxDisparity:12,minConfidence:.05,voxelFt:.35
+  });
+  assert.equal(fused.metrics.referenceCount,3);
+  assert.ok(fused.surfelCount>120,'multiple reference depth maps contribute a dense fused cloud');
+  assert.ok(Array.from(fused.supportReferences).some(v=>v>=2),'some spatial surfels are confirmed by more than one reference camera');
+  assert.ok(fused.metrics.multiReferenceAgreement>0,'fusion reports cross-reference spatial agreement');
+  assert.ok(fused.metrics.averageConfidence>0);
 });
