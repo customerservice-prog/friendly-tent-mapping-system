@@ -182,7 +182,7 @@ const web=http.createServer((req,res)=>{
     assert.equal(await page.locator('#propertyFitPanel').isHidden(),false,'fit reasoning panel opens');
     assert.match(await page.locator('#propertyFitPanel').innerText(),/Planning check only/);
     assert.match(await page.locator('#view3dOrbit360').innerText(),/360 World/);
-    assert.match(await page.locator('#canvasHint').innerText(),/360 World/);assert.match(await page.locator('#canvasHint').innerText(),/parallax/);
+    assert.match(await page.locator('#canvasHint').innerText(),/360 World/);assert.match(await page.locator('#canvasHint').innerText(),/solid local venue reconstruction/);
     await page.locator('#view3dMatchPhoto').click();
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
     await page.locator('#view3dOrbit360').click();
