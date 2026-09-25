@@ -260,7 +260,9 @@ export function init(container,callbacks={}) {
       scanWorld.userData={...world.userData,loading:false};
       scanWorld.userData.setNight?.(night);
       callbacks.onScanReconstruction?.(scanWorld.userData);
-      syncPhotoPresentation();invalidate();
+      syncPhotoPresentation();
+      if(cameraMode==='photo360'&&state?.tent)frame(state.photoSite||state.tent);
+      invalidate();
     }).catch(err=>{
       if(err?.name==='AbortError')return;
       console.warn('[RentSketch] Space Scan reconstruction failed',err);
