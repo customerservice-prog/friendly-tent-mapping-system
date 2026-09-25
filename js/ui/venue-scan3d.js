@@ -59,12 +59,12 @@ export async function createVenueScanWorld({
   const frames=normalizedFrames(scan),samples=normalizedSamples(scan);
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   const requestedBaselineFt=Math.max(1,Math.min(30,Number(scan.baselineFt)||6)),baselineFactor=Math.max(.4,Math.min(1.05,Number(scan.baselineFactor)||1)),baselineFt=requestedBaselineFt*baselineFactor;
-  let centerImage,centerData,result,fusion=null,reconstructionMode='stereo-3',sourceFrameIds=[];
+  let centerImage,centerData,result,fusion=null,multiImages=null,multiSamples=null,multiCenterIndex=-1,reconstructionMode='stereo-3',sourceFrameIds=[];
   if(samples.length>=5){
-    const images=await Promise.all(samples.map(sample=>loadImage(sample.url)));
+    const images=await Promise.all(samples.map(sample=>loadImage(sample.url)));multiImages=images;multiSamples=samples;
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
     let centerIndex=0,bestCenter=Infinity;
-    samples.forEach((sample,index)=>{const d=Math.abs(sample.offsetFactor);if(d<bestCenter){bestCenter=d;centerIndex=index;}});
+    samples.forEach((sample,index)=>{const d=Math.abs(sample.offsetFactor);if(d<bestCenter){bestCenter=d;centerIndex=index;}});multiCenterIndex=centerIndex;
     centerImage=images[centerIndex];
     const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
     const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
@@ -160,6 +160,31 @@ export async function createVenueScanWorld({
   mesh.renderOrder=-2;
   group.add(mesh);
 
+  // Use the nearest captured reference mesh as the textured surface. This keeps
+  // the house/grass/fence appearance tied to the real camera view closest to
+  // the user's current position instead of stretching the center photo across
+  // every side angle.
+  const referenceMeshes=[];
+  mesh.userData.referenceOffsetFt=0;mesh.userData.referenceIndex=multiCenterIndex>=0?multiCenterIndex:0;referenceMeshes.push(mesh);
+  if(fusion?.referenceResults?.length&&multiImages&&multiSamples){
+    for(const ref of fusion.referenceResults){
+      if(ref.referenceIndex===multiCenterIndex)continue;
+      const image=multiImages[ref.referenceIndex],sample=multiSamples[ref.referenceIndex],rr=ref.result;
+      if(!image||!sample||!rr?.indices?.length)continue;
+      const rg=new THREE.BufferGeometry();
+      rg.setAttribute('position',new THREE.BufferAttribute(rr.positions,3));
+      rg.setAttribute('uv',new THREE.BufferAttribute(rr.uvs,2));
+      rg.setIndex(new THREE.BufferAttribute(rr.indices,1));rg.computeVertexNormals();rg.computeBoundingSphere();
+      const rt=textureFromImage(image);
+      const rm=new THREE.MeshStandardMaterial({map:rt,roughness:.96,metalness:0,side:THREE.DoubleSide,transparent:false,color:0xffffff});
+      const refMesh=new THREE.Mesh(rg,rm);refMesh.name='Metric venue reference mesh '+ref.referenceIndex;
+      refMesh.castShadow=false;refMesh.receiveShadow=true;
+      refMesh.position.set(ref.offsetFt,0,-siteLength/2-8);refMesh.renderOrder=-2;
+      refMesh.userData.referenceOffsetFt=ref.offsetFt;refMesh.userData.referenceIndex=ref.referenceIndex;
+      refMesh.visible=false;group.add(refMesh);referenceMeshes.push(refMesh);
+    }
+  }
+
   // A center-reference mesh gives continuous surfaces. For video scans,
   // additional reference viewpoints are voxel-fused into a shared surfel cloud
   // so surfaces that were hidden from the center frame can still appear when
@@ -221,9 +246,23 @@ export async function createVenueScanWorld({
     metrics:{...summary,autoObstacleCount:obstacles.length,referenceCount:fusion?.metrics?.referenceCount||1,fusedSurfels:fusion?.surfelCount||0,multiReferenceAgreementPct:fusion?Math.round((fusion.metrics.multiReferenceAgreement||0)*100):null,fusedConfidencePct:fusion?Math.round((fusion.metrics.averageConfidence||0)*100):null},
     sourceFrames:sourceFrameIds,
     reconstructionMode,
+    referenceViewCount:referenceMeshes.length,
     cameraOrigin:{x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8},
+    updateView(camera){
+      if(referenceMeshes.length<2||!camera)return;
+      let best=referenceMeshes[0],bestDistance=Infinity;
+      for(const candidate of referenceMeshes){
+        const dx=(Number(camera.position?.x)||0)-(Number(candidate.userData.referenceOffsetFt)||0);
+        const dz=(Number(camera.position?.z)||0)-(-siteLength/2-8);
+        const distance=dx*dx+dz*dz*.12;
+        if(distance<bestDistance){bestDistance=distance;best=candidate;}
+      }
+      for(const candidate of referenceMeshes)candidate.visible=candidate===best;
+      group.userData.activeReferenceIndex=best.userData.referenceIndex;
+      group.userData.activeReferenceOffsetFt=best.userData.referenceOffsetFt;
+    },
     setNight(value){
-      material.color.setScalar(value?.48:1);
+      for(const refMesh of referenceMeshes)refMesh.material?.color?.setScalar(value?.48:1);
       groundMaterial.color.copy(groundDay).multiplyScalar(value?.48:1);
       for(const child of group.children){
         if(child.isPoints&&child.material)child.material.opacity=value?.44:.72;
