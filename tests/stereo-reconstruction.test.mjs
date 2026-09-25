@@ -131,6 +131,8 @@ test('multi-reference fusion combines spatial support from several reference cam
     fovDeg:60,horizonY:.35,step:5,maxDisparity:12,minConfidence:.05,voxelFt:.35
   });
   assert.equal(fused.metrics.referenceCount,3);
+  assert.equal(fused.referenceResults.length,3,'fusion preserves each interior reference depth map for view-dependent texturing');
+  assert.ok(fused.referenceResults.every(ref=>ref.result?.indices?.length>0),'each preserved reference contains connected geometry');
   assert.ok(fused.surfelCount>120,'multiple reference depth maps contribute a dense fused cloud');
   assert.ok(Array.from(fused.supportReferences).some(v=>v>=2),'some spatial surfels are confirmed by more than one reference camera');
   assert.ok(fused.metrics.multiReferenceAgreement>0,'fusion reports cross-reference spatial agreement');
