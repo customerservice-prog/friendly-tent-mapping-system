@@ -54,8 +54,10 @@ function rentalPlacement(item,snapshot) {
 export function propertyPlanningInput(snapshot) {
   const site=snapshot?.photoSite || snapshot?.tent;
   const usablePolygon=rectPolygon(site?.widthFt,site?.lengthFt);
-  const obstacles=(snapshot?.photoGeometry||[]).map(photoObstacle).filter(Boolean);
-  return {site,usablePolygon,obstacles};
+  const manual=(snapshot?.photoGeometry||[]).map(photoObstacle).filter(Boolean);
+  const scan=(snapshot?.scanGeometry||[]).map(photoObstacle).filter(Boolean);
+  const obstacles=[...manual,...scan];
+  return {site,usablePolygon,obstacles,manualObstacles:manual,scanObstacles:scan};
 }
 
 export function evaluatePropertyScene(snapshot) {
@@ -74,7 +76,7 @@ export function evaluatePropertyScene(snapshot) {
   // semantic collision map. Do not claim the tent "fits" merely because the
   // arbitrary planning rectangle contains it. Until at least one property
   // boundary/obstacle has been traced, keep the fit badge neutral.
-  if(snapshot.venueScan?.status==='ready'&&!(snapshot.photoGeometry||[]).length){
+  if(snapshot.venueScan?.status==='ready'&&!(snapshot.photoGeometry||[]).length&&!(snapshot.scanGeometry||[]).length){
     return {
       active:false,
       source:'metric-scan-needs-boundaries',
@@ -85,7 +87,7 @@ export function evaluatePropertyScene(snapshot) {
       color:'neutral',
     };
   }
-  const {site,usablePolygon,obstacles}=propertyPlanningInput(snapshot);
+  const {site,usablePolygon,obstacles,manualObstacles,scanObstacles}=propertyPlanningInput(snapshot);
   let tent=null;
   if (snapshot.tent && !snapshot.tent.isSite) {
     tent=evaluateTentFit({
@@ -116,7 +118,8 @@ export function evaluatePropertyScene(snapshot) {
   else if(tent?.status==='close'||counts.close>0)overall='close';
   return {
     active:true,
-    source:'photo-property',
+    source:scanObstacles.length?'metric-scan-property':'photo-property',
+    obstacleSources:{manual:manualObstacles.length,metricDepth:scanObstacles.length},
     site:{widthFt:site.widthFt,lengthFt:site.lengthFt},
     usablePolygon,
     obstacles,
@@ -147,5 +150,6 @@ export function summarizePropertyFit(plan) {
     return {label:plan.counts.close+' rental'+(plan.counts.close===1?'':'s')+' tight',detail:'The setup fits, but preferred clearance is tight around one or more rentals.',kind:'close'};
   }
   const clearance=tent?.clearanceFt||0;
-  return {label:'Property fit looks good',detail:tent?('Tent footprint and '+clearance+' ft installation clearance fit the reconstructed venue area.'):'Placed rentals fit the reconstructed venue area.',kind:'fits'};
+  const metric=plan?.source==='metric-scan-property';
+  return {label:metric?'Depth-based fit looks clear':'Property fit looks good',detail:metric?(tent?('Tent footprint and '+clearance+' ft installation clearance avoid the current depth-derived obstacles. Confirm critical clearances on site.'):'Placed rentals avoid the current depth-derived obstacles. Confirm critical clearances on site.'):(tent?('Tent footprint and '+clearance+' ft installation clearance fit the reconstructed venue area.'):'Placed rentals fit the reconstructed venue area.'),kind:'fits'};
 }
