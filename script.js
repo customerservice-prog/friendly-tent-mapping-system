@@ -195,7 +195,7 @@ async function chooseVenueScanPhoto(role,file,input){
     if(!designId)throw new Error('This layout could not be saved before the scan photo upload.');
     const photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
     const frames=before.frames.filter(f=>f.role!==role).concat([{...photo,role}]);
-    state.venueScan=normalizeVenueScan({...before,frames},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:state.venueScan.status==='ready'};
+    state.venueScan=normalizeVenueScan({...before,frames,captureMethod:'manual',baselineFactor:1},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:state.venueScan.status==='ready'};
     if(role==='center'){
       state.backgroundPhoto={...photo};
       // A new center viewpoint changes the Photo Match camera itself. Recreate
@@ -249,7 +249,7 @@ async function chooseVenueScanVideo(file,input){
     }
     const center=uploaded.find(f=>f.role==='center');
     if(!center)throw new Error('The center scan frame could not be created.');
-    state.venueScan=normalizeVenueScan({...before,frames:uploaded},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:true};
+    state.venueScan=normalizeVenueScan({...before,frames:uploaded,captureMethod:'video',baselineFactor:extracted.baselineFactor},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:true};
     state.backgroundPhoto={...center};
     if(photoMounted){photoViewMod.unmount();photoMounted=false;}
     const snap=buildSnapshot(getConflicts());
