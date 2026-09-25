@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { venueScanFrameTimes, normalizeVenueScan } from '../js/ui/venue-photo.js';
+import { venueScanFrameTimes, venueScanBurstTimes, normalizeVenueScan } from '../js/ui/venue-photo.js';
 
 test('Space Scan video samples three interior viewpoints instead of first/last frames',()=>{
   const times=venueScanFrameTimes(10);
@@ -23,4 +23,30 @@ test('video scan metadata preserves its sampled-baseline correction',()=>{
 test('invalid video durations do not invent scan frames',()=>{
   assert.deepEqual(venueScanFrameTimes(0),[]);
   assert.deepEqual(venueScanFrameTimes(NaN),[]);
+});
+
+
+test('Space Scan video burst samples seven ordered viewpoints across the walk',()=>{
+  const times=venueScanBurstTimes(10,7);
+  assert.equal(times.length,7);
+  assert.ok(times[0]>0&&times.at(-1)<10);
+  for(let i=1;i<times.length;i++)assert.ok(times[i]>times[i-1]);
+  assert.ok(times[3]>4&&times[3]<6,'burst center stays close to the temporal midpoint');
+  assert.ok(times.at(-1)-times[0]>7,'burst uses most of the useful sideways motion');
+});
+
+test('normalized scans preserve seven support samples for multi-view fusion',()=>{
+  const sample=(i,offsetFactor)=>({id:'s'+i,url:'https://api.test/s'+i+'.jpg',name:'s'+i,offsetFactor,sampleIndex:i});
+  const samples=[-.5,-.333,-.166,0,.166,.333,.5].map((v,i)=>sample(i,v));
+  const frames=[
+    {...samples[0],role:'left'},
+    {...samples[3],role:'center'},
+    {...samples[6],role:'right'}
+  ];
+  const scan=normalizeVenueScan({frames,samples,captureMethod:'video',baselineFt:6,baselineFactor:.84},'https://api.test');
+  assert.equal(scan.version,2);
+  assert.equal(scan.samples.length,7);
+  assert.equal(scan.frames.length,3);
+  assert.equal(scan.status,'ready');
+  assert.equal(scan.samples[3].offsetFactor,0);
 });
