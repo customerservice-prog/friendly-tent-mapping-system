@@ -136,12 +136,14 @@ const web=http.createServer((req,res)=>{
     await page.locator('#viewMode3d').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
     await page.locator('#view3dMatchPhoto').waitFor({state:'visible'});
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','one photo opens as camera-matched 2.5D instead of fake 360');
-    assert.equal(await page.locator('#view3dOrbit360').isHidden(),true,'360 controls stay locked until a multi-view scan exists');
+    assert.equal(await page.locator('#view3dOrbit360').isHidden(),true,'3D Scan controls stay locked until a multi-view scan exists');
     assert.equal(await page.locator('#view3dWalk').isHidden(),true,'Walk is not offered for one flat photo');
     assert.match(await page.locator('#canvasHint').innerText(),/Space Scan/);
 
     // Build an actual metric scan from left / center / right viewpoints.
     await page.locator('[data-drawer="site"]').click();
+    await page.locator('[data-role="venue-scan-video"]').waitFor();
+    assert.match(await page.locator('[data-role="venue-scan-video"]').getAttribute('accept'),/video/,'Space Scan offers one-tap video capture in addition to manual frames');
     const scanPayload=Buffer.from([0xff,0xd8,0xff,0xe0,1,2,3,4,5,6,7,8]);
     for(const role of ['left','center','right']){
       const scanInput=page.locator('[data-role="venue-scan-file"][data-scan-role="'+role+'"]');await scanInput.waitFor();
@@ -220,7 +222,7 @@ const web=http.createServer((req,res)=>{
     await page.locator('#view3dMatchPhoto').waitFor({state:'visible'});
     await page.locator('#view3dOrbit360').waitFor({state:'visible'});
     await page.waitForFunction(()=>document.querySelector('#view3dOrbit360')?.getAttribute('aria-pressed')==='true');
-    assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','a venue photo opens directly as the 360 World');
+    assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','a successful metric scan opens directly as 3D Scan');
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'false','exact Matched View stays available but is not the default 3D experience');
     await page.locator('#propertyFitBadge').waitFor({state:'visible'});
     const livePlan=await page.evaluate(()=>window.FriendlyBridge.getPropertyPlan());
@@ -231,15 +233,15 @@ const web=http.createServer((req,res)=>{
     await page.locator('#propertyFitBadge').click();
     assert.equal(await page.locator('#propertyFitPanel').isHidden(),false,'fit reasoning panel opens');
     assert.match(await page.locator('#propertyFitPanel').innerText(),/Planning check only/);
-    assert.match(await page.locator('#view3dOrbit360').innerText(),/360 World/);
-    assert.match(await page.locator('#canvasHint').innerText(),/Space Scan 3D/);assert.match(await page.locator('#canvasHint').innerText(),/multi-view depth mesh/);
+    assert.match(await page.locator('#view3dOrbit360').innerText(),/3D Scan/);
+    assert.match(await page.locator('#canvasHint').innerText(),/3D Scan/);assert.match(await page.locator('#canvasHint').innerText(),/real multi-view depth/);
     await page.locator('#view3dMatchPhoto').click();
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
     await page.locator('#view3dOrbit360').click();
-    assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','user can return to the reconstructed 360 World');
+    assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','user can return to the measured 3D Scan');
     await page.locator('#view3dMeasure').waitFor({state:'visible'});
     await page.locator('#view3dMeasure').click();
-    assert.equal(await page.locator('#view3dMeasure').getAttribute('aria-pressed'),'true','Measurement Mode activates from 360 World');
+    assert.equal(await page.locator('#view3dMeasure').getAttribute('aria-pressed'),'true','Measurement Mode activates from 3D Scan');
     assert.match(await page.locator('#canvasHint').innerText(),/Measurement Mode/);
     const canvasBox=await page.locator('#canvas canvas').boundingBox();assert.ok(canvasBox);
     await page.mouse.click(canvasBox.x+canvasBox.width*.34,canvasBox.y+canvasBox.height*.72);
@@ -257,13 +259,13 @@ const web=http.createServer((req,res)=>{
 
     await page.locator('#view3dWalk').waitFor({state:'visible'});
     await page.locator('#view3dWalk').click();
-    assert.equal(await page.locator('#view3dWalk').getAttribute('aria-pressed'),'true','Walk Mode activates from 360 World');
+    assert.equal(await page.locator('#view3dWalk').getAttribute('aria-pressed'),'true','Walk Mode activates from 3D Scan');
     assert.match(await page.locator('#view3dWalk').innerText(),/Exit Walk/);
     assert.match(await page.locator('#canvasHint').innerText(),/WASD/);
     await page.keyboard.down('w');await page.waitForTimeout(120);await page.keyboard.up('w');
     await page.keyboard.press('Escape');
     await page.waitForFunction(()=>document.querySelector('#view3dWalk')?.getAttribute('aria-pressed')==='false');
-    assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','Escape leaves Walk Mode in the same reconstructed 360 World');
+    assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','Escape leaves Walk Mode in the same measured 3D Scan');
     await page.screenshot({path:path.join(out,'generic-admin-photo-applied.png'),fullPage:true});
     assert.deepEqual(errors,[],'no browser page errors during Photo Match');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement,tentPlacement,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));

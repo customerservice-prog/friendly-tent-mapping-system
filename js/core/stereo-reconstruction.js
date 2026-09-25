@@ -221,3 +221,67 @@ export function stereoReconstructionSummary(result){
     triangles:Math.round(m.triangleCount||0)
   };
 }
+
+
+export function stereoObstacleRects(result,{
+  siteWidthFt=50,
+  siteLengthFt=60,
+  cameraOffsetZ,
+  cellFt=2,
+  minHeightFt=1.4,
+  maxHeightFt=35,
+  minConfidence=.16,
+  paddingFt=.35,
+}={}){
+  if(!result?.positions||!result?.valid||!result?.confidence)return [];
+  siteWidthFt=Math.max(8,finite(siteWidthFt,50));siteLengthFt=Math.max(8,finite(siteLengthFt,60));
+  cellFt=clamp(finite(cellFt,2),1,5);
+  const cameraZ=Number.isFinite(Number(cameraOffsetZ))?Number(cameraOffsetZ):-siteLengthFt/2-8;
+  const cols=Math.ceil(siteWidthFt/cellFt),rows=Math.ceil(siteLengthFt/cellFt),cells=new Map();
+  for(let i=0;i<result.valid.length;i++){
+    if(!result.valid[i]||result.confidence[i]<minConfidence)continue;
+    const wx=result.positions[i*3],wy=result.positions[i*3+1],wz=result.positions[i*3+2]+cameraZ;
+    if(!Number.isFinite(wx)||!Number.isFinite(wy)||!Number.isFinite(wz)||wy<minHeightFt||wy>maxHeightFt)continue;
+    const sx=wx+siteWidthFt/2,sy=wz+siteLengthFt/2;
+    if(sx<0||sy<0||sx>=siteWidthFt||sy>=siteLengthFt)continue;
+    const cx=Math.floor(sx/cellFt),cy=Math.floor(sy/cellFt),key=cy*cols+cx;
+    const cell=cells.get(key)||{cx,cy,count:0,maxHeight:0,confidence:0};
+    cell.count++;cell.maxHeight=Math.max(cell.maxHeight,wy);cell.confidence+=result.confidence[i];cells.set(key,cell);
+  }
+  // Keep cells with repeated elevated evidence. A lone depth speck should not
+  // become a blocking object in the rental fit engine.
+  const solid=new Map(Array.from(cells).filter(([,cell])=>cell.count>=2).map(([k,v])=>[k,v]));
+  const seen=new Set(),components=[];
+  for(const [key,start] of solid){
+    if(seen.has(key))continue;
+    const queue=[start],part=[];seen.add(key);
+    while(queue.length){
+      const cell=queue.pop();part.push(cell);
+      for(const [nx,ny] of [[cell.cx-1,cell.cy],[cell.cx+1,cell.cy],[cell.cx,cell.cy-1],[cell.cx,cell.cy+1]]){
+        if(nx<0||ny<0||nx>=cols||ny>=rows)continue;
+        const nk=ny*cols+nx,next=solid.get(nk);
+        if(next&&!seen.has(nk)){seen.add(nk);queue.push(next);}
+      }
+    }
+    if(part.length>=2)components.push(part);
+  }
+  return components.map((part,index)=>{
+    const minX=Math.min(...part.map(c=>c.cx)),maxX=Math.max(...part.map(c=>c.cx));
+    const minY=Math.min(...part.map(c=>c.cy)),maxY=Math.max(...part.map(c=>c.cy));
+    const totalPoints=part.reduce((s,c)=>s+c.count,0);
+    const conf=part.reduce((s,c)=>s+c.confidence,0)/Math.max(1,totalPoints);
+    const x=Math.max(0,minX*cellFt-paddingFt),y=Math.max(0,minY*cellFt-paddingFt);
+    const right=Math.min(siteWidthFt,(maxX+1)*cellFt+paddingFt),bottom=Math.min(siteLengthFt,(maxY+1)*cellFt+paddingFt);
+    return {
+      id:'scan-depth-obstacle-'+index,
+      type:'obstacle',
+      source:'metric-depth',
+      x,y,widthFt:Math.max(.2,right-x),depthFt:Math.max(.2,bottom-y),
+      heightFt:part.reduce((m,c)=>Math.max(m,c.maxHeight),0),
+      rotationDeg:0,
+      confidence:clamp(conf,0,1),
+      cells:part.length,
+      points:totalPoints
+    };
+  }).filter(o=>o.widthFt*o.depthFt>=3).sort((a,b)=>(b.points*b.confidence)-(a.points*a.confidence)).slice(0,28);
+}

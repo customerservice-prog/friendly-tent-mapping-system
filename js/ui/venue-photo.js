@@ -1,5 +1,6 @@
 const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
 const TARGET_BYTES = 3.4 * 1024 * 1024;
+const MAX_SCAN_VIDEO_BYTES = 250 * 1024 * 1024;
 
 function clamp(n,min,max,fallback){
   n=Number(n);
@@ -39,6 +40,8 @@ export function normalizeVenueScan(value,apiBase){
     baselineFt:clamp(value.baselineFt,2,20,6),
     eyeHeightFt:clamp(value.eyeHeightFt,4,7,5.6),
     fovDeg:clamp(value.fovDeg,40,90,62),
+    captureMethod:value.captureMethod==='video'?'video':'manual',
+    baselineFactor:clamp(value.baselineFactor,.4,1.05,1),
     frames
   };
 }
@@ -49,7 +52,9 @@ export function venueScanPanel(value){
   return '<section class="venue-scan-card'+(ready?' is-ready':'')+'">'+
     '<div class="venue-photo-kicker">SPACE SCAN'+(ready?' · READY':'')+'</div>'+
     '<h4>Build the actual yard in 3D</h4>'+
-    '<p>Take three overlapping photos while moving sideways and keeping the camera pointed at the same setup area. RentSketch uses the parallax between them to estimate real depth instead of treating one photo like a wall.</p>'+
+    '<p>Move sideways across the setup area while keeping the same yard features centered. RentSketch uses the parallax between viewpoints to estimate real depth instead of treating one photo like a wall.</p>'+
+    '<label class="venue-scan-video-btn"><input class="venue-photo-input" type="file" accept="video/*" capture="environment" data-role="venue-scan-video"><strong>Record / choose a Space Scan video</strong><span>Best: 6–12 seconds · walk sideways about '+scan.baselineFt+' ft · do not pan in place</span></label>'+
+    '<div class="venue-scan-or">or capture three photos manually</div>'+
     '<div class="venue-scan-guide"><span>LEFT</span><span>MOVE SIDEWAYS</span><span>RIGHT</span></div>'+
     '<div class="venue-scan-frame-grid">'+roles.map(([role,num,label])=>{const frame=scanFrame(scan,role);return '<label class="venue-scan-frame'+(frame?' has-photo':'')+'">'+
       (frame?'<img src="'+esc(frame.url)+'" alt="'+esc(label)+' scan frame">':'<span class="venue-scan-step">'+num+'</span>')+
@@ -118,6 +123,71 @@ function canvasBlob(canvas,quality){
   return new Promise(function(resolve,reject){
     canvas.toBlob(function(blob){blob?resolve(blob):reject(new Error('That photo could not be prepared.'));},'image/jpeg',quality);
   });
+}
+export function venueScanFrameTimes(duration){
+  duration=Number(duration);
+  if(!Number.isFinite(duration)||duration<=0)return [];
+  const pad=Math.min(.35,Math.max(.06,duration*.04));
+  const start=pad,end=Math.max(start,duration-pad),span=Math.max(.001,end-start);
+  return [start+span*.12,start+span*.50,start+span*.88];
+}
+function waitForVideoEvent(video,event,timeoutMs=12000){
+  return new Promise(function(resolve,reject){
+    let timer;
+    const done=function(fn,arg){clearTimeout(timer);video.removeEventListener(event,onEvent);video.removeEventListener('error',onError);fn(arg);};
+    const onEvent=function(){done(resolve);};
+    const onError=function(){done(reject,new Error('That scan video could not be opened.'));};
+    video.addEventListener(event,onEvent,{once:true});video.addEventListener('error',onError,{once:true});
+    timer=setTimeout(function(){done(reject,new Error('The scan video took too long to load.'));},timeoutMs);
+  });
+}
+async function seekVideoFrame(video,time){
+  if(Math.abs((Number(video.currentTime)||0)-time)<.015&&video.readyState>=2)return;
+  const waiting=waitForVideoEvent(video,'seeked',12000);
+  video.currentTime=time;
+  await waiting;
+  if(typeof video.requestVideoFrameCallback==='function'){
+    await Promise.race([
+      new Promise(function(resolve){video.requestVideoFrameCallback(function(){resolve();});}),
+      new Promise(function(resolve){setTimeout(resolve,500);})
+    ]);
+  }else{
+    await new Promise(function(resolve){requestAnimationFrame(function(){requestAnimationFrame(resolve);});});
+  }
+}
+export async function extractVenueScanVideo(file,{maxEdge=1600,quality=.86}={}){
+  if(!file)throw new Error('Choose a scan video first.');
+  const type=String(file.type||'').toLowerCase(),name=String(file.name||'').toLowerCase();
+  if(!(type.startsWith('video/')||/\.(mp4|mov|m4v|webm|avi)$/i.test(name)))throw new Error('Choose a phone video for Space Scan.');
+  if(file.size>MAX_SCAN_VIDEO_BYTES)throw new Error('That scan video is too large. Keep the scan under about 20 seconds and try again.');
+  const url=URL.createObjectURL(file),video=document.createElement('video');
+  video.preload='auto';video.muted=true;video.playsInline=true;video.src=url;
+  try{
+    if(video.readyState<1)await waitForVideoEvent(video,'loadedmetadata',15000);
+    const duration=Number(video.duration);
+    if(!Number.isFinite(duration)||duration<2)throw new Error('Record at least 2 seconds while moving sideways.');
+    if(duration>45)throw new Error('Keep Space Scan video under 45 seconds.');
+    if(video.readyState<2){try{await waitForVideoEvent(video,'loadeddata',15000);}catch(_){}}
+    const vw=video.videoWidth||0,vh=video.videoHeight||0;
+    if(!vw||!vh)throw new Error('The scan video has no readable video frames.');
+    const scale=Math.min(1,maxEdge/Math.max(vw,vh)),width=Math.max(1,Math.round(vw*scale)),height=Math.max(1,Math.round(vh*scale));
+    const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
+    const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';
+    const roles=['left','center','right'],times=venueScanFrameTimes(duration),frames=[];
+    for(let i=0;i<roles.length;i++){
+      await seekVideoFrame(video,times[i]);
+      ctx.fillRect(0,0,width,height);ctx.drawImage(video,0,0,width,height);
+      const blob=await canvasBlob(canvas,quality);
+      const frameName='space-scan-'+roles[i]+'.jpg';
+      const frame=typeof File==='function'?new File([blob],frameName,{type:'image/jpeg',lastModified:Date.now()+i}):blob;
+      if(!('name' in frame))Object.defineProperty(frame,'name',{value:frameName});
+      frames.push({role:roles[i],file:frame,time:times[i],width,height});
+    }
+    return {duration,width,height,frames,baselineFactor:clamp((times[2]-times[0])/duration,.4,1.05)};
+  }finally{
+    try{video.pause();video.removeAttribute('src');video.load();}catch(_){}
+    URL.revokeObjectURL(url);
+  }
 }
 function supportedMime(file){
   const raw=String(file?.type||'').trim().toLowerCase();

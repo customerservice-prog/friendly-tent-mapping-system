@@ -1,7 +1,7 @@
 import {mountReviewPricing,currentReviewPricing,reviewDeliveryZip,restoreReviewDeliveryZip} from './js/ui/review-pricing.js';
 import './js/ui/designer-help.js';
 import { sitePanel } from './js/ui/site-controls.js';
-import { normalizeVenuePhoto, normalizeVenueScan, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
+import { normalizeVenuePhoto, normalizeVenueScan, extractVenueScanVideo, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
 import { defaultPhotoCalibration, normalizePhotoCalibration, normalizePhotoGeometry } from './js/core/photo-geometry.js';
 import { evaluatePropertyScene, summarizePropertyFit } from './js/core/property-planning.js';
 import { TABLETOP } from './js/data/tabletop.js';
@@ -160,7 +160,7 @@ async function chooseVenuePhoto(file,input){
     if(!designId)throw new Error('This layout could not be saved before the photo upload.');
     setVenuePhotoStatus('Uploading '+label+'…','working');
     var photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
-    state.backgroundPhoto=photo;state.venueScan=null;
+    state.backgroundPhoto=photo;state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;
     var snapAfterPhoto=buildSnapshot(getConflicts());
     state.photoCalibration=defaultPhotoCalibration(snapAfterPhoto.photoSite);state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
     state.venuePhotoStatus={text:'Applied · Photo View is ready. Drag rentals directly on your real venue.',kind:'success'};
@@ -183,7 +183,7 @@ async function chooseVenuePhoto(file,input){
 function currentVenueScan(){
   return normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
 }
-function metricScanReady(){var scan=currentVenueScan(),runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;return scan.status==='ready'&&!(runtime&&runtime.ready===false&&runtime.loading===false);}
+function metricScanReady(){var scan=currentVenueScan(),runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;if(scan.status!=='ready')return false;return runtime?.ready===true;}
 async function chooseVenueScanPhoto(role,file,input){
   if(!file||!['left','center','right'].includes(role))return false;
   if(!requireEventEditing())return false;
@@ -195,7 +195,7 @@ async function chooseVenueScanPhoto(role,file,input){
     if(!designId)throw new Error('This layout could not be saved before the scan photo upload.');
     const photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
     const frames=before.frames.filter(f=>f.role!==role).concat([{...photo,role}]);
-    state.venueScan=normalizeVenueScan({...before,frames},window.RENTSKETCH_API_URL);
+    state.venueScan=normalizeVenueScan({...before,frames,captureMethod:'manual',baselineFactor:1},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:state.venueScan.status==='ready'};
     if(role==='center'){
       state.backgroundPhoto={...photo};
       // A new center viewpoint changes the Photo Match camera itself. Recreate
@@ -229,14 +229,56 @@ async function chooseVenueScanPhoto(role,file,input){
 function updateVenueScanBaseline(value){
   const n=Number(value);if(!Number.isFinite(n))return false;
   const scan=currentVenueScan();
-  state.venueScan=normalizeVenueScan({...scan,baselineFt:Math.max(2,Math.min(20,n))},window.RENTSKETCH_API_URL);
+  state.venueScan=normalizeVenueScan({...scan,baselineFt:Math.max(2,Math.min(20,n))},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:state.venueScan.status==='ready'};
   renderViews(getConflicts());window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return true;
+}
+async function chooseVenueScanVideo(file,input){
+  if(!file)return false;
+  if(!requireEventEditing())return false;
+  if(input)input.disabled=true;
+  const before=currentVenueScan(),designId=await ensureVenuePhotoDesign().catch(()=>null);
+  if(!designId){if(input&&input.isConnected)input.disabled=false;showLayoutNotice('This layout could not be saved before the scan video.',6000);return false;}
+  try{
+    showLayoutNotice('Reading Space Scan video and extracting viewpoints…',5000);
+    const extracted=await extractVenueScanVideo(file);
+    const uploaded=[];
+    for(const frame of extracted.frames){
+      showLayoutNotice('Uploading '+frame.role+' Space Scan viewpoint…',3500);
+      const photo=await uploadVenuePhoto(frame.file,venuePhotoContext(designId));
+      uploaded.push({...photo,role:frame.role});
+    }
+    const center=uploaded.find(f=>f.role==='center');
+    if(!center)throw new Error('The center scan frame could not be created.');
+    state.venueScan=normalizeVenueScan({...before,frames:uploaded,captureMethod:'video',baselineFactor:extracted.baselineFactor},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:true};
+    state.backgroundPhoto={...center};
+    if(photoMounted){photoViewMod.unmount();photoMounted=false;}
+    const snap=buildSnapshot(getConflicts());
+    state.photoCalibration=defaultPhotoCalibration(snap.photoSite);
+    state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
+    renderDrawerBody('site');renderViews(getConflicts());
+    window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
+    let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(err){console.warn('[RentSketch] Space Scan video save will retry',err);}
+    if(saved){
+      const keep=new Set(uploaded.map(f=>f.id));
+      before.frames.filter(f=>f.id&&!keep.has(f.id)).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
+      if(before.frames.every(f=>f.id!==state.backgroundPhoto?.id)&&state.backgroundPhoto?.id&&before.frames.length){
+        // Center from the new scan is intentionally the trusted Photo Match view.
+      }
+    }
+    showLayoutNotice('Space Scan video ready. Building metric 3D depth from your real viewpoints…',6500);
+    setViewMode('3d');
+    return true;
+  }catch(err){
+    console.error('[RentSketch] Space Scan video failed',err);
+    showLayoutNotice('Could not build Space Scan from that video: '+(err?.message||'Try again while moving sideways more slowly.'),8000);
+    return false;
+  }finally{if(input&&input.isConnected)input.disabled=false;}
 }
 async function clearVenueScan(){
   if(!requireEventEditing())return false;
   const scan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
   const deletable=scan.frames.filter(f=>f.id&&f.id!==state.backgroundPhoto?.id);
-  state.venueScan=null;renderDrawerBody('site');renderViews(getConflicts());
+  state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;renderDrawerBody('site');renderViews(getConflicts());
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
   let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(_){}
   if(saved&&designId)deletable.forEach(photo=>deleteVenuePhoto(photo,venuePhotoContext(designId)));
@@ -246,7 +288,7 @@ async function clearVenueScan(){
 async function removeVenuePhoto(){
   if(!requireEventEditing()||!state.backgroundPhoto)return false;
   var old=state.backgroundPhoto,oldScan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
-  state.backgroundPhoto=null;state.venueScan=null;state.photoCalibration=null;state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;if(state.viewMode==='photo')state.viewMode='plan';renderDrawerBody('site');renderViews(getConflicts());setViewMode(state.viewMode);
+  state.backgroundPhoto=null;state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;state.photoCalibration=null;state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;if(state.viewMode==='photo')state.viewMode='plan';renderDrawerBody('site');renderViews(getConflicts());setViewMode(state.viewMode);
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
   var removalSaved=false;try{await window.RentSketchAutosave?.flush?.();removalSaved=true;}catch(_){}
   if(removalSaved&&designId){
@@ -305,7 +347,8 @@ var view3dMod=null,view3dPendingSnapshot=null,planMounted=false,photoMounted=fal
 var sceneOptions={night:false,weather:'clear',guests:true,styling:true,motion:!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches};
 function buildSnapshot(conflicts){
   var tent=layoutSpace(),photoSite={id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(Number(state.siteWidthFt)||50,tent.widthFt+20,50),lengthFt:Math.max(Number(state.siteLengthFt)||60,tent.lengthFt+20,60)};
-  return {tent:tent,photoSite:photoSite,sidewalls:normalizedSidewalls(tent),backgroundPhoto:normalizeVenuePhoto(state.backgroundPhoto,window.RENTSKETCH_API_URL),venueScan:normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL),photoCalibration:state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSite):null,photoGeometry:state.backgroundPhoto?normalizePhotoGeometry(state.photoGeometry,photoSite):[],photoTentPlacement:state.photoTentPlacement,selectedPhotoId:state.selectedPhotoId,surfaceType:state.surfaceType,anchoringMethod:tent.isSite?null:resolveAnchoringMethod(tent.type,state.surfaceType),objects:store.getState().objects,placement:pendingPlacement,lightingOn:!!(state.lightingId&&state.lightingId!=='lighting-none'),lightingId:state.lightingId,selectedId:state.selectedId,severityMap:conflictSeverityByItemId(conflicts||[])};
+  var scanRuntime=window.RENTSKETCH_SCAN_RECONSTRUCTION,scanGeometry=scanRuntime?.ready&&Array.isArray(scanRuntime.obstacles)?scanRuntime.obstacles.map(function(o){return Object.assign({},o);}):[];
+  return {tent:tent,photoSite:photoSite,sidewalls:normalizedSidewalls(tent),backgroundPhoto:normalizeVenuePhoto(state.backgroundPhoto,window.RENTSKETCH_API_URL),venueScan:normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL),scanGeometry:scanGeometry,scanMetrics:scanRuntime?.ready?scanRuntime.metrics||null:null,photoCalibration:state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSite):null,photoGeometry:state.backgroundPhoto?normalizePhotoGeometry(state.photoGeometry,photoSite):[],photoTentPlacement:state.photoTentPlacement,selectedPhotoId:state.selectedPhotoId,surfaceType:state.surfaceType,anchoringMethod:tent.isSite?null:resolveAnchoringMethod(tent.type,state.surfaceType),objects:store.getState().objects,placement:pendingPlacement,lightingOn:!!(state.lightingId&&state.lightingId!=='lighting-none'),lightingId:state.lightingId,selectedId:state.selectedId,severityMap:conflictSeverityByItemId(conflicts||[])};
 }
 function currentPropertyPlan(){return evaluatePropertyScene(buildSnapshot(getConflicts()));}
 function propertyFitDetails(plan){
@@ -321,7 +364,7 @@ function propertyFitDetails(plan){
 function renderPropertyFit(plan){
   var button=$('propertyFitBadge'),panel=$('propertyFitPanel');
   if(!button||!panel)return;
-  var show=state.viewMode==='3d'&&!!state.backgroundPhoto&&!!plan?.active;
+  var show=state.viewMode==='3d'&&!!state.backgroundPhoto&&(!!plan?.active||plan?.source==='metric-scan-needs-boundaries');
   button.hidden=!show;
   if(!show){panel.hidden=true;return;}
   var summary=summarizePropertyFit(plan),kind=summary.kind||'neutral';
@@ -389,11 +432,21 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20260925-space-scan-1').then(function(mod){
-      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());if(info?.ready){setPhoto3dModeUi('360');showLayoutNotice('Space Scan reconstructed '+(info.metrics?.coveragePct||0)+'% depth coverage from your three real viewpoints.',5200);}else if(info&&!info.loading){setPhoto3dModeUi('matched');showLayoutNotice('Space Scan needs more overlap or texture. Retake Left, Center and Right while keeping the same yard features in all three photos.',7000);}}});
+    import('./js/ui/view3d.js?v=20260925-space-scan-2').then(function(mod){
+      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){
+        window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());
+        if(info?.ready){
+          if(view3dMod?.orbit360?.())setPhoto3dModeUi('360');
+          showLayoutNotice('3D Scan built from real parallax · '+(info.metrics?.coveragePct||0)+'% depth coverage · '+(info.metrics?.triangles||0)+' connected surface triangles.',5600);
+        }else if(info?.loading){
+          setPhoto3dModeUi('matched');
+        }else if(info){
+          setPhoto3dModeUi('matched');showLayoutNotice('Space Scan needs more overlap or texture. Retake the scan while moving sideways and keeping the same yard features visible.',7500);
+        }
+      }});
       inst.rebuild(snap);inst.setScene(sceneOptions);view3dMod=inst;
-      if(snap.backgroundPhoto&&snap.venueScan?.status==='ready'&&inst.orbit360){
-        inst.orbit360();setPhoto3dModeUi('360');
+      if(snap.backgroundPhoto&&snap.venueScan?.status==='ready'&&inst.orbit360?.()){
+        setPhoto3dModeUi('360');
       }else if(snap.backgroundPhoto&&inst.matchPhoto){
         inst.matchPhoto();setPhoto3dModeUi('matched');
       }else{
@@ -422,17 +475,17 @@ function setMeasurementResult(result){
   else if(btn&&!btn.classList.contains('active')){btn.textContent='Measure';btn.title='Measure between two points on the 3D ground';}
 }
 function setPhoto3dModeUi(mode){
-  var matched=$('view3dMatchPhoto'),orbit=$('view3dOrbit360'),walk=$('view3dWalk'),isOrbit=mode==='360',isWalk=mode==='walk',isMatched=mode==='matched';
+  var matched=$('view3dMatchPhoto'),orbit=$('view3dOrbit360'),walk=$('view3dWalk'),isOrbit=mode==='360',isWalk=mode==='walk',isMatched=mode==='matched',scanReady=metricScanReady();
   if(matched){matched.classList.toggle('active',isMatched);matched.setAttribute('aria-pressed',String(isMatched));}
-  if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));}
-  if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk';}
+  if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));orbit.textContent=scanReady?'3D Scan':'3D Scan';orbit.title=scanReady?'Orbit the measured multi-view reconstruction inside its captured field of view':'Capture a Space Scan first';}
+  if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk Scan';}
   if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto){
-    var scanReady=metricScanReady();
-    $('canvasHint').textContent=isWalk?'Walk Mode · metric Space Scan · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?'Space Scan 3D · real multi-view depth mesh · drag to orbit around the fixed setup':scanReady?'Matched View · switch to 360 World for metric depth':'Photo Match · one image stays camera-matched · capture Left + Center + Right in Space Scan for real 360 depth';
+    var runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;
+    $('canvasHint').textContent=isWalk?'Walk Scan · measured Space Scan · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?'3D Scan · real multi-view depth · orbit limited to the captured area':runtime?.loading?'Building metric depth from the scan…':scanReady?'Matched View · choose 3D Scan for measured depth':'Photo Match · one image is not treated as 360 · record a Space Scan for real 3D depth';
   }
 }
 function renderViews(conflicts){
-  var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',scan3d=photo3d&&s.venueScan?.status==='ready',propertyPlan=evaluatePropertyScene(s);
+  var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',scan3d=photo3d&&metricScanReady(),propertyPlan=evaluatePropertyScene(s);
   renderPropertyFit(propertyPlan);
   if($('sceneSettingLabel'))$('sceneSettingLabel').textContent=scan3d?'Metric Space Scan':s.backgroundPhoto?'Your venue photo':(sceneSetting(s.tent,s.surfaceType)==='backyard'?'Backyard setting':'Paved driveway setting');
   if($('viewModePhoto'))$('viewModePhoto').hidden=!s.backgroundPhoto;
@@ -488,6 +541,17 @@ function closeDrawer(){state.activeDrawer=null;document.body.classList.remove('d
     fileInput.addEventListener('click',function(){
       fileInput.value='';
       delete fileInput.dataset.venueScanHandled;
+    });
+  });
+  root.querySelectorAll('[data-role="venue-scan-video"]').forEach(function(fileInput){
+    if(fileInput.dataset.venueScanVideoBound==='1')return;
+    fileInput.dataset.venueScanVideoBound='1';
+    var handle=function(){handleVenueScanVideoInput(fileInput);};
+    fileInput.addEventListener('input',handle);
+    fileInput.addEventListener('change',handle);
+    fileInput.addEventListener('click',function(){
+      fileInput.value='';
+      delete fileInput.dataset.venueScanVideoHandled;
     });
   });
 }
@@ -576,17 +640,30 @@ function handleVenueScanFileInput(fileInput){
   chooseVenueScanPhoto(role,file,fileInput);
   return true;
 }
+function handleVenueScanVideoInput(fileInput){
+  if(!fileInput)return false;
+  var file=fileInput.files&&fileInput.files[0];if(!file)return false;
+  var stamp=[file.name||'',file.size||0,file.lastModified||0].join(':');
+  if(fileInput.dataset.venueScanVideoHandled===stamp)return true;
+  fileInput.dataset.venueScanVideoHandled=stamp;
+  chooseVenueScanVideo(file,fileInput);
+  return true;
+}
 $('drawerBody')?.addEventListener('click',function(e){
   var fileInput=e.target.closest('[data-role="venue-photo-file"]');
   if(fileInput){fileInput.value='';delete fileInput.dataset.venuePhotoHandled;return;}
   var scanInput=e.target.closest('[data-role="venue-scan-file"]');
-  if(scanInput){scanInput.value='';delete scanInput.dataset.venueScanHandled;}
+  if(scanInput){scanInput.value='';delete scanInput.dataset.venueScanHandled;return;}
+  var scanVideo=e.target.closest('[data-role="venue-scan-video"]');
+  if(scanVideo){scanVideo.value='';delete scanVideo.dataset.venueScanVideoHandled;}
 });
 $('drawerBody')?.addEventListener('change',function(e){
   var fileInput=e.target.closest('[data-role="venue-photo-file"]');
   if(fileInput){handleVenuePhotoFileInput(fileInput);return;}
   var scanInput=e.target.closest('[data-role="venue-scan-file"]');
   if(scanInput){handleVenueScanFileInput(scanInput);return;}
+  var scanVideo=e.target.closest('[data-role="venue-scan-video"]');
+  if(scanVideo){handleVenueScanVideoInput(scanVideo);return;}
   var baseline=e.target.closest('[data-role="venue-scan-baseline"]');
   if(baseline){updateVenueScanBaseline(baseline.value);return;}
   var el=e.target.closest('[data-role="sidewall-side"]');if(el){setSidewallSide(el.dataset.side,el.value);}
@@ -596,6 +673,8 @@ $('drawerBody')?.addEventListener('input',function(e){
   if(fileInput){handleVenuePhotoFileInput(fileInput);return;}
   var scanInput=e.target.closest('[data-role="venue-scan-file"]');
   if(scanInput){handleVenueScanFileInput(scanInput);return;}
+  var scanVideo=e.target.closest('[data-role="venue-scan-video"]');
+  if(scanVideo){handleVenueScanVideoInput(scanVideo);return;}
   var baseline=e.target.closest('[data-role="venue-scan-baseline"]');
   if(baseline){updateVenueScanBaseline(baseline.value);return;}
   var el=e.target.closest('[data-role^="venue-photo-"]');if(!el)return;
