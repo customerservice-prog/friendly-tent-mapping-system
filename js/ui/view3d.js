@@ -253,7 +253,8 @@ export function init(container,callbacks={}) {
     if(key===scanWorldKey&&(scanWorld.children.length||scanWorld.userData?.loading))return true;
     clearScanWorld();scanWorldKey=key;
     const seq=++scanWorldSeq,controller=new AbortController();scanWorldAbort=controller;
-    scanWorld.userData={ready:false,loading:true};
+    scanWorld.userData={ready:false,loading:true,mode:'metric-stereo-scan'};
+    callbacks.onScanReconstruction?.(scanWorld.userData);
     createVenueScanWorld({scan:state.venueScan,site:state.photoSite,calibration:state.photoCalibration,mobile,signal:controller.signal}).then(world=>{
       if(destroyed||controller.signal.aborted||seq!==scanWorldSeq)return;
       disposeVenueScanWorld(scanWorld);scanWorld.add(world);
