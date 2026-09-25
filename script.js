@@ -183,7 +183,7 @@ async function chooseVenuePhoto(file,input){
 function currentVenueScan(){
   return normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
 }
-function metricScanReady(){var scan=currentVenueScan(),runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;return scan.status==='ready'&&!(runtime&&runtime.ready===false&&runtime.loading===false);}
+function metricScanReady(){var scan=currentVenueScan(),runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;if(scan.status!=='ready')return false;return runtime?.ready===true;}
 async function chooseVenueScanPhoto(role,file,input){
   if(!file||!['left','center','right'].includes(role))return false;
   if(!requireEventEditing())return false;
@@ -432,10 +432,20 @@ function mount3D(){
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
     import('./js/ui/view3d.js?v=20260925-space-scan-1').then(function(mod){
-      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());if(info?.ready){setPhoto3dModeUi('360');showLayoutNotice('Space Scan reconstructed '+(info.metrics?.coveragePct||0)+'% depth coverage from your three real viewpoints.',5200);}else if(info&&!info.loading){setPhoto3dModeUi('matched');showLayoutNotice('Space Scan needs more overlap or texture. Retake Left, Center and Right while keeping the same yard features in all three photos.',7000);}}});
+      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){
+        window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());
+        if(info?.ready){
+          if(view3dMod?.orbit360?.())setPhoto3dModeUi('360');
+          showLayoutNotice('3D Scan built from real parallax · '+(info.metrics?.coveragePct||0)+'% depth coverage · '+(info.metrics?.triangles||0)+' connected surface triangles.',5600);
+        }else if(info?.loading){
+          setPhoto3dModeUi('matched');
+        }else if(info){
+          setPhoto3dModeUi('matched');showLayoutNotice('Space Scan needs more overlap or texture. Retake the scan while moving sideways and keeping the same yard features visible.',7500);
+        }
+      }});
       inst.rebuild(snap);inst.setScene(sceneOptions);view3dMod=inst;
-      if(snap.backgroundPhoto&&snap.venueScan?.status==='ready'&&inst.orbit360){
-        inst.orbit360();setPhoto3dModeUi('360');
+      if(snap.backgroundPhoto&&snap.venueScan?.status==='ready'&&inst.orbit360?.()){
+        setPhoto3dModeUi('360');
       }else if(snap.backgroundPhoto&&inst.matchPhoto){
         inst.matchPhoto();setPhoto3dModeUi('matched');
       }else{
@@ -464,17 +474,17 @@ function setMeasurementResult(result){
   else if(btn&&!btn.classList.contains('active')){btn.textContent='Measure';btn.title='Measure between two points on the 3D ground';}
 }
 function setPhoto3dModeUi(mode){
-  var matched=$('view3dMatchPhoto'),orbit=$('view3dOrbit360'),walk=$('view3dWalk'),isOrbit=mode==='360',isWalk=mode==='walk',isMatched=mode==='matched';
+  var matched=$('view3dMatchPhoto'),orbit=$('view3dOrbit360'),walk=$('view3dWalk'),isOrbit=mode==='360',isWalk=mode==='walk',isMatched=mode==='matched',scanReady=metricScanReady();
   if(matched){matched.classList.toggle('active',isMatched);matched.setAttribute('aria-pressed',String(isMatched));}
-  if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));}
-  if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk';}
+  if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));orbit.textContent=scanReady?'3D Scan':'3D Scan';orbit.title=scanReady?'Orbit the measured multi-view reconstruction inside its captured field of view':'Capture a Space Scan first';}
+  if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk Scan';}
   if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto){
-    var scanReady=metricScanReady();
-    $('canvasHint').textContent=isWalk?'Walk Mode · metric Space Scan · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?'Space Scan 3D · real multi-view depth mesh · drag to orbit around the fixed setup':scanReady?'Matched View · switch to 360 World for metric depth':'Photo Match · one image stays camera-matched · capture Left + Center + Right in Space Scan for real 360 depth';
+    var runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;
+    $('canvasHint').textContent=isWalk?'Walk Scan · measured Space Scan · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?'3D Scan · real multi-view depth · orbit limited to the captured area':runtime?.loading?'Building metric depth from the scan…':scanReady?'Matched View · choose 3D Scan for measured depth':'Photo Match · one image is not treated as 360 · record a Space Scan for real 3D depth';
   }
 }
 function renderViews(conflicts){
-  var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',scan3d=photo3d&&s.venueScan?.status==='ready',propertyPlan=evaluatePropertyScene(s);
+  var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',scan3d=photo3d&&metricScanReady(),propertyPlan=evaluatePropertyScene(s);
   renderPropertyFit(propertyPlan);
   if($('sceneSettingLabel'))$('sceneSettingLabel').textContent=scan3d?'Metric Space Scan':s.backgroundPhoto?'Your venue photo':(sceneSetting(s.tent,s.surfaceType)==='backyard'?'Backyard setting':'Paved driveway setting');
   if($('viewModePhoto'))$('viewModePhoto').hidden=!s.backgroundPhoto;
