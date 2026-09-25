@@ -69,13 +69,15 @@ function patchScore(a,b,w,h,ax,ay,bx,by,r){
   }
   return err/Math.max(1,energy);
 }
-function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,verticalSearch}){
+function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,verticalSearch,verticalBias=0,verticalSlope=0}){
   let best={score:Infinity,d:0,dy:0},second=Infinity;
+  const xNorm=w>1?(x-(w-1)/2)/Math.max(1,(w-1)/2):0;
+  const predicted=Math.round(finite(verticalBias,0)+finite(verticalSlope,0)*xNorm);
   for(let d=1;d<=maxDisparity;d++){
     const tx=x+direction*d;
     if(tx-patchRadius<0||tx+patchRadius>=w)continue;
-    for(let dy=-verticalSearch;dy<=verticalSearch;dy++){
-      const ty=y+dy;
+    for(let delta=-verticalSearch;delta<=verticalSearch;delta++){
+      const dy=predicted+delta,ty=y+dy;
       if(ty-patchRadius<0||ty+patchRadius>=h)continue;
       const score=patchScore(center,target,w,h,x,y,tx,ty,patchRadius);
       if(score<best.score){second=best.score;best={score,d,dy};}
@@ -86,6 +88,62 @@ function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,ver
   const confidence=clamp(separation*3.2,0,1)*clamp(1-best.score/.95,0,1);
   return {...best,confidence};
 }
+export function estimateEpipolarAlignment(centerGray,targetGray,w,h,{
+  direction=1,
+  maxDisparity=28,
+  patchRadius=1,
+  maxVerticalShift=12,
+  sampleCols=7,
+  sampleRows=5,
+  minContrast=7,
+}={}){
+  if(!centerGray||!targetGray||!w||!h)return {verticalBias:0,verticalSlope:0,quality:0,samples:0};
+  maxVerticalShift=Math.max(2,Math.min(18,Math.round(finite(maxVerticalShift,12))));
+  const mx=maxDisparity+patchRadius+3,my=maxVerticalShift+patchRadius+3,matches=[];
+  const cols=Math.max(3,Math.round(sampleCols)),rows=Math.max(3,Math.round(sampleRows));
+  for(let gy=0;gy<rows;gy++){
+    const y=Math.round(my+(h-1-2*my)*(gy+.5)/rows);
+    for(let gx=0;gx<cols;gx++){
+      const x=Math.round(mx+(w-1-2*mx)*(gx+.5)/cols);
+      if(x<mx||x>=w-mx||y<my||y>=h-my)continue;
+      if(localContrast(centerGray,w,h,x,y,patchRadius+1)<minContrast)continue;
+      const m=bestMatch(centerGray,targetGray,w,h,x,y,{direction,maxDisparity,patchRadius,verticalSearch:maxVerticalShift});
+      if(!Number.isFinite(m.score)||m.d<=0||m.score>.92)continue;
+      const xNorm=(x-(w-1)/2)/Math.max(1,(w-1)/2);
+      const weight=clamp(1-m.score,.05,1)*(.35+.65*clamp(m.confidence,0,1));
+      matches.push({xNorm,dy:m.dy,weight,confidence:m.confidence,score:m.score});
+    }
+  }
+  if(matches.length<4)return {verticalBias:0,verticalSlope:0,quality:0,samples:matches.length};
+  const med=percentile(matches.map(m=>m.dy),.5);
+  let filtered=matches.filter(m=>Math.abs(m.dy-med)<=Math.max(3,maxVerticalShift*.45));
+  if(filtered.length<4)filtered=matches;
+  let sw=0,sx=0,sy=0,sxx=0,sxy=0,conf=0;
+  for(const m of filtered){
+    const weight=Math.max(.01,m.weight);sw+=weight;sx+=weight*m.xNorm;sy+=weight*m.dy;sxx+=weight*m.xNorm*m.xNorm;sxy+=weight*m.xNorm*m.dy;conf+=weight*m.confidence;
+  }
+  const denom=sw*sxx-sx*sx;
+  let slope=Math.abs(denom)>.0001?(sw*sxy-sx*sy)/denom:0;
+  let intercept=sw?((sy-slope*sx)/sw):med;
+  intercept=clamp(intercept,-maxVerticalShift,maxVerticalShift);
+  slope=clamp(slope,-maxVerticalShift*.75,maxVerticalShift*.75);
+  let residual=0;
+  for(const m of filtered){
+    const d=m.dy-(intercept+slope*m.xNorm);residual+=m.weight*d*d;
+  }
+  const rms=Math.sqrt(residual/Math.max(.01,sw));
+  const coverage=clamp(filtered.length/(cols*rows)*1.8,0,1);
+  const confidenceScore=clamp((conf/Math.max(.01,sw))*2.3,0,1);
+  const residualScore=clamp(1-rms/4.5,0,1);
+  return {
+    verticalBias:intercept,
+    verticalSlope:slope,
+    quality:coverage*confidenceScore*(.45+.55*residualScore),
+    samples:filtered.length,
+    rmsPx:rms
+  };
+}
+
 function chooseDisparity(leftMatch,rightMatch){
   const candidates=[leftMatch,rightMatch].filter(m=>m&&m.d>0&&Number.isFinite(m.score)&&m.confidence>.08);
   if(!candidates.length)return null;
