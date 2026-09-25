@@ -1,9 +1,9 @@
 import {mountReviewPricing,currentReviewPricing,reviewDeliveryZip,restoreReviewDeliveryZip} from './js/ui/review-pricing.js';
 import './js/ui/designer-help.js';
-import { sitePanel } from './js/ui/site-controls.js';
-import { normalizeVenuePhoto, normalizeVenueScan, extractVenueScanVideo, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
+import { sitePanel } from './js/ui/site-controls.js?v=20260925-space-scan-4';
+import { normalizeVenuePhoto, normalizeVenueScan, extractVenueScanVideo, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js?v=20260925-space-scan-4';
 import { defaultPhotoCalibration, normalizePhotoCalibration, normalizePhotoGeometry } from './js/core/photo-geometry.js';
-import { evaluatePropertyScene, summarizePropertyFit } from './js/core/property-planning.js';
+import { evaluatePropertyScene, summarizePropertyFit } from './js/core/property-planning.js?v=20260925-space-scan-4';
 import { TABLETOP } from './js/data/tabletop.js';
 // Friendly Event Designer - v2 client-side logic
 // Customer-facing designer: contextual drawers, visual cards, a 2D-first
@@ -438,7 +438,7 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20260925-space-scan-2').then(function(mod){
+    import('./js/ui/view3d.js?v=20260925-space-scan-4').then(function(mod){
       var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){
         window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());
         if(info?.ready){
