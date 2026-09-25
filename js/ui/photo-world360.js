@@ -178,11 +178,19 @@ function addBoundaryContext(group,style,site,materials){
   const trunkMat=trackedMaterial(materials,new THREE.MeshStandardMaterial({color:color(mix3(style.structure,[83,63,43],.55)),roughness:1}),.42);
   const leafMat=trackedMaterial(materials,new THREE.MeshStandardMaterial({color:color(mix3(style.ground,[48,83,43],.32)),roughness:1}),.42);
   const positions=[];
-  for(let i=0;i<16;i++){
-    const rear=i<8,side=i%2===0?-1:1;
-    const x=rear?mix(-w*.55,w*.55,(i+.5)/8):side*w*(.53+rand()*.08);
-    const z=rear?l*(.48+rand()*.10):mix(-l*.32,l*.46,(i-8+.5)/8);
-    positions.push({x,z,h:11+rand()*11,r:2.2+rand()*2.8});
+  // Keep the center of the photographed rear direction visually open so the
+  // real venue photo can remain readable when 360 World first opens.
+  for(let i=0;i<12;i++){
+    const side=i%2===0?-1:1;
+    const x=side*w*(.53+rand()*.07);
+    const z=mix(-l*.30,l*.44,(Math.floor(i/2)+.5)/6);
+    positions.push({x,z,h:11+rand()*10,r:2.0+rand()*2.5});
+  }
+  for(let i=0;i<4;i++){
+    const side=i<2?-1:1;
+    const x=side*w*(.42+rand()*.11);
+    const z=l*(.50+rand()*.07);
+    positions.push({x,z,h:12+rand()*10,r:2.2+rand()*2.6});
   }
   for(const p of positions){
     const trunk=new THREE.Mesh(new THREE.CylinderGeometry(.22,.34,p.h*.44,8),trunkMat);trunk.position.set(p.x,p.h*.22,p.z);trunk.castShadow=trunk.receiveShadow=true;trunk.name='Photo world solid tree trunk';
