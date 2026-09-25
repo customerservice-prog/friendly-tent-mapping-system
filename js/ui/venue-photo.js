@@ -145,7 +145,10 @@ async function seekVideoFrame(video,time){
   video.currentTime=time;
   await waiting;
   if(typeof video.requestVideoFrameCallback==='function'){
-    await new Promise(function(resolve){video.requestVideoFrameCallback(function(){resolve();});});
+    await Promise.race([
+      new Promise(function(resolve){video.requestVideoFrameCallback(function(){resolve();});}),
+      new Promise(function(resolve){setTimeout(resolve,500);})
+    ]);
   }else{
     await new Promise(function(resolve){requestAnimationFrame(function(){requestAnimationFrame(resolve);});});
   }
