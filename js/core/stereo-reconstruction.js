@@ -190,6 +190,9 @@ export function reconstructStereoGrid({
   step=Math.max(2,Math.min(10,Math.round(finite(step,4))));
   maxDisparity=Math.max(4,Math.min(Math.floor(w*.24),Math.round(finite(maxDisparity,28))));
   const centerGray=gray(center),leftGray=gray(left),rightGray=gray(right);
+  const alignmentSearch=Math.max(8,verticalSearch*3);
+  const leftAlignment=estimateEpipolarAlignment(centerGray,leftGray,w,h,{direction:1,maxDisparity,patchRadius:1,maxVerticalShift:alignmentSearch,minContrast});
+  const rightAlignment=estimateEpipolarAlignment(centerGray,rightGray,w,h,{direction:-1,maxDisparity,patchRadius:1,maxVerticalShift:alignmentSearch,minContrast});
   const focalPx=w/(2*Math.tan(fovDeg*Math.PI/360));
   const halfBaseline=baselineFt/2;
   const margin=maxDisparity+patchRadius+2;
@@ -211,8 +214,8 @@ export function reconstructStereoGrid({
       if(contrast<minContrast)continue;
       // Same-facing lateral capture: content shifts right in the left image and
       // left in the right image relative to the center frame.
-      const lm=bestMatch(centerGray,leftGray,w,h,x,y,{direction:1,maxDisparity,patchRadius,verticalSearch});
-      const rm=bestMatch(centerGray,rightGray,w,h,x,y,{direction:-1,maxDisparity,patchRadius,verticalSearch});
+      const lm=bestMatch(centerGray,leftGray,w,h,x,y,{direction:1,maxDisparity,patchRadius,verticalSearch,verticalBias:leftAlignment.verticalBias,verticalSlope:leftAlignment.verticalSlope});
+      const rm=bestMatch(centerGray,rightGray,w,h,x,y,{direction:-1,maxDisparity,patchRadius,verticalSearch,verticalBias:rightAlignment.verticalBias,verticalSlope:rightAlignment.verticalSlope});
       const match=chooseDisparity(lm,rm);
       if(!match||match.confidence<minConfidence)continue;
       const depth=clamp(focalPx*halfBaseline/Math.max(.5,match.d),minDepthFt,maxDepthFt);
@@ -265,7 +268,13 @@ export function reconstructStereoGrid({
     width:w,height:h,cols,rows,xSamples:xs,ySamples:ys,
     positions,uvs,colors,depths,confidence,valid,indices:new Uint32Array(indices),
     focalPx,baselineFt,fovDeg,horizonY,eyeHeightFt,
-    metrics:{validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,triangleCount:indices.length/3,quality}
+    alignments:{left:leftAlignment,right:rightAlignment},
+    metrics:{
+      validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,triangleCount:indices.length/3,quality,
+      maxVerticalDriftPx:Math.max(Math.abs(leftAlignment.verticalBias),Math.abs(rightAlignment.verticalBias)),
+      maxRollSlopePx:Math.max(Math.abs(leftAlignment.verticalSlope),Math.abs(rightAlignment.verticalSlope)),
+      averageAlignmentQuality:(leftAlignment.quality+rightAlignment.quality)/2
+    }
   };
 }
 
@@ -303,6 +312,12 @@ export function reconstructMultiViewGrid({
   maxDisparity=Math.max(4,Math.min(Math.floor(w*.28),Math.round(finite(maxDisparity,30))));
   const centerGray=gray(center),targets=usable.map(v=>({...v,gray:gray(v.image)}));
   const focalPx=w/(2*Math.tan(fovDeg*Math.PI/360)),maxOffset=Math.max(...targets.map(v=>Math.abs(v.offsetFt)),.2);
+  const alignmentSearch=Math.max(8,verticalSearch*3);
+  for(const target of targets){
+    const absOffset=Math.abs(target.offsetFt),direction=target.offsetFt<0?1:-1;
+    const scaledMax=Math.max(4,Math.min(maxDisparity,Math.round(maxDisparity*(.40+.60*absOffset/maxOffset))));
+    target.alignment=estimateEpipolarAlignment(centerGray,target.gray,w,h,{direction,maxDisparity:scaledMax,patchRadius:1,maxVerticalShift:alignmentSearch,minContrast});
+  }
   const margin=maxDisparity+patchRadius+2,xs=[],ys=[];
   for(let x=margin;x<w-margin;x+=step)xs.push(x);
   for(let y=patchRadius+verticalSearch+1;y<h-patchRadius-verticalSearch-1;y+=step)ys.push(y);
@@ -342,7 +357,7 @@ export function reconstructMultiViewGrid({
       for(const target of targets){
         const absOffset=Math.abs(target.offsetFt),direction=target.offsetFt<0?1:-1;
         const scaledMax=Math.max(4,Math.min(maxDisparity,Math.round(maxDisparity*(.40+.60*absOffset/maxOffset))));
-        const match=bestMatch(centerGray,target.gray,w,h,x,y,{direction,maxDisparity:scaledMax,patchRadius,verticalSearch});
+        const match=bestMatch(centerGray,target.gray,w,h,x,y,{direction,maxDisparity:scaledMax,patchRadius,verticalSearch,verticalBias:target.alignment?.verticalBias||0,verticalSlope:target.alignment?.verticalSlope||0});
         if(!match||match.d<=0||match.confidence<minConfidence)continue;
         const depth=clamp(focalPx*absOffset/Math.max(.5,match.d),minDepthFt,maxDepthFt);
         const baselineWeight=.55+.45*Math.sqrt(absOffset/maxOffset);
@@ -394,6 +409,10 @@ export function reconstructMultiViewGrid({
   const avgConfidence=validCount?Array.from(confidence).reduce((s,v,i)=>s+(valid[i]?v:0),0)/validCount:0;
   const avgViews=validCount?Array.from(supportViews).reduce((s,v,i)=>s+(valid[i]?v:0),0)/validCount:0;
   const strongMultiView=validCount?Array.from(supportViews).reduce((s,v,i)=>s+(valid[i]&&v>=2?1:0),0)/validCount:0;
+  const alignmentQuality=targets.length?targets.reduce((s,t)=>s+(t.alignment?.quality||0),0)/targets.length:0;
+  const maxVerticalDriftPx=targets.reduce((m,t)=>Math.max(m,Math.abs(t.alignment?.verticalBias||0)),0);
+  const maxRollSlopePx=targets.reduce((m,t)=>Math.max(m,Math.abs(t.alignment?.verticalSlope||0)),0);
+  const alignmentRmsPx=targets.length?targets.reduce((s,t)=>s+(t.alignment?.rmsPx||0),0)/targets.length:0;
   const quality=validRatio>.44&&avgConfidence>.23&&strongMultiView>.55?'good':validRatio>.20&&avgConfidence>.13?'usable':'weak';
   return {
     width:w,height:h,cols,rows,xSamples:xs,ySamples:ys,
@@ -402,7 +421,8 @@ export function reconstructMultiViewGrid({
     metrics:{
       validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,
       triangleCount:indices.length/3,quality,viewCount:targets.length+1,
-      averageViewsPerPoint:avgViews,multiViewAgreement:strongMultiView
+      averageViewsPerPoint:avgViews,multiViewAgreement:strongMultiView,
+      averageAlignmentQuality:alignmentQuality,maxVerticalDriftPx,maxRollSlopePx,alignmentRmsPx
     }
   };
 }
