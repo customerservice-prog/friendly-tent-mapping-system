@@ -340,7 +340,7 @@ function setPhoto3dModeUi(mode){
   if(matched){matched.classList.toggle('active',isMatched);matched.setAttribute('aria-pressed',String(isMatched));}
   if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));}
   if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk';}
-  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto)$('canvasHint').textContent=isWalk?'Walk Mode · WASD / arrow keys to move · drag to look · Esc exits':isOrbit?'360 World · photo-derived ground + depth + parallax · drag to orbit around the fixed setup':'Matched View · exact calibrated original photo perspective';
+  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto)$('canvasHint').textContent=isWalk?'Walk Mode · WASD / arrow keys to move · drag to look · Esc exits':isOrbit?'360 World · solid local venue reconstruction · drag to orbit around the fixed setup':'Matched View · exact calibrated original photo perspective';
 }
 function renderViews(conflicts){
   var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',propertyPlan=evaluatePropertyScene(s);
