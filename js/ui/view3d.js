@@ -166,25 +166,32 @@ export function init(container,callbacks={}) {
     clearPhotoStage();photoStageKey=key;
     const tex=new THREE.Texture(photoImage);tex.needsUpdate=true;tex.colorSpace=THREE.SRGBColorSpace;tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;photoStageTexture=tex;
     const w=Math.max(1,Number(site.widthFt)||50),l=Math.max(1,Number(site.lengthFt)||60),fl=photoUv(cal.frontLeft),fr=photoUv(cal.frontRight),br=photoUv(cal.backRight),bl=photoUv(cal.backLeft);
-    const groundMat=new THREE.MeshStandardMaterial({map:tex,roughness:1,metalness:0,side:THREE.FrontSide,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
+    const groundMat=new THREE.MeshStandardMaterial({map:tex,roughness:1,metalness:0,side:THREE.DoubleSide,transparent:true,opacity:1,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
     const ground=photoQuad('Photo ground projection',[-w/2,-.04,-l/2,w/2,-.04,-l/2,w/2,-.04,l/2,-w/2,-.04,l/2],[...fl,...fr,...br,...bl],groundMat);
-    ground.receiveShadow=true;photoStage.add(ground);
+    ground.receiveShadow=true;ground.userData.photoEvidenceGround=true;ground.userData.baseOpacity=1;photoStage.add(ground);
     const estimate=photoCameraEstimate(site,cal),h=Math.max(18,Math.min(70,Math.max(l*.42,estimate.position[1]*1.3)));
-    const backMat=new THREE.MeshBasicMaterial({map:tex,side:THREE.FrontSide,transparent:true,opacity:.98,depthWrite:true});
+    const backMat=new THREE.MeshBasicMaterial({map:tex,side:THREE.DoubleSide,transparent:true,opacity:.98,depthWrite:true});
     const backdrop=photoQuad('Photo backdrop projection',[-w/2,0,l/2+.02,w/2,0,l/2+.02,w/2,h,l/2+.02,-w/2,h,l/2+.02],[...bl,...br,br[0],1,bl[0],1],backMat);
     backdrop.receiveShadow=false;backdrop.userData.photoEvidenceBackdrop=true;backdrop.userData.baseOpacity=.98;photoStage.add(backdrop);
     photoStage.userData={mode:'single-photo-2.5d',calibration:cal,coverage:'visible-ground-and-rear-view'};
     return true;
   }
   function updatePhotoStageViewFade(){
-    if(!photoStage.visible||!state?.photoSite)return;
-    const backdrop=photoStage.children.find(o=>o.userData?.photoEvidenceBackdrop);
-    if(!backdrop?.material)return;
-    const x=camera.position.x,z=camera.position.z,r=Math.max(.001,Math.hypot(x,z));
-    const facing=-z/r,sidePenalty=Math.min(1,Math.abs(x)/r);
-    const confidence=THREE.MathUtils.smoothstep(facing,.08,.78)*(1-THREE.MathUtils.smoothstep(sidePenalty,.62,.96));
-    backdrop.material.opacity=(backdrop.userData.baseOpacity||.98)*confidence;
-    backdrop.visible=confidence>.025;
+    if(!photoStage.visible||!state?.photoSite||!state?.photoCalibration)return;
+    const estimate=photoCameraEstimate(state.photoSite,state.photoCalibration);
+    const reference=new THREE.Vector3(...estimate.position).sub(new THREE.Vector3(...estimate.target)).normalize();
+    const current=camera.position.clone().sub(new THREE.Vector3(...estimate.target)).normalize();
+    const alignment=THREE.MathUtils.clamp(reference.dot(current),-1,1);
+    // Keep the real photo dominant near the original calibrated camera direction.
+    // Fade it only as the user leaves the direction that was actually photographed.
+    const confidence=THREE.MathUtils.smoothstep(alignment,.20,.94);
+    for(const evidence of photoStage.children){
+      if(!evidence.userData?.photoEvidenceBackdrop&&!evidence.userData?.photoEvidenceGround)continue;
+      const base=evidence.userData.baseOpacity??1;
+      const k=evidence.userData.photoEvidenceGround?Math.pow(confidence,1.25):confidence;
+      if(evidence.material)evidence.material.opacity=base*k;
+      evidence.visible=k>.018;
+    }
   }
   function syncPhotoFog(){
     const photo=hasVenuePhoto(),immersive=photo&&(cameraMode==='photo360'||cameraMode==='walk');
@@ -342,13 +349,14 @@ export function init(container,callbacks={}) {
   function shadows(t){const radius=Math.max(t.widthFt,t.lengthFt)/2+18;sun.shadow.camera.left=-radius;sun.shadow.camera.right=radius;sun.shadow.camera.top=radius;sun.shadow.camera.bottom=-radius;sun.shadow.camera.far=radius*4+120;sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;}
   function frame(t){
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='photo360'){
-      const site=state.photoSite||t,w=Math.max(20,site.widthFt),l=Math.max(20,site.lengthFt),r=Math.max(w,l);
-      // Eye-level starting height makes the property read like a place you are inside,
-      // rather than a product spinner viewed from above.
-      camera.fov=50;camera.updateProjectionMatrix();
-      camera.position.set(Math.min(w*.30,r*.34),6.15,-Math.min(l*.38,r*.40));
-      controls.target.set(0,3.25,0);
-      controls.minDistance=5.5;controls.maxDistance=Math.max(90,r*1.55);
+      const site=state.photoSite||t,r=Math.max(Math.max(20,site.widthFt),Math.max(20,site.lengthFt));
+      const estimate=photoCameraEstimate(site,state.photoCalibration);
+      // 360 World now begins from the same calibrated camera that matches the
+      // customer's real photo. Orbiting then transitions into the reconstructed
+      // side/rear world instead of immediately replacing the real venue.
+      camera.fov=estimate.fov;camera.updateProjectionMatrix();
+      camera.position.set(...estimate.position);controls.target.set(...estimate.target);
+      controls.minDistance=5.5;controls.maxDistance=Math.max(78,Math.min(r*1.45,camera.position.distanceTo(controls.target)*1.5));
       controls.maxPolarAngle=Math.PI*.49;controls.update();syncPhotoPresentation();updatePhotoStageViewFade();invalidate();return;
     }
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='outside'){
