@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reconstructStereoGrid, stereoReconstructionSummary, stereoObstacleRects } from '../js/core/stereo-reconstruction.js';
+import { reconstructStereoGrid, reconstructMultiViewGrid, stereoReconstructionSummary, stereoObstacleRects } from '../js/core/stereo-reconstruction.js';
 
 function image(width,height,fn){
   const data=new Uint8ClampedArray(width*height*4);
@@ -70,4 +70,38 @@ test('ground-height depth samples are not turned into blocking geometry',()=>{
   const valid=new Uint8Array([1,1,1,1]),confidence=new Float32Array([.9,.9,.9,.9]);
   const rects=stereoObstacleRects({positions,valid,confidence},{siteWidthFt:20,siteLengthFt:20,cameraOffsetZ:-18,cellFt:2});
   assert.deepEqual(rects,[]);
+});
+
+
+function shiftedMultiView(width=112,height=72){
+  const center=image(width,height,(x,y)=>{
+    const v=(x*31+y*47+x*y*5+(x%11)*23+(y%7)*19)%256;
+    return [v,(v*5+17)%256,(v*7+61)%256];
+  });
+  const offsets=[-3,-2,-1,1,2,3],views=offsets.map(offsetFt=>{
+    const disparity=Math.max(1,Math.round(Math.abs(offsetFt)*2));
+    const data=new Uint8ClampedArray(width*height*4);
+    for(let i=3;i<data.length;i+=4)data[i]=255;
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+      const src=(y*width+x)*4,targetX=x+(offsetFt<0?disparity:-disparity);
+      if(targetX<0||targetX>=width)continue;
+      const dst=(y*width+targetX)*4;for(let ch=0;ch<3;ch++)data[dst+ch]=center.data[src+ch];
+    }
+    return {image:{width,height,data},offsetFt};
+  });
+  return {center,views};
+}
+
+test('seven-view fusion increases support and keeps metric depth consistent',()=>{
+  const scene=shiftedMultiView();
+  const result=reconstructMultiViewGrid({...scene,fovDeg:60,horizonY:.35,step:4,maxDisparity:12,minConfidence:.05});
+  assert.equal(result.metrics.viewCount,7);
+  assert.ok(result.metrics.validCount>100,'multi-view scan reconstructs a useful depth field');
+  assert.ok(result.metrics.triangleCount>60,'multi-view depth creates connected surfaces');
+  assert.ok(result.metrics.averageViewsPerPoint>1.4,'most retained points are supported by multiple captured views');
+  assert.ok(result.metrics.multiViewAgreement>.35,'a meaningful share of depth points have cross-view agreement');
+  const summary=stereoReconstructionSummary(result);
+  assert.equal(summary.viewCount,7);
+  assert.ok(summary.averageViewsPerPoint>1);
+  assert.ok(summary.multiViewAgreementPct>0);
 });
