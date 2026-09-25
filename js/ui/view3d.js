@@ -5,6 +5,7 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { makeTable as table, makeStandaloneChair, makeDanceFloor as dance, mergeParts } from './equipment3d.js';
 import { createEnvironment, createPhotoEnvironment, disposeGroup } from './scene-environment.js';
 import { createPhotoWorld360 } from './photo-world360.js';
+import { createVenueScanWorld, disposeVenueScanWorld, hasMetricSpaceScan } from './venue-scan3d.js';
 import { createFirstPersonWalk } from './first-person-walk.js';
 import { createWeather } from './scene-weather.js';
 import { createGuests } from './scene-guests.js';
@@ -114,12 +115,13 @@ export function init(container,callbacks={}) {
   controls.enableDamping=true;controls.dampingFactor=.065;controls.minDistance=8;controls.maxDistance=260;controls.maxPolarAngle=Math.PI*.48;controls.target.set(0,4,0);
   controls.touches.ONE=THREE.TOUCH.ROTATE;controls.touches.TWO=THREE.TOUCH.DOLLY_PAN;
   const raycaster=new THREE.Raycaster(),pointer=new THREE.Vector2(),groundPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0);
-  const furniture=new THREE.Group(),structure=new THREE.Group(),photoStage=new THREE.Group(),photoContinuation=new THREE.Group(),local360=new THREE.Group(),measurementGroup=new THREE.Group();photoStage.name='Photo 360 stage';photoContinuation.name='Smart 360 continuation';local360.name='Local Smart 360 synthesis';photoStage.visible=false;photoContinuation.visible=false;local360.visible=false;measurementGroup.name='3D measurements';scene.add(photoContinuation,local360,photoStage,structure,furniture,measurementGroup);
+  const furniture=new THREE.Group(),structure=new THREE.Group(),photoStage=new THREE.Group(),photoContinuation=new THREE.Group(),local360=new THREE.Group(),scanWorld=new THREE.Group(),measurementGroup=new THREE.Group();photoStage.name='Photo 360 stage';photoContinuation.name='Smart 360 continuation';local360.name='Local Smart 360 synthesis';scanWorld.name='Metric Space Scan';photoStage.visible=false;photoContinuation.visible=false;local360.visible=false;scanWorld.visible=false;measurementGroup.name='3D measurements';scene.add(photoContinuation,local360,scanWorld,photoStage,structure,furniture,measurementGroup);
   const rendered=new Map(),pointers=new Set();let state=null,night=false,raf=0,drag=null,danceMesh=null,environment=null,lightGroup=null;
   let inflatableActivity=null,styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',local360Key='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
+  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',local360Key='',scanWorldKey='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
+  let scanWorldSeq=0,scanWorldAbort=null;
   const photoCanvas=document.createElement('canvas'),photoCtx=photoCanvas.getContext('2d',{alpha:false}),photoTexture=new THREE.CanvasTexture(photoCanvas);
   photoTexture.colorSpace=THREE.SRGBColorSpace;photoTexture.minFilter=THREE.LinearFilter;photoTexture.magFilter=THREE.LinearFilter;
   let photoImage=null,photoUrl='',photoLoadSeq=0;
@@ -238,6 +240,35 @@ export function init(container,callbacks={}) {
     });
     local360.clear();geometries.forEach(g=>g.dispose());materials.forEach(m=>m.dispose());textures.forEach(t=>t.dispose());local360Key='';
   }
+  function clearScanWorld(){
+    if(scanWorldAbort){scanWorldAbort.abort();scanWorldAbort=null;}
+    disposeVenueScanWorld(scanWorld);scanWorldKey='';scanWorld.userData={ready:false};
+  }
+  function hasReadyMetricScan(){
+    return !!(hasMetricSpaceScan(state?.venueScan)&&scanWorld.userData?.ready);
+  }
+  function rebuildVenueScanWorld(){
+    if(!state?.photoSite||!hasMetricSpaceScan(state?.venueScan)){clearScanWorld();syncPhotoPresentation();return false;}
+    const key=JSON.stringify([state.venueScan,state.photoSite.widthFt,state.photoSite.lengthFt,state.photoCalibration]);
+    if(key===scanWorldKey&&(scanWorld.children.length||scanWorld.userData?.loading))return true;
+    clearScanWorld();scanWorldKey=key;
+    const seq=++scanWorldSeq,controller=new AbortController();scanWorldAbort=controller;
+    scanWorld.userData={ready:false,loading:true};
+    createVenueScanWorld({scan:state.venueScan,site:state.photoSite,calibration:state.photoCalibration,mobile,signal:controller.signal}).then(world=>{
+      if(destroyed||controller.signal.aborted||seq!==scanWorldSeq)return;
+      disposeVenueScanWorld(scanWorld);scanWorld.add(world);
+      scanWorld.userData={...world.userData,loading:false};
+      scanWorld.userData.setNight?.(night);
+      callbacks.onScanReconstruction?.(scanWorld.userData);
+      syncPhotoPresentation();invalidate();
+    }).catch(err=>{
+      if(err?.name==='AbortError')return;
+      console.warn('[RentSketch] Space Scan reconstruction failed',err);
+      scanWorld.userData={ready:false,loading:false,error:String(err?.message||err)};
+      callbacks.onScanReconstruction?.(scanWorld.userData);syncPhotoPresentation();invalidate();
+    });
+    return true;
+  }
   function rgbCss(c){return 'rgb('+Math.round(c[0])+','+Math.round(c[1])+','+Math.round(c[2])+')';}
   function mixRgb(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
   function sampleLocal360Style(){
@@ -325,8 +356,11 @@ export function init(container,callbacks={}) {
     return !!world.userData?.ready;
   }
   function syncPhotoPresentation(){
-    const photo=hasVenuePhoto(),immersive=photo&&(cameraMode==='photo360'||cameraMode==='walk'),matched=photo&&cameraMode==='outside',walking=walk.isActive();
-    photoStage.visible=immersive;photoContinuation.visible=false;local360.visible=immersive;
+    const photo=hasVenuePhoto(),immersive=photo&&(cameraMode==='photo360'||cameraMode==='walk'),matched=photo&&cameraMode==='outside',walking=walk.isActive(),metric=immersive&&hasReadyMetricScan();
+    // A completed Space Scan replaces the flat photo planes in immersive mode.
+    // The single photo remains available for Matched View and as a fallback while
+    // reconstruction is still loading.
+    photoStage.visible=immersive&&!metric;photoContinuation.visible=false;local360.visible=immersive;scanWorld.visible=metric;
     // Matched View is an exact camera registration. Walk Mode owns the camera directly.
     controls.enabled=!matched&&!walking;
     controls.enablePan=!matched&&!walking;
@@ -360,10 +394,10 @@ export function init(container,callbacks={}) {
   }
   function loadVenuePhoto(photo){
     const url=photo&&/^https?:\/\//i.test(photo.url||'')?photo.url:'';
-    if(!url){photoUrl='';photoImage=null;clearPhotoStage();clearLocal360();return;}
+    if(!url){photoUrl='';photoImage=null;clearPhotoStage();clearLocal360();clearScanWorld();return;}
     if(url===photoUrl&&photoImage){paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();syncPhotoPresentation();return;}
     photoUrl=url;photoImage=null;const seq=++photoLoadSeq,img=new Image();img.crossOrigin='anonymous';img.decoding='async';
-    img.onload=function(){if(destroyed||seq!==photoLoadSeq||url!==photoUrl)return;photoImage=img;paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();syncPhotoPresentation();invalidate();};
+    img.onload=function(){if(destroyed||seq!==photoLoadSeq||url!==photoUrl)return;photoImage=img;paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();rebuildVenueScanWorld();syncPhotoPresentation();invalidate();};
     img.onerror=function(){if(seq!==photoLoadSeq)return;console.warn('[RentSketch] venue background could not load');};
     img.src=url;
   }
@@ -377,6 +411,13 @@ export function init(container,callbacks={}) {
   function frame(t){
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='photo360'){
       const site=state.photoSite||t,r=Math.max(Math.max(20,site.widthFt),Math.max(20,site.lengthFt));
+      if(hasReadyMetricScan()){
+        const origin=scanWorld.userData.cameraOrigin||{x:0,y:5.6,z:-site.lengthFt/2-8};
+        camera.fov=Number(state.venueScan?.fovDeg)||62;camera.updateProjectionMatrix();
+        camera.position.set(origin.x,origin.y,origin.z);controls.target.set(0,Math.min(5,origin.y*.62),Math.min(site.lengthFt*.08,7));
+        controls.minDistance=4;controls.maxDistance=Math.max(72,r*1.28);controls.maxPolarAngle=Math.PI*.49;
+        controls.update();syncPhotoPresentation();invalidate();return;
+      }
       const view=immersivePhotoCamera(site,state.photoCalibration);
       // Open 360 World in the photographed direction at human eye height.
       // The real venue remains dominant here, then fades into reconstructed
@@ -412,7 +453,7 @@ export function init(container,callbacks={}) {
         rotationDeg:pp&&Number.isFinite(Number(pp.rotationDeg))?Number(pp.rotationDeg):(Number(o.rotationDeg||0)+Number(photoTent.rotationDeg||0))
       };
     }):state.objects;
-    loadVenuePhoto(state.backgroundPhoto);if(photoMode&&photoImage){rebuildPhotoStage();rebuildLocal360();}
+    loadVenuePhoto(state.backgroundPhoto);if(photoMode&&photoImage){rebuildPhotoStage();rebuildLocal360();rebuildVenueScanWorld();}else if(!photoMode)clearScanWorld();
     const nextContinuationKey=photoMode?JSON.stringify([state.photoSite?.widthFt,state.photoSite?.lengthFt,state.surfaceType]):'';
     if(nextContinuationKey!==photoContinuationKey){
       // The old generic RentSketch backyard conflicted visually with the customer's
