@@ -443,7 +443,8 @@ function mount3D(){
         window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());
         if(info?.ready){
           if(view3dMod?.orbit360?.())setPhoto3dModeUi('360');
-          showLayoutNotice('3D Scan built from real parallax · '+(info.metrics?.coveragePct||0)+'% depth coverage · '+(info.metrics?.triangles||0)+' connected surface triangles.',5600);
+          var m=info.metrics||{},views=m.viewCount||info.sourceFrames?.length||3,agreement=m.multiReferenceAgreementPct??m.multiViewAgreementPct;
+          showLayoutNotice('3D Scan built from '+views+' real views · '+(m.coveragePct||0)+'% depth coverage'+(agreement!=null?' · '+agreement+'% cross-view agreement':'')+' · '+(m.triangles||0)+' connected surface triangles.',6500);
         }else if(info?.loading){
           setPhoto3dModeUi('matched');
         }else if(info){
@@ -487,7 +488,8 @@ function setPhoto3dModeUi(mode){
   if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk Scan';}
   if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto){
     var runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;
-    $('canvasHint').textContent=isWalk?'Walk Scan · measured Space Scan · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?'3D Scan · real multi-view depth · orbit limited to the captured area':runtime?.loading?'Building metric depth from the scan…':scanReady?'Matched View · choose 3D Scan for measured depth':'Photo Match · one image is not treated as 360 · record a Space Scan for real 3D depth';
+    var views=runtime?.metrics?.viewCount||runtime?.sourceFrames?.length||3,agreement=runtime?.metrics?.multiReferenceAgreementPct??runtime?.metrics?.multiViewAgreementPct;
+    $('canvasHint').textContent=isWalk?'Walk Scan · measured Space Scan · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?('3D Scan · '+views+' real views'+(agreement!=null?' · '+agreement+'% spatial agreement':'')+' · orbit limited to captured geometry'):runtime?.loading?'Building metric depth from the scan…':scanReady?'Matched View · choose 3D Scan for measured depth':'Photo Match · one image is not treated as 360 · record a Space Scan for real 3D depth';
   }
 }
 function renderViews(conflicts){
