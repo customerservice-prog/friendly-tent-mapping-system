@@ -207,6 +207,8 @@ const web=http.createServer((req,res)=>{
     assert.ok(savedScene.photoTentPlacement,'tent photo placement persists');
     assert.ok(savedScene.photoCalibration,'calibration persists');
     assert.ok(savedScene.photoGeometry?.some(g=>g.type==='house'),'traced geometry persists');
+    assert.equal(savedScene.venueScan?.status,'ready','three-view Space Scan persists with the design');
+    assert.equal(savedScene.venueScan?.frames?.length,3,'all metric scan viewpoints persist');
 
     await page.locator('#viewMode3d').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
     assert.equal(await page.locator('#viewMode3d').getAttribute('aria-selected'),'true');
@@ -225,7 +227,7 @@ const web=http.createServer((req,res)=>{
     assert.equal(await page.locator('#propertyFitPanel').isHidden(),false,'fit reasoning panel opens');
     assert.match(await page.locator('#propertyFitPanel').innerText(),/Planning check only/);
     assert.match(await page.locator('#view3dOrbit360').innerText(),/360 World/);
-    assert.match(await page.locator('#canvasHint').innerText(),/360 World/);assert.match(await page.locator('#canvasHint').innerText(),/solid local venue reconstruction/);
+    assert.match(await page.locator('#canvasHint').innerText(),/Space Scan 3D/);assert.match(await page.locator('#canvasHint').innerText(),/multi-view depth mesh/);
     await page.locator('#view3dMatchPhoto').click();
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
     await page.locator('#view3dOrbit360').click();
@@ -260,7 +262,7 @@ const web=http.createServer((req,res)=>{
     await page.screenshot({path:path.join(out,'generic-admin-photo-applied.png'),fullPage:true});
     assert.deepEqual(errors,[],'no browser page errors during Photo Match');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement,tentPlacement,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));
-    console.log('PASS Photo Spatial Chromium: property-fit planning, exact 3D Measurement Mode, 360 World and first-person Walk Mode all work in the real browser flow.');
+    console.log('PASS Photo Spatial Chromium: one-photo matched safety plus metric multi-view Space Scan, Measure and Walk work in the real browser flow.');
     await context.close();
   }finally{await browser.close();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}
 })().catch(e=>{console.error(e);web.close();api.close();process.exitCode=1;});
