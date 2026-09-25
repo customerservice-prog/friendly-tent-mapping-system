@@ -136,3 +136,40 @@ test('multi-reference fusion combines spatial support from several reference cam
   assert.ok(fused.metrics.multiReferenceAgreement>0,'fusion reports cross-reference spatial agreement');
   assert.ok(fused.metrics.averageConfidence>0);
 });
+
+
+function handheldMultiView(width=112,height=72){
+  const center=image(width,height,(x,y)=>{
+    const v=(x*29+y*43+x*y*7+(x%9)*31+(y%6)*13)%256;
+    return [v,(v*3+53)%256,(v*7+97)%256];
+  });
+  const offsets=[-3,-2,-1,1,2,3],views=offsets.map(offsetFt=>{
+    const disparity=Math.max(1,Math.round(Math.abs(offsetFt)*2)),vertical=Math.round(offsetFt*1.45);
+    const data=new Uint8ClampedArray(width*height*4);for(let i=3;i<data.length;i+=4)data[i]=255;
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+      const src=(y*width+x)*4,targetX=x+(offsetFt<0?disparity:-disparity);
+      const roll=Math.round(1.4*((x-(width-1)/2)/Math.max(1,(width-1)/2)));
+      const targetY=y+vertical+roll;
+      if(targetX<0||targetX>=width||targetY<0||targetY>=height)continue;
+      const dst=(targetY*width+targetX)*4;for(let ch=0;ch<3;ch++)data[dst+ch]=center.data[src+ch];
+    }
+    return {image:{width,height,data},offsetFt};
+  });
+  return {center,views};
+}
+
+test('handheld vertical bob and small roll are rectified before depth fusion',()=>{
+  const scene=handheldMultiView();
+  const result=reconstructMultiViewGrid({
+    ...scene,fovDeg:60,horizonY:.35,step:4,maxDisparity:12,
+    verticalSearch:1,minConfidence:.045
+  });
+  assert.ok(result.metrics.validCount>70,'rectification recovers depth despite vertical handheld drift');
+  assert.ok(result.metrics.triangleCount>35,'rectified matches still build connected geometry');
+  assert.ok(result.metrics.maxVerticalDriftPx>=2,'scan reports the handheld vertical correction it applied');
+  assert.ok(result.metrics.maxRollSlopePx>.2,'scan detects non-zero roll drift across the frame');
+  assert.ok(result.metrics.averageAlignmentQuality>0,'scan reports alignment confidence');
+  const summary=stereoReconstructionSummary(result);
+  assert.ok(summary.verticalDriftPx>=2);
+  assert.ok(summary.alignmentQualityPct>0);
+});
