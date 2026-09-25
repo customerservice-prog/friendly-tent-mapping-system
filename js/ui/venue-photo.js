@@ -54,7 +54,7 @@ export function venueScanPanel(value){
     '<div class="venue-scan-frame-grid">'+roles.map(([role,num,label])=>{const frame=scanFrame(scan,role);return '<label class="venue-scan-frame'+(frame?' has-photo':'')+'">'+
       (frame?'<img src="'+esc(frame.url)+'" alt="'+esc(label)+' scan frame">':'<span class="venue-scan-step">'+num+'</span>')+
       '<strong>'+label+'</strong><span>'+(frame?'Captured':'Choose photo')+'</span>'+
-      '<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-role="venue-scan-file" data-scan-role="'+role+'">'+
+      '<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-role="venue-scan-file" data-scan-role="'+role+'">'+
     '</label>';}).join('')+'</div>'+
     '<label class="venue-scan-baseline"><span>Distance from left photo to right photo</span><div><input type="number" min="2" max="20" step=".5" value="'+scan.baselineFt+'" data-role="venue-scan-baseline"><strong>ft</strong></div><small>For best results, move about 6 ft total. This known distance gives the reconstruction a real-world scale.</small></label>'+
     (ready?'<div class="venue-scan-ready"><strong>3D depth scan ready</strong><span>Open 3D View to use the reconstructed metric venue.</span></div>':'<p class="equipment-note">Capture all three positions to unlock the metric 3D reconstruction.</p>')+
