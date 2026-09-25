@@ -3,6 +3,16 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'qa-photo-match');fs.mkdirSync(out,{recursive:true});
 const waitServer=server=>new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const tinyJpeg=Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=','base64');
+function scanSvg(n){
+  const shift=n===4?7:n===6?-7:0;
+  let marks='';
+  for(let i=0;i<460;i++){
+    const x=(i*37+i*i*3)%192,y=(i*53+i*i*5)%128,w=2+(i%5),h=2+((i*3)%5);
+    const r=(i*71)%256,g=(i*43+80)%256,b=(i*97+30)%256;
+    marks+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="rgb('+r+','+g+','+b+')"/>';
+  }
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="192" height="128" viewBox="0 0 192 128"><rect width="192" height="128" fill="#9fc8e0"/><g transform="translate('+shift+' 0)"><rect y="54" width="192" height="74" fill="#658451"/><rect x="48" y="43" width="96" height="39" fill="#8297a2"/><path d="M43 44 L96 21 L149 44" fill="#3e4852"/><path d="M0 86 H192" stroke="#d8d8cc" stroke-width="3"/>'+marks+'</g></svg>';
+}
 let webOrigin='',apiOrigin='',uploads=[],savedPatches=[];
 const api=http.createServer((req,res)=>{
   const u=new URL(req.url,'http://api.local');
@@ -22,7 +32,12 @@ const api=http.createServer((req,res)=>{
       json(201,{id:'photo-browser-fixture-'+n,path:'/api/consumer/background-photo/photo-browser-fixture-'+n+'?t=capability',mimeType:'image/jpeg',byteSize:body.length});
     });return;
   }
-  if(/^\/api\/consumer\/background-photo\/photo-browser-fixture-\d+$/.test(u.pathname)&&req.method==='GET'){res.statusCode=200;res.setHeader('Content-Type','image/jpeg');res.end(tinyJpeg);return;}
+  if(/^\/api\/consumer\/background-photo\/photo-browser-fixture-\d+$/.test(u.pathname)&&req.method==='GET'){
+    const n=Number(u.pathname.match(/(\d+)$/)?.[1]||0);res.statusCode=200;
+    if(n>=4&&n<=6){res.setHeader('Content-Type','image/svg+xml');res.end(scanSvg(n));}
+    else{res.setHeader('Content-Type','image/jpeg');res.end(tinyJpeg);}
+    return;
+  }
   if(u.pathname==='/api/consumer/event-pass/preview'){req.resume();return json(200,{limited:false});}
   json(404,{error:'Unexpected QA API '+req.method+' '+u.pathname});
 });
