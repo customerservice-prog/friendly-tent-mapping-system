@@ -300,6 +300,7 @@ export function init(container,callbacks={}) {
     controls.enablePan=!matched&&!walking;
     controls.enableZoom=!matched&&!walking;
     controls.enableRotate=!matched&&!walking&&!state?.placement;
+    environment?.userData.setImmersive?.(immersive);
     syncPhotoFog();
     if(immersive){
       if(scene.background===photoTexture)scene.background=null;
