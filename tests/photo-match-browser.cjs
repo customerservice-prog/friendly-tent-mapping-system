@@ -3,6 +3,16 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'qa-photo-match');fs.mkdirSync(out,{recursive:true});
 const waitServer=server=>new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const tinyJpeg=Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=','base64');
+function scanSvg(n){
+  const shift=n===4?7:n===6?-7:0;
+  let marks='';
+  for(let i=0;i<460;i++){
+    const x=(i*37+i*i*3)%192,y=(i*53+i*i*5)%128,w=2+(i%5),h=2+((i*3)%5);
+    const r=(i*71)%256,g=(i*43+80)%256,b=(i*97+30)%256;
+    marks+='<rect x="'+x+'" y="'+y+'" width="'+w+'" height="'+h+'" fill="rgb('+r+','+g+','+b+')"/>';
+  }
+  return '<svg xmlns="http://www.w3.org/2000/svg" width="192" height="128" viewBox="0 0 192 128"><rect width="192" height="128" fill="#9fc8e0"/><g transform="translate('+shift+' 0)"><rect y="54" width="192" height="74" fill="#658451"/><rect x="48" y="43" width="96" height="39" fill="#8297a2"/><path d="M43 44 L96 21 L149 44" fill="#3e4852"/><path d="M0 86 H192" stroke="#d8d8cc" stroke-width="3"/>'+marks+'</g></svg>';
+}
 let webOrigin='',apiOrigin='',uploads=[],savedPatches=[];
 const api=http.createServer((req,res)=>{
   const u=new URL(req.url,'http://api.local');
@@ -22,7 +32,12 @@ const api=http.createServer((req,res)=>{
       json(201,{id:'photo-browser-fixture-'+n,path:'/api/consumer/background-photo/photo-browser-fixture-'+n+'?t=capability',mimeType:'image/jpeg',byteSize:body.length});
     });return;
   }
-  if(/^\/api\/consumer\/background-photo\/photo-browser-fixture-\d+$/.test(u.pathname)&&req.method==='GET'){res.statusCode=200;res.setHeader('Content-Type','image/jpeg');res.end(tinyJpeg);return;}
+  if(/^\/api\/consumer\/background-photo\/photo-browser-fixture-\d+$/.test(u.pathname)&&req.method==='GET'){
+    const n=Number(u.pathname.match(/(\d+)$/)?.[1]||0);res.statusCode=200;
+    if(n>=4&&n<=6){res.setHeader('Content-Type','image/svg+xml');res.end(scanSvg(n));}
+    else{res.setHeader('Content-Type','image/jpeg');res.end(tinyJpeg);}
+    return;
+  }
   if(u.pathname==='/api/consumer/event-pass/preview'){req.resume();return json(200,{limited:false});}
   json(404,{error:'Unexpected QA API '+req.method+' '+u.pathname});
 });
@@ -117,6 +132,36 @@ const web=http.createServer((req,res)=>{
     assert.equal(uploads[2].contentType,'image/jpeg');
     assert.match(await page.locator('[data-role="venue-photo-status"]').innerText(),/Applied/);
 
+    // A single photo is no longer pretended to be a true 360 reconstruction.
+    await page.locator('#viewMode3d').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
+    await page.locator('#view3dMatchPhoto').waitFor({state:'visible'});
+    assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','one photo opens as camera-matched 2.5D instead of fake 360');
+    assert.equal(await page.locator('#view3dOrbit360').isHidden(),true,'360 controls stay locked until a multi-view scan exists');
+    assert.equal(await page.locator('#view3dWalk').isHidden(),true,'Walk is not offered for one flat photo');
+    assert.match(await page.locator('#canvasHint').innerText(),/Space Scan/);
+
+    // Build an actual metric scan from left / center / right viewpoints.
+    await page.locator('[data-drawer="site"]').click();
+    const scanPayload=Buffer.from([0xff,0xd8,0xff,0xe0,1,2,3,4,5,6,7,8]);
+    for(const role of ['left','center','right']){
+      const scanInput=page.locator('[data-role="venue-scan-file"][data-scan-role="'+role+'"]');await scanInput.waitFor();
+      await scanInput.setInputFiles({name:'scan-'+role+'.jpg',mimeType:'image/jpeg',buffer:scanPayload});
+      await page.waitForFunction(r=>window.FriendlyBridge.getScene().venueScan?.frames?.some(f=>f.role===r),role,{timeout:10000});
+    }
+    await page.waitForFunction(()=>window.FriendlyBridge.getScene().venueScan?.status==='ready',{timeout:10000});
+    assert.equal(uploads.length,6,'three Space Scan viewpoints add exactly three uploads');
+    const scanScene=await page.evaluate(()=>window.FriendlyBridge.getScene());
+    assert.equal(scanScene.venueScan.frames.length,3);
+    assert.equal(scanScene.backgroundPhoto.id,'photo-browser-fixture-5','center scan capture becomes the trusted matched photo');
+    await page.waitForFunction(()=>window.RENTSKETCH_SCAN_RECONSTRUCTION?.ready===true,{timeout:20000});
+    const scanRuntime=await page.evaluate(()=>window.RENTSKETCH_SCAN_RECONSTRUCTION);
+    assert.equal(scanRuntime.metric,true,'Space Scan produces metric reconstruction metadata');
+    assert.ok(scanRuntime.metrics.triangles>0,'Space Scan produces connected 3D surface triangles');
+    assert.ok(scanRuntime.metrics.coveragePct>0,'Space Scan reports real depth coverage');
+    if(!(await page.locator('#drawer').isHidden()))await page.locator('#drawerClose').click();
+
+    // Return to the center photo workspace after the scan auto-opens metric 3D.
+    await page.locator('#viewModePhoto').click();
     // Photo View becomes the actual placement workspace.
     await page.locator('#viewModePhoto').waitFor({state:'visible'});
     assert.equal(await page.locator('#viewModePhoto').getAttribute('aria-selected'),'true','upload opens Photo View');
@@ -124,6 +169,9 @@ const web=http.createServer((req,res)=>{
     await page.locator('.photo-workspace').waitFor();
     assert.equal(await page.locator('[data-photo-item="__photo_tent__"]').count(),1,'tent is independently draggable on the photo');
     assert.equal(await page.locator('[data-photo-item="qa-photo-table"]').count(),1,'rental is rendered over the real photo');
+    // The successful reconstruction notice can overlap the SVG briefly; dismiss
+    // it so this remains a test of the Photo View drag target, not z-index timing.
+    await page.evaluate(()=>document.getElementById('layoutNotice')?.remove());
 
     // Drag the table somewhere else on the venue.
     const tableBox=await page.locator('[data-photo-item="qa-photo-table"]').boundingBox();assert.ok(tableBox);
@@ -164,6 +212,8 @@ const web=http.createServer((req,res)=>{
     assert.ok(savedScene.photoTentPlacement,'tent photo placement persists');
     assert.ok(savedScene.photoCalibration,'calibration persists');
     assert.ok(savedScene.photoGeometry?.some(g=>g.type==='house'),'traced geometry persists');
+    assert.equal(savedScene.venueScan?.status,'ready','three-view Space Scan persists with the design');
+    assert.equal(savedScene.venueScan?.frames?.length,3,'all metric scan viewpoints persist');
 
     await page.locator('#viewMode3d').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
     assert.equal(await page.locator('#viewMode3d').getAttribute('aria-selected'),'true');
@@ -182,7 +232,7 @@ const web=http.createServer((req,res)=>{
     assert.equal(await page.locator('#propertyFitPanel').isHidden(),false,'fit reasoning panel opens');
     assert.match(await page.locator('#propertyFitPanel').innerText(),/Planning check only/);
     assert.match(await page.locator('#view3dOrbit360').innerText(),/360 World/);
-    assert.match(await page.locator('#canvasHint').innerText(),/360 World/);assert.match(await page.locator('#canvasHint').innerText(),/solid local venue reconstruction/);
+    assert.match(await page.locator('#canvasHint').innerText(),/Space Scan 3D/);assert.match(await page.locator('#canvasHint').innerText(),/multi-view depth mesh/);
     await page.locator('#view3dMatchPhoto').click();
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
     await page.locator('#view3dOrbit360').click();
@@ -217,7 +267,7 @@ const web=http.createServer((req,res)=>{
     await page.screenshot({path:path.join(out,'generic-admin-photo-applied.png'),fullPage:true});
     assert.deepEqual(errors,[],'no browser page errors during Photo Match');
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement,tentPlacement,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));
-    console.log('PASS Photo Spatial Chromium: property-fit planning, exact 3D Measurement Mode, 360 World and first-person Walk Mode all work in the real browser flow.');
+    console.log('PASS Photo Spatial Chromium: one-photo matched safety plus metric multi-view Space Scan, Measure and Walk work in the real browser flow.');
     await context.close();
   }finally{await browser.close();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}
 })().catch(e=>{console.error(e);web.close();api.close();process.exitCode=1;});

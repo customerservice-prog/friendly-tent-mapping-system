@@ -88,7 +88,7 @@ async function storePhoto(req, res, tenant, design, pathPrefix) {
   await db.query(
     `DELETE FROM design_background_photos
       WHERE design_id=$1 AND id NOT IN (
-        SELECT id FROM design_background_photos WHERE design_id=$1 ORDER BY created_at DESC LIMIT 5
+        SELECT id FROM design_background_photos WHERE design_id=$1 ORDER BY created_at DESC LIMIT 16
       )`,
     [design.id]
   );

@@ -1,7 +1,7 @@
 import {mountReviewPricing,currentReviewPricing,reviewDeliveryZip,restoreReviewDeliveryZip} from './js/ui/review-pricing.js';
 import './js/ui/designer-help.js';
 import { sitePanel } from './js/ui/site-controls.js';
-import { normalizeVenuePhoto, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
+import { normalizeVenuePhoto, normalizeVenueScan, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
 import { defaultPhotoCalibration, normalizePhotoCalibration, normalizePhotoGeometry } from './js/core/photo-geometry.js';
 import { evaluatePropertyScene, summarizePropertyFit } from './js/core/property-planning.js';
 import { TABLETOP } from './js/data/tabletop.js';
@@ -42,7 +42,7 @@ function allowLayoutMutation(action,next,current){
 var restoringScene=false;
 var NL = String.fromCharCode(10);
 TENTS.forEach(function (t) { t.centerPoles=computeCenterPoles(t.type,t.widthFt,t.lengthFt);t.installationClearanceFt=installationClearanceFt(t.type); });
-var state={siteWidthFt:50,siteLengthFt:60,primaryInflatableId:null,eventType:'wedding',guestCount:50,spaceType:'backyard',surfaceType:'notSure',needDance:false,danceFloorSizeId:'18x18',customDanceFloorFt:null,matchedPackageId:null,tentId:'pole-20x40',chairId:'plastic-white',lightingId:'lighting-none',sidewalls:[],backgroundPhoto:null,photoCalibration:null,photoGeometry:[],photoTentPlacement:null,selectedPhotoId:null,venuePhotoStatus:{text:'',kind:''},selectedId:null,viewMode:'plan',activeDrawer:null,lastTableConfig:null,eventCheckOpen:false,estimateOpen:false,inspectorCollapsed:true};
+var state={siteWidthFt:50,siteLengthFt:60,primaryInflatableId:null,eventType:'wedding',guestCount:50,spaceType:'backyard',surfaceType:'notSure',needDance:false,danceFloorSizeId:'18x18',customDanceFloorFt:null,matchedPackageId:null,tentId:'pole-20x40',chairId:'plastic-white',lightingId:'lighting-none',sidewalls:[],backgroundPhoto:null,venueScan:null,photoCalibration:null,photoGeometry:[],photoTentPlacement:null,selectedPhotoId:null,venuePhotoStatus:{text:'',kind:''},selectedId:null,viewMode:'plan',activeDrawer:null,lastTableConfig:null,eventCheckOpen:false,estimateOpen:false,inspectorCollapsed:true};
 var nextItemNum=1,tryTheseDismissed=false;function newItemId(){var id;do{id='item-'+(nextItemNum++);}while(store&&store.getState().objects.some(function(o){return o.id===id;}));return id;}var store=createLayoutStore({tentId:state.tentId,objects:[],zones:[],aisles:[]},{canMutate:allowLayoutMutation}),tableDraft=null;function byId(arr,id){return arr.find(function(a){return a.id===id;});}function $(id){return document.getElementById(id);}function showStep(id){document.querySelectorAll('.step').forEach(function(el){el.classList.remove('active');});$(id).classList.add('active');}function money(n){return'$'+n.toFixed(2);}function moneyOrAsk(n){return(n===null||n===undefined)?'Ask for pricing':money(n);}function danceFloorSizeFt(){if(state.danceFloorSizeId==='custom')return state.customDanceFloorFt||18;var sz=byId(DANCE_FLOOR_SIZES,state.danceFloorSizeId);return sz?sz.ft:18;}function recommendDanceFloorFt(){var g=state.guestCount;if(g<=30)return 12;if(g<=60)return 15;if(g<=100)return 18;if(g<=150)return 21;return 24;}function validateLighting(){if(!byId(LIGHTING_OPTIONS,state.lightingId))state.lightingId='lighting-none';}
 
 function layoutSpace(){
@@ -112,9 +112,10 @@ function loadScene(scene,options){
   }
   if(!scene||typeof scene!=='object'||!Array.isArray(scene.objects)||(!scene.objects.length&&!Object.prototype.hasOwnProperty.call(scene,'tentId')))return false;
   if(pendingPlacement)cancelPlacement();
-  ['eventName','siteWidthFt','siteLengthFt','primaryInflatableId','eventType','guestCount','spaceType','surfaceType','needDance','danceFloorSizeId','customDanceFloorFt','matchedPackageId','tentId','chairId','lightingId','sidewalls','backgroundPhoto','photoCalibration','photoGeometry','photoTentPlacement','lastTableConfig'].forEach(function(k){if(scene[k]!==undefined&&scene[k]!==null)state[k]=scene[k];});
-  ['tentId','primaryInflatableId','customDanceFloorFt','matchedPackageId','sidewalls','backgroundPhoto','photoCalibration','photoGeometry','photoTentPlacement','lastTableConfig'].forEach(function(k){if(Object.prototype.hasOwnProperty.call(scene,k))state[k]=scene[k];});
+  ['eventName','siteWidthFt','siteLengthFt','primaryInflatableId','eventType','guestCount','spaceType','surfaceType','needDance','danceFloorSizeId','customDanceFloorFt','matchedPackageId','tentId','chairId','lightingId','sidewalls','backgroundPhoto','venueScan','photoCalibration','photoGeometry','photoTentPlacement','lastTableConfig'].forEach(function(k){if(scene[k]!==undefined&&scene[k]!==null)state[k]=scene[k];});
+  ['tentId','primaryInflatableId','customDanceFloorFt','matchedPackageId','sidewalls','backgroundPhoto','venueScan','photoCalibration','photoGeometry','photoTentPlacement','lastTableConfig'].forEach(function(k){if(Object.prototype.hasOwnProperty.call(scene,k))state[k]=scene[k];});
   state.backgroundPhoto=normalizeVenuePhoto(state.backgroundPhoto,window.RENTSKETCH_API_URL);
+  state.venueScan=normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
   var restoreTent=byId(TENTS,state.tentId),photoSiteForRestore={id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(Number(state.siteWidthFt)||50,(restoreTent?.widthFt||0)+20,50),lengthFt:Math.max(Number(state.siteLengthFt)||60,(restoreTent?.lengthFt||0)+20,60)};
   state.photoCalibration=state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSiteForRestore):null;
   state.photoGeometry=state.backgroundPhoto?normalizePhotoGeometry(state.photoGeometry,photoSiteForRestore):[];
@@ -150,7 +151,7 @@ async function chooseVenuePhoto(file,input){
     return false;
   }
   if(input)input.disabled=true;
-  var previous=state.backgroundPhoto;
+  var previous=state.backgroundPhoto,previousScan=currentVenueScan();
   var label=(file.name||'photo').slice(0,120);
   try{
     setVenuePhotoStatus('Selected '+label+' · applying to your 3D background…','working');
@@ -159,7 +160,7 @@ async function chooseVenuePhoto(file,input){
     if(!designId)throw new Error('This layout could not be saved before the photo upload.');
     setVenuePhotoStatus('Uploading '+label+'…','working');
     var photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
-    state.backgroundPhoto=photo;
+    state.backgroundPhoto=photo;state.venueScan=null;
     var snapAfterPhoto=buildSnapshot(getConflicts());
     state.photoCalibration=defaultPhotoCalibration(snapAfterPhoto.photoSite);state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
     state.venuePhotoStatus={text:'Applied · Photo View is ready. Drag rentals directly on your real venue.',kind:'success'};
@@ -168,6 +169,7 @@ async function chooseVenuePhoto(file,input){
     var photoSaved=false;
     try{await window.RentSketchAutosave?.flush?.();photoSaved=true;}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
     if(photoSaved&&previous?.id&&previous.id!==photo.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
+    if(photoSaved)previousScan.frames.filter(f=>f.id&&f.id!==photo.id&&f.id!==previous?.id).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
     showLayoutNotice('Photo applied. Your real venue is now showing in 3D.',6500);
     return true;
   }catch(err){
@@ -178,14 +180,80 @@ async function chooseVenuePhoto(file,input){
     return false;
   }finally{if(input&&input.isConnected)input.disabled=false;}
 }
+function currentVenueScan(){
+  return normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
+}
+function metricScanReady(){var scan=currentVenueScan(),runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;return scan.status==='ready'&&!(runtime&&runtime.ready===false&&runtime.loading===false);}
+async function chooseVenueScanPhoto(role,file,input){
+  if(!file||!['left','center','right'].includes(role))return false;
+  if(!requireEventEditing())return false;
+  if(input)input.disabled=true;
+  const before=currentVenueScan(),previous=before.frames.find(f=>f.role===role)||null;
+  try{
+    showLayoutNotice('Uploading '+role+' Space Scan photo…',4200);
+    const designId=await ensureVenuePhotoDesign();
+    if(!designId)throw new Error('This layout could not be saved before the scan photo upload.');
+    const photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
+    const frames=before.frames.filter(f=>f.role!==role).concat([{...photo,role}]);
+    state.venueScan=normalizeVenueScan({...before,frames},window.RENTSKETCH_API_URL);
+    if(role==='center'){
+      state.backgroundPhoto={...photo};
+      // A new center viewpoint changes the Photo Match camera itself. Recreate
+      // the Photo View workspace instead of carrying stale pointer/selection
+      // state from the previous single-photo image.
+      if(photoMounted){photoViewMod.unmount();photoMounted=false;}
+      const snap=buildSnapshot(getConflicts());
+      state.photoCalibration=defaultPhotoCalibration(snap.photoSite);
+      state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
+    }
+    renderDrawerBody('site');renderViews(getConflicts());
+    window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
+    let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(err){console.warn('[RentSketch] Space Scan save will retry',err);}
+    if(saved&&previous?.id&&previous.id!==photo.id&&previous.id!==state.backgroundPhoto?.id){
+      deleteVenuePhoto(previous,venuePhotoContext(designId));
+    }
+    if(state.venueScan.status==='ready'){
+      showLayoutNotice('Space Scan ready. RentSketch can now build depth from three real viewpoints.',6500);
+      setViewMode('3d');
+    }else{
+      const captured=state.venueScan.frames.length;
+      showLayoutNotice('Space Scan: '+captured+' of 3 viewpoints captured.',4200);
+    }
+    return true;
+  }catch(err){
+    console.error('[RentSketch] Space Scan photo failed',err);
+    showLayoutNotice('Could not add Space Scan photo: '+(err?.message||'Upload failed.'),7000);
+    return false;
+  }finally{if(input&&input.isConnected)input.disabled=false;}
+}
+function updateVenueScanBaseline(value){
+  const n=Number(value);if(!Number.isFinite(n))return false;
+  const scan=currentVenueScan();
+  state.venueScan=normalizeVenueScan({...scan,baselineFt:Math.max(2,Math.min(20,n))},window.RENTSKETCH_API_URL);
+  renderViews(getConflicts());window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return true;
+}
+async function clearVenueScan(){
+  if(!requireEventEditing())return false;
+  const scan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
+  const deletable=scan.frames.filter(f=>f.id&&f.id!==state.backgroundPhoto?.id);
+  state.venueScan=null;renderDrawerBody('site');renderViews(getConflicts());
+  window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
+  let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(_){}
+  if(saved&&designId)deletable.forEach(photo=>deleteVenuePhoto(photo,venuePhotoContext(designId)));
+  showLayoutNotice(state.backgroundPhoto?'Space Scan cleared. Your center photo is still available as Photo Match.':'Space Scan cleared.',4200);
+  return true;
+}
 async function removeVenuePhoto(){
   if(!requireEventEditing()||!state.backgroundPhoto)return false;
-  var old=state.backgroundPhoto,designId=window.RentSketchAutosave?.getDesignId?.();
-  state.backgroundPhoto=null;state.photoCalibration=null;state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;if(state.viewMode==='photo')state.viewMode='plan';renderDrawerBody('site');renderViews(getConflicts());setViewMode(state.viewMode);
+  var old=state.backgroundPhoto,oldScan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
+  state.backgroundPhoto=null;state.venueScan=null;state.photoCalibration=null;state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;if(state.viewMode==='photo')state.viewMode='plan';renderDrawerBody('site');renderViews(getConflicts());setViewMode(state.viewMode);
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
   var removalSaved=false;try{await window.RentSketchAutosave?.flush?.();removalSaved=true;}catch(_){}
-  if(removalSaved&&designId)deleteVenuePhoto(old,venuePhotoContext(designId));
-  showLayoutNotice('Venue photo removed. RentSketch is showing the generated setting again.',4200);
+  if(removalSaved&&designId){
+    const unique=new Map([[old.id,old],...oldScan.frames.filter(f=>f.id).map(f=>[f.id,f])]);
+    unique.forEach(photo=>deleteVenuePhoto(photo,venuePhotoContext(designId)));
+  }
+  showLayoutNotice('Venue photo and Space Scan removed. RentSketch is showing the generated setting again.',4200);
   return true;
 }
 function resetVenuePhotoFraming(){
@@ -237,7 +305,7 @@ var view3dMod=null,view3dPendingSnapshot=null,planMounted=false,photoMounted=fal
 var sceneOptions={night:false,weather:'clear',guests:true,styling:true,motion:!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches};
 function buildSnapshot(conflicts){
   var tent=layoutSpace(),photoSite={id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(Number(state.siteWidthFt)||50,tent.widthFt+20,50),lengthFt:Math.max(Number(state.siteLengthFt)||60,tent.lengthFt+20,60)};
-  return {tent:tent,photoSite:photoSite,sidewalls:normalizedSidewalls(tent),backgroundPhoto:normalizeVenuePhoto(state.backgroundPhoto,window.RENTSKETCH_API_URL),photoCalibration:state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSite):null,photoGeometry:state.backgroundPhoto?normalizePhotoGeometry(state.photoGeometry,photoSite):[],photoTentPlacement:state.photoTentPlacement,selectedPhotoId:state.selectedPhotoId,surfaceType:state.surfaceType,anchoringMethod:tent.isSite?null:resolveAnchoringMethod(tent.type,state.surfaceType),objects:store.getState().objects,placement:pendingPlacement,lightingOn:!!(state.lightingId&&state.lightingId!=='lighting-none'),lightingId:state.lightingId,selectedId:state.selectedId,severityMap:conflictSeverityByItemId(conflicts||[])};
+  return {tent:tent,photoSite:photoSite,sidewalls:normalizedSidewalls(tent),backgroundPhoto:normalizeVenuePhoto(state.backgroundPhoto,window.RENTSKETCH_API_URL),venueScan:normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL),photoCalibration:state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSite):null,photoGeometry:state.backgroundPhoto?normalizePhotoGeometry(state.photoGeometry,photoSite):[],photoTentPlacement:state.photoTentPlacement,selectedPhotoId:state.selectedPhotoId,surfaceType:state.surfaceType,anchoringMethod:tent.isSite?null:resolveAnchoringMethod(tent.type,state.surfaceType),objects:store.getState().objects,placement:pendingPlacement,lightingOn:!!(state.lightingId&&state.lightingId!=='lighting-none'),lightingId:state.lightingId,selectedId:state.selectedId,severityMap:conflictSeverityByItemId(conflicts||[])};
 }
 function currentPropertyPlan(){return evaluatePropertyScene(buildSnapshot(getConflicts()));}
 function propertyFitDetails(plan){
@@ -321,11 +389,13 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20260924-real-photo-360-2').then(function(mod){
-      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);}});
+    import('./js/ui/view3d.js?v=20260925-space-scan-1').then(function(mod){
+      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());if(info?.ready){setPhoto3dModeUi('360');showLayoutNotice('Space Scan reconstructed '+(info.metrics?.coveragePct||0)+'% depth coverage from your three real viewpoints.',5200);}else if(info&&!info.loading){setPhoto3dModeUi('matched');showLayoutNotice('Space Scan needs more overlap or texture. Retake Left, Center and Right while keeping the same yard features in all three photos.',7000);}}});
       inst.rebuild(snap);inst.setScene(sceneOptions);view3dMod=inst;
-      if(snap.backgroundPhoto&&inst.orbit360){
+      if(snap.backgroundPhoto&&snap.venueScan?.status==='ready'&&inst.orbit360){
         inst.orbit360();setPhoto3dModeUi('360');
+      }else if(snap.backgroundPhoto&&inst.matchPhoto){
+        inst.matchPhoto();setPhoto3dModeUi('matched');
       }else{
         if(inst.fitCamera)inst.fitCamera();
         if(inst.inside&&!layoutSpace().isSite&&store.getState().objects.length)inst.inside();
@@ -342,7 +412,7 @@ function setMeasureUi(active){
     if($('view3dWalk')){$('view3dWalk').classList.remove('active');$('view3dWalk').setAttribute('aria-pressed','false');$('view3dWalk').textContent='Walk';}
     if($('canvasHint'))$('canvasHint').textContent='Measurement Mode · click Point A, then Point B on the ground · Esc exits';
   }else if(state.viewMode==='3d'){
-    setPhoto3dModeUi(state.backgroundPhoto?'360':'matched');
+    setPhoto3dModeUi(state.backgroundPhoto&&metricScanReady()?'360':'matched');
   }
 }
 function setMeasurementResult(result){
@@ -356,16 +426,20 @@ function setPhoto3dModeUi(mode){
   if(matched){matched.classList.toggle('active',isMatched);matched.setAttribute('aria-pressed',String(isMatched));}
   if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));}
   if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk';}
-  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto)$('canvasHint').textContent=isWalk?'Walk Mode · WASD / arrow keys to move · drag to look · Esc exits':isOrbit?'360 World · solid local venue reconstruction · drag to orbit around the fixed setup':'Matched View · exact calibrated original photo perspective';
+  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto){
+    var scanReady=metricScanReady();
+    $('canvasHint').textContent=isWalk?'Walk Mode · metric Space Scan · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?'Space Scan 3D · real multi-view depth mesh · drag to orbit around the fixed setup':scanReady?'Matched View · switch to 360 World for metric depth':'Photo Match · one image stays camera-matched · capture Left + Center + Right in Space Scan for real 360 depth';
+  }
 }
 function renderViews(conflicts){
-  var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',propertyPlan=evaluatePropertyScene(s);
+  var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',scan3d=photo3d&&s.venueScan?.status==='ready',propertyPlan=evaluatePropertyScene(s);
   renderPropertyFit(propertyPlan);
-  if($('sceneSettingLabel'))$('sceneSettingLabel').textContent=s.backgroundPhoto?'Your venue photo':(sceneSetting(s.tent,s.surfaceType)==='backyard'?'Backyard setting':'Paved driveway setting');
+  if($('sceneSettingLabel'))$('sceneSettingLabel').textContent=scan3d?'Metric Space Scan':s.backgroundPhoto?'Your venue photo':(sceneSetting(s.tent,s.surfaceType)==='backyard'?'Backyard setting':'Paved driveway setting');
   if($('viewModePhoto'))$('viewModePhoto').hidden=!s.backgroundPhoto;
   if($('view3dMatchPhoto'))$('view3dMatchPhoto').hidden=!photo3d;
-  if($('view3dOrbit360'))$('view3dOrbit360').hidden=!photo3d;
-  if($('view3dWalk'))$('view3dWalk').hidden=!photo3d;
+  if($('view3dOrbit360'))$('view3dOrbit360').hidden=!scan3d;
+  if($('view3dWalk'))$('view3dWalk').hidden=!scan3d;
+  if($('view3dMeasure'))$('view3dMeasure').hidden=!scan3d;
   if(planMounted)plan2dMod.update(s);
   if(photoMounted&&s.backgroundPhoto)photoViewMod.update(s);
   if(view3dMod)view3dMod.update(s);else if(state.viewMode==='3d')view3dPendingSnapshot=s;
@@ -380,7 +454,7 @@ function setViewMode(mode){
   [['plan','viewModePlan'],['photo','viewModePhoto'],['3d','viewMode3d']].forEach(function(pair){var b=$(pair[1]);if(!b)return;b.classList.toggle('active',mode===pair[0]);b.setAttribute('aria-selected',String(mode===pair[0]));});
   if($('viewModePhoto'))$('viewModePhoto').hidden=!state.backgroundPhoto;
   if($('canvasHint'))$('canvasHint').textContent=mode==='3d'?'Drag to look around · Pinch or scroll to zoom':mode==='photo'?'Drag rentals anywhere on the real photo · Calibrate perspective for better 3D':'Select an item · Drag to move';
-  if($('view3dFit'))$('view3dFit').hidden=mode!=='3d';if($('view3dInside'))$('view3dInside').hidden=mode!=='3d';if($('view3dMatchPhoto'))$('view3dMatchPhoto').hidden=!(mode==='3d'&&state.backgroundPhoto);if($('view3dOrbit360'))$('view3dOrbit360').hidden=!(mode==='3d'&&state.backgroundPhoto);if($('view3dWalk'))$('view3dWalk').hidden=!(mode==='3d'&&state.backgroundPhoto);if($('view3dMeasure'))$('view3dMeasure').hidden=mode!=='3d';if($('view3dMeasureClear'))$('view3dMeasureClear').hidden=mode!=='3d'||!view3dMod?.getMeasurement?.();
+  if($('view3dFit'))$('view3dFit').hidden=mode!=='3d';if($('view3dInside'))$('view3dInside').hidden=mode!=='3d';if($('view3dMatchPhoto'))$('view3dMatchPhoto').hidden=!(mode==='3d'&&state.backgroundPhoto);if($('view3dOrbit360'))$('view3dOrbit360').hidden=!(mode==='3d'&&state.backgroundPhoto&&metricScanReady());if($('view3dWalk'))$('view3dWalk').hidden=!(mode==='3d'&&state.backgroundPhoto&&metricScanReady());if($('view3dMeasure'))$('view3dMeasure').hidden=!(mode==='3d'&&(!state.backgroundPhoto||metricScanReady()));if($('view3dMeasureClear'))$('view3dMeasureClear').hidden=mode!=='3d'||!view3dMod?.getMeasurement?.();
   var planEl=$('plan2d'),photoEl=$('photoView'),canvasEl=$('canvas');
   if(planEl)planEl.style.display=mode==='plan'?'flex':'none';
   if(photoEl)photoEl.style.display=mode==='photo'?'block':'none';
@@ -389,7 +463,7 @@ function setViewMode(mode){
   if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').style.display=mode==='3d'?'':'none';
   if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').style.display=mode==='3d'?'':'none';
   if(mode==='photo')setTimeout(function(){mountPhoto();},0);
-  if(mode==='3d'){setPhoto3dModeUi(state.backgroundPhoto?'360':'matched');setTimeout(function(){mount3D();if(view3dMod&&state.backgroundPhoto&&view3dMod.orbit360){view3dMod.orbit360();setPhoto3dModeUi('360');}},16);}
+  if(mode==='3d'){var useScan=!!state.backgroundPhoto&&metricScanReady();setPhoto3dModeUi(useScan?'360':'matched');setTimeout(function(){mount3D();if(!view3dMod)return;if(useScan&&view3dMod.orbit360){view3dMod.orbit360();setPhoto3dModeUi('360');}else if(state.backgroundPhoto&&view3dMod.matchPhoto){view3dMod.matchPhoto();setPhoto3dModeUi('matched');}},16);}
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return true;
 }
 function closeDrawer(){state.activeDrawer=null;document.body.classList.remove('drawer-open');document.querySelectorAll('.rail-btn').forEach(function(b){b.classList.remove('active');b.setAttribute('aria-expanded','false');});if($('drawerBackdrop'))$('drawerBackdrop').hidden=true;if($('drawer'))$('drawer').hidden=true;renderEmptyState();}function openDrawer(kind){if(!requireEventEditing())return false;if(pendingPlacement)cancelPlacement();if(state.activeDrawer===kind){closeDrawer();return;}state.selectedId=null;renderInspector([]);state.activeDrawer=kind;document.body.classList.add('drawer-open');document.querySelectorAll('.rail-btn').forEach(function(b){b.classList.toggle('active',b.dataset.drawer===kind);b.setAttribute('aria-expanded',String(b.dataset.drawer===kind));});$('drawerBackdrop').hidden=false;$('drawer').hidden=false;$('drawerTitle').textContent=({site:'Event Setting',inflatables:'Bounce Houses & Waterslides',tables:'Tables & Chairs',tent:'Choose Your Tent',chairs:'Chair Styles',dance:'Dance Floor',lighting:'Lighting',setup:'Suggest a Layout'})[kind]||kind;renderDrawerBody(kind);$('drawerBody').scrollTop=0;renderEmptyState();}function bindVenuePhotoInputs(root){
@@ -403,6 +477,17 @@ function closeDrawer(){state.activeDrawer=null;document.body.classList.remove('d
     fileInput.addEventListener('click',function(){
       fileInput.value='';
       delete fileInput.dataset.venuePhotoHandled;
+    });
+  });
+  root.querySelectorAll('[data-role="venue-scan-file"]').forEach(function(fileInput){
+    if(fileInput.dataset.venueScanDirectBound==='1')return;
+    fileInput.dataset.venueScanDirectBound='1';
+    var handle=function(){handleVenueScanFileInput(fileInput);};
+    fileInput.addEventListener('input',handle);
+    fileInput.addEventListener('change',handle);
+    fileInput.addEventListener('click',function(){
+      fileInput.value='';
+      delete fileInput.dataset.venueScanHandled;
     });
   });
 }
@@ -473,7 +558,7 @@ function openTableComposer(tableId){if(!requireEventEditing())return false;
 
 function handleEquipmentClick(e){if(!requireEventEditing())return false;var el=e.target.closest('[data-role]');if(!el)return;var role=el.dataset.role;if(role==='inspector-close'){state.selectedId=null;refreshAll();}else if(role==='insp-delete'){store.removeObject(el.dataset.id);state.selectedId=null;}else if(role==='insp-match-tables'){matchTableStyle(el.dataset.id);}else if(role==='insp-linen-swatch'){store.updateObject(el.dataset.id,{linenColor:el.dataset.color});}else if(role==='insp-seats'||role==='insp-rotate'||role==='insp-duplicate'){var item=store.getState().objects.find(function(o){return o.id===el.dataset.id;}),tent=layoutSpace();if(!item)return;if(role==='insp-seats'){var max=Math.max(0,...byId(TABLES,item.tableId).seatsOptions);store.updateObject(item.id,{seatCount:Math.max(0,Math.min(max,item.seatCount+Number(el.dataset.delta)))});}else if(role==='insp-rotate'){var w=item.depthFt,d=item.widthFt;store.updateObject(item.id,{widthFt:w,depthFt:d,x:Math.max(0,Math.min(tent.widthFt-w,item.x+(item.widthFt-w)/2)),y:Math.max(0,Math.min(tent.lengthFt-d,item.y+(item.depthFt-d)/2)),rotationDeg:((item.rotationDeg||0)+90)%360});}else{store.duplicateObject(item.id,1,{x:Math.min(2,tent.widthFt-item.widthFt-item.x),y:Math.min(2,tent.lengthFt-item.depthFt-item.y)});state.selectedId=store.getState().objects.at(-1).id;refreshAll();}}else if(role==='insp-delete-dance'){state.needDance=false;state.selectedId=null;removeAllDanceFloors();}else if(role==='insp-design-table'){import('./js/ui/tableStudio.js').then(function(m){m.openTableStudio(el.dataset.id,store,{onClick:handleEquipmentClick,onChange:handleEquipmentChange,tables:TABLES,chairs:CHAIRS,linens:LINENS,tabletop:TABLETOP});}).catch(function(error){console.error('Table details could not open:',error);showLayoutNotice('Table details could not open. You can still edit this table below.');});}}
 function handleEquipmentChange(e){if(!requireEventEditing())return false;var el=e.target,role=el.dataset.role,id=el.dataset.id;if(role==='insp-chair'&&!byId(CHAIRS,el.value)?.isThrone)store.updateObject(id,{chairId:el.value});if(role==='insp-linen'){var linen=byId(LINENS,el.value),item=store.getState().objects.find(function(o){return o.id===id;}),colors=linen&&linen.colors||['White'];store.updateObject(id,{linenId:el.value||null,linenColor:el.value?(colors.includes(item.linenColor)?item.linenColor:colors[0]):null});}if(role==='insp-linen-color')store.updateObject(id,{linenColor:el.value});}
-document.querySelectorAll('.rail-btn').forEach(function(btn){btn.addEventListener('click',function(){openDrawer(btn.dataset.drawer);});});if($('drawerClose'))$('drawerClose').addEventListener('click',closeDrawer);if($('drawerBackdrop'))$('drawerBackdrop').addEventListener('click',closeDrawer);if($('drawerBody'))$('drawerBody').addEventListener('click',function(e){var el=e.target.closest('[data-role]');if(!el)return;if(el.dataset.role==='venue-photo-remove'){removeVenuePhoto();return;}if(el.dataset.role==='venue-photo-reset'){resetVenuePhotoFraming();return;}if(el.dataset.role==='sidewall-all'){setAllSidewalls(el.dataset.type);return;}if(el.dataset.role==='site-surface'){if(layoutSpace().type==='pole'&&['concrete','asphalt'].includes(el.dataset.surface))return;state.surfaceType=el.dataset.surface;refreshAll();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return;}if(el.dataset.role==='site-frame'){openDrawer('tent');return;}if(el.dataset.role==='accent-chair'){beginAccentPlacement(el.dataset.id);return;}if(el.dataset.role==='outdoor-layout'){var previous=layoutSpace();state.siteWidthFt=Math.max(state.siteWidthFt,previous.widthFt);state.siteLengthFt=Math.max(state.siteLengthFt,previous.lengthFt);state.tentId=null;state.lightingId='lighting-none';store.setTent(null);closeDrawer();return;}if(el.dataset.role==='setup-manual'){closeDrawer();openDrawer('tables');return;}if(el.dataset.role==='table-style'){openTableComposer(el.dataset.id);return;}if(el.dataset.role==='table-card'){var t=byId(TABLES,el.dataset.id);tableDraft.tableId=t.id;tableDraft.chairId=state.chairId;tableDraft.linenId=null;tableDraft.seatCount=t.seatsDefault;beginTablePlacement(t);}else if(el.dataset.role==='add-table'){tableDraft.activeItemId=addTableFromDraft();state.selectedId=tableDraft.activeItemId;}else if(el.dataset.role==='inflatable-card'){beginInflatablePlacement(inflatableById(el.dataset.id));}else if(el.dataset.role==='tent-card'){selectTent(el.dataset.id);}else if(el.dataset.role==='chair-card'){chooseEventChairs(el.dataset.id);}else if(el.dataset.role==='dance-size-card'){beginDancePlacement(parseFloat(el.dataset.ft),el.dataset.id);}else if(el.dataset.role==='dance-remove'){state.needDance=false;removeAllDanceFloors();}else if(el.dataset.role==='lighting-card'){state.lightingId=el.dataset.id;validateLighting();if(state.lightingId!=='lighting-none'){setSceneNight(true);closeDrawer();setViewMode('3d');showLayoutNotice('Night preview is on so you can see your lights. Switch back to day in Scene.',6000);}window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));}refreshAll();});function handleVenuePhotoFileInput(fileInput){
+document.querySelectorAll('.rail-btn').forEach(function(btn){btn.addEventListener('click',function(){openDrawer(btn.dataset.drawer);});});if($('drawerClose'))$('drawerClose').addEventListener('click',closeDrawer);if($('drawerBackdrop'))$('drawerBackdrop').addEventListener('click',closeDrawer);if($('drawerBody'))$('drawerBody').addEventListener('click',function(e){var el=e.target.closest('[data-role]');if(!el)return;if(el.dataset.role==='venue-photo-remove'){removeVenuePhoto();return;}if(el.dataset.role==='venue-photo-reset'){resetVenuePhotoFraming();return;}if(el.dataset.role==='venue-scan-clear'){clearVenueScan();return;}if(el.dataset.role==='sidewall-all'){setAllSidewalls(el.dataset.type);return;}if(el.dataset.role==='site-surface'){if(layoutSpace().type==='pole'&&['concrete','asphalt'].includes(el.dataset.surface))return;state.surfaceType=el.dataset.surface;refreshAll();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return;}if(el.dataset.role==='site-frame'){openDrawer('tent');return;}if(el.dataset.role==='accent-chair'){beginAccentPlacement(el.dataset.id);return;}if(el.dataset.role==='outdoor-layout'){var previous=layoutSpace();state.siteWidthFt=Math.max(state.siteWidthFt,previous.widthFt);state.siteLengthFt=Math.max(state.siteLengthFt,previous.lengthFt);state.tentId=null;state.lightingId='lighting-none';store.setTent(null);closeDrawer();return;}if(el.dataset.role==='setup-manual'){closeDrawer();openDrawer('tables');return;}if(el.dataset.role==='table-style'){openTableComposer(el.dataset.id);return;}if(el.dataset.role==='table-card'){var t=byId(TABLES,el.dataset.id);tableDraft.tableId=t.id;tableDraft.chairId=state.chairId;tableDraft.linenId=null;tableDraft.seatCount=t.seatsDefault;beginTablePlacement(t);}else if(el.dataset.role==='add-table'){tableDraft.activeItemId=addTableFromDraft();state.selectedId=tableDraft.activeItemId;}else if(el.dataset.role==='inflatable-card'){beginInflatablePlacement(inflatableById(el.dataset.id));}else if(el.dataset.role==='tent-card'){selectTent(el.dataset.id);}else if(el.dataset.role==='chair-card'){chooseEventChairs(el.dataset.id);}else if(el.dataset.role==='dance-size-card'){beginDancePlacement(parseFloat(el.dataset.ft),el.dataset.id);}else if(el.dataset.role==='dance-remove'){state.needDance=false;removeAllDanceFloors();}else if(el.dataset.role==='lighting-card'){state.lightingId=el.dataset.id;validateLighting();if(state.lightingId!=='lighting-none'){setSceneNight(true);closeDrawer();setViewMode('3d');showLayoutNotice('Night preview is on so you can see your lights. Switch back to day in Scene.',6000);}window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));}refreshAll();});function handleVenuePhotoFileInput(fileInput){
   if(!fileInput)return false;
   var file=fileInput.files&&fileInput.files[0];if(!file)return false;
   var stamp=[file.name||'',file.size||0,file.lastModified||0].join(':');
@@ -482,18 +567,37 @@ document.querySelectorAll('.rail-btn').forEach(function(btn){btn.addEventListene
   chooseVenuePhoto(file,fileInput);
   return true;
 }
+function handleVenueScanFileInput(fileInput){
+  if(!fileInput)return false;
+  var file=fileInput.files&&fileInput.files[0],role=fileInput.dataset.scanRole;if(!file||!role)return false;
+  var stamp=[role,file.name||'',file.size||0,file.lastModified||0].join(':');
+  if(fileInput.dataset.venueScanHandled===stamp)return true;
+  fileInput.dataset.venueScanHandled=stamp;
+  chooseVenueScanPhoto(role,file,fileInput);
+  return true;
+}
 $('drawerBody')?.addEventListener('click',function(e){
   var fileInput=e.target.closest('[data-role="venue-photo-file"]');
-  if(fileInput){fileInput.value='';delete fileInput.dataset.venuePhotoHandled;}
+  if(fileInput){fileInput.value='';delete fileInput.dataset.venuePhotoHandled;return;}
+  var scanInput=e.target.closest('[data-role="venue-scan-file"]');
+  if(scanInput){scanInput.value='';delete scanInput.dataset.venueScanHandled;}
 });
 $('drawerBody')?.addEventListener('change',function(e){
   var fileInput=e.target.closest('[data-role="venue-photo-file"]');
   if(fileInput){handleVenuePhotoFileInput(fileInput);return;}
+  var scanInput=e.target.closest('[data-role="venue-scan-file"]');
+  if(scanInput){handleVenueScanFileInput(scanInput);return;}
+  var baseline=e.target.closest('[data-role="venue-scan-baseline"]');
+  if(baseline){updateVenueScanBaseline(baseline.value);return;}
   var el=e.target.closest('[data-role="sidewall-side"]');if(el){setSidewallSide(el.dataset.side,el.value);}
 });
 $('drawerBody')?.addEventListener('input',function(e){
   var fileInput=e.target.closest('[data-role="venue-photo-file"]');
   if(fileInput){handleVenuePhotoFileInput(fileInput);return;}
+  var scanInput=e.target.closest('[data-role="venue-scan-file"]');
+  if(scanInput){handleVenueScanFileInput(scanInput);return;}
+  var baseline=e.target.closest('[data-role="venue-scan-baseline"]');
+  if(baseline){updateVenueScanBaseline(baseline.value);return;}
   var el=e.target.closest('[data-role^="venue-photo-"]');if(!el)return;
   updateVenuePhotoControl(el.dataset.role,el.value);
 });if($('inspectorPanel')){$('inspectorPanel').addEventListener('click',handleEquipmentClick);$('inspectorPanel').addEventListener('change',handleEquipmentChange);}if($('emptyStateOverlay'))$('emptyStateOverlay').addEventListener('click',function(e){var el=e.target.closest('[data-role]');if(el&&el.dataset.role==='empty-party')buildPartyScene();if(el&&el.dataset.role==='empty-choose-own')openDrawer('tables');if(el&&el.dataset.role==='empty-suggest')openDrawer('setup');});if($('viewModePlan'))$('viewModePlan').addEventListener('click',function(){setViewMode('plan');});if($('viewModePhoto'))$('viewModePhoto').addEventListener('click',function(){setViewMode('photo');});if($('viewMode3d'))$('viewMode3d').addEventListener('click',function(){setViewMode('3d');});if($('view3dInside'))$('view3dInside').addEventListener('click',function(){view3dMod?.inside();});if($('view3dFit'))$('view3dFit').addEventListener('click',function(){if(view3dMod){view3dMod.fitCamera();setPhoto3dModeUi('matched');}});if($('view3dMatchPhoto'))$('view3dMatchPhoto').addEventListener('click',function(){if(view3dMod?.matchPhoto()){setPhoto3dModeUi('matched');}});if($('view3dOrbit360'))$('view3dOrbit360').addEventListener('click',function(){if(view3dMod?.orbit360()){setPhoto3dModeUi('360');}});if($('view3dWalk'))$('view3dWalk').addEventListener('click',function(){if(!view3dMod)return;if(view3dMod.isMeasuring?.())view3dMod.setMeasureMode(false);var walking=view3dMod.toggleWalk?.();setPhoto3dModeUi(walking?'walk':'360');});if($('view3dMeasure'))$('view3dMeasure').addEventListener('click',function(){if(!view3dMod)return;if(view3dMod.isWalking?.())view3dMod.exitWalk();var measuring=view3dMod.toggleMeasure?.();setMeasureUi(measuring);});if($('view3dMeasureClear'))$('view3dMeasureClear').addEventListener('click',function(){view3dMod?.clearMeasurement?.();setMeasurementResult(null);});if($('view3dDayNight'))$('view3dDayNight').addEventListener('click',function(){setSceneNight(!sceneOptions.night);});
@@ -501,7 +605,7 @@ $('drawerBody')?.addEventListener('input',function(e){
 if($('propertyFitBadge'))$('propertyFitBadge').addEventListener('click',function(){
   var panel=$('propertyFitPanel');if(!panel)return;panel.hidden=!panel.hidden;this.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)renderPropertyFit(currentPropertyPlan());
 });
-if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('build');});if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('breakdown');});if($('btnUndo'))$('btnUndo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.undo();});if($('btnRedo'))$('btnRedo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.redo();});store.subscribe(function(){refreshAll();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});if($('btnBackToRecommend'))$('btnBackToRecommend').addEventListener('click',function(){openDrawer('setup');});if($('btnToReview'))$('btnToReview').addEventListener('click',goToReview);if($('btnBackToDesigner'))$('btnBackToDesigner').addEventListener('click',function(){document.body.classList.add('designer-active');showStep('step-designer');});window.FriendlyBridge={INFLATABLES:INFLATABLES,openInflatablePreview:openInflatablePreview,buildPartyScene:buildPartyScene,openDrawer:openDrawer,state:state,TENTS:TENTS,TABLES:TABLES,CHAIRS:CHAIRS,PACKAGES:PACKAGES,byId:byId,showStep:showStep,enterDesigner:enterDesigner,getScene:getScene,loadScene:loadScene,useRecommendedLayout:useRecommendedLayout,customizeFromScratch:customizeFromScratch,refreshAll:refreshAll,setViewMode:setViewMode,computeLineItems:computeLineItems,currentReviewPricing:currentReviewPricing,getPropertyPlan:currentPropertyPlan,getMeasurement:function(){return view3dMod?.getMeasurement?.()||null;},startMeasurement:function(){if(!view3dMod)return false;var active=view3dMod.setMeasureMode(true);setMeasureUi(active);return active;},clearMeasurement:function(){view3dMod?.clearMeasurement?.();setMeasurementResult(null);return true;}};
+if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('build');});if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('breakdown');});if($('btnUndo'))$('btnUndo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.undo();});if($('btnRedo'))$('btnRedo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.redo();});store.subscribe(function(){refreshAll();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});if($('btnBackToRecommend'))$('btnBackToRecommend').addEventListener('click',function(){openDrawer('setup');});if($('btnToReview'))$('btnToReview').addEventListener('click',goToReview);if($('btnBackToDesigner'))$('btnBackToDesigner').addEventListener('click',function(){document.body.classList.add('designer-active');showStep('step-designer');});window.FriendlyBridge={INFLATABLES:INFLATABLES,openInflatablePreview:openInflatablePreview,buildPartyScene:buildPartyScene,openDrawer:openDrawer,state:state,TENTS:TENTS,TABLES:TABLES,CHAIRS:CHAIRS,PACKAGES:PACKAGES,byId:byId,showStep:showStep,enterDesigner:enterDesigner,getScene:getScene,loadScene:loadScene,useRecommendedLayout:useRecommendedLayout,customizeFromScratch:customizeFromScratch,refreshAll:refreshAll,setViewMode:setViewMode,computeLineItems:computeLineItems,currentReviewPricing:currentReviewPricing,getPropertyPlan:currentPropertyPlan,getSpaceScan:function(){return currentVenueScan();},getScanReconstruction:function(){return window.RENTSKETCH_SCAN_RECONSTRUCTION||null;},getMeasurement:function(){return view3dMod?.getMeasurement?.()||null;},startMeasurement:function(){if(!view3dMod)return false;var active=view3dMod.setMeasureMode(true);setMeasureUi(active);return active;},clearMeasurement:function(){view3dMod?.clearMeasurement?.();setMeasurementResult(null);return true;}};
 
 $('drawerBody').addEventListener('submit',function(e){if(e.target.id!=='quickSetupForm')return;e.preventDefault();var form=e.target;if(!form.reportValidity())return;state.guestCount=Math.max(1,Math.min(1000,Number(form.elements.guests.value)||1));var ft=Number(form.elements.dance.value);state.needDance=ft>0;state.danceFloorSizeId='custom';state.customDanceFloorFt=ft||null;useRecommendedLayout();});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(view3dMod?.isMeasuring?.()){view3dMod.setMeasureMode(false);setMeasureUi(false);return;}if(view3dMod?.isWalking?.()){view3dMod.exitWalk();setPhoto3dModeUi('360');return;}if(pendingPlacement){cancelPlacement();return;}if($('sceneControls'))$('sceneControls').open=false;if(state.activeDrawer)closeDrawer();else if(state.selectedId){state.selectedId=null;refreshAll();}}});
