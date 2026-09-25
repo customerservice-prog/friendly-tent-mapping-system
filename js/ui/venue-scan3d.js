@@ -59,7 +59,7 @@ export async function createVenueScanWorld({
   const frames=normalizedFrames(scan),samples=normalizedSamples(scan);
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   const requestedBaselineFt=Math.max(1,Math.min(30,Number(scan.baselineFt)||6)),baselineFactor=Math.max(.4,Math.min(1.05,Number(scan.baselineFactor)||1)),baselineFt=requestedBaselineFt*baselineFactor;
-  let centerImage,result,reconstructionMode='stereo-3',sourceFrameIds=[];
+  let centerImage,centerData,result,reconstructionMode='stereo-3',sourceFrameIds=[];
   if(samples.length>=5){
     const images=await Promise.all(samples.map(sample=>loadImage(sample.url)));
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
@@ -68,7 +68,7 @@ export async function createVenueScanWorld({
     centerImage=images[centerIndex];
     const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
     const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
-    const center=imageData(centerImage,width,height),views=[];
+    centerData=imageData(centerImage,width,height);const center=centerData,views=[];
     for(let i=0;i<images.length;i++){
       if(i===centerIndex)continue;
       views.push({image:imageData(images[i],width,height),offsetFt:samples[i].offsetFactor*baselineFt});
@@ -94,7 +94,7 @@ export async function createVenueScanWorld({
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
     const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
     const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
-    const left=imageData(leftImage,width,height),center=imageData(centerImage,width,height),right=imageData(rightImage,width,height);
+    const left=imageData(leftImage,width,height),center=imageData(centerImage,width,height),right=imageData(rightImage,width,height);centerData=center;
     result=reconstructStereoGrid({
       left,center,right,baselineFt,
       fovDeg:Number(scan.fovDeg)||62,
@@ -117,7 +117,7 @@ export async function createVenueScanWorld({
   // Use the real lower-image palette only as a neutral support surface for
   // holes outside the reconstructed mesh. No invented trees/houses are added.
   const siteWidth=Math.max(20,Number(site.widthFt)||50),siteLength=Math.max(20,Number(site.lengthFt)||60);
-  const groundColor=averageLowerColor(center),groundDay=groundColor.clone();
+  const groundColor=averageLowerColor(centerData),groundDay=groundColor.clone();
   const groundMaterial=new THREE.MeshStandardMaterial({color:groundColor,roughness:1,metalness:0});
   const supportGround=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(80,siteWidth*1.45),Math.max(100,siteLength*1.5)),groundMaterial);
   supportGround.name='Metric scan support ground';supportGround.rotation.x=-Math.PI/2;supportGround.position.y=-.10;supportGround.receiveShadow=true;supportGround.renderOrder=-10;
