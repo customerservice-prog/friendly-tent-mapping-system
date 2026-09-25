@@ -183,7 +183,7 @@ async function chooseVenuePhoto(file,input){
 function currentVenueScan(){
   return normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
 }
-function metricScanReady(){return currentVenueScan().status==='ready';}
+function metricScanReady(){var scan=currentVenueScan(),runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;return scan.status==='ready'&&!(runtime&&runtime.ready===false&&runtime.loading===false);}
 async function chooseVenueScanPhoto(role,file,input){
   if(!file||!['left','center','right'].includes(role))return false;
   if(!requireEventEditing())return false;
@@ -386,7 +386,7 @@ function mount3D(){
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
     import('./js/ui/view3d.js?v=20260924-real-photo-360-2').then(function(mod){
-      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;if(info?.ready){setPhoto3dModeUi('360');showLayoutNotice('Space Scan reconstructed '+(info.metrics?.coveragePct||0)+'% depth coverage from your three real viewpoints.',5200);}}});
+      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());if(info?.ready){setPhoto3dModeUi('360');showLayoutNotice('Space Scan reconstructed '+(info.metrics?.coveragePct||0)+'% depth coverage from your three real viewpoints.',5200);}else if(info&&!info.loading){setPhoto3dModeUi('matched');showLayoutNotice('Space Scan needs more overlap or texture. Retake Left, Center and Right while keeping the same yard features in all three photos.',7000);}}});
       inst.rebuild(snap);inst.setScene(sceneOptions);view3dMod=inst;
       if(snap.backgroundPhoto&&snap.venueScan?.status==='ready'&&inst.orbit360){
         inst.orbit360();setPhoto3dModeUi('360');
