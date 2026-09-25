@@ -160,7 +160,7 @@ async function chooseVenuePhoto(file,input){
     if(!designId)throw new Error('This layout could not be saved before the photo upload.');
     setVenuePhotoStatus('Uploading '+label+'…','working');
     var photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
-    state.backgroundPhoto=photo;state.venueScan=null;
+    state.backgroundPhoto=photo;state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;
     var snapAfterPhoto=buildSnapshot(getConflicts());
     state.photoCalibration=defaultPhotoCalibration(snapAfterPhoto.photoSite);state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
     state.venuePhotoStatus={text:'Applied · Photo View is ready. Drag rentals directly on your real venue.',kind:'success'};
@@ -195,7 +195,7 @@ async function chooseVenueScanPhoto(role,file,input){
     if(!designId)throw new Error('This layout could not be saved before the scan photo upload.');
     const photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
     const frames=before.frames.filter(f=>f.role!==role).concat([{...photo,role}]);
-    state.venueScan=normalizeVenueScan({...before,frames},window.RENTSKETCH_API_URL);
+    state.venueScan=normalizeVenueScan({...before,frames},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:state.venueScan.status==='ready'};
     if(role==='center'){
       state.backgroundPhoto={...photo};
       // A new center viewpoint changes the Photo Match camera itself. Recreate
@@ -229,7 +229,7 @@ async function chooseVenueScanPhoto(role,file,input){
 function updateVenueScanBaseline(value){
   const n=Number(value);if(!Number.isFinite(n))return false;
   const scan=currentVenueScan();
-  state.venueScan=normalizeVenueScan({...scan,baselineFt:Math.max(2,Math.min(20,n))},window.RENTSKETCH_API_URL);
+  state.venueScan=normalizeVenueScan({...scan,baselineFt:Math.max(2,Math.min(20,n))},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:state.venueScan.status==='ready'};
   renderViews(getConflicts());window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return true;
 }
 async function chooseVenueScanVideo(file,input){
@@ -249,7 +249,7 @@ async function chooseVenueScanVideo(file,input){
     }
     const center=uploaded.find(f=>f.role==='center');
     if(!center)throw new Error('The center scan frame could not be created.');
-    state.venueScan=normalizeVenueScan({...before,frames:uploaded},window.RENTSKETCH_API_URL);
+    state.venueScan=normalizeVenueScan({...before,frames:uploaded},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:true};
     state.backgroundPhoto={...center};
     if(photoMounted){photoViewMod.unmount();photoMounted=false;}
     const snap=buildSnapshot(getConflicts());
@@ -278,7 +278,7 @@ async function clearVenueScan(){
   if(!requireEventEditing())return false;
   const scan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
   const deletable=scan.frames.filter(f=>f.id&&f.id!==state.backgroundPhoto?.id);
-  state.venueScan=null;renderDrawerBody('site');renderViews(getConflicts());
+  state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;renderDrawerBody('site');renderViews(getConflicts());
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
   let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(_){}
   if(saved&&designId)deletable.forEach(photo=>deleteVenuePhoto(photo,venuePhotoContext(designId)));
@@ -288,7 +288,7 @@ async function clearVenueScan(){
 async function removeVenuePhoto(){
   if(!requireEventEditing()||!state.backgroundPhoto)return false;
   var old=state.backgroundPhoto,oldScan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
-  state.backgroundPhoto=null;state.venueScan=null;state.photoCalibration=null;state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;if(state.viewMode==='photo')state.viewMode='plan';renderDrawerBody('site');renderViews(getConflicts());setViewMode(state.viewMode);
+  state.backgroundPhoto=null;state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;state.photoCalibration=null;state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;if(state.viewMode==='photo')state.viewMode='plan';renderDrawerBody('site');renderViews(getConflicts());setViewMode(state.viewMode);
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
   var removalSaved=false;try{await window.RentSketchAutosave?.flush?.();removalSaved=true;}catch(_){}
   if(removalSaved&&designId){
