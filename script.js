@@ -321,7 +321,7 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20260924-measure-1').then(function(mod){
+    import('./js/ui/view3d.js?v=20260924-solid-world-1').then(function(mod){
       var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);}});
       inst.rebuild(snap);inst.setScene(sceneOptions);view3dMod=inst;
       if(snap.backgroundPhoto&&inst.orbit360){
@@ -356,7 +356,7 @@ function setPhoto3dModeUi(mode){
   if(matched){matched.classList.toggle('active',isMatched);matched.setAttribute('aria-pressed',String(isMatched));}
   if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));}
   if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk';}
-  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto)$('canvasHint').textContent=isWalk?'Walk Mode · WASD / arrow keys to move · drag to look · Esc exits':isOrbit?'360 World · photo-derived ground + depth + parallax · drag to orbit around the fixed setup':'Matched View · exact calibrated original photo perspective';
+  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto)$('canvasHint').textContent=isWalk?'Walk Mode · WASD / arrow keys to move · drag to look · Esc exits':isOrbit?'360 World · solid local venue reconstruction · drag to orbit around the fixed setup':'Matched View · exact calibrated original photo perspective';
 }
 function renderViews(conflicts){
   var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',propertyPlan=evaluatePropertyScene(s);

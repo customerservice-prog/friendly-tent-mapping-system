@@ -172,9 +172,26 @@ export function init(container,callbacks={}) {
     const estimate=photoCameraEstimate(site,cal),h=Math.max(18,Math.min(70,Math.max(l*.42,estimate.position[1]*1.3)));
     const backMat=new THREE.MeshBasicMaterial({map:tex,side:THREE.FrontSide,transparent:true,opacity:.98,depthWrite:true});
     const backdrop=photoQuad('Photo backdrop projection',[-w/2,0,l/2+.02,w/2,0,l/2+.02,w/2,h,l/2+.02,-w/2,h,l/2+.02],[...bl,...br,br[0],1,bl[0],1],backMat);
-    backdrop.receiveShadow=false;photoStage.add(backdrop);
+    backdrop.receiveShadow=false;backdrop.userData.photoEvidenceBackdrop=true;backdrop.userData.baseOpacity=.98;photoStage.add(backdrop);
     photoStage.userData={mode:'single-photo-2.5d',calibration:cal,coverage:'visible-ground-and-rear-view'};
     return true;
+  }
+  function updatePhotoStageViewFade(){
+    if(!photoStage.visible||!state?.photoSite)return;
+    const backdrop=photoStage.children.find(o=>o.userData?.photoEvidenceBackdrop);
+    if(!backdrop?.material)return;
+    const x=camera.position.x,z=camera.position.z,r=Math.max(.001,Math.hypot(x,z));
+    const facing=-z/r,sidePenalty=Math.min(1,Math.abs(x)/r);
+    const confidence=THREE.MathUtils.smoothstep(facing,.08,.78)*(1-THREE.MathUtils.smoothstep(sidePenalty,.62,.96));
+    backdrop.material.opacity=(backdrop.userData.baseOpacity||.98)*confidence;
+    backdrop.visible=confidence>.025;
+  }
+  function syncPhotoFog(){
+    const photo=hasVenuePhoto(),immersive=photo&&(cameraMode==='photo360'||cameraMode==='walk');
+    scene.fog.color.set(night?0x203044:weatherMode==='rain'?0x9eafb5:0xdde8df);
+    scene.fog.density=photo
+      ? (immersive?(weatherMode==='rain'?.0020:.00105):(weatherMode==='rain'?.0012:.00015))
+      : (weatherMode==='rain'?.004:.002);
   }
   function clearLocal360(){
     const geometries=new Set(),materials=new Set(),textures=new Set();
@@ -281,6 +298,8 @@ export function init(container,callbacks={}) {
     controls.enablePan=!matched&&!walking;
     controls.enableZoom=!matched&&!walking;
     controls.enableRotate=!matched&&!walking&&!state?.placement;
+    environment?.userData.setImmersive?.(immersive);
+    syncPhotoFog();
     if(immersive){
       if(scene.background===photoTexture)scene.background=null;
       scene.background=sky(night,weatherMode==='rain');
@@ -319,7 +338,7 @@ export function init(container,callbacks={}) {
     if(scene.background===photoTexture)scene.background=null;else scene.background?.dispose?.();
     scene.background=sky(night,weatherMode==='rain');
   }
-  controls.addEventListener('change',invalidate);
+  controls.addEventListener('change',()=>{updatePhotoStageViewFade();invalidate();});
   function shadows(t){const radius=Math.max(t.widthFt,t.lengthFt)/2+18;sun.shadow.camera.left=-radius;sun.shadow.camera.right=radius;sun.shadow.camera.top=radius;sun.shadow.camera.bottom=-radius;sun.shadow.camera.far=radius*4+120;sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;}
   function frame(t){
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='photo360'){
@@ -327,10 +346,10 @@ export function init(container,callbacks={}) {
       // Eye-level starting height makes the property read like a place you are inside,
       // rather than a product spinner viewed from above.
       camera.fov=50;camera.updateProjectionMatrix();
-      camera.position.set(Math.min(w*.38,r*.42),6.1,-Math.min(l*.42,r*.46));
+      camera.position.set(Math.min(w*.30,r*.34),6.15,-Math.min(l*.38,r*.40));
       controls.target.set(0,3.25,0);
-      controls.minDistance=5.5;controls.maxDistance=Math.max(140,r*2.25);
-      controls.maxPolarAngle=Math.PI*.49;controls.update();syncPhotoPresentation();invalidate();return;
+      controls.minDistance=5.5;controls.maxDistance=Math.max(90,r*1.55);
+      controls.maxPolarAngle=Math.PI*.49;controls.update();syncPhotoPresentation();updatePhotoStageViewFade();invalidate();return;
     }
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='outside'){
       const site=state.photoSite||t,estimate=photoCameraEstimate(site,state.photoCalibration);
@@ -661,9 +680,9 @@ export function init(container,callbacks={}) {
   }
   renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',up);
   const ro=new ResizeObserver(resize);ro.observe(container);resize();
-  function loop(now=0){if(destroyed)return;raf=requestAnimationFrame(loop);const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;if(walk.isActive()){if(walk.update(dt))dirty=true;}else controls.update();if(container.clientWidth&&container.clientHeight&&!document.hidden&&!document.body.classList.contains('table-studio-open')&&!document.body.classList.contains('rs-preview-expired')){if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){weather?.userData.update(animationTime);if(showGuests){guests?.userData.update(animationTime);inflatableActivity?.userData.update(animationTime);renderer.shadowMap.needsUpdate=true;}animationTime=0;dirty=true;}if(dirty){renderer.render(scene,camera);dirty=false;}}}
+  function loop(now=0){if(destroyed)return;raf=requestAnimationFrame(loop);const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;if(walk.isActive()){if(walk.update(dt))dirty=true;}else controls.update();if(container.clientWidth&&container.clientHeight&&!document.hidden&&!document.body.classList.contains('table-studio-open')&&!document.body.classList.contains('rs-preview-expired')){if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){weather?.userData.update(animationTime);if(showGuests){guests?.userData.update(animationTime);inflatableActivity?.userData.update(animationTime);renderer.shadowMap.needsUpdate=true;}animationTime=0;dirty=true;}if(dirty){updatePhotoStageViewFade();renderer.render(scene,camera);dirty=false;}}}
   loop();document.addEventListener('visibilitychange',invalidate);
-  function setNight(value){night=!!value;generatedBackground();scene.fog.color.set(night?0x203044:weatherMode==='rain'?0x9eafb5:0xdde8df);scene.fog.density=hasVenuePhoto()?(weatherMode==='rain'?.0012:.00015):(weatherMode==='rain'?.004:.002);hemi.intensity=night?.7:weatherMode==='rain'?1.25:1.65;sun.intensity=night?.25:weatherMode==='rain'?.65:3.2;fill.intensity=night?.4:.7;renderer.toneMappingExposure=night?1.18:1.05;weather?.userData.setNight(night);weather?.userData.setPhotoMode?.(hasVenuePhoto());environment?.userData.setNight(night);local360.userData.setNight?.(night);lightGroup?.userData.setNight?.(night);renderer.shadowMap.needsUpdate=true;invalidate();}
+  function setNight(value){night=!!value;generatedBackground();syncPhotoFog();hemi.intensity=night?.7:weatherMode==='rain'?1.25:1.65;sun.intensity=night?.25:weatherMode==='rain'?.65:3.2;fill.intensity=night?.4:.7;renderer.toneMappingExposure=night?1.18:1.05;weather?.userData.setNight(night);weather?.userData.setPhotoMode?.(hasVenuePhoto());environment?.userData.setNight(night);local360.userData.setNight?.(night);lightGroup?.userData.setNight?.(night);renderer.shadowMap.needsUpdate=true;invalidate();}
   function setScene(options={}){
     showStyling=options.styling!==false;if(styling)styling.visible=showStyling;
     weatherMode=options.weather==='rain'?'rain':'clear';showGuests=!!options.guests;motion=options.motion!==false;
