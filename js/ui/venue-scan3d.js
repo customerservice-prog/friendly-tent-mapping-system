@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
+import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js?v=20260925-space-scan-4';
 
 function loadImage(url){
   return new Promise((resolve,reject)=>{
