@@ -385,7 +385,7 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20260924-real-photo-360-2').then(function(mod){
+    import('./js/ui/view3d.js?v=20260925-space-scan-1').then(function(mod){
       var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());if(info?.ready){setPhoto3dModeUi('360');showLayoutNotice('Space Scan reconstructed '+(info.metrics?.coveragePct||0)+'% depth coverage from your three real viewpoints.',5200);}else if(info&&!info.loading){setPhoto3dModeUi('matched');showLayoutNotice('Space Scan needs more overlap or texture. Retake Left, Center and Right while keeping the same yard features in all three photos.',7000);}}});
       inst.rebuild(snap);inst.setScene(sceneOptions);view3dMod=inst;
       if(snap.backgroundPhoto&&snap.venueScan?.status==='ready'&&inst.orbit360){
