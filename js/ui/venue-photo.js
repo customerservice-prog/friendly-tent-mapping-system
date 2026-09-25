@@ -25,6 +25,43 @@ export function normalizeVenuePhoto(value,apiBase){
     heightPx:clamp(value.heightPx,1,10000,null)
   };
 }
+export function normalizeVenueScan(value,apiBase){
+  value=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
+  const frames=(Array.isArray(value.frames)?value.frames:[]).map(frame=>{
+    if(!frame||typeof frame!=='object'||!['left','center','right'].includes(frame.role))return null;
+    const photo=normalizeVenuePhoto(frame,apiBase);if(!photo)return null;
+    return {...photo,role:frame.role};
+  }).filter(Boolean);
+  const roles=new Set(frames.map(f=>f.role));
+  return {
+    version:1,
+    status:roles.size===3?'ready':frames.length?'capturing':'empty',
+    baselineFt:clamp(value.baselineFt,2,20,6),
+    eyeHeightFt:clamp(value.eyeHeightFt,4,7,5.6),
+    fovDeg:clamp(value.fovDeg,40,90,62),
+    frames
+  };
+}
+function scanFrame(scan,role){return (scan.frames||[]).find(f=>f.role===role)||null;}
+export function venueScanPanel(value){
+  const scan=normalizeVenueScan(value,window.RENTSKETCH_API_URL),ready=scan.status==='ready';
+  const roles=[['left','1','Left position'],['center','2','Center position'],['right','3','Right position']];
+  return '<section class="venue-scan-card'+(ready?' is-ready':'')+'">'+
+    '<div class="venue-photo-kicker">SPACE SCAN'+(ready?' · READY':'')+'</div>'+
+    '<h4>Build the actual yard in 3D</h4>'+
+    '<p>Take three overlapping photos while moving sideways and keeping the camera pointed at the same setup area. RentSketch uses the parallax between them to estimate real depth instead of treating one photo like a wall.</p>'+
+    '<div class="venue-scan-guide"><span>LEFT</span><span>MOVE SIDEWAYS</span><span>RIGHT</span></div>'+
+    '<div class="venue-scan-frame-grid">'+roles.map(([role,num,label])=>{const frame=scanFrame(scan,role);return '<label class="venue-scan-frame'+(frame?' has-photo':'')+'">'+
+      (frame?'<img src="'+esc(frame.url)+'" alt="'+esc(label)+' scan frame">':'<span class="venue-scan-step">'+num+'</span>')+
+      '<strong>'+label+'</strong><span>'+(frame?'Captured':'Choose photo')+'</span>'+
+      '<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-role="venue-scan-file" data-scan-role="'+role+'">'+
+    '</label>';}).join('')+'</div>'+
+    '<label class="venue-scan-baseline"><span>Distance from left photo to right photo</span><div><input type="number" min="2" max="20" step=".5" value="'+scan.baselineFt+'" data-role="venue-scan-baseline"><strong>ft</strong></div><small>For best results, move about 6 ft total. This known distance gives the reconstruction a real-world scale.</small></label>'+
+    (ready?'<div class="venue-scan-ready"><strong>3D depth scan ready</strong><span>Open 3D View to use the reconstructed metric venue.</span></div>':'<p class="equipment-note">Capture all three positions to unlock the metric 3D reconstruction.</p>')+
+    (scan.frames.length?'<button type="button" class="btn-tertiary venue-scan-clear" data-role="venue-scan-clear">Clear Space Scan</button>':'')+
+  '</section>';
+}
+
 export function venuePhotoPanel(photo,status){
   photo=normalizeVenuePhoto(photo,window.RENTSKETCH_API_URL);
   const input='<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" data-role="venue-photo-file">';
