@@ -234,7 +234,7 @@ const web=http.createServer((req,res)=>{
     assert.equal(await page.locator('#propertyFitPanel').isHidden(),false,'fit reasoning panel opens');
     assert.match(await page.locator('#propertyFitPanel').innerText(),/Planning check only/);
     assert.match(await page.locator('#view3dOrbit360').innerText(),/3D Scan/);
-    assert.match(await page.locator('#canvasHint').innerText(),/Space Scan 3D/);assert.match(await page.locator('#canvasHint').innerText(),/multi-view depth mesh/);
+    assert.match(await page.locator('#canvasHint').innerText(),/3D Scan/);assert.match(await page.locator('#canvasHint').innerText(),/real multi-view depth/);
     await page.locator('#view3dMatchPhoto').click();
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
     await page.locator('#view3dOrbit360').click();
