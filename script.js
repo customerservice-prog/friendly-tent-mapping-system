@@ -212,6 +212,7 @@ async function chooseVenueScanPhoto(role,file,input){
       state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
     }
     renderDrawerBody('site');renderViews(getConflicts());
+    if(state.venueScan.status==='ready')setViewMode('3d');
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(err){console.warn('[RentSketch] Space Scan save will retry',err);}
     if(saved){
@@ -220,8 +221,7 @@ async function chooseVenueScanPhoto(role,file,input){
       before.samples.filter(f=>f.id&&!keep.has(f.id)&&f.id!==state.backgroundPhoto?.id).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
     }
     if(state.venueScan.status==='ready'){
-      showLayoutNotice('Space Scan ready. RentSketch can now build depth from three real viewpoints.',6500);
-      setViewMode('3d');
+      showLayoutNotice('Space Scan ready. RentSketch is building depth from three real viewpoints.',6500);
     }else{
       const captured=state.venueScan.frames.length;
       showLayoutNotice('Space Scan: '+captured+' of 3 viewpoints captured.',4200);
@@ -264,7 +264,7 @@ async function chooseVenueScanVideo(file,input){
     const snap=buildSnapshot(getConflicts());
     state.photoCalibration=defaultPhotoCalibration(snap.photoSite);
     state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
-    renderDrawerBody('site');renderViews(getConflicts());
+    renderDrawerBody('site');renderViews(getConflicts());setViewMode('3d');
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(err){console.warn('[RentSketch] Space Scan video save will retry',err);}
     if(saved){
@@ -272,7 +272,6 @@ async function chooseVenueScanVideo(file,input){
       venueScanPhotos(before).filter(f=>f.id&&!keep.has(f.id)).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
     }
     showLayoutNotice('Space Scan video ready. Building metric 3D depth from your real viewpoints…',6500);
-    setViewMode('3d');
     return true;
   }catch(err){
     console.error('[RentSketch] Space Scan video failed',err);
