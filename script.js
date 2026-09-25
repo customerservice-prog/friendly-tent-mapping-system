@@ -179,6 +179,64 @@ async function chooseVenuePhoto(file,input){
     return false;
   }finally{if(input&&input.isConnected)input.disabled=false;}
 }
+function currentVenueScan(){
+  return normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
+}
+async function chooseVenueScanPhoto(role,file,input){
+  if(!file||!['left','center','right'].includes(role))return false;
+  if(!requireEventEditing())return false;
+  if(input)input.disabled=true;
+  const before=currentVenueScan(),previous=before.frames.find(f=>f.role===role)||null;
+  try{
+    showLayoutNotice('Uploading '+role+' Space Scan photo…',4200);
+    const designId=await ensureVenuePhotoDesign();
+    if(!designId)throw new Error('This layout could not be saved before the scan photo upload.');
+    const photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
+    const frames=before.frames.filter(f=>f.role!==role).concat([{...photo,role}]);
+    state.venueScan=normalizeVenueScan({...before,frames},window.RENTSKETCH_API_URL);
+    if(role==='center'){
+      state.backgroundPhoto={...photo};
+      const snap=buildSnapshot(getConflicts());
+      state.photoCalibration=defaultPhotoCalibration(snap.photoSite);
+      state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
+    }
+    renderDrawerBody('site');renderViews(getConflicts());
+    window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
+    let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(err){console.warn('[RentSketch] Space Scan save will retry',err);}
+    if(saved&&previous?.id&&previous.id!==photo.id&&previous.id!==state.backgroundPhoto?.id){
+      deleteVenuePhoto(previous,venuePhotoContext(designId));
+    }
+    if(state.venueScan.status==='ready'){
+      showLayoutNotice('Space Scan ready. RentSketch can now build depth from three real viewpoints.',6500);
+      setViewMode('3d');
+    }else{
+      const captured=state.venueScan.frames.length;
+      showLayoutNotice('Space Scan: '+captured+' of 3 viewpoints captured.',4200);
+    }
+    return true;
+  }catch(err){
+    console.error('[RentSketch] Space Scan photo failed',err);
+    showLayoutNotice('Could not add Space Scan photo: '+(err?.message||'Upload failed.'),7000);
+    return false;
+  }finally{if(input&&input.isConnected)input.disabled=false;}
+}
+function updateVenueScanBaseline(value){
+  const n=Number(value);if(!Number.isFinite(n))return false;
+  const scan=currentVenueScan();
+  state.venueScan=normalizeVenueScan({...scan,baselineFt:Math.max(2,Math.min(20,n))},window.RENTSKETCH_API_URL);
+  renderViews(getConflicts());window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return true;
+}
+async function clearVenueScan(){
+  if(!requireEventEditing())return false;
+  const scan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
+  const deletable=scan.frames.filter(f=>f.id&&f.id!==state.backgroundPhoto?.id);
+  state.venueScan=null;renderDrawerBody('site');renderViews(getConflicts());
+  window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
+  let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(_){}
+  if(saved&&designId)deletable.forEach(photo=>deleteVenuePhoto(photo,venuePhotoContext(designId)));
+  showLayoutNotice(state.backgroundPhoto?'Space Scan cleared. Your center photo is still available as Photo Match.':'Space Scan cleared.',4200);
+  return true;
+}
 async function removeVenuePhoto(){
   if(!requireEventEditing()||!state.backgroundPhoto)return false;
   var old=state.backgroundPhoto,designId=window.RentSketchAutosave?.getDesignId?.();
