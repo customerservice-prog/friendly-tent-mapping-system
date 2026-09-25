@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { reconstructStereoGrid, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
+import { reconstructStereoGrid, reconstructMultiViewGrid, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
 
 function loadImage(url){
   return new Promise((resolve,reject)=>{
@@ -39,9 +39,12 @@ function normalizedFrames(scan){
   }
   return out;
 }
+function normalizedSamples(scan){
+  return (Array.isArray(scan?.samples)?scan.samples:[]).filter(sample=>sample&&/^https?:\/\//i.test(sample.url||'')&&Number.isFinite(Number(sample.offsetFactor))).map(sample=>({...sample,offsetFactor:Number(sample.offsetFactor)})).sort((a,b)=>a.offsetFactor-b.offsetFactor);
+}
 export function hasMetricSpaceScan(scan){
-  const f=normalizedFrames(scan);
-  return !!(f.left&&f.center&&f.right&&Number(scan?.baselineFt)>0);
+  const f=normalizedFrames(scan),samples=normalizedSamples(scan);
+  return !!((samples.length>=5||(f.left&&f.center&&f.right))&&Number(scan?.baselineFt)>0);
 }
 export async function createVenueScanWorld({
   scan,
@@ -53,28 +56,58 @@ export async function createVenueScanWorld({
   const group=new THREE.Group();group.name='Metric Space Scan';
   group.userData={mode:'metric-stereo-scan',ready:false,setNight(){}};
   if(!hasMetricSpaceScan(scan)||!site)return group;
-  const frames=normalizedFrames(scan);
+  const frames=normalizedFrames(scan),samples=normalizedSamples(scan);
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
-  const [leftImage,centerImage,rightImage]=await Promise.all([
-    loadImage(frames.left.url),loadImage(frames.center.url),loadImage(frames.right.url)
-  ]);
-  if(signal?.aborted)throw new DOMException('Aborted','AbortError');
-
-  const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
-  const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
-  const left=imageData(leftImage,width,height),center=imageData(centerImage,width,height),right=imageData(rightImage,width,height);
   const requestedBaselineFt=Math.max(1,Math.min(30,Number(scan.baselineFt)||6)),baselineFactor=Math.max(.4,Math.min(1.05,Number(scan.baselineFactor)||1)),baselineFt=requestedBaselineFt*baselineFactor;
-  const result=reconstructStereoGrid({
-    left,center,right,baselineFt,
-    fovDeg:Number(scan.fovDeg)||62,
-    horizonY:Number(calibration?.horizonY)||.34,
-    eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
-    step:mobile?5:4,
-    maxDisparity:mobile?20:26,
-    patchRadius:2,
-    verticalSearch:2,
-    maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
-  });
+  let centerImage,centerData,result,reconstructionMode='stereo-3',sourceFrameIds=[];
+  if(samples.length>=5){
+    const images=await Promise.all(samples.map(sample=>loadImage(sample.url)));
+    if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+    let centerIndex=0,bestCenter=Infinity;
+    samples.forEach((sample,index)=>{const d=Math.abs(sample.offsetFactor);if(d<bestCenter){bestCenter=d;centerIndex=index;}});
+    centerImage=images[centerIndex];
+    const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
+    const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
+    centerData=imageData(centerImage,width,height);const center=centerData,views=[];
+    for(let i=0;i<images.length;i++){
+      if(i===centerIndex)continue;
+      views.push({image:imageData(images[i],width,height),offsetFt:samples[i].offsetFactor*baselineFt});
+    }
+    result=reconstructMultiViewGrid({
+      center,views,
+      fovDeg:Number(scan.fovDeg)||62,
+      horizonY:Number(calibration?.horizonY)||.34,
+      eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
+      step:mobile?5:4,
+      maxDisparity:mobile?22:30,
+      patchRadius:2,
+      verticalSearch:3,
+      maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
+    });
+    reconstructionMode='multiview-'+samples.length;
+    sourceFrameIds=samples.map(s=>s.id).filter(Boolean);
+  }else{
+    const [leftImage,centerLoaded,rightImage]=await Promise.all([
+      loadImage(frames.left.url),loadImage(frames.center.url),loadImage(frames.right.url)
+    ]);
+    centerImage=centerLoaded;
+    if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+    const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
+    const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
+    const left=imageData(leftImage,width,height),center=imageData(centerImage,width,height),right=imageData(rightImage,width,height);centerData=center;
+    result=reconstructStereoGrid({
+      left,center,right,baselineFt,
+      fovDeg:Number(scan.fovDeg)||62,
+      horizonY:Number(calibration?.horizonY)||.34,
+      eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
+      step:mobile?5:4,
+      maxDisparity:mobile?20:26,
+      patchRadius:2,
+      verticalSearch:2,
+      maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
+    });
+    sourceFrameIds=[frames.left.id,frames.center.id,frames.right.id].filter(Boolean);
+  }
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   if(result.metrics.validCount<45||result.metrics.triangleCount<30){
     group.userData={mode:'metric-stereo-scan',ready:false,error:'not-enough-overlap',metrics:stereoReconstructionSummary(result),setNight(){}};
@@ -84,7 +117,7 @@ export async function createVenueScanWorld({
   // Use the real lower-image palette only as a neutral support surface for
   // holes outside the reconstructed mesh. No invented trees/houses are added.
   const siteWidth=Math.max(20,Number(site.widthFt)||50),siteLength=Math.max(20,Number(site.lengthFt)||60);
-  const groundColor=averageLowerColor(center),groundDay=groundColor.clone();
+  const groundColor=averageLowerColor(centerData),groundDay=groundColor.clone();
   const groundMaterial=new THREE.MeshStandardMaterial({color:groundColor,roughness:1,metalness:0});
   const supportGround=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(80,siteWidth*1.45),Math.max(100,siteLength*1.5)),groundMaterial);
   supportGround.name='Metric scan support ground';supportGround.rotation.x=-Math.PI/2;supportGround.position.y=-.10;supportGround.receiveShadow=true;supportGround.renderOrder=-10;
@@ -153,7 +186,8 @@ export async function createVenueScanWorld({
     knownBounds:worldBounds,
     obstacles,
     metrics:{...summary,autoObstacleCount:obstacles.length},
-    sourceFrames:[frames.left.id,frames.center.id,frames.right.id].filter(Boolean),
+    sourceFrames:sourceFrameIds,
+    reconstructionMode,
     cameraOrigin:{x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8},
     setNight(value){
       material.color.setScalar(value?.48:1);

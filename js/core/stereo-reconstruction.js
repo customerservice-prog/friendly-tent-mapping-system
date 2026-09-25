@@ -211,6 +211,144 @@ export function reconstructStereoGrid({
   };
 }
 
+
+export function reconstructMultiViewGrid({
+  center,
+  views=[],
+  fovDeg=62,
+  horizonY=.34,
+  eyeHeightFt=5.6,
+  step=4,
+  maxDisparity=30,
+  patchRadius=2,
+  verticalSearch=3,
+  minContrast=7,
+  minConfidence=.10,
+  maxDepthFt=150,
+  minDepthFt=3,
+}={}){
+  if(!center)throw new Error('Multi-view reconstruction needs a center capture.');
+  const w=center.width,h=center.height;
+  const usable=(Array.isArray(views)?views:[]).map((view,index)=>{
+    const image=view?.image,offsetFt=finite(view?.offsetFt,0);
+    if(!image||Math.abs(offsetFt)<.20)return null;
+    if(image.width!==w||image.height!==h)throw new Error('All multi-view scan frames must use the same working resolution.');
+    return {image,offsetFt,index};
+  }).filter(Boolean);
+  if(usable.length<2)throw new Error('Multi-view reconstruction needs captures on both sides of the center view.');
+  const hasLeft=usable.some(v=>v.offsetFt<0),hasRight=usable.some(v=>v.offsetFt>0);
+  if(!hasLeft||!hasRight)throw new Error('Multi-view reconstruction needs camera motion on both sides of the center viewpoint.');
+
+  fovDeg=clamp(finite(fovDeg,62),35,100);
+  horizonY=clamp(finite(horizonY,.34),.08,.85);
+  step=Math.max(2,Math.min(10,Math.round(finite(step,4))));
+  maxDisparity=Math.max(4,Math.min(Math.floor(w*.28),Math.round(finite(maxDisparity,30))));
+  const centerGray=gray(center),targets=usable.map(v=>({...v,gray:gray(v.image)}));
+  const focalPx=w/(2*Math.tan(fovDeg*Math.PI/360)),maxOffset=Math.max(...targets.map(v=>Math.abs(v.offsetFt)),.2);
+  const margin=maxDisparity+patchRadius+2,xs=[],ys=[];
+  for(let x=margin;x<w-margin;x+=step)xs.push(x);
+  for(let y=patchRadius+verticalSearch+1;y<h-patchRadius-verticalSearch-1;y+=step)ys.push(y);
+  const cols=xs.length,rows=ys.length,total=cols*rows;
+  const positions=new Float32Array(total*3),uvs=new Float32Array(total*2),colors=new Float32Array(total*3);
+  const depths=new Float32Array(total),confidence=new Float32Array(total),valid=new Uint8Array(total),supportViews=new Uint8Array(total);
+  const horizonPx=horizonY*h;
+
+  function weightedMedian(candidates){
+    const sorted=candidates.slice().sort((a,b)=>a.depth-b.depth);
+    const totalWeight=sorted.reduce((s,c)=>s+c.weight,0);let run=0;
+    for(const cand of sorted){run+=cand.weight;if(run>=totalWeight*.5)return cand.depth;}
+    return sorted.at(-1)?.depth||0;
+  }
+  function fuse(candidates){
+    if(!candidates.length)return null;
+    const med=weightedMedian(candidates),tol=Math.max(2.2,med*.20);
+    const consistent=candidates.filter(c=>Math.abs(c.depth-med)<=tol);
+    const pool=consistent.length?consistent:candidates.slice().sort((a,b)=>b.weight-a.weight).slice(0,1);
+    const weightSum=pool.reduce((s,c)=>s+c.weight,0);
+    const depth=pool.reduce((s,c)=>s+c.depth*c.weight,0)/Math.max(.0001,weightSum);
+    const meanConfidence=pool.reduce((s,c)=>s+c.confidence*c.weight,0)/Math.max(.0001,weightSum);
+    const supportFactor=clamp(pool.length/Math.min(4,targets.length),.25,1);
+    const consistencyFactor=consistent.length>=2?1:.62;
+    return {depth,confidence:clamp(meanConfidence*supportFactor*consistencyFactor,0,1),views:pool.length};
+  }
+
+  for(let gy=0;gy<rows;gy++){
+    const y=ys[gy];
+    for(let gx=0;gx<cols;gx++){
+      const x=xs[gx],index=gy*cols+gx;
+      uvs[index*2]=x/(w-1);uvs[index*2+1]=1-y/(h-1);
+      const rgb=sampleColor(center,x,y);colors[index*3]=rgb[0];colors[index*3+1]=rgb[1];colors[index*3+2]=rgb[2];
+      const contrast=localContrast(centerGray,w,h,x,y,patchRadius+1);
+      if(contrast<minContrast)continue;
+      const candidates=[];
+      for(const target of targets){
+        const absOffset=Math.abs(target.offsetFt),direction=target.offsetFt<0?1:-1;
+        const scaledMax=Math.max(4,Math.min(maxDisparity,Math.round(maxDisparity*(.40+.60*absOffset/maxOffset))));
+        const match=bestMatch(centerGray,target.gray,w,h,x,y,{direction,maxDisparity:scaledMax,patchRadius,verticalSearch});
+        if(!match||match.d<=0||match.confidence<minConfidence)continue;
+        const depth=clamp(focalPx*absOffset/Math.max(.5,match.d),minDepthFt,maxDepthFt);
+        const baselineWeight=.55+.45*Math.sqrt(absOffset/maxOffset);
+        const weight=Math.max(.015,match.confidence*baselineWeight);
+        candidates.push({depth,confidence:match.confidence,weight,offsetFt:target.offsetFt});
+      }
+      const fused=fuse(candidates);
+      if(!fused||fused.confidence<minConfidence*.78)continue;
+      const depth=fused.depth;
+      positions[index*3]=(x-w/2)/focalPx*depth;
+      positions[index*3+1]=eyeHeightFt-(y-horizonPx)/focalPx*depth;
+      positions[index*3+2]=depth;
+      depths[index]=depth;confidence[index]=fused.confidence;supportViews[index]=fused.views;valid[index]=1;
+    }
+  }
+
+  for(let pass=0;pass<2;pass++){
+    const fill=[];
+    for(let gy=1;gy<rows-1;gy++)for(let gx=1;gx<cols-1;gx++){
+      const i=gy*cols+gx;if(valid[i])continue;
+      const ns=[i-1,i+1,i-cols,i+cols].filter(j=>valid[j]);
+      if(ns.length<3)continue;
+      const ds=ns.map(j=>depths[j]),med=percentile(ds,.5);
+      if(Math.max(...ds)-Math.min(...ds)>Math.max(3.5,med*.24))continue;
+      fill.push({i,gx,gy,depth:med,conf:Math.min(...ns.map(j=>confidence[j]))*.62,views:Math.max(1,Math.round(ns.reduce((s,j)=>s+supportViews[j],0)/ns.length))});
+    }
+    for(const f of fill){
+      const x=xs[f.gx],y=ys[f.gy],i=f.i,depth=f.depth;
+      positions[i*3]=(x-w/2)/focalPx*depth;
+      positions[i*3+1]=eyeHeightFt-(y-horizonPx)/focalPx*depth;
+      positions[i*3+2]=depth;depths[i]=depth;confidence[i]=f.conf;supportViews[i]=f.views;valid[i]=1;
+    }
+  }
+
+  const indices=[];
+  function triangle(a,b,c){
+    if(!valid[a]||!valid[b]||!valid[c])return;
+    const da=depths[a],db=depths[b],dc=depths[c],min=Math.min(da,db,dc),max=Math.max(da,db,dc);
+    if(max-min>Math.max(4.2,min*.34))return;
+    indices.push(a,b,c);
+  }
+  for(let gy=0;gy<rows-1;gy++)for(let gx=0;gx<cols-1;gx++){
+    const a=gy*cols+gx,b=a+1,c=a+cols,d=c+1;
+    triangle(a,c,b);triangle(b,c,d);
+  }
+  const validCount=valid.reduce((s,v)=>s+v,0),validRatio=total?validCount/total:0;
+  const validDepths=Array.from(depths).filter((_,i)=>valid[i]);
+  const medianDepthFt=percentile(validDepths,.5);
+  const avgConfidence=validCount?Array.from(confidence).reduce((s,v,i)=>s+(valid[i]?v:0),0)/validCount:0;
+  const avgViews=validCount?Array.from(supportViews).reduce((s,v,i)=>s+(valid[i]?v:0),0)/validCount:0;
+  const strongMultiView=validCount?Array.from(supportViews).reduce((s,v,i)=>s+(valid[i]&&v>=2?1:0),0)/validCount:0;
+  const quality=validRatio>.44&&avgConfidence>.23&&strongMultiView>.55?'good':validRatio>.20&&avgConfidence>.13?'usable':'weak';
+  return {
+    width:w,height:h,cols,rows,xSamples:xs,ySamples:ys,
+    positions,uvs,colors,depths,confidence,valid,supportViews,indices:new Uint32Array(indices),
+    focalPx,fovDeg,horizonY,eyeHeightFt,viewCount:targets.length+1,
+    metrics:{
+      validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,
+      triangleCount:indices.length/3,quality,viewCount:targets.length+1,
+      averageViewsPerPoint:avgViews,multiViewAgreement:strongMultiView
+    }
+  };
+}
+
 export function stereoReconstructionSummary(result){
   const m=result?.metrics||{};
   return {
@@ -218,7 +356,10 @@ export function stereoReconstructionSummary(result){
     coveragePct:Math.round((m.validRatio||0)*100),
     medianDepthFt:m.medianDepthFt==null?null:Math.round(m.medianDepthFt*10)/10,
     confidencePct:Math.round((m.averageConfidence||0)*100),
-    triangles:Math.round(m.triangleCount||0)
+    triangles:Math.round(m.triangleCount||0),
+    viewCount:Math.round(m.viewCount||result?.viewCount||3),
+    averageViewsPerPoint:m.averageViewsPerPoint==null?null:Math.round(m.averageViewsPerPoint*10)/10,
+    multiViewAgreementPct:m.multiViewAgreement==null?null:Math.round(m.multiViewAgreement*100)
   };
 }
 

@@ -169,7 +169,7 @@ async function chooseVenuePhoto(file,input){
     var photoSaved=false;
     try{await window.RentSketchAutosave?.flush?.();photoSaved=true;}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
     if(photoSaved&&previous?.id&&previous.id!==photo.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
-    if(photoSaved)previousScan.frames.filter(f=>f.id&&f.id!==photo.id&&f.id!==previous?.id).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
+    if(photoSaved)venueScanPhotos(previousScan).filter(f=>f.id!==photo.id&&f.id!==previous?.id).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
     showLayoutNotice('Photo applied. Your real venue is now showing in 3D.',6500);
     return true;
   }catch(err){
@@ -183,6 +183,11 @@ async function chooseVenuePhoto(file,input){
 function currentVenueScan(){
   return normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
 }
+function venueScanPhotos(scan){
+  scan=scan||currentVenueScan();const unique=new Map();
+  [...(scan.frames||[]),...(scan.samples||[])].forEach(function(photo){if(photo?.id)unique.set(photo.id,photo);});
+  return Array.from(unique.values());
+}
 function metricScanReady(){var scan=currentVenueScan(),runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;if(scan.status!=='ready')return false;return runtime?.ready===true;}
 async function chooseVenueScanPhoto(role,file,input){
   if(!file||!['left','center','right'].includes(role))return false;
@@ -195,7 +200,7 @@ async function chooseVenueScanPhoto(role,file,input){
     if(!designId)throw new Error('This layout could not be saved before the scan photo upload.');
     const photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
     const frames=before.frames.filter(f=>f.role!==role).concat([{...photo,role}]);
-    state.venueScan=normalizeVenueScan({...before,frames,captureMethod:'manual',baselineFactor:1},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:state.venueScan.status==='ready'};
+    state.venueScan=normalizeVenueScan({...before,frames,samples:[],captureMethod:'manual',baselineFactor:1},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:state.venueScan.status==='ready'};
     if(role==='center'){
       state.backgroundPhoto={...photo};
       // A new center viewpoint changes the Photo Match camera itself. Recreate
@@ -209,8 +214,10 @@ async function chooseVenueScanPhoto(role,file,input){
     renderDrawerBody('site');renderViews(getConflicts());
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(err){console.warn('[RentSketch] Space Scan save will retry',err);}
-    if(saved&&previous?.id&&previous.id!==photo.id&&previous.id!==state.backgroundPhoto?.id){
-      deleteVenuePhoto(previous,venuePhotoContext(designId));
+    if(saved){
+      if(previous?.id&&previous.id!==photo.id&&previous.id!==state.backgroundPhoto?.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
+      const keep=new Set(state.venueScan.frames.map(f=>f.id).filter(Boolean));
+      before.samples.filter(f=>f.id&&!keep.has(f.id)&&f.id!==state.backgroundPhoto?.id).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
     }
     if(state.venueScan.status==='ready'){
       showLayoutNotice('Space Scan ready. RentSketch can now build depth from three real viewpoints.',6500);
@@ -241,15 +248,17 @@ async function chooseVenueScanVideo(file,input){
   try{
     showLayoutNotice('Reading Space Scan video and extracting viewpoints…',5000);
     const extracted=await extractVenueScanVideo(file);
-    const uploaded=[];
-    for(const frame of extracted.frames){
-      showLayoutNotice('Uploading '+frame.role+' Space Scan viewpoint…',3500);
-      const photo=await uploadVenuePhoto(frame.file,venuePhotoContext(designId));
-      uploaded.push({...photo,role:frame.role});
+    const uploadedSamples=[];
+    for(let i=0;i<extracted.samples.length;i++){
+      const sample=extracted.samples[i];
+      showLayoutNotice('Uploading Space Scan viewpoint '+(i+1)+' of '+extracted.samples.length+'…',3500);
+      const photo=await uploadVenuePhoto(sample.file,venuePhotoContext(designId));
+      uploadedSamples.push({...photo,role:sample.role||undefined,sampleIndex:sample.sampleIndex,offsetFactor:sample.offsetFactor});
     }
-    const center=uploaded.find(f=>f.role==='center');
+    const center=uploadedSamples.find(f=>f.role==='center')||uploadedSamples[Math.floor(uploadedSamples.length/2)];
     if(!center)throw new Error('The center scan frame could not be created.');
-    state.venueScan=normalizeVenueScan({...before,frames:uploaded,captureMethod:'video',baselineFactor:extracted.baselineFactor},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:true};
+    const primaryFrames=uploadedSamples.filter(f=>['left','center','right'].includes(f.role));
+    state.venueScan=normalizeVenueScan({...before,frames:primaryFrames,samples:uploadedSamples,captureMethod:'video',baselineFactor:extracted.baselineFactor},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:true};
     state.backgroundPhoto={...center};
     if(photoMounted){photoViewMod.unmount();photoMounted=false;}
     const snap=buildSnapshot(getConflicts());
@@ -259,11 +268,8 @@ async function chooseVenueScanVideo(file,input){
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(err){console.warn('[RentSketch] Space Scan video save will retry',err);}
     if(saved){
-      const keep=new Set(uploaded.map(f=>f.id));
-      before.frames.filter(f=>f.id&&!keep.has(f.id)).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
-      if(before.frames.every(f=>f.id!==state.backgroundPhoto?.id)&&state.backgroundPhoto?.id&&before.frames.length){
-        // Center from the new scan is intentionally the trusted Photo Match view.
-      }
+      const keep=new Set(uploadedSamples.map(f=>f.id));
+      venueScanPhotos(before).filter(f=>f.id&&!keep.has(f.id)).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
     }
     showLayoutNotice('Space Scan video ready. Building metric 3D depth from your real viewpoints…',6500);
     setViewMode('3d');
@@ -277,7 +283,7 @@ async function chooseVenueScanVideo(file,input){
 async function clearVenueScan(){
   if(!requireEventEditing())return false;
   const scan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
-  const deletable=scan.frames.filter(f=>f.id&&f.id!==state.backgroundPhoto?.id);
+  const deletable=venueScanPhotos(scan).filter(f=>f.id&&f.id!==state.backgroundPhoto?.id);
   state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;renderDrawerBody('site');renderViews(getConflicts());
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
   let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(_){}
@@ -292,7 +298,7 @@ async function removeVenuePhoto(){
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
   var removalSaved=false;try{await window.RentSketchAutosave?.flush?.();removalSaved=true;}catch(_){}
   if(removalSaved&&designId){
-    const unique=new Map([[old.id,old],...oldScan.frames.filter(f=>f.id).map(f=>[f.id,f])]);
+    const unique=new Map([[old.id,old],...venueScanPhotos(oldScan).map(f=>[f.id,f])]);
     unique.forEach(photo=>deleteVenuePhoto(photo,venuePhotoContext(designId)));
   }
   showLayoutNotice('Venue photo and Space Scan removed. RentSketch is showing the generated setting again.',4200);
