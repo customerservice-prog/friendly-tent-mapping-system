@@ -99,7 +99,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  assert.equal(continuation.visible,false,'returning to Matched View keeps the obsolete continuation hidden');
  assert.equal(control.enabled,false,'returning to Matched View locks the camera again');
  assert.ok(scene.background?.isCanvasTexture,'Matched View restores the exact photo background');
- assert.notDeepEqual(renderer.camera.position.toArray(),orbitCamera.toArray(),'Matched View restores the calibrated camera');
+ assert.deepEqual(renderer.camera.position.toArray(),orbitCamera.toArray(),'failed free-camera requests never disturb the calibrated single-photo camera');
  assert.ok(draws>0,'uploaded photo is drawn into the background texture');assert.match(view.captureImage(),/^data:image\/jpeg/,'print/review capture includes the WebGL composition');
  const before=draws,cameraBefore=renderer.camera.position.clone();
  view.rebuild({...data,photoSite,photoGeometry,photoCalibration:{...photoCalibration,horizonY:.25,backLeft:{x:.34,y:.42},backRight:{x:.66,y:.42}},backgroundPhoto:{id:'p1',url:'https://api.test/background-photo/p1?t=cap',focusX:80,focusY:30,zoom:1.5,shade:.2}});
