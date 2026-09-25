@@ -138,7 +138,7 @@ export function init(container,callbacks={}) {
   const walk=createFirstPersonWalk({
     camera,controls,domElement:renderer.domElement,container,mobile,
     getSite:()=>state?.photoSite||state?.tent||{widthFt:50,lengthFt:60},
-    getObstacles:()=>state?.photoGeometry||[],
+    getObstacles:()=>[...(state?.photoGeometry||[]),...(state?.scanGeometry||[])],
     getItems:()=>state?(state.objects||[]).map(o=>({...o,...photoPlacementFor(o)})):[],
     onChange:invalidate,
     onMode:value=>callbacks.onWalkMode?.(value)
