@@ -121,7 +121,7 @@ function createBlocks(){
   const g=new THREE.Group();g.name='Animated tumbling blocks';
   const blocks=[];
   for(let layer=0;layer<10;layer++)for(let i=0;i<3;i++){
-    const swap=layer%2===1,b=box(swap?.7:2.1,.28,swap?2.1:.7,0xd4a56d,.87,.02);
+    const swap=layer%2===1,b=box(swap ? .7 : 2.1,.28,swap ? 2.1 : .7,0xd4a56d,.87,.02);
     b.position.set(swap?-.7+i*.7:0,.2+layer*.29,swap?0:-.7+i*.7);g.add(b);blocks.push(b);
   }
   g.userData.update=t=>{const top=blocks.slice(-6);top.forEach((b,i)=>b.rotation.y=Math.sin(t*.65+i)*.015);};return g;
