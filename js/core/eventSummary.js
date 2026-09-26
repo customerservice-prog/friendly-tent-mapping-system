@@ -18,8 +18,21 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
     if(wallCounts.window) add(null,wallCounts.window,'sidewall','Window 10 ft Sidewall — confirm pricing','Window 10 ft Sidewall');
   }
   const inflatables=new Map();for(const o of objects)if(o.kind==='inflatable')inflatables.set(o.inflatableId,(inflatables.get(o.inflatableId)||0)+1);inflatables.forEach((qty,id)=>add(find(catalog.inflatables,id),qty,'inflatable','Inflatable — confirm selection'));
-  const equipment=new Map();for(const o of objects)if(o.kind==='equipment'){const key=o.equipmentId||o.id;const entry=equipment.get(key)||{item:find(catalog.equipment,key)||{name:o.name||'Equipment — confirm selection',productId:o.productId,pricePerDay:null},qty:0};entry.qty++;equipment.set(key,entry);}equipment.forEach(({item,qty})=>add(item,qty,'equipment','Equipment — confirm selection'));
-  const accessories=new Map();for(const o of objects)if(o.kind==='accessory'){const key=o.accessoryId||o.id;const entry=accessories.get(key)||{item:find(catalog.accessories,key)||{name:o.name||'Rental item — confirm selection',productId:o.productId,pricePerDay:null},qty:0};entry.qty++;accessories.set(key,entry);}accessories.forEach(({item,qty})=>add(item,qty,'accessory','Rental item — confirm selection'));
+  // Equipment is the forward format. Legacy accessory saves remain readable,
+  // but both formats share one product identity in review/print/quote output.
+  // This prevents a migrated item from appearing twice when an old layout is
+  // opened after the live catalog has gained the newer equipment mapping.
+  const rentals=new Map();
+  for(const o of objects)if(o.kind==='equipment'||o.kind==='accessory'){
+    const localId=o.kind==='equipment'?(o.equipmentId||o.id):(o.accessoryId||o.id);
+    const productId=o.productId||null;
+    const key=productId?'product:'+productId:o.kind+':'+localId;
+    const current=(catalog.equipment||[]).find(item=>(productId&&item.productId===productId)||item.id===localId);
+    const legacy=(catalog.accessories||[]).find(item=>(productId&&item.productId===productId)||item.id===localId);
+    const item=current||legacy||{name:o.name||'Rental item — confirm selection',productId,pricePerDay:null};
+    const entry=rentals.get(key)||{item,qty:0};entry.qty++;rentals.set(key,entry);
+  }
+  rentals.forEach(({item,qty})=>add(item,qty,'equipment','Rental item — confirm selection'));
   const tables = new Map(), chairs = new Map(), linens = new Map();
   for(const object of objects) {
     if(object.kind==='chair')chairs.set(object.chairId,(chairs.get(object.chairId)||0)+1);

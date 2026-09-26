@@ -138,3 +138,30 @@ test('multi-reference fusion combines spatial support from several reference cam
   assert.ok(fused.metrics.multiReferenceAgreement>0,'fusion reports cross-reference spatial agreement');
   assert.ok(fused.metrics.averageConfidence>0);
 });
+
+test('camera vertical drift is registered before stereo disparity is solved',()=>{
+  const width=96,height=64,disparity=5;
+  const center=image(width,height,(x,y)=>{
+    const v=(x*37+y*53+x*y*7+(x%7)*29+(y%5)*17)%256;
+    return [v,(v*3+41)%256,(v*5+73)%256];
+  });
+  function shifted(dx,dy){
+    const data=new Uint8ClampedArray(width*height*4);
+    for(let i=3;i<data.length;i+=4)data[i]=255;
+    for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+      const tx=x+dx,ty=y+dy;if(tx<0||ty<0||tx>=width||ty>=height)continue;
+      const src=(y*width+x)*4,dst=(ty*width+tx)*4;
+      for(let c=0;c<3;c++)data[dst+c]=center.data[src+c];
+    }
+    return {width,height,data};
+  }
+  const result=reconstructStereoGrid({
+    left:shifted(disparity,3),center,right:shifted(-disparity,-2),
+    baselineFt:6,fovDeg:60,horizonY:.35,step:4,maxDisparity:12,verticalSearch:1,minConfidence:.05
+  });
+  assert.ok(result.metrics.validCount>60,'registered scan keeps enough depth points');
+  const expected=result.focalPx*3/disparity;
+  assert.ok(Math.abs(result.metrics.medianDepthFt-expected)<expected*.30,'camera drift must not become false depth');
+  assert.ok(Math.abs(result.metrics.cameraRegistration.left.y)>=2);
+  assert.ok(Math.abs(result.metrics.cameraRegistration.right.y)>=1);
+});
