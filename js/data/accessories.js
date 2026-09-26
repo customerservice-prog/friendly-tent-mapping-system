@@ -5,7 +5,7 @@
 
 export const ACCESSORIES = [];
 
-const EXCLUDED_CATEGORIES=new Set(['tent','table','chair','linen','lighting','dance_floor']);
+const EXCLUDED_CATEGORIES=new Set(['tent','table','chair','linen','lighting']);
 const normal=v=>String(v||'').toLowerCase().replace(/×/g,'x').replace(/[^a-z0-9]+/g,' ').trim();
 const slug=v=>normal(v).replace(/\s+/g,'-');
 const finite=v=>{const n=Number(v);return Number.isFinite(n)&&n>0?n:null;};
@@ -44,6 +44,7 @@ const PROFILES=[
 function profileFor(product){
   const text=normal((product.name||'')+' '+(product.external_id||'')+' '+(product.category||''));
   if(/bounce|water ?slide|waterslide|inflatable|obstacle course/.test(text))return {exclude:'inflatable'};
+  if(/dance floor/.test(text))return {exclude:'dance-floor'};
   for(const p of PROFILES)if(p.test.test(text))return p;
   const cat=normal(product.category);
   if(cat==='game'||cat==='games')return {type:'game',category:'Games',w:4,d:4,h:4};
