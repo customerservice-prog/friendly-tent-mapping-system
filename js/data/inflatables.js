@@ -17,7 +17,7 @@ export const INFLATABLE_PROFILES = [
   profile('22ft-tropical-lava-wave-marble-waterslide','slide',['#b82420','#ffbf2f','#d74329','#e3811d'],18,40,22,{lanes:2,palms:true,marble:true}),
 ];
 const normal=v=>String(v||'').toLowerCase().replace(/×/g,'x').replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
-export function isInflatableProduct(p){return p?.active!==false && !/package|cover|blower|repair|accessor/i.test(p?.name||'') && /\bbounce\s*house\b|\bwater\s*slide\b|\bwaterslide\b/i.test(p?.name||'');}
+export function isInflatableProduct(p){return p?.active!==false && !/package|cover|blower|repair|accessor/i.test(p?.name||'') && /\bbounce\s*house\b|\bwater\s*slide\b|\bwaterslide\b|\bobstacle\s*course\b|\binflatable\s+(?:slide|game|combo)\b/i.test(p?.name||'');}
 function positive(v){const n=Number(v);return Number.isFinite(n)&&n>0&&n<=200?n:null;}
 export function inflatableCatalog(products,showPrices){
   return products.filter(isInflatableProduct).map(p=>{
