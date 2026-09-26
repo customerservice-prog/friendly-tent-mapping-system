@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../js/core/stereo-reconstruction.js';
+import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects, smoothDepthField } from '../js/core/stereo-reconstruction.js';
 
 function image(width,height,fn){
   const data=new Uint8ClampedArray(width*height*4);
@@ -217,4 +217,17 @@ test('weak reference reconstruction is rejected instead of ghosting the fused wo
   assert.equal(weak.accepted,false);
   assert.ok(weak.referenceScore<.34);
   assert.ok(fused.referenceResults.find(r=>r.referenceIndex===3).accepted);
+});
+
+test('edge-aware smoothing reduces local depth noise without washing across a depth boundary',()=>{
+  const cols=6,rows=4,total=cols*rows,depths=new Float32Array(total),valid=new Uint8Array(total).fill(1),confidence=new Float32Array(total).fill(.8);
+  for(let y=0;y<rows;y++)for(let x=0;x<cols;x++)depths[y*cols+x]=x<3?20:40;
+  depths[1*cols+1]=21.2;depths[2*cols+4]=38.8;
+  const result=smoothDepthField({depths,confidence,valid,cols,rows,strength:.45,edgeFraction:.08,edgeFt:1.5,iterations:1});
+  assert.ok(Math.abs(result.depths[1*cols+1]-20)<Math.abs(21.2-20),'left-side depth noise moves toward its local surface');
+  assert.ok(Math.abs(result.depths[2*cols+4]-40)<Math.abs(38.8-40),'right-side depth noise moves toward its local surface');
+  const leftEdge=result.depths[1*cols+2],rightEdge=result.depths[1*cols+3];
+  assert.ok(rightEdge-leftEdge>15,'sharp foreground/background depth edge remains separated');
+  assert.ok(result.averageDelta>0);
+  assert.ok(result.maxDelta<2,'smoothing remains conservative');
 });
