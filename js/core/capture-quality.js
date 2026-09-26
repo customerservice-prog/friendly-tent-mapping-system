@@ -5,28 +5,35 @@ function gray(frame){
  return out;
 }
 function mean(values){let total=0;for(const v of values)total+=v;return total/Math.max(1,values.length);}
-export function estimateFrameTranslation(reference,target,{maxXFraction=.18,maxYFraction=.10}={}){
+export function estimateFrameTranslation(reference,target,{maxXFraction=.18,maxYFraction=.18}={}){
  const w=Number(reference?.width)||0,h=Number(reference?.height)||0;
  if(!w||!h||target?.width!==w||target?.height!==h||!reference?.data||!target?.data)return null;
  const a=gray(reference),b=gray(target),ma=mean(a),mb=mean(b);
  const maxDx=Math.max(2,Math.min(Math.floor(w*.24),Math.round(w*maxXFraction)));
  const maxDy=Math.max(2,Math.min(Math.floor(h*.16),Math.round(h*maxYFraction)));
- const stride=w*h>18000?4:w*h>7000?3:2;
  let best={dx:0,dy:0,score:Infinity,samples:0};
- // A coarse global registration estimates camera bob/tilt. Horizontal motion is
- // searched but intentionally not applied to stereo because horizontal disparity
- // is the depth signal. Only the vertical component is used for rectification.
- for(let dy=-maxDy;dy<=maxDy;dy++){
-  for(let dx=-maxDx;dx<=maxDx;dx+=2){
-   let error=0,n=0;
-   const x0=maxDx+2,x1=w-maxDx-2,y0=maxDy+2,y1=h-maxDy-2;
-   for(let y=y0;y<y1;y+=stride)for(let x=x0;x<x1;x+=stride){
-    const av=a[y*w+x]-ma,bv=b[(y+dy)*w+(x+dx)]-mb;
-    error+=Math.min(90,Math.abs(av-bv));n++;
-   }
-   if(!n)continue;
-   const score=error/n;
-   if(score<best.score)best={dx,dy,score,samples:n};
+ const scoreAt=(dx,dy,stride)=>{
+  let error=0,n=0;
+  const x0=maxDx+2,x1=w-maxDx-2,y0=maxDy+2,y1=h-maxDy-2;
+  for(let y=y0;y<y1;y+=stride)for(let x=x0;x<x1;x+=stride){
+   const av=a[y*w+x]-ma,bv=b[(y+dy)*w+(x+dx)]-mb;
+   error+=Math.min(90,Math.abs(av-bv));n++;
+  }
+  return {score:n?error/n:Infinity,samples:n};
+ };
+ // Coarse search finds the motion basin cheaply, then a local full-pixel pass
+ // avoids aliasing odd-pixel phone movement. Horizontal motion is searched but
+ // intentionally not applied to stereo because horizontal disparity is depth.
+ const coarseStride=w*h>18000?5:w*h>7000?4:3;
+ for(let dy=-maxDy;dy<=maxDy;dy+=2)for(let dx=-maxDx;dx<=maxDx;dx+=2){
+  const hit=scoreAt(dx,dy,coarseStride);
+  if(hit.score<best.score)best={dx,dy,...hit};
+ }
+ const coarse={...best},fineStride=w*h>18000?4:w*h>7000?3:2;
+ for(let dy=Math.max(-maxDy,coarse.dy-3);dy<=Math.min(maxDy,coarse.dy+3);dy++){
+  for(let dx=Math.max(-maxDx,coarse.dx-3);dx<=Math.min(maxDx,coarse.dx+3);dx++){
+   const hit=scoreAt(dx,dy,fineStride);
+   if(hit.score<best.score)best={dx,dy,...hit};
   }
  }
  if(!Number.isFinite(best.score))return null;
