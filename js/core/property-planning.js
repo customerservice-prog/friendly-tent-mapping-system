@@ -1,6 +1,6 @@
 import { evaluateTentFit, evaluateRentalFit } from './site-fit.js';
 import { objectLocalDimensions } from './world-space.js';
-import { rentalPhotoPlacement } from './photo-geometry.js';
+import { rentalPhotoPlacement, photoCalibrationValidity } from './photo-geometry.js';
 
 function finite(value, fallback = 0) {
   const n = Number(value);
@@ -87,7 +87,7 @@ export function evaluatePropertyScene(snapshot) {
       color:'neutral',
     };
   }
-  if(snapshot.photoCalibration?.autoEstimated!==false){
+  if(snapshot.photoCalibration?.autoEstimated!==false||snapshot.photoCalibration?.scaleConfirmed!==true||!photoCalibrationValidity(snapshot.photoCalibration).valid){
     return {active:false,source:'photo-needs-calibration',tent:null,rentals:[],counts:{fits:0,close:0,blocked:0},overall:'unknown',color:'neutral'};
   }
   const {site,usablePolygon,obstacles,manualObstacles,scanObstacles}=propertyPlanningInput(snapshot);
@@ -136,7 +136,7 @@ export function evaluatePropertyScene(snapshot) {
 }
 
 export function summarizePropertyFit(plan) {
-  if(plan?.source==='photo-needs-calibration')return {label:'Adjust photo ground first',detail:'The photo ground is still an automatic estimate. Adjust its four corners before checking the model. Photo scale remains unverified.',kind:'neutral'};
+  if(plan?.source==='photo-needs-calibration')return {label:'Set photo scale first',detail:'Align a measured ground rectangle and enter its width and depth before checking the model. A photo alone does not establish scale; vertical perspective and site clearance still need verification.',kind:'neutral'};
   if(plan?.source==='photo-needs-boundaries')return {label:'Outline your usable space',detail:'A photo alone cannot establish boundaries or confirm fit. Adjust the ground and trace obstacles in Photo View; verify actual site dimensions with staff.',kind:'neutral'};
   if(!plan?.active){if(plan?.source==='metric-scan-needs-boundaries')return {label:'Trace boundaries to check fit',detail:'The Space Scan has estimated depth, but automatic obstacle boundaries are not yet reliable. Trace the house, fence or no-place areas in Photo View before using the fit result.',kind:'neutral'};return {label:'Site fit unavailable',detail:'Upload and calibrate a venue photo to check the estimated property model.',kind:'neutral'};}
   const tent=plan.tent;

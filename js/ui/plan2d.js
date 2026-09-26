@@ -1,3 +1,5 @@
+import { photoPlanSnapshot } from '../core/photo-plan.js';
+import { objectLocalDimensions, objectGroundFootprint } from '../core/world-space.js';
 import { equipmentById } from '../data/equipment.js';
 import { tabletopSvg } from './tabletop-symbols.js';
 // Friendly Event Designer - 2D top-down plan view
@@ -119,11 +121,13 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
   const silhouette = chair.silhouette || 'folding';
   const frameColor = chair.frameColor || '#ffffff';
   const accentColor = chair.accentColor || frameColor;
-  for (const position of chairPositions(item,chair)) {
-    const fx = cxFt + position.x;
-    const fy = cyFt + position.y;
-    const disp = toDispXY(fx, fy);
-    const effAngle = rotate90 ? (Math.PI / 2 - position.angle) : position.angle;
+  const local=planModelDimensions(item),angle=currentData?.photoSitePlan?(Number(item.rotationDeg)||0)*Math.PI/180:0;
+  const chairItem=currentData?.photoSitePlan?{...item,...local,rotationDeg:0}:item;
+  for (const position of chairPositions(chairItem,chair)) {
+    const fx = cxFt + position.x*Math.cos(angle)-position.y*Math.sin(angle);
+    const fy = cyFt + position.x*Math.sin(angle)+position.y*Math.cos(angle);
+    const disp = toDispXY(fx, fy),chairAngle=position.angle+angle;
+    const effAngle = rotate90 ? (Math.PI / 2 - chairAngle) : chairAngle;
     const bearingDeg = Math.atan2(-Math.cos(effAngle), Math.sin(effAngle)) * 180 / Math.PI;
     const dot = document.createElement('div');
     dot.className = 'plan2d-chair plan2d-chair--' + silhouette+(item.preview?' placement-ghost':'');
@@ -138,6 +142,16 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
     dot.innerHTML = chairPlanSvg(silhouette);
     host.appendChild(dot);
   }
+}
+
+function planModelDimensions(item){
+  if(!currentData?.photoSitePlan)return {widthFt:item.widthFt,depthFt:item.depthFt};
+  const product=item.kind==='inflatable'?inflatableById(item.inflatableId):item.kind==='equipment'?equipmentById(item.equipmentId):null;
+  return product?{widthFt:product.widthFt,depthFt:product.depthFt}:objectLocalDimensions(item);
+}
+function positionObjectElement(element,item,x,y){
+  const local=planModelDimensions(item),origin=toDispXY(x+item.widthFt/2-local.widthFt/2,y+item.depthFt/2-local.depthFt/2);
+  element.style.left=origin.x*pxPerFt+'px';element.style.top=origin.y*pxPerFt+'px';
 }
 
 function severityClass(data, itemId) {
@@ -229,10 +243,10 @@ function buildChandelier(layer, tent) {
   layer.appendChild(el);
 }
 
-function renderSidewalls(data,tent){
+function renderSidewalls(data,tent,host=stageEl){
   const walls=Array.isArray(data.sidewalls)?data.sidewalls:[];
   if(!walls.length||tent.isSite)return;
-  const layer=document.createElement('div');layer.className='plan2d-sidewall-layer';stageEl.appendChild(layer);
+  const layer=document.createElement('div');layer.className='plan2d-sidewall-layer';host.appendChild(layer);
   walls.forEach(function(seg){
     if(!seg||!['solid','window'].includes(seg.type))return;
     const start=Number(seg.startFt)||0,len=Math.max(.1,Number(seg.lengthFt)||10);
@@ -249,14 +263,14 @@ function renderSidewalls(data,tent){
   });
 }
 
-function renderLighting(data, tent) {
+function renderLighting(data, tent, host=stageEl) {
   if (!data.lightingOn) return;
   const opt = lightingById(data.lightingId);
   const visual = opt && opt.visual;
   if (!visual || visual === 'none') return;
   const layer = document.createElement('div');
   layer.className = 'plan2d-lighting-layer';
-  stageEl.appendChild(layer);
+  host.appendChild(layer);
   if (visual === 'bistro-cross-runs') buildCanopyLights(layer, tent);
   else if (visual === 'perimeter-eave') buildPerimeterLights(layer, tent, 4);
   else if (visual === 'grid-canopy') buildCanopyLights(layer, tent);
@@ -268,6 +282,7 @@ function renderLighting(data, tent) {
 }
 
 function render(data) {
+  data=photoPlanSnapshot(data);
   currentData = data;
   const tent = data.tent;
   const area=tent.planningArea||tent;
@@ -280,13 +295,24 @@ function render(data) {
   if(sheetEl){sheetEl.style.width=(size.w+64)+'px';sheetEl.style.height=(size.h+64)+'px';}
   if(toolbarEl){toolbarEl.querySelector('output').textContent=Math.round(zoom*100)+'%';toolbarEl.querySelector('[data-plan=out]').disabled=zoom<=1;toolbarEl.querySelector('[data-plan=in]').disabled=zoom>=3;}
   stageEl.classList.toggle('is-outdoor',!!tent.isSite||!!tent.planningArea);
-  if(tent.planningArea){const outline=document.createElement('div');outline.className='plan-tent-footprint';const sz=toDispWD(tent.widthFt,tent.lengthFt);outline.style.width=sz.w*pxPerFt+'px';outline.style.height=sz.d*pxPerFt+'px';outline.textContent=tent.name;stageEl.appendChild(outline);}
-  stageEl.dataset.dimensions = tent.widthFt+' × '+tent.lengthFt+' ft';
+
+  stageEl.dataset.dimensions = area.widthFt+' × '+area.lengthFt+' ft';
   stageEl.dataset.surface=data.surfaceType==='concrete'||data.surfaceType==='asphalt'?'paved':'grass';
   const dimension=document.createElement('span');dimension.className='plan-dimension plan-dimension-width';dimension.textContent=(rotate90?area.lengthFt:area.widthFt)+' ft';stageEl.appendChild(dimension);
   const length=document.createElement('span');length.className='plan-dimension plan-dimension-length';length.textContent=(rotate90?area.widthFt:area.lengthFt)+' ft';stageEl.appendChild(length);
   stageEl.setAttribute('role','group');
   stageEl.setAttribute('aria-label',tent.name+' floor plan');
+
+  let structureHost=stageEl;
+  if(data.photoSitePlan&&!tent.isSite){
+    const placement=data.planTentPlacement,origin=toDispXY(placement.x,placement.y),sz=toDispWD(tent.widthFt,tent.lengthFt);
+    structureHost=document.createElement('div');structureHost.className='plan2d-tent-layer';
+    Object.assign(structureHost.style,{position:'absolute',left:origin.x*pxPerFt+'px',top:origin.y*pxPerFt+'px',width:sz.w*pxPerFt+'px',height:sz.d*pxPerFt+'px',transformOrigin:'50% 50%',transform:'rotate('+((rotate90?-1:1)*placement.rotationDeg)+'deg)',pointerEvents:'none'});
+    structureHost.dataset.worldX=placement.x;structureHost.dataset.worldY=placement.y;structureHost.dataset.rotation=placement.rotationDeg;
+    structureHost.setAttribute('aria-label',(tent.name||'Tent')+'; move the tent in Photo View or 3D View');stageEl.appendChild(structureHost);
+  }
+  if(tent.planningArea&&!tent.isSite){const outline=document.createElement('div');outline.className='plan-tent-footprint';const sz=toDispWD(tent.widthFt,tent.lengthFt);outline.style.width=sz.w*pxPerFt+'px';outline.style.height=sz.d*pxPerFt+'px';outline.textContent=tent.name;outline.title=data.photoSitePlan?'Move the tent in Photo View or 3D View':tent.name;structureHost.appendChild(outline);}
+  if(toolbarEl?.querySelector('.plan-view-label')){const label=toolbarEl.querySelector('.plan-view-label');label.textContent=data.photoSitePlan?'ESTIMATED SITE PLAN':'OVERHEAD PLAN';label.title=data.photoSitePlan?'Same rental positions as Photo View and 3D View. Move the tent in either of those views.':'';}
 
 (tent.centerPoles || []).forEach(function (p) {
   const pole = document.createElement('div');
@@ -298,11 +324,11 @@ function render(data) {
   pole.style.height = r + 'px';
   pole.style.left = (disp.x * pxPerFt) + 'px';
   pole.style.top = (disp.y * pxPerFt) + 'px';
-  stageEl.appendChild(pole);
+  structureHost.appendChild(pole);
 });
 
-renderSidewalls(data,tent);
-renderLighting(data, tent);
+renderSidewalls(data,tent,structureHost);
+renderLighting(data,tent,structureHost);
   
   if (data.anchoringMethod) {
     var corners = [
@@ -329,18 +355,18 @@ renderLighting(data, tent);
         line.style.left = cx + 'px';
         line.style.top = cy + 'px';
         line.style.transform = 'rotate(' + ang + 'deg)';
-        stageEl.appendChild(line);
+        structureHost.appendChild(line);
         var stake = document.createElement('div');
         stake.className = 'plan2d-anchor-stake';
         stake.style.left = outPxX + 'px';
         stake.style.top = outPxY + 'px';
-        stageEl.appendChild(stake);
+        structureHost.appendChild(stake);
       } else if (data.anchoringMethod === 'ballast') {
         var block = document.createElement('div');
         block.className = 'plan2d-anchor-ballast';
         block.style.left = outPxX + 'px';
         block.style.top = outPxY + 'px';
-        stageEl.appendChild(block);
+        structureHost.appendChild(block);
       }
     });
   }
@@ -364,12 +390,12 @@ renderLighting(data, tent);
   wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + linenClass + ' ' + severityClass(data, item.id) + ((selectedDanceGroup ? item.kind === 'dance' : data.selectedId === item.id) ? ' selected' : '');
   if(inflatable)wrap.classList.add('inflatable');if(standaloneChair)wrap.classList.add('standalone-chair');if(accessory){wrap.classList.add('accessory','accessory--'+accessory.accessoryType);wrap.dataset.accessoryId=accessory.id;}
   if(item.preview)wrap.classList.add('placement-ghost');
-  const disp = toDispXY(item.x, item.y);
-  const dispSize = toDispWD(item.widthFt, item.depthFt);
-  wrap.style.left = (disp.x * pxPerFt) + 'px';
-  wrap.style.top = (disp.y * pxPerFt) + 'px';
+  const local=planModelDimensions(item),dispSize=toDispWD(local.widthFt,local.depthFt);
+  positionObjectElement(wrap,item,item.x,item.y);
   wrap.style.width = (dispSize.w * pxPerFt) + 'px';
   wrap.style.height = (dispSize.d * pxPerFt) + 'px';
+  if(data.photoSitePlan){wrap.style.transformOrigin='50% 50%';wrap.style.transform='rotate('+((rotate90?-1:1)*(Number(item.rotationDeg)||0))+'deg)';}
+  wrap.dataset.worldX=item.x;wrap.dataset.worldY=item.y;wrap.dataset.rotation=item.rotationDeg||0;
   wrap.dataset.itemId = item.id;
   if(tableDef)wrap.dataset.tableId=tableDef.id;
   wrap.tabIndex = item.preview?-1:0;
@@ -380,7 +406,7 @@ renderLighting(data, tent);
 
                              const top = document.createElement('div');
   top.className = 'plan2d-table-top';
-  top.innerHTML = standaloneChair ? `<div class="plan-accent-chair" style="--chair-frame:${standaloneChair.frameColor};--chair-accent:${standaloneChair.accentColor};transform:rotate(${180+(rotate90?90-(item.rotationDeg||0):(item.rotationDeg||0))}deg)">${chairPlanSvg(standaloneChair.silhouette)}</div>` : inflatable ? inflatablePlanSvg(inflatable,rotate90?90-(item.rotationDeg||0):(item.rotationDeg||0)) : accessory ? '<div class="plan-accessory-symbol">'+accessoryIcon(accessory.accessoryType)+'<span>'+String(accessory.name||'Rental').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span></div>' : isDance ? '<span class="parquet-quadrants"><i></i><i></i><i></i><i></i></span>' : item.linenId ? '' : tableTopDetailHtml(silhouette);
+  top.innerHTML = standaloneChair ? `<div class="plan-accent-chair" style="--chair-frame:${standaloneChair.frameColor};--chair-accent:${standaloneChair.accentColor};transform:rotate(${180+(rotate90?90-(data.photoSitePlan?0:item.rotationDeg||0):(data.photoSitePlan?0:item.rotationDeg||0))}deg)">${chairPlanSvg(standaloneChair.silhouette)}</div>` : inflatable ? inflatablePlanSvg(inflatable,rotate90?90-(data.photoSitePlan?0:item.rotationDeg||0):(data.photoSitePlan?0:item.rotationDeg||0)) : accessory ? '<div class="plan-accessory-symbol">'+accessoryIcon(accessory.accessoryType)+'<span>'+String(accessory.name||'Rental').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span></div>' : isDance ? '<span class="parquet-quadrants"><i></i><i></i><i></i><i></i></span>' : item.linenId ? '' : tableTopDetailHtml(silhouette);
   if(['linen-runner-9ft','linen-napkins'].includes(item.linenId)){
     const accent=document.createElement('span');accent.className=item.linenId==='linen-napkins'?'plan2d-napkin':'plan2d-runner';
     accent.style.background=linenColorHex(item.linenColor);
@@ -412,9 +438,8 @@ renderLighting(data, tent);
   if (danceItems.length) {
     var fMinX = Infinity, fMinY = Infinity, fMaxX = -Infinity, fMaxY = -Infinity;
     danceItems.forEach(function (o) {
-      var c1 = toDispXY(o.x, o.y);
-      var c2 = toDispXY(o.x + o.widthFt, o.y + o.depthFt);
-      [c1, c2].forEach(function (c) {
+      var corners=data.photoSitePlan?objectGroundFootprint(o).map(p=>toDispXY(p.x,p.y)):[toDispXY(o.x,o.y),toDispXY(o.x+o.widthFt,o.y+o.depthFt)];
+      corners.forEach(function (c) {
         if (c.x < fMinX) fMinX = c.x;
         if (c.y < fMinY) fMinY = c.y;
         if (c.x > fMaxX) fMaxX = c.x;
@@ -489,16 +514,14 @@ const dModel = toDispXY(dxPx / pxPerFt, dyPx / pxPerFt);
     const dx=Math.max(-Math.min(...floor.map(o=>o.x)),Math.min(tent.widthFt-Math.max(...floor.map(o=>o.x+o.widthFt)),newX-dragOrigFt.x));
     const dy=Math.max(-Math.min(...floor.map(o=>o.y)),Math.min(tent.lengthFt-Math.max(...floor.map(o=>o.y+o.depthFt)),newY-dragOrigFt.y));
     newX=dragOrigFt.x+dx;newY=dragOrigFt.y+dy;
-    floor.forEach(item=>{const el=stageEl.querySelector('[data-item-id="'+item.id+'"]'),disp=toDispXY(item.x+dx,item.y+dy);if(el){el.style.left=disp.x*pxPerFt+'px';el.style.top=disp.y*pxPerFt+'px';}});
+    floor.forEach(item=>{const el=stageEl.querySelector('[data-item-id="'+item.id+'"]');if(el)positionObjectElement(el,item,item.x+dx,item.y+dy);});
     const frame=stageEl.querySelector('.plan2d-dance-frame'),delta=toDispXY(dx,dy);if(frame)frame.style.transform='translate('+delta.x*pxPerFt+'px,'+delta.y*pxPerFt+'px)';
   }
   stageEl.querySelectorAll('.plan2d-chair').forEach(chair=>{if(chair.dataset.chairFor!==dragTarget.id)return;const disp=toDispXY(Number(chair.dataset.modelX)+newX-dragOrigFt.x,Number(chair.dataset.modelY)+newY-dragOrigFt.y);chair.style.left=disp.x*pxPerFt+'px';chair.style.top=disp.y*pxPerFt+'px';});
   dragLiveFt = { x: newX, y: newY };
   const el = stageEl.querySelector('[data-item-id="' + dragTarget.id + '"]');
   if (el) {
-    const disp = toDispXY(newX, newY);
-    el.style.left = (disp.x * pxPerFt) + 'px';
-    el.style.top = (disp.y * pxPerFt) + 'px';
+    positionObjectElement(el,dragTarget,newX,newY);
   }
 }
 

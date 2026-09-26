@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {chromium}=require('playwright');
-const root=path.resolve(__dirname,'..'),out=path.join(root,'qa-photo-match');fs.mkdirSync(out,{recursive:true});
+const root=path.resolve(__dirname,'..'),out=process.env.RENTSKETCH_QA_OUT||path.join(root,'qa-photo-match');fs.mkdirSync(out,{recursive:true});
 const waitServer=server=>new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const tinyJpeg=Buffer.from('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAEf/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9k=','base64');
 function scanSvg(n){
@@ -68,7 +68,7 @@ const web=http.createServer((req,res)=>{
       localStorage.setItem('rentsketch-anon-session','generic-photo-owner');
       localStorage.setItem('rentsketch-autosave:generic',JSON.stringify({id:'generic-photo-design',scene:{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},savedAt:new Date().toISOString(),tenant:'generic',anonymousSessionId:'generic-photo-owner'}));
     });
-    const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+    const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(/INVALID_VALUE|texSubImage2D|texStorage2D/.test(m.text()))errors.push(m.text());});
     await page.goto(webOrigin+'/designer/?tenant=generic&admin=1',{waitUntil:'networkidle'});
     await page.waitForFunction(()=>window.RentSketchEventPass?.canEdit()===true&&window.FriendlyBridge?.getScene);
     assert.equal(new URL(page.url()).search,'?tenant=generic&admin=1');
@@ -137,12 +137,12 @@ const web=http.createServer((req,res)=>{
     assert.match(await page.locator('[data-role="venue-photo-status"]').innerText(),/Applied/);
 
     // A single photo is no longer pretended to be a true 360 reconstruction.
-    await page.locator('#viewMode3d').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
-    await page.locator('#view3dMatchPhoto').waitFor({state:'visible'});
+    await page.locator('#viewModePhoto').click();await page.locator('#canvas canvas').waitFor({timeout:15000});
+    assert.equal(await page.locator('#viewModePhoto').getAttribute('aria-selected'),'true');
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','one photo opens as camera-matched 2.5D instead of fake 360');
     assert.equal(await page.locator('#view3dOrbit360').isHidden(),true,'3D Scan controls stay locked until a multi-view scan exists');
     assert.equal(await page.locator('#view3dWalk').isHidden(),true,'Walk is not offered for one flat photo');
-    assert.match(await page.locator('#canvasHint').innerText(),/Space Scan/);
+    assert.match(await page.locator('#canvasHint').innerText(),/scale|Scale|photo|Photo/);
     assert.equal(await page.locator('#view3dInside').isHidden(),true,'a flat photo never offers the interior camera');
     assert.equal(await page.locator('#propertyFitBadge').getAttribute('data-kind'),'neutral','untraced automatic photo never claims fit');
     await page.evaluate(()=>document.getElementById('layoutNotice')?.remove());
@@ -150,16 +150,32 @@ const web=http.createServer((req,res)=>{
     const roofPoint=await page.evaluate(async()=>{
       const g=await import('/js/core/photo-geometry.js?projection-test'),s=window.FriendlyBridge.getScene(),r=document.querySelector('#canvas canvas').getBoundingClientRect();
       const site={widthFt:50,lengthFt:60},p=g.photoProjection(site,s.photoCalibration,r.width,r.height,192,128,s.backgroundPhoto),m=p.matrix;
-      const v=[0,11,0,1],dot=row=>row.reduce((n,a,i)=>n+a*v[i],0),w=dot(m.slice(12,16));
+      const {canopyHeight}=await import('/js/core/tent-canopy.js'),{structuralProfile}=await import('/js/data/tentStructure.js'),tent={type:'pole',widthFt:20,lengthFt:20};
+      const v=[0,canopyHeight(tent,structuralProfile('pole',20,20),0,-5),-5,1],dot=row=>row.reduce((n,a,i)=>n+a*v[i],0),w=dot(m.slice(12,16));
       return {x:r.left+(dot(m.slice(0,4))/w+1)*r.width/2,y:r.top+(1-dot(m.slice(4,8))/w)*r.height/2};
     });
     await page.mouse.move(roofPoint.x,roofPoint.y);await page.mouse.down();await page.mouse.move(roofPoint.x+65,roofPoint.y+24,{steps:8});await page.mouse.up();
-    await page.waitForFunction(()=>!!window.FriendlyBridge.getScene().photoTentPlacement,{timeout:5000});
+    await page.waitForFunction(()=>!!window.FriendlyBridge.getScene().photoTentPlacement,null,{timeout:5000});
     const dragged3dTent=await page.evaluate(()=>window.FriendlyBridge.getScene().photoTentPlacement);
     assert.ok(Math.abs(dragged3dTent.x-15)>.2||Math.abs(dragged3dTent.y-20)>.2,'visible 3D tent drag changes saved yard placement');
+    // Move an independently selectable table in the rendered photo, not only
+    // the primary tent. The calibration workspace now edits ground marks only.
+    const tableScreenPoint=()=>page.evaluate(async()=>{
+      const g=await import('/js/core/photo-geometry.js?projection-test'),s=window.FriendlyBridge.getScene(),r=document.querySelector('#canvas canvas').getBoundingClientRect(),site={widthFt:50,lengthFt:60};
+      const item=g.rentalPhotoPlacement(s.objects.find(o=>o.id==='qa-photo-table'),{widthFt:20,lengthFt:20},site,s.photoTentPlacement),m=g.photoProjection(site,s.photoCalibration,r.width,r.height,192,128,s.backgroundPhoto).matrix;
+      const v=[item.x+item.widthFt/2-25,2.5,item.y+item.depthFt/2-30,1],dot=row=>row.reduce((n,a,i)=>n+a*v[i],0),w=dot(m.slice(12,16));
+      return {x:r.left+(dot(m.slice(0,4))/w+1)*r.width/2,y:r.top+(1-dot(m.slice(4,8))/w)*r.height/2};
+    });
+    const tablePoint=await tableScreenPoint();await page.mouse.click(tablePoint.x,tablePoint.y);
+    await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+    const selectedTablePoint=await tableScreenPoint();
+    await page.mouse.move(selectedTablePoint.x,selectedTablePoint.y);await page.mouse.down();await page.mouse.move(selectedTablePoint.x+32,selectedTablePoint.y+14,{steps:8});await page.mouse.up();
+    await page.waitForFunction(()=>!!window.FriendlyBridge.getScene().objects.find(o=>o.id==='qa-photo-table')?.photoPlacement,null,{timeout:5000});
+    const movedPhotoTable=await page.evaluate(()=>window.FriendlyBridge.getScene().objects.find(o=>o.id==='qa-photo-table').photoPlacement);
+    assert.ok(Number.isFinite(movedPhotoTable.x)&&Number.isFinite(movedPhotoTable.y),'visible photo table drag commits independent world placement');
     await page.locator('#view3dAdjustPhoto').click();
     assert.equal(await page.locator('#viewModePhoto').getAttribute('aria-selected'),'true','Adjust photo opens the placement workspace');
-    await page.locator('#viewMode3d').click();
+    await page.locator('#viewModePhoto').click();
 
 
     await page.locator('.rail-btn[data-drawer="tables"]').click();
@@ -178,6 +194,7 @@ const web=http.createServer((req,res)=>{
     const restored=await page.evaluate(()=>window.FriendlyBridge.getScene());
     assert.deepEqual(restored.objects.find(o=>o.id===yardItem.id)?.photoPlacement,yardItem.photoPlacement,'yard placement survives saved design reload');
     assert.deepEqual(restored.photoTentPlacement,dragged3dTent,'dragged tent location survives saved design reload');
+    assert.deepEqual(restored.objects.find(o=>o.id==='qa-photo-table')?.photoPlacement,movedPhotoTable,'independently dragged table survives saved design reload');
 
     console.log('PASS Photo customer journey: yard and tent placement survive reload');
     // Build an estimated depth preview from left / center / right viewpoints.
@@ -211,29 +228,9 @@ const web=http.createServer((req,res)=>{
     await page.locator('#viewModePhoto').waitFor({state:'visible'});
     assert.equal(await page.locator('#viewModePhoto').getAttribute('aria-selected'),'true','upload opens Photo View');
     assert.equal(await page.locator('#drawer').isHidden(),true,'Photo Match closes the setting drawer so the workspace is actually draggable');
+    await page.locator('#view3dAdjustPhoto').click();
     await page.locator('.photo-workspace').waitFor();
-    assert.equal(await page.locator('[data-photo-item="__photo_tent__"]').count(),1,'tent is independently draggable on the photo');
-    assert.equal(await page.locator('[data-photo-item="qa-photo-table"]').count(),1,'rental is rendered over the real photo');
-    await page.locator('[data-photo-item="qa-photo-table"]').waitFor({state:'visible',timeout:10000});
-    // The successful reconstruction notice can overlap the SVG briefly; dismiss
-    // it so this remains a test of the Photo View drag target, not z-index timing.
     await page.evaluate(()=>document.getElementById('layoutNotice')?.remove());
-
-    // Drag the table somewhere else on the venue.
-    const tableBox=await page.locator('[data-photo-item="qa-photo-table"]').boundingBox();assert.ok(tableBox);
-    await page.mouse.move(tableBox.x+tableBox.width/2,tableBox.y+tableBox.height/2);
-    await page.mouse.down();await page.mouse.move(tableBox.x+tableBox.width/2+115,tableBox.y+tableBox.height/2-55,{steps:8});await page.mouse.up();
-    await page.waitForFunction(()=>!!window.FriendlyBridge.getScene().objects.find(o=>o.id==='qa-photo-table')?.photoPlacement);
-    const tablePlacement=await page.evaluate(()=>window.FriendlyBridge.getScene().objects.find(o=>o.id==='qa-photo-table').photoPlacement);
-    assert.ok(Number.isFinite(tablePlacement.x)&&Number.isFinite(tablePlacement.y),'photo drag writes world-space placement');
-
-    // Drag the tent independently from its normal floor-plan origin.
-    const tentBox=await page.locator('[data-photo-item="__photo_tent__"]').boundingBox();assert.ok(tentBox);
-    await page.mouse.move(tentBox.x+tentBox.width/2,tentBox.y+tentBox.height/2);
-    await page.mouse.down();await page.mouse.move(tentBox.x+tentBox.width/2-85,tentBox.y+tentBox.height/2+40,{steps:8});await page.mouse.up();
-    await page.waitForFunction(()=>!!window.FriendlyBridge.getScene().photoTentPlacement);
-    const tentPlacement=await page.evaluate(()=>window.FriendlyBridge.getScene().photoTentPlacement);
-    assert.ok(Number.isFinite(tentPlacement.x)&&Number.isFinite(tentPlacement.y));
 
     // Manual calibration changes the ground perspective used by both Photo View and 3D.
     await page.locator('[data-photo-tool="calibrate"]').click();
@@ -243,7 +240,12 @@ const web=http.createServer((req,res)=>{
     await page.waitForFunction(before=>JSON.stringify(window.FriendlyBridge.getScene().photoCalibration)!==before,calBefore);
     assert.equal(await page.evaluate(()=>window.FriendlyBridge.getScene().photoCalibration.autoEstimated),false);
 
+    await page.locator('[data-photo-reference-width]').fill('24');await page.locator('[data-photo-reference-depth]').fill('22');await page.locator('[data-photo-confirm-scale]').click();
+    assert.equal(await page.evaluate(()=>window.FriendlyBridge.getScene().photoCalibration.scaleConfirmed),true,'explicit reference measurements persist');
+    assert.deepEqual(await page.evaluate(()=>({width:window.FriendlyBridge.getScene().photoCalibration.reference.widthFt,depth:window.FriendlyBridge.getScene().photoCalibration.reference.lengthFt})),{width:24,depth:22},'both edited reference dimensions survive rerenders before Apply');
+
     // Trace a building proxy; it becomes saved scene geometry for the 3D reconstruction.
+    await page.locator('.photo-mark-tools summary').click();
     await page.selectOption('[data-photo-geometry-type]','house');await page.locator('[data-photo-tool="geometry"]').click();
     const stageBox=await page.locator('.photo-workspace-stage').boundingBox();assert.ok(stageBox);
     await page.mouse.move(stageBox.x+stageBox.width*.48,stageBox.y+stageBox.height*.52);
@@ -254,8 +256,7 @@ const web=http.createServer((req,res)=>{
 
     await page.evaluate(()=>window.RentSketchAutosave.flush());await page.waitForTimeout(80);
     const savedScene=savedPatches.at(-1)?.scene;assert.ok(savedScene,'photo workspace state was PATCH-saved');
-    assert.ok(savedScene.objects.find(o=>o.id==='qa-photo-table')?.photoPlacement,'rental photo placement persists');
-    assert.ok(savedScene.photoTentPlacement,'tent photo placement persists');
+    assert.ok(savedScene.objects.find(o=>o.id===yardItem.id)?.photoPlacement,'rental photo placement persists');
     assert.ok(savedScene.photoCalibration,'calibration persists');
     assert.ok(savedScene.photoGeometry?.some(g=>g.type==='house'),'traced geometry persists');
     assert.equal(savedScene.venueScan?.status,'ready','three-view Space Scan persists with the design');
@@ -281,7 +282,7 @@ const web=http.createServer((req,res)=>{
     assert.match(await page.locator('#canvasHint').innerText(),/dimensions unverified/);assert.match(await page.locator('#canvasHint').innerText(),/3D Scan/);assert.match(await page.locator('#canvasHint').innerText(),/real views/);assert.match(await page.locator('#canvasHint').innerText(),/captured geometry/);
     await page.locator('#view3dMatchPhoto').click();
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
-    await page.locator('#view3dOrbit360').click();
+    await page.locator('#viewMode3d').click();
     assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','user can return to the estimated 3D Scan');
     await page.locator('#view3dMeasure').waitFor({state:'visible'});
     await page.locator('#view3dMeasure').click();
@@ -312,7 +313,7 @@ const web=http.createServer((req,res)=>{
     assert.equal(await page.locator('#view3dOrbit360').getAttribute('aria-pressed'),'true','Escape leaves Walk Mode in the same estimated 3D Scan');
     await page.screenshot({path:path.join(out,'generic-admin-photo-applied.png'),fullPage:true});
     assert.deepEqual(errors,[],'no browser page errors during Photo Match');
-    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement,tentPlacement,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));
+    fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement:movedPhotoTable,tentPlacement:dragged3dTent,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));
     console.log('PASS Photo Spatial Chromium: one-photo matched safety plus explicitly unverified multi-view Space Scan, Measure and Walk work in the real browser flow.');
     await context.close();
   }finally{await browser.close();web.closeAllConnections();api.closeAllConnections();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}

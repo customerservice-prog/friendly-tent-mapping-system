@@ -32,28 +32,51 @@ function subscribe(fn) {
   };
 }
 
-function commit(nextState, action = 'edit') {
-  if (options.canMutate && !options.canMutate(action, nextState, state)) return false;
-  past.push(cloneState(state));
+// Optional scene context participates in the same timeline as rental edits.
+function historyEntry() {
+  return { layout: cloneState(state), context: options.captureContext ? cloneState(options.captureContext()) : null };
+}
+
+function restoreEntry(entry) {
+  state = entry.layout;
+  if (options.restoreContext && entry.context !== null) options.restoreContext(cloneState(entry.context));
+}
+
+function remember() {
+  past.push(historyEntry());
   if (past.length > 100) past.shift();
   future = [];
+}
+
+function commit(nextState, action = 'edit') {
+  if (options.canMutate && !options.canMutate(action, nextState, state)) return false;
+  remember();
   state = nextState;
   notify();
   return true;
 }
 
+function commitContext(nextContext) {
+  if (!options.captureContext || !options.restoreContext || (options.canMutate && !options.canMutate('context', state, state))) return false;
+  if (JSON.stringify(options.captureContext()) === JSON.stringify(nextContext)) return true;
+  remember();
+  options.restoreContext(cloneState(nextContext));
+  notify();
+  return true;
+}
+
 function undo() {
-  if (!past.length || (options.canMutate && !options.canMutate('undo', past[past.length-1], state))) return false;
-  future.push(cloneState(state));
-  state = past.pop();
+  if (!past.length || (options.canMutate && !options.canMutate('undo', past[past.length-1].layout, state))) return false;
+  future.push(historyEntry());
+  restoreEntry(past.pop());
   notify();
   return true;
 }
 
 function redo() {
-  if (!future.length || (options.canMutate && !options.canMutate('redo', future[future.length-1], state))) return false;
-  past.push(cloneState(state));
-  state = future.pop();
+  if (!future.length || (options.canMutate && !options.canMutate('redo', future[future.length-1].layout, state))) return false;
+  past.push(historyEntry());
+  restoreEntry(future.pop());
   notify();
   return true;
 }
@@ -134,6 +157,7 @@ function reset(newState) {
 
 return {
   getState: getState,
+  commitContext: commitContext,
   subscribe: subscribe,
   setTent: setTent,
   addObject: addObject,

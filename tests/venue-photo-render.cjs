@@ -92,7 +92,9 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  // off-centre crops and narrow screens. Merely checking camera state missed this.
  const geometry=await load(path.join(root,'js/core/photo-geometry.js'));await geometry.evaluate();
  for(const [vw,vh] of [[900,600],[1900,740],[360,640]]){
+   const previousPhotoTexture=scene.background,previousPhotoSize=[previousPhotoTexture.image.width,previousPhotoTexture.image.height].join(':');let previousDisposed=false;previousPhotoTexture.addEventListener('dispose',()=>{previousDisposed=true;});
    viewportWidth=vw;viewportHeight=vh;resizeScene();
+   if([scene.background.image.width,scene.background.image.height].join(':')!==previousPhotoSize){assert.notEqual(scene.background,previousPhotoTexture,'resize allocates new GPU photo storage');assert.equal(previousDisposed,true,'superseded photo texture is disposed');}
    const rect=geometry.namespace.photoImageRect(vw,vh,1600,1000,{focusX:24,focusY:72,zoom:1.2});
    for(const [x,z] of [[0,0],[70,0],[70,90],[0,90],[35,45],[24,28],[44,48]]){
      const photo=geometry.namespace.worldToPhoto(x,z,photoSite,photoCalibration),actual=new THREE.Vector3(x-35,0,z-45).project(renderer.camera);
@@ -134,6 +136,28 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  view.rebuild({...data,photoSite,photoGeometry,photoCalibration:{...photoCalibration,horizonY:.25,backLeft:{x:.34,y:.42},backRight:{x:.66,y:.42}},backgroundPhoto:{id:'p1',url:'https://api.test/background-photo/p1?t=cap',focusX:80,focusY:30,zoom:1.5,shade:.2}});
  assert.ok(draws>before,'crop/focus changes repaint the photo without replacing the layout');
  assert.notDeepEqual(renderer.camera.position.toArray(),cameraBefore.toArray(),'photo calibration reframes the 3D camera');
+ // Switching away from the photograph changes presentation, not the event.
+ const modelData={...data,photoSite,photoCalibration,photoGeometry,photoTentPlacement:{x:24,y:28,rotationDeg:15},backgroundPhoto:{id:'p1',url:'https://api.test/background-photo/p1?t=cap'}};
+ view.rebuild(modelData);scene.updateMatrixWorld(true);
+ let photoTent;scene.traverse(o=>{if(o.userData.kind==='tent')photoTent=o;});
+ const photoPosition=photoTent.position.clone(),photoRotation=photoTent.rotation.y;
+ view.rebuild({...modelData,photoLayoutModel:true});scene.updateMatrixWorld(true);
+ let modelTent;scene.traverse(o=>{if(o.userData.kind==='tent')modelTent=o;});
+ assert.ok(modelTent.position.distanceTo(photoPosition)<1e-9,'3D model preserves the tent placement from Photo View');
+ assert.equal(modelTent.rotation.y,photoRotation,'3D model preserves photo rotation');
+ assert.equal(control.enabled,true,'model has an independent orbitable camera');
+ assert.equal(view.setMeasureMode(true),true,'dimensioned model measurement is available without claiming a metric photo scan');view.setMeasureMode(false);
+ assert.equal(view.inside(),true);const localEye=modelTent.worldToLocal(renderer.camera.position.clone());assert.ok(Math.abs(localEye.x-5.6)<1e-7&&Math.abs(localEye.z-8)<1e-7&&Math.abs(localEye.y-5.6)<1e-7,'Inside Tent camera is inside the rotated and moved tent');view.fitCamera();
+ assert.ok(scene.getObjectByName('Model planning ground'),'model uses a neutral planning ground');
+ assert.equal(scene.getObjectByName('Backyard setting'),undefined,'model never invents a photographed property');
+ assert.equal(scene.background.isCanvasTexture,undefined,'model does not use the flat photograph as a 3D backdrop');
+ const modelPoint=new THREE.Box3().setFromObject(modelTent.children[0]).getCenter(new THREE.Vector3()).project(renderer.camera),mx=(modelPoint.x+1)*450,my=(1-modelPoint.y)*300;
+ const moveCount=photoMoves.length;pointer('pointerdown',mx,my);pointer('pointermove',mx+38,my+8);pointer('pointerup',mx+38,my+8);
+ assert.ok(photoMoves.length>moveCount,'a real model tent drag commits through shared photo placement');
+ const modelPlacement=photoMoves.at(-1);view.rebuild({...modelData,photoTentPlacement:modelPlacement});
+ let returnedTent;scene.traverse(o=>{if(o.userData.kind==='tent')returnedTent=o;});
+ assert.ok(Math.abs(returnedTent.position.x-(modelPlacement.x+10-35))<1e-8,'returning to Photo View retains the model edit');
+ assert.ok(Math.abs(returnedTent.position.z-(modelPlacement.y+10-45))<1e-8,'returning to Photo View retains model depth');
  view.rebuild(data);view.setScene({night:false,weather:'clear',guests:false,motion:false});
  assert.ok(scene.getObjectByName('Backyard setting'),'removing the photo restores generated scenery');
  assert.equal(scene.getObjectByName('Venue photo shadow catcher'),undefined);

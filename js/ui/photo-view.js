@@ -1,11 +1,11 @@
 import {
   normalizePhotoCalibration, defaultPhotoCalibration, worldToPhoto, photoToWorld,
   objectPhotoPolygon, objectPhotoCenter, normalizePhotoGeometry, geometryPhotoPolygon,
-  geometryTypeHeight, rentalPhotoPlacement, photoImageRect
+  geometryTypeHeight, rentalPhotoPlacement, photoImageRect, photoGroundHorizon, photoCalibrationValidity
 } from '../core/photo-geometry.js';
 
 let container=null,root=null,stage=null,img=null,svg=null,toolbar=null,currentData=null,callbacks={};
-let resizeObserver=null,tool='move',drag=null,draftGeom=null,selectedGeomId=null;
+let resizeObserver=null,tool='move',drag=null,draftGeom=null,selectedGeomId=null,referenceInputsDirty=false;
 const NS='http://www.w3.org/2000/svg';
 
 function el(tag,cls){const n=document.createElement(tag);if(cls)n.className=cls;return n;}
@@ -53,56 +53,70 @@ function fitStage(){
 }
 function updateHint(){
   const out=root?.querySelector('[data-photo-hint]');if(!out)return;
-  if(tool==='calibrate')out.textContent='Drag the four corner dots so the shaded ground matches the real usable event area.';
+  if(tool==='calibrate')out.textContent='Mark the four corners of a real rectangle on level ground, then enter its measured width and depth. A photo cannot determine scale by itself.';
   else if(tool==='geometry')out.textContent='Drag across the photo to mark a house, fence, tree, obstacle, or no-place zone.';
   else out.textContent='Drag the tent or any rental anywhere on the real venue photo. Select one to rotate it.';
 }
-function setTool(next){
-  tool=next||'move';root?.querySelectorAll('[data-photo-tool]').forEach(b=>b.classList.toggle('active',b.dataset.photoTool===tool));updateHint();renderOverlay();
+export function setTool(next){
+  tool=next||'move';
+  const panel=root?.querySelector('[data-photo-calibration-panel]');if(panel)panel.hidden=tool!=='calibrate';root?.querySelectorAll('[data-photo-tool]').forEach(b=>b.classList.toggle('active',b.dataset.photoTool===tool));updateHint();renderOverlay();
 }
 function renderToolbar(){
   toolbar.innerHTML=
-    '<div class="photo-workspace-title"><strong>PHOTO PLACEMENT</strong><span>Estimated scale · verify site dimensions</span></div>'+
+    '<div class="photo-workspace-title"><strong>Adjust photo</strong><span data-photo-scale-status>Scale not set</span></div>'+
     '<div class="photo-workspace-tools">'+
       '<button type="button" class="btn-chip active" data-photo-tool="move">Move rentals</button>'+
-      '<button type="button" class="btn-chip" data-photo-tool="calibrate">Calibrate ground</button>'+
-      '<button type="button" class="btn-chip" data-photo-auto>Reset perspective</button>'+
-      '<select class="photo-geometry-type" data-photo-geometry-type aria-label="Geometry type">'+
-        '<option value="house">House / building</option><option value="fence">Fence / wall</option><option value="tree">Tree / tall object</option><option value="obstacle">Obstacle</option><option value="no-place">No-place zone</option>'+
-      '</select>'+
-      '<button type="button" class="btn-chip" data-photo-tool="geometry">Trace geometry</button>'+
-      '<button type="button" class="btn-chip" data-photo-remove-geometry disabled>Remove selected</button>'+
+      '<button type="button" class="btn-chip" data-photo-tool="calibrate">Set scale</button>'+
+      '<button type="button" class="btn-chip" data-photo-done>Preview</button>'+
+      '<details class="photo-mark-tools"><summary>Mark obstacles</summary><div class="photo-workspace-tools">'+
+        '<select class="photo-geometry-type" data-photo-geometry-type aria-label="Obstacle type">'+
+        '<option value="house">House / building</option><option value="fence">Fence / wall</option><option value="tree">Tree / tall object</option><option value="obstacle">Obstacle</option><option value="no-place">No-place zone</option></select>'+
+        '<button type="button" class="btn-chip" data-photo-tool="geometry">Trace obstacle</button>'+
+        '<button type="button" class="btn-chip" data-photo-remove-geometry disabled>Remove selected</button></div></details>'+
+    '</div>'+
+    '<div class="photo-calibration-panel" data-photo-calibration-panel hidden>'+
+      '<div class="photo-reference-fields"><label>Rectangle width (ft)<input data-photo-reference-width type="number" min="1" max="500" step="0.5" inputmode="decimal"></label>'+
+      '<label>Rectangle depth (ft)<input data-photo-reference-depth type="number" min="1" max="500" step="0.5" inputmode="decimal"></label>'+
+      '<button type="button" class="btn-chip" data-photo-confirm-scale>Apply measurements</button></div>'+
+      '<details class="photo-perspective-tools"><summary>Perspective &amp; horizon</summary><div class="photo-perspective-fields"><label>Eye-level horizon<input data-photo-horizon type="range" min="15" max="70" step="1"></label>'+
+      '<label>Lens perspective<input data-photo-lens type="range" min="35" max="85" step="1"></label>'+
+      '<button type="button" class="btn-chip" data-photo-auto>Reset estimates</button></div>'+
+      '<p>Place the horizon at camera eye level, not along a roof or fence. Lens and height remain estimates. Verify clearance on site.</p></details>'+
     '</div>'+
     '<div class="photo-workspace-hint" data-photo-hint></div>';
-  toolbar.addEventListener('click',async e=>{
+  toolbar.addEventListener('click',e=>{
     const toolBtn=e.target.closest('[data-photo-tool]');if(toolBtn){setTool(toolBtn.dataset.photoTool);return;}
-    if(e.target.closest('[data-photo-auto]')){await autoPerspective();return;}
+    if(e.target.closest('[data-photo-done]')){callbacks.onDone?.();return;}
+    if(e.target.closest('[data-photo-auto]')){referenceInputsDirty=false;applyCalibration(defaultPhotoCalibration(photoSpace(),currentData.backgroundPhoto));return;}
+    if(e.target.closest('[data-photo-confirm-scale]')){
+      const width=Number(root.querySelector('[data-photo-reference-width]').value),depth=Number(root.querySelector('[data-photo-reference-depth]').value);
+      if(!(width>=1&&width<=500&&depth>=1&&depth<=500))return;
+      const cal=calibration(),r=cal.reference||{x:0,y:0,widthFt:photoSpace().widthFt,lengthFt:photoSpace().lengthFt};
+      referenceInputsDirty=false;applyCalibration({...cal,version:2,reference:{...r,widthFt:width,lengthFt:depth},scaleConfirmed:true,calibratedAt:new Date().toISOString()});return;
+    }
     if(e.target.closest('[data-photo-remove-geometry]')&&selectedGeomId){callbacks.onGeometryRemove?.(selectedGeomId);selectedGeomId=null;renderOverlay();}
   });
-  updateHint();
-}
-async function estimateHorizon(){
-  if(!img?.complete||!img.naturalWidth)return .34;
-  try{
-    const w=192,h=Math.max(100,Math.round(w*img.naturalHeight/img.naturalWidth)),c=document.createElement('canvas');c.width=w;c.height=h;
-    const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(img,0,0,w,h);
-    const d=ctx.getImageData(0,0,w,h).data,gray=new Float32Array(w*h);
-    for(let i=0;i<w*h;i++){const j=i*4;gray[i]=d[j]*.299+d[j+1]*.587+d[j+2]*.114;}
-    let best=Math.round(h*.34),score=-1;
-    const y0=Math.max(3,Math.round(h*.18)),y1=Math.min(h-3,Math.round(h*.66));
-    for(let y=y0;y<=y1;y++){
-      let s=0;for(let x=2;x<w-2;x+=2)s+=Math.abs(gray[y*w+x]-gray[(y-2)*w+x]);
-      const centerBias=1-Math.abs(y/h-.38)*.45;s*=centerBias;
-      if(s>score){score=s;best=y;}
+  toolbar.addEventListener('input',e=>{
+    if(e.target.matches('[data-photo-reference-width],[data-photo-reference-depth]')){referenceInputsDirty=true;return;}
+    const cal=calibration();
+    if(e.target.matches('[data-photo-lens]')){applyCalibration({...cal,fovDeg:Number(e.target.value)});return;}
+    if(e.target.matches('[data-photo-horizon]')){
+      const horizon=Number(e.target.value)/100,old=photoGroundHorizon(photoSpace(),cal)??cal.horizonY,delta=horizon-old;
+      const next={...cal,horizonY:horizon};for(const key of ['frontLeft','frontRight','backLeft','backRight'])next[key]={x:cal[key].x,y:clamp(cal[key].y+delta,.01,.99)};
+      applyCalibration(next);
     }
-    return clamp(best/h,.18,.62);
-  }catch(_){return .34;}
+  });
+  syncCalibrationControls();updateHint();
 }
-async function autoPerspective(){
-  const h=await estimateHorizon(),base=defaultPhotoCalibration(photoSpace()),topY=clamp(h+.11,.36,.66);
-  const widthFactor=clamp(.24+(topY-.45)*.12,.20,.30);
-  const cal={...base,horizonY:h,backLeft:{x:.5-widthFactor,y:topY},backRight:{x:.5+widthFactor,y:topY},autoEstimated:true,calibratedAt:new Date().toISOString()};
-  callbacks.onCalibration?.(cal);if(currentData)currentData={...currentData,photoCalibration:cal};renderOverlay();
+function applyCalibration(next){
+  currentData={...currentData,photoCalibration:normalizePhotoCalibration(next,photoSpace())};callbacks.onCalibration?.(currentData.photoCalibration);syncCalibrationControls();renderOverlay();
+}
+function syncCalibrationControls(){
+  if(!root)return;const cal=calibration(),r=cal.reference||{widthFt:photoSpace().widthFt,lengthFt:photoSpace().lengthFt};
+  for(const [selector,value] of [['[data-photo-reference-width]',r.widthFt],['[data-photo-reference-depth]',r.lengthFt],['[data-photo-lens]',cal.fovDeg],['[data-photo-horizon]',Math.round((photoGroundHorizon(photoSpace(),cal)??cal.horizonY)*100)]]){
+    const input=root.querySelector(selector);if(input&&document.activeElement!==input&&!(referenceInputsDirty&&selector.startsWith('[data-photo-reference-')))input.value=String(value);
+  }
+  const validity=photoCalibrationValidity(cal),status=root.querySelector('[data-photo-scale-status]');if(status)status.textContent=!validity.valid?validity.reason:cal.scaleConfirmed?'Measurements entered · vertical perspective estimated':'Scale not set · starting estimate';
 }
 function renderGround(){
   const cal=calibration(),pts=[cal.frontLeft,cal.frontRight,cal.backRight,cal.backLeft];
@@ -111,7 +125,7 @@ function renderGround(){
   if(tool==='calibrate'){
     const names=['frontLeft','frontRight','backRight','backLeft'];
     pts.forEach((p,i)=>{const q=pct(p);g.appendChild(svgEl('circle',{cx:q.x,cy:q.y,r:13,'class':'photo-calibration-handle','data-cal-handle':names[i]}));});
-    const hY=cal.horizonY*1000;g.appendChild(svgEl('line',{x1:0,y1:hY,x2:1000,y2:hY,'class':'photo-horizon-line'}));
+    const hY=(photoGroundHorizon(photoSpace(),cal)??cal.horizonY)*1000;g.appendChild(svgEl('line',{x1:0,y1:hY,x2:1000,y2:hY,'class':'photo-horizon-line'}));
   }
   svg.appendChild(g);
 }
@@ -127,6 +141,7 @@ function renderGeometry(){
   }
 }
 function renderObjects(){
+  if(tool==='calibrate')return;
   const objects=[];
   if(currentData?.tent&&!currentData.tent.isSite){
     const tp=tentPlacement();objects.push({id:'__photo_tent__',kind:'tent',widthFt:currentData.tent.widthFt,depthFt:currentData.tent.lengthFt,x:tp.x,y:tp.y,rotationDeg:tp.rotationDeg,name:currentData.tent.name||'Tent'});
@@ -136,6 +151,7 @@ function renderObjects(){
     const pts=objectPhotoPolygon(item,photoSpace(),calibration()),center=objectPhotoCenter(item,photoSpace(),calibration()),q=pct(center);
     const selected=currentData.selectedPhotoId===item.id||currentData.selectedId===item.id;
     const group=svgEl('g',{'data-photo-item':item.id,'class':'photo-rental '+(selected?'selected':'')+' '+(item.kind||'item')});
+    if(tool==='calibrate')group.style.pointerEvents='none';
     group.appendChild(svgEl('polygon',{points:pointsAttr(pts),'class':'photo-rental-shape'}));
     const label=svgEl('text',{x:q.x,y:q.y,'class':'photo-rental-label'});label.textContent=itemLabel(item);group.appendChild(label);
     if(selected){
@@ -165,8 +181,10 @@ function renderOverlay(){
 }
 function dragCalibration(name,p){
   const cal=calibration(),next={...cal,[name]:{x:p.x,y:p.y},autoEstimated:false,calibratedAt:new Date().toISOString()};
-  if(name==='backLeft'||name==='backRight')next.horizonY=Math.min(next[name].y-.04,cal.horizonY);
-  currentData={...currentData,photoCalibration:next};callbacks.onCalibration?.(next);renderOverlay();
+  const validity=photoCalibrationValidity(next);
+  if(!validity.valid){const status=root.querySelector('[data-photo-scale-status]');if(status)status.textContent=validity.reason;return;}
+  next.horizonY=photoGroundHorizon(photoSpace(),next)??cal.horizonY;
+  applyCalibration(next);
 }
 function pointerDown(e){
   const handle=e.target.closest?.('[data-cal-handle]');
@@ -232,26 +250,26 @@ function renderImage(){
   const p=currentData.backgroundPhoto;img.style.objectPosition=(Number(p.focusX)||50)+'% '+(Number(p.focusY)||50)+'%';
 }
 export function mount(containerEl,data,cbs){
-  container=containerEl;callbacks=cbs||{};
-  currentData={...data,objects:(data.objects||[]).map(o=>({...o})),photoCalibration:normalizePhotoCalibration(data.photoCalibration,data.photoSite||data.tent),photoGeometry:normalizePhotoGeometry(data.photoGeometry,data.photoSite||data.tent)};
+  container=containerEl;callbacks=cbs||{};referenceInputsDirty=false;
+  currentData={...data,objects:(data.objects||[]).map(o=>({...o})),photoCalibration:normalizePhotoCalibration(data.photoCalibration,data.photoSite||data.tent,data.backgroundPhoto),photoGeometry:normalizePhotoGeometry(data.photoGeometry,data.photoSite||data.tent)};
   root=el('div','photo-workspace');toolbar=el('div','photo-workspace-toolbar');
   const viewport=el('div','photo-workspace-viewport');stage=el('div','photo-workspace-stage');
   img=el('img','photo-workspace-image');img.alt='Uploaded venue photo';img.crossOrigin='anonymous';img.decoding='async';
   svg=svgEl('svg',{viewBox:'0 0 1000 1000',preserveAspectRatio:'none','class':'photo-workspace-overlay','aria-label':'Photo placement workspace'});
   stage.append(img,svg);viewport.appendChild(stage);root.append(toolbar,viewport);container.replaceChildren(root);
   renderToolbar();renderImage();
-  img.addEventListener('load',()=>{fitStage();if(!data.photoCalibration){const cal=defaultPhotoCalibration(photoSpace());currentData={...currentData,photoCalibration:cal};callbacks.onCalibration?.(cal);}renderOverlay();});
+  img.addEventListener('load',()=>{fitStage();if(!data.photoCalibration){const cal=defaultPhotoCalibration(photoSpace(),currentData.backgroundPhoto);currentData={...currentData,photoCalibration:cal};callbacks.onCalibration?.(cal);}renderOverlay();});
   stage.addEventListener('pointerdown',pointerDown);stage.addEventListener('pointermove',pointerMove);stage.addEventListener('pointerup',pointerUp);stage.addEventListener('pointercancel',pointerUp);
   window.addEventListener('pointerup',pointerUp,true);window.addEventListener('pointercancel',pointerUp,true);
   if(window.ResizeObserver){resizeObserver=new ResizeObserver(()=>{fitStage();renderOverlay();});resizeObserver.observe(viewport);}
   fitStage();renderOverlay();
 }
 export function update(data){
-  currentData={...data,objects:(data.objects||[]).map(o=>({...o})),photoCalibration:normalizePhotoCalibration(data.photoCalibration,data.photoSite||data.tent),photoGeometry:normalizePhotoGeometry(data.photoGeometry,data.photoSite||data.tent)};
-  renderImage();fitStage();renderOverlay();
+  currentData={...data,objects:(data.objects||[]).map(o=>({...o})),photoCalibration:normalizePhotoCalibration(data.photoCalibration,data.photoSite||data.tent,data.backgroundPhoto),photoGeometry:normalizePhotoGeometry(data.photoGeometry,data.photoSite||data.tent)};
+  renderImage();fitStage();syncCalibrationControls();renderOverlay();
 }
 export function unmount(){
   window.removeEventListener('pointerup',pointerUp,true);window.removeEventListener('pointercancel',pointerUp,true);
   resizeObserver?.disconnect();resizeObserver=null;if(container)container.replaceChildren();
-  container=root=stage=img=svg=toolbar=null;currentData=null;callbacks={};drag=draftGeom=null;selectedGeomId=null;tool='move';
+  container=root=stage=img=svg=toolbar=null;currentData=null;callbacks={};drag=draftGeom=null;selectedGeomId=null;tool='move';referenceInputsDirty=false;
 }

@@ -4,8 +4,9 @@ import {mountReviewPricing,currentReviewPricing,reviewDeliveryZip,restoreReviewD
 import './js/ui/designer-help.js';
 import { sitePanel } from './js/ui/site-controls.js';
 import { normalizeVenuePhoto, normalizeVenueScan, extractVenueScanVideo, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
-import { defaultPhotoCalibration, normalizePhotoCalibration, normalizePhotoGeometry, rentalPhotoPlacement } from './js/core/photo-geometry.js';
+import { defaultPhotoCalibration, normalizePhotoCalibration, photoCalibrationValidity, normalizePhotoGeometry, rentalPhotoPlacement } from './js/core/photo-geometry.js';
 import { evaluatePropertyScene, summarizePropertyFit } from './js/core/property-planning.js';
+import { runPhotoPlanChecks } from './js/core/photo-plan.js';
 import { TABLETOP } from './js/data/tabletop.js';
 // Friendly Event Designer - v2 client-side logic
 // Customer-facing designer: contextual drawers, visual cards, a 2D-first
@@ -48,7 +49,7 @@ var NL = String.fromCharCode(10);
 TENTS.forEach(function (t) { t.centerPoles=computeCenterPoles(t.type,t.widthFt,t.lengthFt);t.installationClearanceFt=installationClearanceFt(t.type); });
 var state={siteLayout:false,siteWidthFt:50,siteLengthFt:60,primaryInflatableId:null,eventType:'wedding',guestCount:50,spaceType:'backyard',surfaceType:'notSure',needDance:false,danceFloorSizeId:'18x18',customDanceFloorFt:null,matchedPackageId:null,tentId:'pole-20x40',chairId:'plastic-white',lightingId:'lighting-none',sidewalls:[],backgroundPhoto:null,venueScan:null,photoCalibration:null,photoGeometry:[],photoTentPlacement:null,selectedPhotoId:null,venuePhotoStatus:{text:'',kind:''},selectedId:null,viewMode:'plan',activeDrawer:null,lastTableConfig:null,eventCheckOpen:false,estimateOpen:false,inspectorCollapsed:true};
 var inventoryQuery="",inventoryCategory="all";
-var nextItemNum=1,tryTheseDismissed=false;function newItemId(){var id;do{id='item-'+(nextItemNum++);}while(store&&store.getState().objects.some(function(o){return o.id===id;}));return id;}var store=createLayoutStore({tentId:state.tentId,objects:[],zones:[],aisles:[]},{canMutate:allowLayoutMutation}),tableDraft=null;function byId(arr,id){return arr.find(function(a){return a.id===id;});}function $(id){return document.getElementById(id);}function showStep(id){document.querySelectorAll('.step').forEach(function(el){el.classList.remove('active');});$(id).classList.add('active');}function money(n){return'$'+n.toFixed(2);}function moneyOrAsk(n){return(n===null||n===undefined)?'Ask for pricing':money(n);}function danceFloorSizeFt(){if(state.danceFloorSizeId==='custom')return state.customDanceFloorFt||18;var sz=byId(DANCE_FLOOR_SIZES,state.danceFloorSizeId);return sz?sz.ft:18;}function recommendDanceFloorFt(){var g=state.guestCount;if(g<=30)return 12;if(g<=60)return 15;if(g<=100)return 18;if(g<=150)return 21;return 24;}function validateLighting(){if(!byId(LIGHTING_OPTIONS,state.lightingId))state.lightingId='lighting-none';}
+var nextItemNum=1,tryTheseDismissed=false;function newItemId(){var id;do{id='item-'+(nextItemNum++);}while(store&&store.getState().objects.some(function(o){return o.id===id;}));return id;}var store=createLayoutStore({tentId:state.tentId,objects:[],zones:[],aisles:[]},{canMutate:allowLayoutMutation,captureContext:photoHistoryContext,restoreContext:restorePhotoHistoryContext}),tableDraft=null;function byId(arr,id){return arr.find(function(a){return a.id===id;});}function $(id){return document.getElementById(id);}function showStep(id){document.querySelectorAll('.step').forEach(function(el){el.classList.remove('active');});$(id).classList.add('active');}function money(n){return'$'+n.toFixed(2);}function moneyOrAsk(n){return(n===null||n===undefined)?'Ask for pricing':money(n);}function danceFloorSizeFt(){if(state.danceFloorSizeId==='custom')return state.customDanceFloorFt||18;var sz=byId(DANCE_FLOOR_SIZES,state.danceFloorSizeId);return sz?sz.ft:18;}function recommendDanceFloorFt(){var g=state.guestCount;if(g<=30)return 12;if(g<=60)return 15;if(g<=100)return 18;if(g<=150)return 21;return 24;}function validateLighting(){if(!byId(LIGHTING_OPTIONS,state.lightingId))state.lightingId='lighting-none';}
 
 function layoutSpace(){
   var tent=byId(TENTS,state.tentId);if(tent)return state.siteLayout?Object.assign({},tent,{planningArea:{widthFt:Math.max(state.siteWidthFt,tent.widthFt),lengthFt:Math.max(state.siteLengthFt,tent.lengthFt)}}):tent;
@@ -123,7 +124,7 @@ function loadScene(scene,options){
   state.backgroundPhoto=normalizeVenuePhoto(state.backgroundPhoto,window.RENTSKETCH_API_URL);
   state.venueScan=normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
   var restoreTent=byId(TENTS,state.tentId),photoSiteForRestore={id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(Number(state.siteWidthFt)||50,(restoreTent?.widthFt||0)+20,50),lengthFt:Math.max(Number(state.siteLengthFt)||60,(restoreTent?.lengthFt||0)+20,60)};
-  state.photoCalibration=state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSiteForRestore):null;
+  state.photoCalibration=state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSiteForRestore,state.backgroundPhoto):null;
   state.photoGeometry=state.backgroundPhoto?normalizePhotoGeometry(state.photoGeometry,photoSiteForRestore):[];
   restoreCustomerDetails(scene.customer,options?.customerEmail);
   restoreReviewDeliveryZip(scene.deliveryZip);
@@ -160,7 +161,7 @@ async function chooseVenuePhoto(file,input){
   var previous=state.backgroundPhoto,previousScan=currentVenueScan();
   var label=(file.name||'photo').slice(0,120);
   try{
-    setVenuePhotoStatus('Selected '+label+' · applying to your 3D background…','working');
+    setVenuePhotoStatus('Selected '+label+' · preparing your venue photo…','working');
     showLayoutNotice('Applying '+label+' to your venue…',5000);
     var designId=await ensureVenuePhotoDesign();
     if(!designId)throw new Error('This layout could not be saved before the photo upload.');
@@ -168,9 +169,9 @@ async function chooseVenuePhoto(file,input){
     var photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
     state.backgroundPhoto=photo;state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;
     var snapAfterPhoto=buildSnapshot(getConflicts());
-    state.photoCalibration=defaultPhotoCalibration(snapAfterPhoto.photoSite);state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
-    state.venuePhotoStatus={text:'Applied · Photo View is ready. Drag rentals directly on your real venue.',kind:'success'};
-    renderDrawerBody('site');renderViews(getConflicts());closeDrawer();setViewMode('photo');
+    state.photoCalibration=defaultPhotoCalibration(snapAfterPhoto.photoSite,state.backgroundPhoto);state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
+    state.venuePhotoStatus={text:'Applied · Set a ground measurement and align the corners, then preview your rentals.',kind:'success'};
+    renderDrawerBody('site');renderViews(getConflicts());closeDrawer();adjustPhotoScale();
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     var photoSaved=false;
     try{await window.RentSketchAutosave?.flush?.();photoSaved=true;}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
@@ -214,7 +215,7 @@ async function chooseVenueScanPhoto(role,file,input){
       // state from the previous single-photo image.
       if(photoMounted){photoViewMod.unmount();photoMounted=false;}
       const snap=buildSnapshot(getConflicts());
-      state.photoCalibration=defaultPhotoCalibration(snap.photoSite);
+      state.photoCalibration=defaultPhotoCalibration(snap.photoSite,state.backgroundPhoto);
       state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
     }
     renderDrawerBody('site');renderViews(getConflicts());
@@ -268,7 +269,7 @@ async function chooseVenueScanVideo(file,input){
     state.backgroundPhoto={...center};
     if(photoMounted){photoViewMod.unmount();photoMounted=false;}
     const snap=buildSnapshot(getConflicts());
-    state.photoCalibration=defaultPhotoCalibration(snap.photoSite);
+    state.photoCalibration=defaultPhotoCalibration(snap.photoSite,state.backgroundPhoto);
     state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
     renderDrawerBody('site');renderViews(getConflicts());setViewMode('3d');
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
@@ -353,14 +354,37 @@ function sidewallSideType(side){
 }
 function selectTent(tentId){if(!requireEventEditing())return false;if(pendingPlacement)cancelPlacement();if(state.tentId!==tentId)state.sidewalls=[];state.tentId=tentId;store.setTent(tentId);validateLighting();refreshAll();}function nextGridPosition(index,tent,cellFt,danceZone){var cols=Math.max(1,Math.floor((tent.widthFt-.5)/cellFt));return{x:2+(index%cols)*cellFt,y:2+Math.floor(index/cols)*cellFt};}function centerGridRows(){}function computeBalancedGridPositions(tent,count,cellFt,danceZone){var out=[];for(var i=0;i<count;i++)out.push(nextGridPosition(i,tent,cellFt,danceZone));return out;}function tableCellSize(tableDef,chairId){var base=tableDef.shape==='round'?tableDef.diameterFt:Math.max(tableDef.widthFt,tableDef.depthFt),chair=chairVisualById(chairId)||{},chairSpan=Math.max(chair.seatWidthFt||1.5,chair.seatDepthFt||1.5);return base+2*(chairSpan+.35)+.5;}function makeTableItem(tableId,chairId,seatCount,linenId,explicitPos){if(byId(CHAIRS,chairId)?.isThrone)chairId=CHAIRS.find(c=>!c.isThrone)?.id;var tent=layoutSpace(),t=byId(TABLES,tableId),n=store.getState().objects.filter(function(i){return i.kind==='table';}).length,pos=explicitPos||tablePositions(tent,t,chairVisualById(chairId)||{},store.getState().objects)[0]||nextGridPosition(n,tent,tableCellSize(t,chairId)),item={id:newItemId(),kind:'table',tableId:tableId,shape:t.shape,widthFt:t.shape==='round'?t.diameterFt:t.widthFt,depthFt:t.shape==='round'?t.diameterFt:t.depthFt,x:Math.max(0,Math.min(tent.widthFt-(t.diameterFt||t.widthFt),pos.x)),y:Math.max(0,Math.min(tent.lengthFt-(t.diameterFt||t.depthFt),pos.y)),seatCount:seatCount,chairId:chairId,linenId:linenId||null};return item;}
 function addTableCustom(tableId,chairId,seatCount,linenId,explicitPos){if(!requireEventEditing())return false;var item=makeTableItem(tableId,chairId,seatCount,linenId,explicitPos);store.addObject(item);return item.id;}function addTable(tableId,chairId,linenId){var t=byId(TABLES,tableId);addTableCustom(tableId,chairId,t.seatsDefault,linenId);}function ensureTableDraft(){if(!tableDraft&&TABLES.length){var t=TABLES[0];tableDraft={tableId:t.id,chairId:state.chairId,seatCount:t.seatsDefault,linenId:null};}return tableDraft;}function addTableFromDraft(){var t=byId(TABLES,tableDraft.tableId),seats=t.seatsDefault>0?tableDraft.seatCount:0,id=addTableCustom(t.id,tableDraft.chairId,seats,tableDraft.linenId);state.lastTableConfig={tableId:t.id,chairId:tableDraft.chairId,seatCount:seats,linenId:tableDraft.linenId};return id;}function addTableFromConfig(cfg,n){if(!cfg)return;for(var i=0;i<n;i++)addTableCustom(cfg.tableId,cfg.chairId,cfg.seatCount,cfg.linenId);}function layoutDanceFloorPositions(tent,total){var per=Math.ceil(Math.sqrt(total)),out=[];for(var i=0;i<total;i++)out.push({x:2+(i%per)*DANCE_SECTION.ft,y:Math.max(2,tent.lengthFt-2-per*DANCE_SECTION.ft)+Math.floor(i/per)*DANCE_SECTION.ft});return out;}function removeAllDanceFloors(){store.getState().objects.filter(function(i){return i.kind==='dance';}).forEach(function(i){store.removeObject(i.id);});}function setDanceFloorCount(total){if(!requireEventEditing())return false;var tent=layoutSpace();removeAllDanceFloors();layoutDanceFloorPositions(tent,total).forEach(function(pos){store.addObject({id:newItemId(),kind:'dance',widthFt:DANCE_SECTION.ft,depthFt:DANCE_SECTION.ft,x:pos.x,y:pos.y});});}function setDanceFloorToSize(ft){if(!requireEventEditing())return false;var tent=layoutSpace(),positions=dancePositions(tent,ft);if(!positions.length){showLayoutNotice('This dance floor does not fit around the poles in your current tent. Choose a smaller size.');return;}var objects=store.getState().objects.filter(function(o){return o.kind!=='dance';});positions.forEach(function(pos){objects.push({id:newItemId(),kind:'dance',widthFt:DANCE_SECTION.ft,depthFt:DANCE_SECTION.ft,x:pos.x,y:pos.y});});store.replaceObjects(objects);}
-function forCollision(objects){return objects.map(function(o){return Object.assign({},o,{kind:o.kind==='table'?'tableGroup':o.kind==='dance'?'danceFloor':o.kind});});}function getConflicts(){return runAllChecks({objects:forCollision(store.getState().objects),aisles:[]},layoutSpace(),state.guestCount,state.surfaceType);}function conflictSeverityByItemId(conflicts){var map={};(conflicts||[]).forEach(function(c){(c.objectIds||[]).forEach(function(id){map[id]=c.severity;});});return map;}
-var view3dMod=null,view3dPendingSnapshot=null,planMounted=false,photoMounted=false,view3dMountInProgress=false;var pendingPlacement=null;
-var sceneOptions={night:false,weather:'clear',guests:true,styling:true,motion:!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches};
+function forCollision(objects){return objects.map(function(o){return Object.assign({},o,{kind:o.kind==='table'?'tableGroup':o.kind==='dance'?'danceFloor':o.kind});});}function getConflicts(){if(state.backgroundPhoto)return runPhotoPlanChecks(buildSnapshot([]),state.guestCount,state.surfaceType);return runAllChecks({objects:forCollision(store.getState().objects),aisles:[]},layoutSpace(),state.guestCount,state.surfaceType);}function conflictSeverityByItemId(conflicts){var map={};(conflicts||[]).forEach(function(c){(c.objectIds||[]).forEach(function(id){map[id]=c.severity;});});return map;}
+var view3dMod=null,view3dPendingSnapshot=null,planMounted=false,photoMounted=false,view3dMountInProgress=false;var pendingPlacement=null,photoEditing=false;
+var sceneOptions={night:false,weather:'clear',guests:false,styling:true,motion:!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches};
 function buildSnapshot(conflicts){
   var tent=layoutSpace(),photoSite={id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(Number(state.siteWidthFt)||50,tent.widthFt+20,50),lengthFt:Math.max(Number(state.siteLengthFt)||60,tent.lengthFt+20,60)};
   var scanRuntime=window.RENTSKETCH_SCAN_RECONSTRUCTION,scanGeometry=scanRuntime?.ready&&Array.isArray(scanRuntime.obstacles)?scanRuntime.obstacles.map(function(o){return Object.assign({},o);}):[];
-  return {tent:tent,photoSite:photoSite,sidewalls:normalizedSidewalls(tent),backgroundPhoto:normalizeVenuePhoto(state.backgroundPhoto,window.RENTSKETCH_API_URL),venueScan:normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL),scanGeometry:scanGeometry,scanMetrics:scanRuntime?.ready?scanRuntime.metrics||null:null,photoCalibration:state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSite):null,photoGeometry:state.backgroundPhoto?normalizePhotoGeometry(state.photoGeometry,photoSite):[],photoTentPlacement:state.photoTentPlacement,selectedPhotoId:state.selectedPhotoId,surfaceType:state.surfaceType,anchoringMethod:tent.isSite?null:resolveAnchoringMethod(tent.type,state.surfaceType),objects:store.getState().objects,placement:pendingPlacement,lightingOn:!!(state.lightingId&&state.lightingId!=='lighting-none'),lightingId:state.lightingId,selectedId:state.selectedId,severityMap:conflictSeverityByItemId(conflicts||[])};
+  return {tent:tent,photoSite:photoSite,sidewalls:normalizedSidewalls(tent),backgroundPhoto:normalizeVenuePhoto(state.backgroundPhoto,window.RENTSKETCH_API_URL),venueScan:normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL),scanGeometry:scanGeometry,scanMetrics:scanRuntime?.ready?scanRuntime.metrics||null:null,photoCalibration:state.backgroundPhoto?normalizePhotoCalibration(state.photoCalibration,photoSite,state.backgroundPhoto):null,photoGeometry:state.backgroundPhoto?normalizePhotoGeometry(state.photoGeometry,photoSite):[],photoTentPlacement:state.photoTentPlacement,selectedPhotoId:state.selectedPhotoId,surfaceType:state.surfaceType,anchoringMethod:tent.isSite?null:resolveAnchoringMethod(tent.type,state.surfaceType),objects:store.getState().objects,placement:pendingPlacement,lightingOn:!!(state.lightingId&&state.lightingId!=='lighting-none'),lightingId:state.lightingId,selectedId:state.selectedId,severityMap:conflictSeverityByItemId(conflicts||[])};
 }
+function hasCapturedScan(){var reconstruction=window.RENTSKETCH_SCAN_RECONSTRUCTION;return currentVenueScan().status==='ready'&&!(reconstruction&&!reconstruction.ready&&!reconstruction.loading);}
+function renderedPhotoActive(){return !!state.backgroundPhoto&&((state.viewMode==='photo'&&!photoEditing)||(state.viewMode==='3d'&&hasCapturedScan()));}
+function rendererSnapshot(snapshot){
+  if(state.viewMode==='3d'&&state.backgroundPhoto&&!hasCapturedScan())return Object.assign({},snapshot,{photoLayoutModel:true});
+  return snapshot;
+}
+function syncViewModeUi(){
+  var photo=!!state.backgroundPhoto,preview=photo&&state.viewMode==='photo'&&!photoEditing;
+  document.body.classList.toggle('photo-preview-mode',preview);
+  document.body.classList.toggle('photo-edit-mode',photo&&state.viewMode==='photo'&&photoEditing);
+  document.body.classList.toggle('photo-model-mode',photo&&state.viewMode==='3d'&&!hasCapturedScan());
+  [['plan','viewModePlan'],['photo','viewModePhoto'],['3d','viewMode3d']].forEach(function(pair){var button=$(pair[1]);if(!button)return;button.classList.toggle('active',state.viewMode===pair[0]);button.setAttribute('aria-selected',String(state.viewMode===pair[0]));});
+  if($('viewModePhoto'))$('viewModePhoto').hidden=!photo;
+  if($('btnUndo'))$('btnUndo').title=photoEditing?'Undo rentals, tent moves and obstacles · calibration uses Reset estimates':'Undo layout edit';
+  var controls=document.querySelector('.canvas-view-controls');
+  if(controls&&!$('photoScaleStatus')){var status=document.createElement('span');status.id='photoScaleStatus';status.className='photo-scale-status';status.setAttribute('role','status');controls.appendChild(status);}
+  var measured=state.photoCalibration?.scaleConfirmed===true,confirmed=measured&&state.photoCalibration?.autoEstimated===false&&photoCalibrationValidity(state.photoCalibration).valid;
+  if($('photoScaleStatus')){$('photoScaleStatus').hidden=!preview;$('photoScaleStatus').dataset.confirmed=String(confirmed);$('photoScaleStatus').textContent=confirmed?'Scale set · photo estimate':measured?'Measurements entered · align corners':'Scale not set · visual preview';$('photoScaleStatus').title='A single photo stays in its original viewpoint. Verify all real site dimensions before booking.';}
+  if($('view3dAdjustPhoto')){$('view3dAdjustPhoto').hidden=!preview;$('view3dAdjustPhoto').textContent=measured?'Edit scale':'Set scale';}
+  if($('view3dFit'))$('view3dFit').textContent=preview?'Fit photo':'Reset View';
+  if($('canvasHint')&&photo&&state.viewMode==='3d'&&!hasCapturedScan())$('canvasHint').textContent='3D layout model · photo in Photo View';
+}
+function adjustPhotoScale(){setViewMode('photo-edit');setTimeout(function(){if(mountPhoto())photoViewMod.setTool?.('calibrate');},0);}
 function currentPropertyPlan(){return evaluatePropertyScene(buildSnapshot(getConflicts()));}
 function propertyFitDetails(plan){
   var rows=[];
@@ -375,19 +399,20 @@ function propertyFitDetails(plan){
 function renderPropertyFit(plan){
   var button=$('propertyFitBadge'),panel=$('propertyFitPanel');
   if(!button||!panel)return;
-  var show=state.viewMode==='3d'&&!!state.backgroundPhoto;
+  var show=renderedPhotoActive();
   button.hidden=!show;
   if(!show){panel.hidden=true;return;}
   var summary=summarizePropertyFit(plan),kind=summary.kind||'neutral';
   button.dataset.kind=kind;
-  button.textContent=summary.label;
+  button.textContent=state.viewMode==='photo'?'Site check':summary.label;
   button.title=summary.detail||'';
   button.setAttribute('aria-expanded',String(!panel.hidden));
   var rows=propertyFitDetails(plan);
   panel.dataset.kind=kind;
   panel.innerHTML='<strong>'+summary.label+'</strong><p>'+summary.detail+'</p>'+(rows.length?'<ul>'+rows.map(function(row){return '<li>'+row+'</li>';}).join('')+'</ul>':'')+'<small>Planning check only. Final placement and anchoring must be confirmed on site.</small>';
 }
-function handleSelect(id){state.selectedId=id;closeDrawer();refreshAll();}function handleMove(id,x,y){if(!requireEventEditing())return false;
+function handleSelect(id){state.selectedId=id;closeDrawer();refreshAll();}function photoWorldItem(item){var snap=buildSnapshot([]);return rentalPhotoPlacement(item,snap.tent,snap.photoSite,state.photoTentPlacement);}function handleMove(id,x,y){if(!requireEventEditing())return false;
+  if(state.backgroundPhoto){var source=store.getState().objects.find(o=>o.id===id);return handlePhotoPlacement(id,{x:x,y:y,rotationDeg:source?photoWorldItem(source).rotationDeg||0:state.photoTentPlacement?.rotationDeg||0});}
   var objects=store.getState().objects,item=objects.find(o=>o.id===id);
   if(item?.kind==='dance'){
     var floor=objects.filter(o=>o.kind==='dance'),tent=layoutSpace();
@@ -401,28 +426,30 @@ function handlePhotoSelect(id){
   state.selectedId=id&&id!=='__photo_tent__'?id:null;
   renderViews(getConflicts());
 }
+function photoHistoryContext(){return {photoTentPlacement:state.photoTentPlacement||null,photoGeometry:state.photoGeometry||[]};}
+function restorePhotoHistoryContext(context){state.photoTentPlacement=context.photoTentPlacement;state.photoGeometry=context.photoGeometry;}
 function handlePhotoPlacement(id,placement){
   if(!requireEventEditing()||!placement)return false;
-  if(id==='__photo_tent__')state.photoTentPlacement={x:Number(placement.x)||0,y:Number(placement.y)||0,rotationDeg:Number(placement.rotationDeg)||0};
+  if(id==='__photo_tent__')store.commitContext({...photoHistoryContext(),photoTentPlacement:{x:Number(placement.x)||0,y:Number(placement.y)||0,rotationDeg:Number(placement.rotationDeg)||0}});
   else{
     var item=store.getState().objects.find(o=>o.id===id);if(!item)return false;
-    store.updateObject(id,{photoPlacement:{x:Number(placement.x)||0,y:Number(placement.y)||0,rotationDeg:Number(placement.rotationDeg)||0}});
+    if(item.kind==='dance'){var objects=store.getState().objects,floor=objects.filter(o=>o.kind==='dance').map(photoWorldItem),anchor=floor.find(o=>o.id===id),site=buildSnapshot([]).photoSite;var dx=Math.max(-Math.min(...floor.map(o=>o.x)),Math.min(site.widthFt-Math.max(...floor.map(o=>o.x+o.widthFt)),Number(placement.x)-anchor.x)),dy=Math.max(-Math.min(...floor.map(o=>o.y)),Math.min(site.lengthFt-Math.max(...floor.map(o=>o.y+o.depthFt)),Number(placement.y)-anchor.y));store.replaceObjects(objects.map(function(o){if(o.kind!=='dance')return o;var world=floor.find(f=>f.id===o.id);return {...o,photoPlacement:{x:world.x+dx,y:world.y+dy,rotationDeg:world.rotationDeg||0}};}));}else store.updateObject(id,{photoPlacement:{x:Number(placement.x)||0,y:Number(placement.y)||0,rotationDeg:Number(placement.rotationDeg)||0}});
   }
   state.selectedPhotoId=id;window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));renderViews(getConflicts());return true;
 }
 function updatePhotoCalibration(cal){
   if(!requireEventEditing())return false;
-  var snap=buildSnapshot([]);state.photoCalibration=normalizePhotoCalibration(cal,snap.photoSite);
+  var snap=buildSnapshot([]);state.photoCalibration=normalizePhotoCalibration(cal,snap.photoSite,state.backgroundPhoto);
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));renderViews(getConflicts());
 }
 function addPhotoGeometry(geom){
   if(!requireEventEditing())return false;
-  var snap=buildSnapshot([]);state.photoGeometry=normalizePhotoGeometry([...(state.photoGeometry||[]),geom],snap.photoSite);
+  var snap=buildSnapshot([]);store.commitContext({...photoHistoryContext(),photoGeometry:normalizePhotoGeometry([...(state.photoGeometry||[]),geom],snap.photoSite)});
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));renderViews(getConflicts());
 }
 function removePhotoGeometry(id){
   if(!requireEventEditing())return false;
-  state.photoGeometry=(state.photoGeometry||[]).filter(g=>g.id!==id);
+  store.commitContext({...photoHistoryContext(),photoGeometry:(state.photoGeometry||[]).filter(g=>g.id!==id)});
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));renderViews(getConflicts());
 }
 function mountPhoto(){
@@ -430,7 +457,7 @@ function mountPhoto(){
   var host=$('photoView');if(!host)return false;
   var snap=buildSnapshot(getConflicts());
   if(!photoMounted){
-    photoViewMod.mount(host,snap,{onSelect:handleSelect,onPhotoSelect:handlePhotoSelect,onPhotoPlacement:handlePhotoPlacement,onCalibration:updatePhotoCalibration,onGeometryAdd:addPhotoGeometry,onGeometryRemove:removePhotoGeometry});
+    photoViewMod.mount(host,snap,{onSelect:handleSelect,onPhotoSelect:handlePhotoSelect,onPhotoPlacement:handlePhotoPlacement,onCalibration:updatePhotoCalibration,onGeometryAdd:addPhotoGeometry,onGeometryRemove:removePhotoGeometry,onDone:function(){setViewMode('photo');}});
     photoMounted=true;
   }else photoViewMod.update(snap);
   return true;
@@ -446,27 +473,27 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20260926-photo-security-2').then(function(mod){
-      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPhotoSelect:handlePhotoSelect,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){
+    import('./js/ui/view3d.js?v=20260926-photo-camera-1').then(function(mod){
+      var snap=view3dPendingSnapshot||rendererSnapshot(buildSnapshot(getConflicts())),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPhotoSelect:handlePhotoSelect,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){
         window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());
         if(info?.ready){
-          if(view3dMod?.orbit360?.())setPhoto3dModeUi('360');
+          if(state.viewMode==='3d'&&view3dMod?.orbit360?.())setPhoto3dModeUi('360');
           var m=info.metrics||{},views=m.viewCount||info.sourceFrames?.length||3,agreement=m.multiReferenceAgreementPct??m.multiViewAgreementPct;
           showLayoutNotice('Estimated depth preview from '+views+' real views · '+(m.coveragePct||0)+'% depth coverage'+(agreement!=null?' · '+agreement+'% cross-view agreement':'')+' · '+(m.triangles||0)+' connected surface triangles.',6500);
         }else if(info?.loading){
           setPhoto3dModeUi('matched');
         }else if(info){
-          setPhoto3dModeUi('matched');showLayoutNotice(info.quality?.issues?.join(' ')||'Space Scan needs more overlap or texture. Retake while moving sideways and keeping the same yard features visible.',7500);
+          if(state.viewMode==='3d')setViewMode('photo');setPhoto3dModeUi('matched');showLayoutNotice(info.quality?.issues?.join(' ')||'Space Scan needs more overlap or texture. Retake while moving sideways and keeping the same yard features visible.',7500);
         }
       }});
       inst.rebuild(snap);inst.setScene(sceneOptions);view3dMod=inst;
-      if(snap.backgroundPhoto&&snap.venueScan?.status==='ready'&&inst.orbit360?.()){
+      if(state.viewMode==='3d'&&snap.backgroundPhoto&&snap.venueScan?.status==='ready'&&inst.orbit360?.()){
         setPhoto3dModeUi('360');
-      }else if(snap.backgroundPhoto&&inst.matchPhoto){
+      }else if(snap.backgroundPhoto&&!snap.photoLayoutModel&&inst.matchPhoto){
         inst.matchPhoto();setPhoto3dModeUi('matched');
       }else{
         if(inst.fitCamera)inst.fitCamera();
-        if(inst.inside&&!layoutSpace().isSite&&store.getState().objects.length)inst.inside();
+        if(inst.inside&&!snap.photoLayoutModel&&!layoutSpace().isSite&&store.getState().objects.length)inst.inside();
       }
       view3dPendingSnapshot=null;view3dMountInProgress=false;window.FriendlyBridge.fitTentPreview=inst.fitTentPreview;
     }).catch(function(e){console.error('3D mount failed:',e);view3dMod=null;view3dMountInProgress=false;});
@@ -491,55 +518,58 @@ function setMeasurementResult(result){
 }
 function setPhoto3dModeUi(mode){
   var matched=$('view3dMatchPhoto'),orbit=$('view3dOrbit360'),walk=$('view3dWalk'),isOrbit=mode==='360',isWalk=mode==='walk',isMatched=mode==='matched',scanReady=metricScanReady();
-  if(matched&&!$('view3dAdjustPhoto')){var adjust=document.createElement('button');adjust.id='view3dAdjustPhoto';adjust.type='button';adjust.className='btn-chip';adjust.textContent='Adjust photo';adjust.addEventListener('click',function(){setViewMode('photo');});matched.after(adjust);}
+  if(matched&&!$('view3dAdjustPhoto')){var adjust=document.createElement('button');adjust.id='view3dAdjustPhoto';adjust.type='button';adjust.className='btn-chip';adjust.textContent='Set scale';adjust.addEventListener('click',adjustPhotoScale);matched.after(adjust);}
   if($('view3dAdjustPhoto'))$('view3dAdjustPhoto').hidden=!(state.viewMode==='3d'&&state.backgroundPhoto);
   if(matched){matched.classList.toggle('active',isMatched);matched.setAttribute('aria-pressed',String(isMatched));matched.textContent='Photo preview';}
   if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));orbit.textContent=scanReady?'3D Scan':'3D Scan';orbit.title=scanReady?'Orbit the estimated depth preview within the captured views; dimensions unverified':'Capture a Space Scan first';}
   if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk Scan';}
-  if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto){
+  if($('canvasHint')&&renderedPhotoActive()){
     var runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;
     var views=runtime?.metrics?.viewCount||runtime?.sourceFrames?.length||3,agreement=runtime?.metrics?.multiReferenceAgreementPct??runtime?.metrics?.multiViewAgreementPct;
     $('canvasHint').textContent=isWalk?'Walk Scan · estimated scene, dimensions unverified · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?('3D Scan · estimated depth, dimensions unverified · '+views+' real views'+(agreement!=null?' · '+agreement+'% spatial agreement':'')+' · orbit limited to captured geometry'):runtime?.loading?'Estimating depth from captured views…':scanReady?'Matched View · choose 3D Scan for estimated depth':'Drag rentals to place · Photo scale is estimated · Use Space Scan for depth';
   }
+  syncViewModeUi();
 }
 function renderViews(conflicts){
-  var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',scan3d=photo3d&&metricScanReady(),propertyPlan=evaluatePropertyScene(s);
+  var s=buildSnapshot(conflicts),rendered=rendererSnapshot(s),photo3d=renderedPhotoActive(),scan3d=photo3d&&state.viewMode==='3d'&&metricScanReady(),propertyPlan=evaluatePropertyScene(s);
   renderPropertyFit(propertyPlan);
-  if($('sceneSettingLabel'))$('sceneSettingLabel').textContent=scan3d?'Estimated Space Scan':s.backgroundPhoto?'Your venue photo':(sceneSetting(s.tent,s.surfaceType)==='backyard'?'Backyard setting':'Paved driveway setting');
-  if($('viewModePhoto'))$('viewModePhoto').hidden=!s.backgroundPhoto;
+  if($('sceneSettingLabel'))$('sceneSettingLabel').textContent=scan3d?'Estimated Space Scan':photo3d?'Your venue photo':s.backgroundPhoto?'Layout model':(sceneSetting(s.tent,s.surfaceType)==='backyard'?'Backyard setting':'Paved driveway setting');
   if($('view3dMatchPhoto'))$('view3dMatchPhoto').hidden=!photo3d;
-  if($('view3dAdjustPhoto'))$('view3dAdjustPhoto').hidden=!photo3d;
-  if($('view3dInside'))$('view3dInside').hidden=state.viewMode!=='3d'||!!state.backgroundPhoto;
+  if($('view3dInside'))$('view3dInside').hidden=state.viewMode!=='3d'||photo3d;
   if($('view3dOrbit360'))$('view3dOrbit360').hidden=!scan3d;
   if($('view3dWalk'))$('view3dWalk').hidden=!scan3d;
-  if($('view3dMeasure'))$('view3dMeasure').hidden=!scan3d;
+  if($('view3dMeasure'))$('view3dMeasure').hidden=state.viewMode!=='3d'||(photo3d&&!scan3d);
   if(planMounted)plan2dMod.update(s);
   if(photoMounted&&s.backgroundPhoto)photoViewMod.update(s);
-  if(view3dMod)view3dMod.update(s);else if(state.viewMode==='3d')view3dPendingSnapshot=s;
+  if(view3dMod)view3dMod.update(rendered);else if(state.viewMode==='3d'||(state.viewMode==='photo'&&!photoEditing))view3dPendingSnapshot=rendered;
+  syncViewModeUi();
 }
 function setViewMode(mode){
+  var edit=mode==='photo-edit';if(edit)mode='photo';
   if(mode==='photo'&&!state.backgroundPhoto){openDrawer('site');showLayoutNotice('Upload a venue photo first, then Photo View will unlock.',4500);return false;}
-  if(mode!=='3d'&&view3dMod?.isMeasuring?.()){view3dMod.setMeasureMode(false);setMeasureUi(false);}
+  if((mode!=='3d'||edit)&&view3dMod?.isMeasuring?.()){view3dMod.setMeasureMode(false);setMeasureUi(false);}
   if(mode!=='3d'&&view3dMod?.isWalking?.())view3dMod.exitWalk();
-  state.viewMode=mode;renderPropertyFit(currentPropertyPlan());
-  if($('view3dAdjustPhoto'))$('view3dAdjustPhoto').hidden=!(mode==='3d'&&state.backgroundPhoto);
-  if($('sceneControls'))$('sceneControls').hidden=mode!=='3d';
-  if($('sceneSettingLabel'))$('sceneSettingLabel').hidden=mode!=='3d';
-  [['plan','viewModePlan'],['photo','viewModePhoto'],['3d','viewMode3d']].forEach(function(pair){var b=$(pair[1]);if(!b)return;b.classList.toggle('active',mode===pair[0]);b.setAttribute('aria-selected',String(mode===pair[0]));});
-  if($('viewModePhoto'))$('viewModePhoto').hidden=!state.backgroundPhoto;
-  if($('canvasHint'))$('canvasHint').textContent=mode==='3d'?'Drag to look around · Pinch or scroll to zoom':mode==='photo'?'Drag rentals anywhere on the real photo · Calibrate perspective for better 3D':'Select an item · Drag to move';
-  if($('view3dFit'))$('view3dFit').hidden=mode!=='3d';if($('view3dInside'))$('view3dInside').hidden=mode!=='3d'||!!state.backgroundPhoto;if($('view3dMatchPhoto'))$('view3dMatchPhoto').hidden=!(mode==='3d'&&state.backgroundPhoto);if($('view3dOrbit360'))$('view3dOrbit360').hidden=!(mode==='3d'&&state.backgroundPhoto&&metricScanReady());if($('view3dWalk'))$('view3dWalk').hidden=!(mode==='3d'&&state.backgroundPhoto&&metricScanReady());if($('view3dMeasure'))$('view3dMeasure').hidden=!(mode==='3d'&&(!state.backgroundPhoto||metricScanReady()));if($('view3dMeasureClear'))$('view3dMeasureClear').hidden=mode!=='3d'||!view3dMod?.getMeasurement?.();
+  if(pendingPlacement&&(state.viewMode!==mode||photoEditing!==edit))cancelPlacement();
+  photoEditing=edit;state.viewMode=mode;
+  var rendering=mode==='3d'||(mode==='photo'&&!edit),photoPreview=mode==='photo'&&!edit;
+  if($('sceneControls'))$('sceneControls').hidden=!rendering;
+  if($('sceneSettingLabel'))$('sceneSettingLabel').hidden=!rendering;
+  if($('canvasHint'))$('canvasHint').textContent=mode==='3d'?'Drag to orbit · Pinch or scroll to zoom':mode==='photo'?'Match a known ground measurement to set photo scale':'Select an item · Drag to move';
+  if($('view3dFit'))$('view3dFit').hidden=!rendering;
+  if($('view3dMeasureClear'))$('view3dMeasureClear').hidden=mode!=='3d'||!view3dMod?.getMeasurement?.();
   var planEl=$('plan2d'),photoEl=$('photoView'),canvasEl=$('canvas');
   if(planEl)planEl.style.display=mode==='plan'?'flex':'none';
-  if(photoEl)photoEl.style.display=mode==='photo'?'block':'none';
-  if(canvasEl)canvasEl.style.display=mode==='3d'?'block':'none';
-  if($('view3dDayNight'))$('view3dDayNight').style.display=mode==='3d'?'':'none';
+  if(photoEl)photoEl.style.display=edit?'block':'none';
+  if(canvasEl)canvasEl.style.display=rendering?'block':'none';
+  if($('view3dDayNight'))$('view3dDayNight').style.display=rendering?'':'none';
   if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').style.display=mode==='3d'?'':'none';
   if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').style.display=mode==='3d'?'':'none';
-  if(mode==='photo')setTimeout(function(){mountPhoto();},0);
-  if(mode==='3d'){var useScan=!!state.backgroundPhoto&&metricScanReady();setPhoto3dModeUi(useScan?'360':'matched');setTimeout(function(){mount3D();if(!view3dMod)return;if(useScan&&view3dMod.orbit360){view3dMod.orbit360();setPhoto3dModeUi('360');}else if(state.backgroundPhoto&&view3dMod.matchPhoto){view3dMod.matchPhoto();setPhoto3dModeUi('matched');}},16);}
-  window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return true;
+  renderViews(getConflicts());
+  if(edit)setTimeout(function(){mountPhoto();},0);
+  if(rendering){var useScan=mode==='3d'&&!!state.backgroundPhoto&&hasCapturedScan();setPhoto3dModeUi(useScan?'360':'matched');setTimeout(function(){mount3D();if(!view3dMod)return;if(useScan&&view3dMod.orbit360){view3dMod.orbit360();setPhoto3dModeUi('360');}else if(photoPreview&&view3dMod.matchPhoto){view3dMod.matchPhoto();setPhoto3dModeUi('matched');}else view3dMod.fitCamera?.();},16);}
+  syncViewModeUi();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return true;
 }
+
 function closeDrawer(){state.activeDrawer=null;document.body.classList.remove('drawer-open');document.querySelectorAll('.rail-btn').forEach(function(b){b.classList.remove('active');b.setAttribute('aria-expanded','false');});if($('drawerBackdrop'))$('drawerBackdrop').hidden=true;if($('drawer'))$('drawer').hidden=true;renderEmptyState();}function openDrawer(kind){if(kind==='rentals')kind='inventory';if(!requireEventEditing())return false;if(pendingPlacement)cancelPlacement();if(state.activeDrawer===kind){closeDrawer();return;}state.selectedId=null;renderInspector([]);state.activeDrawer=kind;document.body.classList.add('drawer-open');document.querySelectorAll('.rail-btn').forEach(function(b){b.classList.toggle('active',b.dataset.drawer===kind);b.setAttribute('aria-expanded',String(b.dataset.drawer===kind));});$('drawerBackdrop').hidden=false;$('drawer').hidden=false;$('drawerTitle').textContent=({inventory:'All rentals',site:'Event Setting',inflatables:'Bounce Houses & Waterslides',tables:'Tables & Chairs',tent:'Choose Your Tent',chairs:'Chair Styles',dance:'Dance Floor',lighting:'Lighting',setup:'Suggest a Layout'})[kind]||kind;renderDrawerBody(kind);$('drawerBody').scrollTop=0;renderEmptyState();}function bindVenuePhotoInputs(root){
   if(!root)return;
   root.querySelectorAll('[data-role="venue-photo-file"]').forEach(function(fileInput){
@@ -628,7 +658,7 @@ function matchTableStyle(id){
 }
 
 function renderStatusBar(){var summary=eventSummary(),checks=getConflicts().filter(function(c){return c.severity!=='info';});$('statusBar').innerHTML='<div class="status-pill-group"><span class="status-item">'+(store.getState().objects.some(o=>o.kind==='inflatable')?store.getState().objects.filter(o=>o.kind==='inflatable').length+' inflatable'+(store.getState().objects.filter(o=>o.kind==='inflatable').length===1?'':'s')+' · ':'')+summary.seats+' seats · '+summary.tableCount+' tables</span></div><div class="status-estimate">'+(summary.total==null?'Confirm pricing':money(summary.total)+'/day')+'</div>';}
-function renderEmptyState(){var o=$('emptyStateOverlay');if(store.getState().objects.length||state.activeDrawer||pendingPlacement){o.hidden=true;return;}o.hidden=false;o.innerHTML='<button class="btn-primary" data-role="empty-party">Try a Party Setup</button><button class="btn-secondary" data-role="empty-choose-own">+ Add My Own Items</button><button class="btn-tertiary" data-role="empty-suggest">Suggest for My Guest Count</button>';}function refreshAll(){state.tentId=store.getState().tentId;document.body.classList.toggle('outdoor-design',!state.tentId);var inflatableButton=document.querySelector('[data-drawer="inflatables"]');if(inflatableButton)inflatableButton.hidden=!INFLATABLES.length;var tent=layoutSpace();if(tent&&!window.RENTSKETCH_TENT_PREVIEW){$('toolbarEventTitle').textContent=tent.name;$('toolbarEventMeta').textContent=(tent.isSite?'Outdoor planning area · ':tent.widthFt+' × '+tent.lengthFt+' ft · ')+((window.ACTIVE_TENANT||{}).name||'RentSketch');}state.needDance=store.getState().objects.some(function(o){return o.kind==='dance';});var c=getConflicts();renderInspector(c);renderViews(c);renderStatusBar(c);renderEmptyState();if(state.activeDrawer)renderDrawerBody(state.activeDrawer);if($('btnUndo'))$('btnUndo').disabled=!store.canUndo();if($('btnRedo'))$('btnRedo').disabled=!store.canRedo();}function goToReview(){if(!requireEventEditing())return false;cancelPlacement();var layoutImage=view3dMod?.captureImage?.()||null;closeDrawer();showStep('step-review');document.body.classList.remove('designer-active');var summary=eventSummary();$('reviewSummary').innerHTML=(layoutImage&&/^data:image\//.test(layoutImage)?'<figure class="review-layout-visual"><img src="'+layoutImage+'" alt="3D event layout preview"><figcaption>Your saved RentSketch layout</figcaption></figure>':'')+'<div class="review-section"><h3>'+escapeHtml(layoutSpace().name)+'</h3><p>'+summary.seats+' planned seats · '+summary.tableCount+' tables</p></div><div class="review-equipment-wrap"><table class="review-equipment"><thead><tr><th>Equipment</th><th>Quantity</th><th>Rental amount</th></tr></thead><tbody>'+summary.lines.map(function(line){return '<tr><td>'+escapeHtml(line.label)+'</td><td>'+line.qty+'<small>'+(line.unitPrice==null?'Confirm unit price':money(line.unitPrice)+' each')+'</small></td><td>'+(line.amount==null?'Confirm pricing':money(line.amount))+'</td></tr>';}).join('')+'</tbody></table></div><div class="review-estimate"><strong>'+(summary.total==null?'Confirm pricing':('Rental estimate: '+money(summary.total)+'/day'))+'</strong><p>'+(summary.total==null?'Some selections need pricing confirmed. Known items: '+money(summary.knownSubtotal)+'/day. ':'')+((window.ACTIVE_TENANT||{}).slug==='generic'?'Open the designer from your rental company’s website for its inventory and rental pricing.':'Availability and final setup are confirmed by '+escapeHtml((window.ACTIVE_TENANT||{}).name||'your rental company')+'.')+'</p></div>';var warnings=getConflicts().filter(function(c){return c.severity!=='info';});if(warnings.length)$('reviewSummary').innerHTML+='<div class="review-layout-checks"><h3>Placement to review</h3><ul>'+Array.from(new Set(warnings.map(function(c){return c.message;}))).map(function(message){return '<li>'+escapeHtml(message)+'</li>';}).join('')+'</ul><p>Return to the designer to adjust these items.</p></div>';if((window.ACTIVE_TENANT||{}).slug!=='generic'){var costs=document.createElement('div');costs.id='reviewPricing';$('reviewSummary').appendChild(costs);mountReviewPricing(costs);}}
+function renderEmptyState(){var o=$('emptyStateOverlay');if(store.getState().objects.length||state.activeDrawer||pendingPlacement){o.hidden=true;return;}o.hidden=false;o.innerHTML='<button class="btn-primary" data-role="empty-party">Try a Party Setup</button><button class="btn-secondary" data-role="empty-choose-own">+ Add My Own Items</button><button class="btn-tertiary" data-role="empty-suggest">Suggest for My Guest Count</button>';}function refreshAll(){state.tentId=store.getState().tentId;document.body.classList.toggle('outdoor-design',!state.tentId);var inflatableButton=document.querySelector('[data-drawer="inflatables"]');if(inflatableButton)inflatableButton.hidden=!INFLATABLES.length;var tent=layoutSpace();if(tent&&!window.RENTSKETCH_TENT_PREVIEW){$('toolbarEventTitle').textContent=tent.name;$('toolbarEventMeta').textContent=(tent.isSite?'Outdoor planning area · ':tent.widthFt+' × '+tent.lengthFt+' ft · ')+((window.ACTIVE_TENANT||{}).name||'RentSketch');}state.needDance=store.getState().objects.some(function(o){return o.kind==='dance';});var c=getConflicts();renderInspector(c);renderViews(c);renderStatusBar(c);renderEmptyState();if(state.activeDrawer)renderDrawerBody(state.activeDrawer);if($('btnUndo'))$('btnUndo').disabled=!store.canUndo();if($('btnRedo'))$('btnRedo').disabled=!store.canRedo();}async function goToReview(){if(!requireEventEditing())return false;cancelPlacement();if(photoEditing)setViewMode('photo');var visualMode=state.viewMode==='photo'||state.viewMode==='3d';if(visualMode){mount3D();for(var frame=0;frame<40&&!view3dMod;frame++)await new Promise(function(resolve){setTimeout(resolve,50);});await new Promise(function(resolve){requestAnimationFrame(function(){requestAnimationFrame(resolve);});});}var layoutImage=visualMode?view3dMod?.captureImage?.()||null:null;var visualCaption=state.viewMode==='photo'?'Photo preview · camera and scale are estimates. Confirm dimensions on site.':hasCapturedScan()?'Space Scan preview · reconstructed dimensions are estimates. Confirm on site.':'Dimensioned event layout model';closeDrawer();showStep('step-review');document.body.classList.remove('designer-active');var summary=eventSummary();$('reviewSummary').innerHTML=(layoutImage&&/^data:image\//.test(layoutImage)?'<figure class="review-layout-visual"><img src="'+layoutImage+'" alt="Saved event layout preview"><figcaption>'+escapeHtml(visualCaption)+'</figcaption></figure>':'')+'<div class="review-section"><h3>'+escapeHtml(layoutSpace().name)+'</h3><p>'+summary.seats+' planned seats · '+summary.tableCount+' tables</p></div><div class="review-equipment-wrap"><table class="review-equipment"><thead><tr><th>Equipment</th><th>Quantity</th><th>Rental amount</th></tr></thead><tbody>'+summary.lines.map(function(line){return '<tr><td>'+escapeHtml(line.label)+'</td><td>'+line.qty+'<small>'+(line.unitPrice==null?'Confirm unit price':money(line.unitPrice)+' each')+'</small></td><td>'+(line.amount==null?'Confirm pricing':money(line.amount))+'</td></tr>';}).join('')+'</tbody></table></div><div class="review-estimate"><strong>'+(summary.total==null?'Confirm pricing':('Rental estimate: '+money(summary.total)+'/day'))+'</strong><p>'+(summary.total==null?'Some selections need pricing confirmed. Known items: '+money(summary.knownSubtotal)+'/day. ':'')+((window.ACTIVE_TENANT||{}).slug==='generic'?'Open the designer from your rental company’s website for its inventory and rental pricing.':'Availability and final setup are confirmed by '+escapeHtml((window.ACTIVE_TENANT||{}).name||'your rental company')+'.')+'</p></div>';var warnings=getConflicts().filter(function(c){return c.severity!=='info';});if(warnings.length)$('reviewSummary').innerHTML+='<div class="review-layout-checks"><h3>Placement to review</h3><ul>'+Array.from(new Set(warnings.map(function(c){return c.message;}))).map(function(message){return '<li>'+escapeHtml(message)+'</li>';}).join('')+'</ul><p>Return to the designer to adjust these items.</p></div>';if((window.ACTIVE_TENANT||{}).slug!=='generic'){var costs=document.createElement('div');costs.id='reviewPricing';$('reviewSummary').appendChild(costs);mountReviewPricing(costs);}}
 
 
 
@@ -641,7 +671,7 @@ function openTableComposer(tableId){if(!requireEventEditing())return false;
  }});}).catch(function(error){console.error('Table studio could not open:',error);showLayoutNotice('Table studio could not open. Add a table and use its edit controls.');});
 }
 
-function handleEquipmentClick(e){if(!requireEventEditing())return false;var el=e.target.closest('[data-role]');if(!el)return;var role=el.dataset.role;if(role==='inspector-close'){state.selectedId=null;refreshAll();}else if(role==='insp-delete'){store.removeObject(el.dataset.id);state.selectedId=null;}else if(role==='insp-match-tables'){matchTableStyle(el.dataset.id);}else if(role==='insp-linen-swatch'){store.updateObject(el.dataset.id,{linenColor:el.dataset.color});}else if(role==='insp-seats'||role==='insp-rotate'||role==='insp-duplicate'){var item=store.getState().objects.find(function(o){return o.id===el.dataset.id;}),tent=layoutSpace().planningArea||layoutSpace();if(!item)return;if(role==='insp-seats'){var max=Math.max(0,...byId(TABLES,item.tableId).seatsOptions);store.updateObject(item.id,{seatCount:Math.max(0,Math.min(max,item.seatCount+Number(el.dataset.delta)))});}else if(role==='insp-rotate'){var w=item.depthFt,d=item.widthFt;store.updateObject(item.id,{widthFt:w,depthFt:d,x:Math.max(0,Math.min(tent.widthFt-w,item.x+(item.widthFt-w)/2)),y:Math.max(0,Math.min(tent.lengthFt-d,item.y+(item.depthFt-d)/2)),rotationDeg:((item.rotationDeg||0)+90)%360});}else{store.duplicateObject(item.id,1,{x:Math.min(2,tent.widthFt-item.widthFt-item.x),y:Math.min(2,tent.lengthFt-item.depthFt-item.y)});state.selectedId=store.getState().objects.at(-1).id;refreshAll();}}else if(role==='insp-delete-dance'){state.needDance=false;state.selectedId=null;removeAllDanceFloors();}else if(role==='insp-design-table'){import('./js/ui/tableStudio.js').then(function(m){m.openTableStudio(el.dataset.id,store,{onClick:handleEquipmentClick,onChange:handleEquipmentChange,tables:TABLES,chairs:CHAIRS,linens:LINENS,tabletop:TABLETOP});}).catch(function(error){console.error('Table details could not open:',error);showLayoutNotice('Table details could not open. You can still edit this table below.');});}}
+function handleEquipmentClick(e){if(!requireEventEditing())return false;var el=e.target.closest('[data-role]');if(!el)return;var role=el.dataset.role;if(role==='inspector-close'){state.selectedId=null;refreshAll();}else if(role==='insp-delete'){store.removeObject(el.dataset.id);state.selectedId=null;}else if(role==='insp-match-tables'){matchTableStyle(el.dataset.id);}else if(role==='insp-linen-swatch'){store.updateObject(el.dataset.id,{linenColor:el.dataset.color});}else if(role==='insp-seats'||role==='insp-rotate'||role==='insp-duplicate'){var item=store.getState().objects.find(function(o){return o.id===el.dataset.id;}),tent=layoutSpace().planningArea||layoutSpace();if(!item)return;if(role==='insp-seats'){var max=Math.max(0,...byId(TABLES,item.tableId).seatsOptions);store.updateObject(item.id,{seatCount:Math.max(0,Math.min(max,item.seatCount+Number(el.dataset.delta)))});}else if(state.backgroundPhoto){var world=photoWorldItem(item),site=buildSnapshot([]).photoSite;if(role==='insp-rotate'){store.updateObject(item.id,{photoPlacement:{x:world.x,y:world.y,rotationDeg:((world.rotationDeg||0)+90)%360}});}else{var duplicate={...item,id:newItemId(),photoPlacement:{x:Math.max(0,Math.min(site.widthFt-item.widthFt,world.x+2)),y:Math.max(0,Math.min(site.lengthFt-item.depthFt,world.y+2)),rotationDeg:world.rotationDeg||0}};store.addObject(duplicate);state.selectedId=duplicate.id;refreshAll();}}else if(role==='insp-rotate'){var w=item.depthFt,d=item.widthFt;store.updateObject(item.id,{widthFt:w,depthFt:d,x:Math.max(0,Math.min(tent.widthFt-w,item.x+(item.widthFt-w)/2)),y:Math.max(0,Math.min(tent.lengthFt-d,item.y+(item.depthFt-d)/2)),rotationDeg:((item.rotationDeg||0)+90)%360});}else{store.duplicateObject(item.id,1,{x:Math.min(2,tent.widthFt-item.widthFt-item.x),y:Math.min(2,tent.lengthFt-item.depthFt-item.y)});state.selectedId=store.getState().objects.at(-1).id;refreshAll();}}else if(role==='insp-delete-dance'){state.needDance=false;state.selectedId=null;removeAllDanceFloors();}else if(role==='insp-design-table'){import('./js/ui/tableStudio.js').then(function(m){m.openTableStudio(el.dataset.id,store,{onClick:handleEquipmentClick,onChange:handleEquipmentChange,tables:TABLES,chairs:CHAIRS,linens:LINENS,tabletop:TABLETOP});}).catch(function(error){console.error('Table details could not open:',error);showLayoutNotice('Table details could not open. You can still edit this table below.');});}}
 function handleEquipmentChange(e){if(!requireEventEditing())return false;var el=e.target,role=el.dataset.role,id=el.dataset.id;if(role==='insp-chair'&&!byId(CHAIRS,el.value)?.isThrone)store.updateObject(id,{chairId:el.value});if(role==='insp-linen'){var linen=byId(LINENS,el.value),item=store.getState().objects.find(function(o){return o.id===id;}),colors=linen&&linen.colors||['White'];store.updateObject(id,{linenId:el.value||null,linenColor:el.value?(colors.includes(item.linenColor)?item.linenColor:colors[0]):null});}if(role==='insp-linen-color')store.updateObject(id,{linenColor:el.value});}
 document.querySelectorAll('.rail-btn').forEach(function(btn){btn.addEventListener('click',function(){openDrawer(btn.dataset.drawer);});});if($('drawerClose'))$('drawerClose').addEventListener('click',closeDrawer);if($('drawerBackdrop'))$('drawerBackdrop').addEventListener('click',closeDrawer);if($('drawerBody'))$('drawerBody').addEventListener('click',function(e){var el=e.target.closest('[data-role]');if(!el)return;if(el.dataset.role==='inventory-category'){inventoryCategory=el.dataset.category;renderDrawerBody('inventory');return;}if(el.dataset.role==='inventory-open'){openDrawer(el.dataset.drawer);return;}if(el.dataset.role==='accessory-card'){beginAccessoryPlacement(accessoryById(el.dataset.id));return;}if(el.dataset.role==='equipment-card'){beginEquipmentPlacement(equipmentById(el.dataset.id));return;}if(el.dataset.role==='venue-photo-remove'){removeVenuePhoto();return;}if(el.dataset.role==='venue-photo-reset'){resetVenuePhotoFraming();return;}if(el.dataset.role==='venue-scan-clear'){clearVenueScan();return;}if(el.dataset.role==='sidewall-all'){setAllSidewalls(el.dataset.type);return;}if(el.dataset.role==='site-surface'){if(layoutSpace().type==='pole'&&['concrete','asphalt'].includes(el.dataset.surface))return;state.surfaceType=el.dataset.surface;refreshAll();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));return;}if(el.dataset.role==='site-frame'){openDrawer('tent');return;}if(el.dataset.role==='accent-chair'){beginAccentPlacement(el.dataset.id);return;}if(el.dataset.role==='outdoor-layout'){var previous=layoutSpace();state.siteWidthFt=Math.max(state.siteWidthFt,previous.widthFt);state.siteLengthFt=Math.max(state.siteLengthFt,previous.lengthFt);state.tentId=null;state.lightingId='lighting-none';store.setTent(null);closeDrawer();return;}if(el.dataset.role==='setup-manual'){closeDrawer();openDrawer('tables');return;}if(el.dataset.role==='table-style'){openTableComposer(el.dataset.id);return;}if(el.dataset.role==='table-card'){var t=byId(TABLES,el.dataset.id);if(!t)return;ensureTableDraft();tableDraft.tableId=t.id;tableDraft.chairId=state.chairId;tableDraft.linenId=null;tableDraft.seatCount=t.seatsDefault;beginTablePlacement(t);}else if(el.dataset.role==='add-table'){tableDraft.activeItemId=addTableFromDraft();state.selectedId=tableDraft.activeItemId;}else if(el.dataset.role==='inflatable-card'){beginInflatablePlacement(inflatableById(el.dataset.id));}else if(el.dataset.role==='tent-card'){selectTent(el.dataset.id);}else if(el.dataset.role==='chair-card'){chooseEventChairs(el.dataset.id);}else if(el.dataset.role==='dance-size-card'){beginDancePlacement(parseFloat(el.dataset.ft),el.dataset.id);}else if(el.dataset.role==='dance-remove'){state.needDance=false;removeAllDanceFloors();}else if(el.dataset.role==='lighting-card'){state.lightingId=el.dataset.id;validateLighting();if(state.lightingId!=='lighting-none'){setSceneNight(true);closeDrawer();setViewMode('3d');showLayoutNotice('Night preview is on so you can see your lights. Switch back to day in Scene.',6000);}window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));}refreshAll();});function handleVenuePhotoFileInput(fileInput){
   if(!fileInput)return false;
@@ -700,12 +730,12 @@ $('drawerBody')?.addEventListener('input',function(e){
   if(baseline){updateVenueScanBaseline(baseline.value);return;}
   var el=e.target.closest('[data-role^="venue-photo-"]');if(!el)return;
   updateVenuePhotoControl(el.dataset.role,el.value);
-});if($('inspectorPanel')){$('inspectorPanel').addEventListener('click',handleEquipmentClick);$('inspectorPanel').addEventListener('change',handleEquipmentChange);}if($('emptyStateOverlay'))$('emptyStateOverlay').addEventListener('click',function(e){var el=e.target.closest('[data-role]');if(el&&el.dataset.role==='empty-party')buildPartyScene();if(el&&el.dataset.role==='empty-choose-own')openDrawer('inventory');if(el&&el.dataset.role==='empty-suggest')openDrawer('setup');});if($('viewModePlan'))$('viewModePlan').addEventListener('click',function(){setViewMode('plan');});if($('viewModePhoto'))$('viewModePhoto').addEventListener('click',function(){setViewMode('photo');});if($('viewMode3d'))$('viewMode3d').addEventListener('click',function(){setViewMode('3d');});if($('view3dInside'))$('view3dInside').addEventListener('click',function(){view3dMod?.inside();});if($('view3dFit'))$('view3dFit').addEventListener('click',function(){if(view3dMod){view3dMod.fitCamera();setPhoto3dModeUi('matched');}});if($('view3dMatchPhoto'))$('view3dMatchPhoto').addEventListener('click',function(){if(view3dMod?.matchPhoto()){setPhoto3dModeUi('matched');}});if($('view3dOrbit360'))$('view3dOrbit360').addEventListener('click',function(){if(view3dMod?.orbit360()){setPhoto3dModeUi('360');}});if($('view3dWalk'))$('view3dWalk').addEventListener('click',function(){if(!view3dMod)return;if(view3dMod.isMeasuring?.())view3dMod.setMeasureMode(false);var walking=view3dMod.toggleWalk?.();setPhoto3dModeUi(walking?'walk':'360');});if($('view3dMeasure'))$('view3dMeasure').addEventListener('click',function(){if(!view3dMod)return;if(view3dMod.isWalking?.())view3dMod.exitWalk();var measuring=view3dMod.toggleMeasure?.();setMeasureUi(measuring);});if($('view3dMeasureClear'))$('view3dMeasureClear').addEventListener('click',function(){view3dMod?.clearMeasurement?.();setMeasurementResult(null);});if($('view3dDayNight'))$('view3dDayNight').addEventListener('click',function(){setSceneNight(!sceneOptions.night);});
+});if($('inspectorPanel')){$('inspectorPanel').addEventListener('click',handleEquipmentClick);$('inspectorPanel').addEventListener('change',handleEquipmentChange);}if($('emptyStateOverlay'))$('emptyStateOverlay').addEventListener('click',function(e){var el=e.target.closest('[data-role]');if(el&&el.dataset.role==='empty-party')buildPartyScene();if(el&&el.dataset.role==='empty-choose-own')openDrawer('inventory');if(el&&el.dataset.role==='empty-suggest')openDrawer('setup');});if($('viewModePlan'))$('viewModePlan').addEventListener('click',function(){setViewMode('plan');});if($('viewModePhoto'))$('viewModePhoto').addEventListener('click',function(){setViewMode('photo');});if($('viewMode3d'))$('viewMode3d').addEventListener('click',function(){setViewMode('3d');});if($('view3dInside'))$('view3dInside').addEventListener('click',function(){view3dMod?.inside();});if($('view3dFit'))$('view3dFit').addEventListener('click',function(){if(view3dMod){view3dMod.fitCamera();setPhoto3dModeUi('matched');}});if($('view3dMatchPhoto'))$('view3dMatchPhoto').addEventListener('click',function(){setViewMode('photo');});if($('view3dOrbit360'))$('view3dOrbit360').addEventListener('click',function(){if(view3dMod?.orbit360()){setPhoto3dModeUi('360');}});if($('view3dWalk'))$('view3dWalk').addEventListener('click',function(){if(!view3dMod)return;if(view3dMod.isMeasuring?.())view3dMod.setMeasureMode(false);var walking=view3dMod.toggleWalk?.();setPhoto3dModeUi(walking?'walk':'360');});if($('view3dMeasure'))$('view3dMeasure').addEventListener('click',function(){if(!view3dMod)return;if(view3dMod.isWalking?.())view3dMod.exitWalk();var measuring=view3dMod.toggleMeasure?.();setMeasureUi(measuring);});if($('view3dMeasureClear'))$('view3dMeasureClear').addEventListener('click',function(){view3dMod?.clearMeasurement?.();setMeasurementResult(null);});if($('view3dDayNight'))$('view3dDayNight').addEventListener('click',function(){setSceneNight(!sceneOptions.night);});
 ['sceneRain','sceneGuests','sceneStyling','sceneMotion'].forEach(function(id){var input=$(id);if(!input)return;input.checked=id==='sceneGuests'?sceneOptions.guests:id==='sceneStyling'?sceneOptions.styling:id==='sceneMotion'?sceneOptions.motion:false;input.addEventListener('change',function(){sceneOptions.weather=$('sceneRain').checked?'rain':'clear';sceneOptions.guests=$('sceneGuests').checked;sceneOptions.styling=$('sceneStyling').checked;sceneOptions.motion=$('sceneMotion').checked;view3dMod?.setScene(sceneOptions);window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});});
 if($('propertyFitBadge'))$('propertyFitBadge').addEventListener('click',function(){
   var panel=$('propertyFitPanel');if(!panel)return;panel.hidden=!panel.hidden;this.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)renderPropertyFit(currentPropertyPlan());
 });
-if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('build');});if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('breakdown');});if($('btnUndo'))$('btnUndo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.undo();});if($('btnRedo'))$('btnRedo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.redo();});store.subscribe(function(){refreshAll();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});if($('btnBackToRecommend'))$('btnBackToRecommend').addEventListener('click',function(){openDrawer('setup');});if($('btnToReview'))$('btnToReview').addEventListener('click',goToReview);if($('btnBackToDesigner'))$('btnBackToDesigner').addEventListener('click',function(){document.body.classList.add('designer-active');showStep('step-designer');});window.FriendlyBridge={INFLATABLES:INFLATABLES,ACCESSORIES:ACCESSORIES,openInflatablePreview:openInflatablePreview,buildPartyScene:buildPartyScene,openDrawer:openDrawer,state:state,TENTS:TENTS,TABLES:TABLES,CHAIRS:CHAIRS,PACKAGES:PACKAGES,byId:byId,showStep:showStep,enterDesigner:enterDesigner,getScene:getScene,loadScene:loadScene,useRecommendedLayout:useRecommendedLayout,customizeFromScratch:customizeFromScratch,refreshAll:refreshAll,setViewMode:setViewMode,computeLineItems:computeLineItems,currentReviewPricing:currentReviewPricing,getPropertyPlan:currentPropertyPlan,getSpaceScan:function(){return currentVenueScan();},getScanReconstruction:function(){return window.RENTSKETCH_SCAN_RECONSTRUCTION||null;},getMeasurement:function(){return view3dMod?.getMeasurement?.()||null;},startMeasurement:function(){if(!view3dMod)return false;var active=view3dMod.setMeasureMode(true);setMeasureUi(active);return active;},clearMeasurement:function(){view3dMod?.clearMeasurement?.();setMeasurementResult(null);return true;}};
+if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('build');});if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('breakdown');});if($('btnUndo'))$('btnUndo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.undo();});if($('btnRedo'))$('btnRedo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.redo();});store.subscribe(function(){refreshAll();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});if($('btnBackToRecommend'))$('btnBackToRecommend').addEventListener('click',function(){openDrawer('setup');});if($('btnToReview'))$('btnToReview').addEventListener('click',goToReview);if($('btnBackToDesigner'))$('btnBackToDesigner').addEventListener('click',function(){document.body.classList.add('designer-active');showStep('step-designer');});window.FriendlyBridge={INFLATABLES:INFLATABLES,ACCESSORIES:ACCESSORIES,openInflatablePreview:openInflatablePreview,buildPartyScene:buildPartyScene,openDrawer:openDrawer,state:state,TENTS:TENTS,TABLES:TABLES,CHAIRS:CHAIRS,PACKAGES:PACKAGES,byId:byId,showStep:showStep,enterDesigner:enterDesigner,getScene:getScene,loadScene:loadScene,useRecommendedLayout:useRecommendedLayout,customizeFromScratch:customizeFromScratch,refreshAll:refreshAll,setViewMode:setViewMode,goToReview:goToReview,computeLineItems:computeLineItems,currentReviewPricing:currentReviewPricing,getPropertyPlan:currentPropertyPlan,getSpaceScan:function(){return currentVenueScan();},getScanReconstruction:function(){return window.RENTSKETCH_SCAN_RECONSTRUCTION||null;},getMeasurement:function(){return view3dMod?.getMeasurement?.()||null;},startMeasurement:function(){if(!view3dMod)return false;var active=view3dMod.setMeasureMode(true);setMeasureUi(active);return active;},clearMeasurement:function(){view3dMod?.clearMeasurement?.();setMeasurementResult(null);return true;}};
 
 $('drawerBody').addEventListener('submit',function(e){if(e.target.id!=='quickSetupForm')return;e.preventDefault();var form=e.target;if(!form.reportValidity())return;state.guestCount=Math.max(1,Math.min(1000,Number(form.elements.guests.value)||1));var ft=Number(form.elements.dance.value);state.needDance=ft>0;state.danceFloorSizeId='custom';state.customDanceFloorFt=ft||null;useRecommendedLayout();});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(view3dMod?.isMeasuring?.()){view3dMod.setMeasureMode(false);setMeasureUi(false);return;}if(view3dMod?.isWalking?.()){view3dMod.exitWalk();setPhoto3dModeUi('360');return;}if(pendingPlacement){cancelPlacement();return;}if($('sceneControls'))$('sceneControls').open=false;if(state.activeDrawer)closeDrawer();else if(state.selectedId){state.selectedId=null;refreshAll();}}});
@@ -713,8 +743,8 @@ document.querySelectorAll('.rail-btn').forEach(function(button){var icon=railIco
 
 // Pending placement stays outside the authoritative store until confirmation.
 function startPlacement(objects,label,previewId,extra){if(!requireEventEditing())return false;
-  var photoMode=!!state.backgroundPhoto&&state.viewMode!=='plan';
-  if(photoMode){var snap=buildSnapshot([]);objects=objects.map(function(o){return rentalPhotoPlacement(o,snap.tent,snap.photoSite,state.photoTentPlacement);});if(state.viewMode==='photo')setViewMode('3d');}
+  var photoMode=!!state.backgroundPhoto;
+  if(photoMode){var snap=buildSnapshot([]);objects=objects.map(function(o){return rentalPhotoPlacement(o,snap.tent,snap.photoSite,state.photoTentPlacement);});if(photoEditing)setViewMode('photo');}
   var x=Math.min(...objects.map(o=>o.x)),y=Math.min(...objects.map(o=>o.y));
   pendingPlacement={objects:objects,label:label,x:x,y:y,widthFt:Math.max(...objects.map(o=>o.x+o.widthFt))-x,depthFt:Math.max(...objects.map(o=>o.y+o.depthFt))-y,photoMode:photoMode,...extra};
   state.selectedId=null;closeDrawer();$('sceneControls').open=false;
@@ -792,7 +822,7 @@ function restoreScenePreferences(value){
   sceneOptions={
     night:typeof saved.night==='boolean'?saved.night:!!(state.lightingId&&state.lightingId!=='lighting-none'),
     weather:saved.weather==='rain'?'rain':'clear',
-    guests:typeof saved.guests==='boolean'?saved.guests:true,
+    guests:typeof saved.guests==='boolean'?saved.guests:false,
     styling:typeof saved.styling==='boolean'?saved.styling:true,
     motion:!reducedMotion&&(typeof saved.motion==='boolean'?saved.motion:true)
   };
