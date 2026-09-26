@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, refineReconstructionSurface, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
+import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, refineReconstructionSurface, spaceScanQualityProfile, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
 
 function loadImage(url){
   return new Promise((resolve,reject)=>{
@@ -19,13 +19,6 @@ function textureFromImage(image){
   const tex=new THREE.Texture(image);tex.needsUpdate=true;tex.colorSpace=THREE.SRGBColorSpace;
   tex.minFilter=THREE.LinearMipmapLinearFilter;tex.magFilter=THREE.LinearFilter;tex.anisotropy=4;
   return tex;
-}
-export function spaceScanQualityProfile({mobile=false,deviceMemory,hardwareConcurrency}={}){
-  const memory=Number(deviceMemory),cores=Number(hardwareConcurrency);
-  if(mobile)return {tier:'mobile',width:160,maxHeight:168,primaryStep:4,fusionStep:6,maxDisparity:24,fusionDisparity:22,referenceSpan:2,voxelFt:.48,refinementPasses:1};
-  if((Number.isFinite(memory)&&memory<=4)||(Number.isFinite(cores)&&cores<=4))return {tier:'balanced',width:184,maxHeight:176,primaryStep:4,fusionStep:6,maxDisparity:28,fusionDisparity:26,referenceSpan:2,voxelFt:.42,refinementPasses:1};
-  if((Number.isFinite(memory)&&memory>=12)&&(Number.isFinite(cores)&&cores>=8))return {tier:'ultra',width:232,maxHeight:210,primaryStep:3,fusionStep:5,maxDisparity:34,fusionDisparity:30,referenceSpan:2,voxelFt:.30,refinementPasses:2};
-  return {tier:'high',width:208,maxHeight:192,primaryStep:3,fusionStep:5,maxDisparity:32,fusionDisparity:28,referenceSpan:2,voxelFt:.34,refinementPasses:2};
 }
 function currentDeviceProfile(mobile){
   const n=typeof navigator!=='undefined'?navigator:{};
