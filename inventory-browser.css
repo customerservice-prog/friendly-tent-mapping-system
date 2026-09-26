@@ -151,3 +151,21 @@
   .context-product { margin-bottom:16px; }
   .context-target { min-height:76px; }
 }
+
+/* Distinguish source photography from illustrative models at the same card size. */
+.inventory-media { position:relative; display:block; width:100%; height:126px; overflow:hidden; background:radial-gradient(ellipse at 50% 30%,#fff 0,#f2f6f1 80%); }
+.inventory-photo-layer,.inventory-illustration { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; }
+.inventory-media [hidden] { display:none!important; }
+.inventory-media .inventory-photo { width:100%; height:100%; padding:7px 7px 23px; box-sizing:border-box; background:#fff; object-fit:contain; }
+.inventory-illustration>[data-inventory-layer],.inventory-illustration>span:not(.inventory-source-label) { display:flex; align-items:center; justify-content:center; width:100%; height:100%; padding:6px 9px 25px; box-sizing:border-box; }
+.inventory-media .inventory-preview-image { width:100%; height:100%; object-fit:contain; mix-blend-mode:multiply; }
+.inventory-media svg { width:100%; max-width:125px; height:100%; max-height:91px; margin:0; color:#527763; overflow:visible; }
+.inventory-media .accessory-icon { width:66px; height:66px; stroke-width:1.25; }
+.inventory-media .chair-visual { width:70px; max-height:94px; }
+.inventory-source-label { position:absolute; left:50%; bottom:6px; transform:translateX(-50%); max-width:calc(100% - 12px); box-sizing:border-box; padding:3px 6px; border-radius:5px; background:#ffffffdc; color:#63796d; font-size:9px; line-height:1.25; white-space:nowrap; text-align:center; font-weight:500; }
+.context-product .inventory-media { width:88px; height:90px; border-radius:8px; }
+.context-product .inventory-media .inventory-source-label { font-size:8px; letter-spacing:0; }
+.context-product .inventory-media .inventory-photo { width:100%; height:100%; }
+#inspectorPanel>.inventory-media { height:180px; margin:12px 0; border-radius:10px; }
+#inspectorPanel>.inventory-media svg { max-width:175px; max-height:145px; }
+@media(max-width:650px) { .inventory-media { height:108px; } .inventory-source-label { font-size:8px; } }

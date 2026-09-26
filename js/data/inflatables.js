@@ -1,3 +1,4 @@
+import { objectLocalDimensions } from '../core/world-space.js';
 // Product identity/pricing always come from the active tenant catalog. These
 // photo-based visual profiles contain no inventory or pricing. Dimensions are
 // illustrative until the rental company's catalog supplies measured dimensions.
@@ -26,14 +27,29 @@ export function inflatableCatalog(products,showPrices){
     // Unknown tenants get a labeled illustrative profile, never another tenant's item.
     const style=metadata.inflatableStyle || (/slide/i.test(p.name)?(/bounce/i.test(p.name)?'combo':'slide'):'castle');
     const model=known||{style,colors:['#247ab1','#efd33c','#ef644e','#3d9b67'],widthFt:style==='castle'?15:16,depthFt:style==='castle'?18:32,heightFt:16,lanes:1,combo:style==='combo'};
-    const width=positive(p.width_ft),depth=positive(p.length_ft),height=positive(metadata.heightFt||metadata.height_ft);
+    const width=positive(p.width_ft),depth=positive(p.length_ft),height=positive(p.height_ft||metadata.heightFt||metadata.height_ft);
     const price=p.price_per_day==null||p.price_per_day===''?null:Number(p.price_per_day);
     const photo=String(p.photo_url||p.image_url||'');
-    return {...model,id:'inflatable-'+p.id,productId:p.id,externalId:p.external_id||null,name:p.name,category:'inflatable',widthFt:width||model.widthFt,depthFt:depth||model.depthFt,heightFt:height||model.heightFt,dimensionsConfirmed:!!(width&&depth),photoUrl:/^https?:\/\//i.test(photo)?photo:null,pricePerDay:showPrices&&price!=null&&Number.isFinite(price)?price:null};
+    return {...model,id:'inflatable-'+p.id,productId:p.id,externalId:p.external_id||null,name:p.name,category:'inflatable',widthFt:width||model.widthFt,depthFt:depth||model.depthFt,heightFt:height||model.heightFt,dimensionsConfirmed:!!(width&&depth),heightConfirmed:!!height,photoUrl:/^https?:\/\//i.test(photo)?photo:null,pricePerDay:showPrices&&price!=null&&Number.isFinite(price)?price:null};
   });
 }
 export function byId(id){return INFLATABLES.find(p=>p.id===id);}
-export function inflatableItem(product,id,x=0,y=0){return {id,kind:'inflatable',inflatableId:product.id,widthFt:product.widthFt,depthFt:product.depthFt,rotationDeg:0,x,y};}
+function visualProfile(product={}){
+ return {version:1,slug:String(product.slug||''),style:['castle','crayon','white','firetruck','pirate','slide','combo'].includes(product.style)?product.style:'castle',colors:(Array.isArray(product.colors)?product.colors:[]).slice(0,4).map(c=>/^#[0-9a-f]{3,8}$/i.test(c)?c:'#70998b'),combo:product.combo===true,lanes:product.lanes===2?2:1,palms:product.palms===true,marble:product.marble===true};
+}
+export function inflatableItem(product,id,x=0,y=0){
+ return {id,kind:'inflatable',inflatableId:product.id,productId:product.productId||null,externalId:product.externalId||null,name:product.name||'Inflatable',widthFt:product.widthFt,depthFt:product.depthFt,modelWidthFt:product.widthFt,modelDepthFt:product.depthFt,heightFt:product.heightFt,footprintOriented:true,dimensionsConfirmed:product.dimensionsConfirmed===true,heightConfirmed:product.heightConfirmed===true,modelProfile:visualProfile(product),rotationDeg:0,x,y};
+}
+// A saved placement owns its size and visual profile. Live catalog changes may
+// supply current pricing/photos, but cannot silently resize a customer's plan.
+export function resolvedInflatableDefinition(item,definition=byId(item?.inflatableId)){
+ if(!item)return null;
+ const saved=item.modelProfile&&typeof item.modelProfile==='object'?item.modelProfile:null;
+ if(!definition&&!saved)return null;
+ const profile=visualProfile(saved||definition),local=objectLocalDimensions(item);
+ if(profile.colors.length<3)profile.colors=['#247ab1','#efd33c','#ef644e','#3d9b67'];
+ return {...definition,...profile,id:item.inflatableId||definition?.id,productId:item.productId||definition?.productId||null,externalId:item.externalId||definition?.externalId||null,name:item.name||definition?.name||'Inflatable — confirm selection',widthFt:positive(item.modelWidthFt)||(positive(item.widthFt)&&positive(local.widthFt))||positive(definition?.widthFt)||15,depthFt:positive(item.modelDepthFt)||(positive(item.depthFt)&&positive(local.depthFt))||positive(definition?.depthFt)||18,heightFt:positive(item.heightFt)||positive(definition?.heightFt)||16,dimensionsConfirmed:typeof item.dimensionsConfirmed==='boolean'?item.dimensionsConfirmed:definition?.dimensionsConfirmed===true,heightConfirmed:typeof item.heightConfirmed==='boolean'?item.heightConfirmed:definition?.heightConfirmed===true,pricePerDay:definition?.pricePerDay??null};
+}
 export function inflatableSizeLabel(p){return p.dimensionsConfirmed?`${p.widthFt} × ${p.depthFt} ft`:'Illustrative size · confirm dimensions';}
 // Shared geometry/activity coordinates: feet, positive Z toward the entrance.
 export function inflatableZones(p){

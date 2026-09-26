@@ -5,7 +5,7 @@ const root=path.resolve(__dirname,'..'),out=process.env.RENTSKETCH_QA_DIR||path.
 let design,versions=[];
 const html=`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/js/ui/project-panel.css"><style>body{margin:0;background:#eef3ec;font-family:system-ui}main{padding:32px}button{padding:16px;border-radius:10px;border:1px solid #bacaba;background:white}</style></head><body><main><h1>RentSketch project verification</h1><p>Isolated layout fixture · no customer information</p><button id="projects">Projects</button><button id="edit">Move table</button></main><script>
 var fixtureScene={tentId:'frame',objects:[{id:'one',kind:'table',tableId:'six',widthFt:6,depthFt:2.5,x:4,y:5}]};
-window.RENTSKETCH_API_URL=location.origin;window.RENTSKETCH_TENANT_SLUG='friendly';window.RENTSKETCH_CATALOG_READY=true;window.RentSketchEventPass={canEdit:()=>true};
+window.RENTSKETCH_API_URL=location.origin;window.RENTSKETCH_TENANT_SLUG='friendly';window.RENTSKETCH_CATALOG_READY=true;window.fixtureEditable=true;window.fixturePaid=false;window.fixtureAccessCalls=[];window.RentSketchEventPass={canEdit:()=>window.fixtureEditable,hasPaidEvent:()=>window.fixturePaid,requestAccess:()=>window.fixtureAccessCalls.push('access'),showRecovery:()=>window.fixtureAccessCalls.push('recover')};
 window.FriendlyBridge={state:{},getScene:()=>JSON.parse(JSON.stringify(fixtureScene)),loadScene:s=>{fixtureScene=s;return true},closeDrawer:()=>{},computeLineItems:()=>[{label:'6 ft table',qty:1}],getChecks:()=>[{message:'Verify the delivery path.'}]};
 </script><script src="/js/ui/autosave.js"></script><script src="/js/ui/project-panel.js"></script><script>projects.onclick=()=>RentSketchProjects.open();edit.onclick=()=>{fixtureScene.objects[0].x++;dispatchEvent(new CustomEvent('rentsketch:requestSave'))}</script></body></html>`;
 const server=http.createServer(async(req,res)=>{
@@ -33,6 +33,7 @@ let browser;
   const context=await browser.newContext({viewport:{width,height:900},deviceScaleFactor:1}),page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port);await page.getByRole('button',{name:'Projects',exact:true}).click();
   await page.getByLabel('Project name',{exact:true}).waitFor();await page.waitForFunction(()=>document.querySelector('[name=projectName]').value==='Garden reception');
+  await page.locator('[role=dialog]').focus();await page.keyboard.press('Shift+Tab');assert.equal(await page.locator(':focus').getAttribute('data-action'),'print','Initial dialog Shift+Tab wraps inside');
   await page.getByLabel('Version name',{exact:true}).fill('Before final review');await page.getByRole('button',{name:'Save version',exact:true}).click();await page.getByText('Before final review',{exact:true}).waitFor();
   const overflow=await page.locator('.rs-project-dialog').evaluate(el=>el.scrollWidth>el.clientWidth+1);assert.equal(overflow,false,'No panel overflow at '+width);
   const targets=await page.locator('.rs-project-panel button').evaluateAll(nodes=>nodes.map(n=>n.getBoundingClientRect().height).filter(h=>h>0));assert.ok(targets.every(h=>h>=43),'Accessible button targets at '+width);
@@ -41,7 +42,10 @@ let browser;
   await page.keyboard.press('Escape');await page.locator('.rs-project-panel').waitFor({state:'detached'});assert.equal(await page.locator(':focus').getAttribute('id'),'projects','Close restores launcher focus');
   design.revision++;await page.getByRole('button',{name:'Move table',exact:true}).click();await page.getByRole('button',{name:'Projects',exact:true}).click();await page.getByRole('button',{name:'Save layout now'}).click();
   await page.getByText('Keep both layouts safe',{exact:true}).waitFor();await page.locator('.rs-project-dialog').evaluate(el=>el.scrollTop=0);await page.screenshot({path:path.join(out,'projects-conflict-'+width+'.png')});
-  assert.match(await page.locator('[data-save-status]').innerText(),/another session/);assert.equal(errors.length,0,errors.join('\n'));await context.close();
+  assert.match(await page.locator('[data-save-status]').innerText(),/another session/);assert.equal(errors.length,0,errors.join('\n'));
+  await page.keyboard.press('Escape');await page.evaluate(()=>{window.fixtureEditable=false;});await page.getByRole('button',{name:'Projects',exact:true}).click();await page.locator('[data-access-state=preview]').waitFor();assert.doesNotMatch(await page.locator('[data-save-status]').innerText(),/saved on this device|Shared/);assert.ok(await page.locator('.rs-project-panel').evaluate(el=>el.contains(document.activeElement)));await page.screenshot({path:path.join(out,'projects-preview-'+width+'.png')});await page.getByRole('button',{name:'See Event Pass options'}).click();assert.deepEqual(await page.evaluate(()=>window.fixtureAccessCalls),['access']);assert.equal(await page.locator('.rs-project-panel').count(),0);
+  await page.getByRole('button',{name:'Projects',exact:true}).click();await page.getByRole('button',{name:'Open my saved event'}).click();assert.deepEqual(await page.evaluate(()=>window.fixtureAccessCalls),['access','recover']);
+  await context.close();
  }
  console.log('PASS actual Chromium Projects panel: 1440/390/320px, named version, visible conflict controls, 44px buttons, no overflow, keyboard focus trap and Escape restore. Screenshots: '+out);
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{await browser?.close();await new Promise(r=>server.close(r));});

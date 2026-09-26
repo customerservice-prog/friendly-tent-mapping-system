@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
-import { byId, inflatableZones } from '../data/inflatables.js';
+import { byId, inflatableZones, resolvedInflatableDefinition } from '../data/inflatables.js';
 const UP=new THREE.Vector3(0,1,0);
 export function slidePoint(zone,lane,t){
  const u=Math.max(0,Math.min(1,t)),ease=(1-Math.cos(Math.PI*Math.min(1,u/.82)))/2;
@@ -18,6 +18,7 @@ function netMaterial(){
  return new THREE.MeshStandardMaterial({map:texture,transparent:true,alphaTest:.2,side:THREE.DoubleSide,roughness:.8});
 }
 export function createInflatable(item,definition=byId(item.inflatableId)){
+ definition=resolvedInflatableDefinition(item,definition);
  const root=new THREE.Group();root.name=definition?.name||'Inflatable';root.userData.kind='inflatable';root.userData.itemId=item.id;
  if(!definition)return root;
  const p=definition,w=p.widthFt,d=p.depthFt,h=p.heightFt,group=new THREE.Group();group.rotation.y=-(item.rotationDeg||0)*Math.PI/180;root.add(group);
@@ -115,7 +116,7 @@ export function createInflatableActivity(space,objects,{mobile=false}={}){
  const skins=['#e4b08a','#955f42','#c98d62'],shirts=['#f2c238','#ee735b','#3b9cc3'],hair=['#473329','#302d28','#805739'];
  const sphere=new THREE.SphereGeometry(1,12,8),limb=new THREE.CylinderGeometry(1,1,1,10),shoe=new RoundedBoxGeometry(.27,.17,.48,2,.06);
  objects.filter(o=>o.kind==='inflatable').slice(0,mobile?4:8).forEach((item,oi)=>{
-  const p=byId(item.inflatableId);if(!p)return;const host=new THREE.Group();host.position.set(item.x+item.widthFt/2-space.widthFt/2,0,item.y+item.depthFt/2-space.lengthFt/2);host.rotation.y=-(item.rotationDeg||0)*Math.PI/180;root.add(host);
+  const p=resolvedInflatableDefinition(item);if(!p)return;const host=new THREE.Group();host.position.set(item.x+item.widthFt/2-space.widthFt/2,0,item.y+item.depthFt/2-space.lengthFt/2);host.rotation.y=-(item.rotationDeg||0)*Math.PI/180;root.add(host);
   const zones=inflatableZones(p),activities=[...(zones.bounce?['jump','jump']:[]),...(zones.slide?Array(zones.slide.lanes).fill('slide'):[])];
   activities.forEach((activity,i)=>{
    const kid=new THREE.Group(),skin=new THREE.MeshStandardMaterial({color:skins[(oi+i)%3],roughness:.85}),cloth=new THREE.MeshStandardMaterial({color:shirts[(oi+i)%3],roughness:.85}),hairMat=new THREE.MeshStandardMaterial({color:hair[(oi+i)%3]}),pants=new THREE.MeshStandardMaterial({color:'#345270'}),dark=new THREE.MeshStandardMaterial({color:'#25303b'});
@@ -139,5 +140,5 @@ export function createInflatableActivity(space,objects,{mobile=false}={}){
    draw();animated.push(draw);
   });
  });
- root.userData.update=dt=>{time+=dt;animated.forEach(draw=>draw());};root.userData.activityCount=animated.length;return root;
+ root.userData.update=clock=>{time=Math.max(0,Number(clock)||0);animated.forEach(draw=>draw());};root.userData.activityCount=animated.length;return root;
 }

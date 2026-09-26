@@ -256,7 +256,7 @@ export async function prepareVenuePhoto(file){
 function staffIdentity(){return window.RentSketchDashboardSession?.identity?.()||'';}
 async function photoRequest(url,options,identity,api){
   if(identity!==staffIdentity())throw new Error('Your admin session changed. Sign in again before changing venue photos.');
-  const response=identity?await window.RentSketchDashboardSession.request(url.slice(api.length),options):await fetch(url,{...options,credentials:'omit'});
+  const response=identity?await window.RentSketchDashboardSession.request(url.slice(api.length),{...options,expectedIdentity:identity}):await fetch(url,{...options,credentials:'omit'});
   if(identity!==staffIdentity())throw new Error('Your admin session changed. Sign in again before changing venue photos.');
   return response;
 }
@@ -275,8 +275,10 @@ export function venuePhotoRoutes(context){
   return {upload:tenantBase,remove:function(photoId){return tenantBase+'/'+encodeURIComponent(String(photoId||''));}};
 }
 export async function uploadVenuePhoto(file,context){
+  const identity=staffIdentity();
   await window.RentSketchDashboardSession?.ready?.();
-  const identity=staffIdentity(),prepared=await prepareVenuePhoto(file);
+  if(identity!==staffIdentity())throw new Error('Your admin session changed. Sign in again before changing venue photos.');
+  const prepared=await prepareVenuePhoto(file);
   const api=String(context.api||'').replace(/\/$/,'');
   if(!api||!context.slug||!context.designId)throw new Error('Save the layout before adding a venue photo.');
   const routes=venuePhotoRoutes(context);if(!routes)throw new Error('Photo upload route is unavailable.');
@@ -298,9 +300,10 @@ export async function uploadVenuePhoto(file,context){
   }finally{clearTimeout(timer);}
 }
 export async function deleteVenuePhoto(photo,context){
+  const identity=staffIdentity();
   try{
     await window.RentSketchDashboardSession?.ready?.();
-    const identity=staffIdentity();
+    if(identity!==staffIdentity())return;
     photo=normalizeVenuePhoto(photo,context.api);if(!photo?.id||!context.designId)return;
     const headers={};if(context.sessionId)headers['X-RentSketch-Session']=context.sessionId;
     const routes=venuePhotoRoutes(context);if(!routes)return;

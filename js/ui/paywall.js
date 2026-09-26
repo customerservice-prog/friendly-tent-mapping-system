@@ -221,11 +221,18 @@
   function restoreScene(data) {
     if (data.tenant !== slug) throw new Error('This event belongs to a different rental company. Open its original access link.');
     window.RENTSKETCH_PASS_RESTORING = true;
+    var previousVerified = verified, previousIdentity = verifiedIdentity;
     try {
       var auto = autosave();
-      if (!bridge().loadScene(data.scene, { customerEmail: data.customerEmail })) throw new Error('Your saved layout could not be restored. Please retry.');
-      auto.adopt(data);
       verified = data; verifiedIdentity = data.adminAccess ? staffIdentity() : '';
+      // Verify access before choosing a same-owner local recovery. A successful
+      // resume must not replace edits that were still waiting to reach the cloud.
+      if (!auto.restoreVerified?.(data)) {
+        if (!bridge().loadScene(data.scene, { customerEmail: data.customerEmail })) throw new Error('Your saved layout could not be restored. Please retry.');
+        auto.adopt(data);
+      }
+    } catch (error) {
+      verified = previousVerified; verifiedIdentity = previousIdentity; throw error;
     } finally { window.RENTSKETCH_PASS_RESTORING = false; }
     render();
     window.dispatchEvent(new CustomEvent('rentsketch:accessChanged'));

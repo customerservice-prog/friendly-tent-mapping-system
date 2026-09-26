@@ -8,7 +8,7 @@ import { tabletopSvg } from './tabletop-symbols.js';
 // default editing surface: it is easier to scan and arrange a layout from
 // directly above than in a 3D perspective view.
 
-import { byId as inflatableById } from '../data/inflatables.js';
+import { resolvedInflatableDefinition } from '../data/inflatables.js';
 import { inflatablePlanSvg } from './inflatable-controls.js';
 import { chairPlanSvg } from './equipment-symbols.js';
 import { chairPositions } from '../core/seating.js';
@@ -146,8 +146,7 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
 
 function planModelDimensions(item){
   if(!currentData?.photoSitePlan)return {widthFt:item.widthFt,depthFt:item.depthFt};
-  const product=item.kind==='inflatable'?inflatableById(item.inflatableId):item.kind==='equipment'?equipmentById(item.equipmentId):null;
-  return product?{widthFt:product.widthFt,depthFt:product.depthFt}:objectLocalDimensions(item);
+  return objectLocalDimensions(item);
 }
 function positionObjectElement(element,item,x,y){
   const local=planModelDimensions(item),origin=toDispXY(x+item.widthFt/2-local.widthFt/2,y+item.depthFt/2-local.depthFt/2);
@@ -380,7 +379,7 @@ renderLighting(data,tent,structureHost);
   const isDance = item.kind === 'dance';
   const equipment=item.kind==='equipment'?(equipmentById(item.equipmentId)||{name:item.name||'Equipment'}):null;
   const standaloneChair=item.kind==='chair'?chairById(item.chairId):null;
-  const inflatable = item.kind==='inflatable'?inflatableById(item.inflatableId):null;
+  const inflatable = item.kind==='inflatable'?resolvedInflatableDefinition(item):null;
   const accessory = item.kind==='accessory'?(accessoryById(item.accessoryId)||{id:item.accessoryId,name:item.name||'Rental item',accessoryType:item.accessoryType||'generic'}):null;
   const tableDef = (!isDance && item.kind === 'table') ? tableById(item.tableId) : null;
   const silhouette = tableDef ? tableDef.silhouette : null;

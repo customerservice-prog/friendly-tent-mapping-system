@@ -18,7 +18,13 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
     if(wallCounts.solid) add(null,wallCounts.solid,'sidewall','Solid 10 ft Sidewall — confirm pricing','Solid 10 ft Sidewall');
     if(wallCounts.window) add(null,wallCounts.window,'sidewall','Window 10 ft Sidewall — confirm pricing','Window 10 ft Sidewall');
   }
-  const inflatables=new Map();for(const o of objects)if(o.kind==='inflatable')inflatables.set(o.inflatableId,(inflatables.get(o.inflatableId)||0)+1);inflatables.forEach((qty,id)=>add(find(catalog.inflatables,id),qty,'inflatable','Inflatable — confirm selection'));
+  const inflatables=new Map();
+  for(const object of objects)if(object.kind==='inflatable'){
+    const productId=object.productId||null,key=productId?'product:'+productId:'inflatable:'+object.inflatableId;
+    const product=(catalog.inflatables||[]).find(p=>productId?p.productId===productId:p.id===object.inflatableId)||{productId,name:object.name||'Inflatable — confirm selection',pricePerDay:null};
+    const entry=inflatables.get(key)||{product,qty:0};entry.qty++;inflatables.set(key,entry);
+  }
+  inflatables.forEach(({product,qty})=>add(product,qty,'inflatable','Inflatable — confirm selection'));
   // Equipment is the forward format. Legacy accessory saves remain readable,
   // but both formats share one product identity in review/print/quote output.
   // This prevents a migrated item from appearing twice when an old layout is

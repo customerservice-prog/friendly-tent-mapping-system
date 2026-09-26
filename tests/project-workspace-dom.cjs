@@ -38,7 +38,8 @@ function fixture(){
 function submit(w,kind,fields){const form=w.document.querySelector('[data-form="'+kind+'"]');for(const [key,value]of Object.entries(fields))form.elements[key].value=value;form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));}
 (async()=>{
  const f=fixture(),w=f.w,a=w.RentSketchAutosave;await a.flush();assert.equal(a.getRevision(),1);
- await w.RentSketchProjects.open();assert.ok(w.document.querySelector('[role=dialog]'));assert.equal(w.document.querySelector('[data-form=crew]'),null);
+ await w.RentSketchProjects.open();assert.ok(w.document.querySelector('[role=dialog]'));assert.ok(w.document.querySelector('.rs-project-panel').contains(w.document.activeElement),'focus remains in the refreshed dialog');assert.equal(w.document.querySelector('[data-form=crew]'),null);
+ const backward=new w.KeyboardEvent('keydown',{key:'Tab',shiftKey:true,bubbles:true,cancelable:true});w.document.querySelector('[role=dialog]').dispatchEvent(backward);assert.equal(backward.defaultPrevented,true,'Shift+Tab from the dialog stays in the modal');assert.equal(w.document.activeElement.dataset.action,'print');
  submit(w,'version',{name:'Original arrangement'});await until(()=>f.versions.length===1&&!w.document.querySelector('[data-form=version] button').disabled);
  f.scene={...f.scene,eventName:'Changed arrangement'};await a.flush();assert.equal(a.getRevision(),2);
  w.document.querySelector('[data-action=restore]').click();await until(()=>a.getRevision()===3&&!w.document.querySelector('[data-form=version] button').disabled);assert.equal(f.scene.eventName,undefined);
@@ -50,6 +51,7 @@ function submit(w,kind,fields){const form=w.document.querySelector('[data-form="
  assert.equal(f.records.get(originalId).projectName,'Graduation option','alternative does not rename source');
  const id=a.getDesignId();f.records.get(id).revision=2;f.records.get(id).scene.eventName='Other device';f.scene={...f.scene,eventName:'My unsaved change'};
  await assert.rejects(a.flush(),/another device/);assert.equal(a.getRevision(),1);assert.equal(a.getState().status,'conflict');assert.equal(JSON.parse(w.localStorage.getItem('rentsketch-autosave:friendly')).scene.eventName,'My unsaved change');
+ assert.equal(JSON.parse(w.localStorage.getItem('rentsketch-autosave:friendly')).conflict.currentRevision,2,'conflict persists with recovery snapshot');
  const writes=f.calls.filter(c=>c.method==='PATCH').length;await assert.rejects(a.flush(),/Resolve/);assert.equal(f.calls.filter(c=>c.method==='PATCH').length,writes,'conflict never silently adopts remote revision');
  w.document.querySelector('[data-action=conflict-copy]').click();await until(()=>a.getDesignId()!==id&&!w.document.querySelector('[data-form=alternative] button').disabled);assert.equal(f.records.get(id).scene.eventName,'Other device');assert.equal(f.scene.eventName,'My unsaved change');
  w.RentSketchProjects.close();
@@ -60,6 +62,7 @@ function submit(w,kind,fields){const form=w.document.querySelector('[data-form="
  f.staff=true;f.records.get(a.getDesignId()).crewNotes='Private loading instruction';await w.RentSketchProjects.open();assert.ok(w.document.querySelector('[data-form=crew]'));assert.ok(!w.localStorage.getItem('rentsketch-autosave:friendly').includes('Private loading instruction'));
   const printable=w.RentSketchProjects.crewHtml(f.records.get(a.getDesignId()),{});assert.match(printable,/White chairs/);assert.match(printable,/Confirm the access path/);assert.match(printable,/Private loading instruction/);assert.ok(!printable.includes('customerEmail'));
   w.FriendlyBridge.EQUIPMENT=[{id:'foam',name:'Foam cannon',widthFt:3,depthFt:3,heightFt:4,dimensionsConfirmed:true}];
+  const oldModel={...f.scene,objects:[{id:'old-foam',kind:'equipment',equipmentId:'foam',widthFt:3,depthFt:3,dimensionsConfirmed:false,x:0,y:0}]};const beforeDimensions=f.scene;f.scene=oldModel;assert.match(w.RentSketchProjects.crewHtml(f.records.get(a.getDesignId()),{}),/Confirm actual dimensions/,'new catalog measurements do not retroactively confirm a saved approximate model');f.scene=beforeDimensions;
   f.scene={...f.scene,backgroundPhoto:{path:'/api/tenants/friendly/background-photo/test?t=fixture'},objects:[...f.scene.objects,{id:'foam-one',kind:'equipment',equipmentId:'foam',widthFt:3,depthFt:3,x:9,y:12}]};
   await a.flush();const withPhoto=w.RentSketchProjects.crewHtml(f.records.get(a.getDesignId()),{includePhoto:true});assert.match(withPhoto,/Foam cannon/);assert.match(withPhoto,/https:\/\/fixture.invalid\/api\/tenants\/friendly\/background-photo\/test\?t=fixture/);
   let decodeDone,prints=0;w.HTMLImageElement.prototype.decode=()=>new Promise(resolve=>decodeDone=resolve);w.print=()=>{prints++;};
@@ -68,12 +71,18 @@ function submit(w,kind,fields){const form=w.document.querySelector('[data-form="
   assert.ok(!w.RentSketchProjects.crewHtml({...f.records.get(a.getDesignId()),crewNotes:''},{includePhoto:false}).includes('<img'),'venue photo is explicitly optional');
  f.staff=false;assert.ok(!w.RentSketchProjects.crewHtml(f.records.get(a.getDesignId()),{}).includes('Private loading instruction'));
  w.dispatchEvent(new w.CustomEvent('rentsketch:dashboardSessionChanged'));assert.equal(w.document.querySelector('.rs-project-panel'),null);
+ assert.equal(a.getState().readOnly,true);await w.RentSketchProjects.open();assert.ok(w.document.querySelector('[data-access-state=staff]'));assert.equal(w.document.querySelector('[data-form=details]'),null);
  f.close();console.log('PASS project forms: checkpoint, restore, alternatives, expiring read-only share/revoke, revision conflict copy, delayed-save continuation, offline recovery and private crew handoff');
 
  const locked=fixture(),lw=locked.w;locked.canEdit=false;locked.scene={tentId:'frame-20x20',objects:[]};await assert.rejects(lw.RentSketchAutosave.flush(),/read-only/);
  await lw.RentSketchAutosave.prepareCheckoutDraft();assert.equal(lw.RentSketchAutosave.getRevision(),1,'free product preview can checkpoint before checkout');
- lw.RENTSKETCH_SHARED_READONLY=true;const before=locked.calls.length;await lw.RentSketchProjects.open();assert.equal(lw.document.querySelector('[data-form=version]'),null);assert.equal(lw.document.querySelector('[data-action=revoke]'),null);assert.equal(lw.document.querySelector('[data-form=details]'),null);
+ let access=0,recovery=0;lw.RentSketchEventPass.requestAccess=()=>access++;lw.RentSketchEventPass.showRecovery=()=>recovery++;
+ const previewCalls=locked.calls.length;await lw.RentSketchProjects.open();assert.ok(lw.document.querySelector('[data-access-state=preview]'));assert.doesNotMatch(lw.document.querySelector('[data-save-status]').textContent,/saved on this device/);assert.equal(locked.calls.length,previewCalls);lw.document.querySelector('[data-action=request-access]').click();assert.equal(access,1);assert.equal(lw.document.querySelector('.rs-project-panel'),null);
+ await lw.RentSketchProjects.open();lw.document.querySelector('[data-action=recover-access]').click();assert.equal(recovery,1);
+ lw.RentSketchEventPass.hasPaidEvent=()=>true;await lw.RentSketchProjects.open();assert.ok(lw.document.querySelector('[data-access-state=expired]'));lw.RentSketchProjects.close();
+ lw.RENTSKETCH_SHARED_READONLY=true;const before=locked.calls.length;await lw.RentSketchProjects.open();assert.ok(lw.document.querySelector('[data-access-state=shared]'));assert.equal(lw.document.querySelector('[data-form=version]'),null);assert.equal(lw.document.querySelector('[data-action=revoke]'),null);assert.equal(lw.document.querySelector('[data-form=details]'),null);
  await assert.rejects(lw.RentSketchAutosave.prepareCheckoutDraft(),/read-only/);await lw.RentSketchProjects.printCrewSheet();assert.equal(locked.calls.length,before,'shared viewer cannot mutate or print private handoff');
  lw.document.querySelector('[role=dialog]').dispatchEvent(new lw.KeyboardEvent('keydown',{key:'Escape',bubbles:true}));assert.equal(lw.document.querySelector('.rs-project-panel'),null);locked.close();
+ const quota=fixture(),qw=quota.w;Object.defineProperty(qw.navigator,'onLine',{configurable:true,value:false});qw.Storage.prototype.setItem=function(){throw new qw.DOMException('Quota exceeded','QuotaExceededError');};await assert.rejects(qw.RentSketchAutosave.flush(),/offline/);assert.equal(qw.RentSketchAutosave.getState().localRecoveryAvailable,false);assert.match(qw.RentSketchAutosave.getState().message,/could not be saved.*Keep this tab open/);assert.doesNotMatch(qw.RentSketchAutosave.getState().message,/work is saved/);quota.close();
  console.log('PASS free-preview checkout remains available; shared viewer cannot save, restore, checkpoint, change notes, revoke links or access crew printing');
 })().catch(error=>{console.error(error);process.exitCode=1});

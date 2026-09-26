@@ -10,10 +10,21 @@ async function localResume(){
  w.FriendlyBridge={getScene:()=>scene,loadScene:s=>{loaded.push(JSON.parse(JSON.stringify(s)));return true;},state:{}};
  w.confirm=()=>{throw Error('resume must not ask for confirmation');};
  w.localStorage.setItem('rentsketch-autosave:lake',JSON.stringify({id:'saved-design',scene,savedAt:new Date(Date.now()-7*86400000).toISOString(),tenant:'lake',anonymousSessionId:'owner-session'}));
- w.eval(source);await wait(280);
+ w.fetch=async()=>{throw Error('Unexpected fetch before recovery assertions');};w.eval(source);await wait(280);
  assert.equal(loaded.length,1,'returning browser automatically reopens its saved layout');
+ assert.equal(w.RentSketchAutosave.getState().dirty,true,'legacy local copy remains pending until server confirms it');assert.doesNotMatch(w.RentSketchAutosave.getState().message,/All changes saved|Saved to your project/);
  assert.deepEqual(loaded[0],scene);assert.equal(w.RentSketchAutosave.getDesignId(),'saved-design');assert.equal(w.RentSketchAutosave.getSessionId(),'owner-session');
  dom.window.close();
+}
+async function pendingRecovery(){
+ const dom=new JSDOM('<!doctype html><body></body>',{url:'https://rentsketch.com/designer/?tenant=lake',runScripts:'outside-only'}),w=dom.window;
+ let current={tentId:'frame-20x20',objects:[]};const pending={...current,eventName:'Offline changes',objects:[{id:'table-1',kind:'table'}]},calls=[];
+ w.RENTSKETCH_API_URL='https://api.test';w.RENTSKETCH_TENANT_SLUG='lake';w.RENTSKETCH_CATALOG_READY=true;
+ w.FriendlyBridge={getScene:()=>current,loadScene:s=>{current=s;return true;},state:{}};
+ w.localStorage.setItem('rentsketch-autosave:lake',JSON.stringify({id:'saved-design',revision:3,pending:true,scene:pending,savedAt:new Date().toISOString(),tenant:'lake',anonymousSessionId:'owner-session'}));
+ w.fetch=async(url,options)=>{calls.push(JSON.parse(options.body));return{ok:true,json:async()=>({id:'saved-design',revision:4})};};
+ w.eval(source);await wait(280);assert.equal(w.RentSketchAutosave.getState().dirty,true);await w.RentSketchAutosave.flush();
+ assert.equal(calls.length,1);assert.equal(calls[0].expectedRevision,3);assert.equal(calls[0].scene.eventName,'Offline changes');assert.equal(w.RentSketchAutosave.getState().dirty,false);assert.equal(JSON.parse(w.localStorage.getItem('rentsketch-autosave:lake')).pending,false);dom.window.close();
 }
 async function sharedRestore(){
  const dom=new JSDOM('<!doctype html><body></body>',{url:'https://rentsketch.com/designer/?tenant=lake#share=signed-fixture',runScripts:'outside-only',pretendToBeVisual:true});
@@ -70,4 +81,4 @@ async function authenticatedSaves(){
   dom.window.close();
  }
 }
-(async()=>{await localResume();await sharedRestore();await authenticatedSaves();console.log('PASS draft resume: automatic 180-day local continuation and signed shared-layout read-only restore, and authenticated revision-aware saves and missing-project recovery.');})().catch(e=>{console.error(e);process.exitCode=1});
+(async()=>{await localResume();await pendingRecovery();await sharedRestore();await authenticatedSaves();console.log('PASS draft resume: automatic 180-day local continuation and signed shared-layout read-only restore, and authenticated revision-aware saves and missing-project recovery.');})().catch(e=>{console.error(e);process.exitCode=1});
