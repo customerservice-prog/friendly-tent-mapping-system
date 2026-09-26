@@ -679,6 +679,8 @@ $('drawerBody')?.addEventListener('change',function(e){
   var el=e.target.closest('[data-role="sidewall-side"]');if(el){setSidewallSide(el.dataset.side,el.value);}
 });
 $('drawerBody')?.addEventListener('input',function(e){
+  var rentalSearch=e.target.closest('[data-role="rental-search"]');
+  if(rentalSearch){filterRentalLibrary(rentalSearch.value);return;}
   var fileInput=e.target.closest('[data-role="venue-photo-file"]');
   if(fileInput){handleVenuePhotoFileInput(fileInput);return;}
   var scanInput=e.target.closest('[data-role="venue-scan-file"]');
