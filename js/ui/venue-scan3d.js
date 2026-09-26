@@ -180,7 +180,7 @@ export async function createVenueScanWorld({
   mesh.userData.referenceOffsetFt=0;mesh.userData.referenceIndex=multiCenterIndex>=0?multiCenterIndex:0;referenceMeshes.push(mesh);
   if(fusion?.referenceResults?.length&&multiImages&&multiSamples){
     for(const ref of fusion.referenceResults){
-      if(ref.referenceIndex===multiCenterIndex)continue;
+      if(ref.referenceIndex===multiCenterIndex||ref.accepted===false)continue;
       const image=multiImages[ref.referenceIndex],sample=multiSamples[ref.referenceIndex],rr=ref.result;
       if(!image||!sample||!rr?.indices?.length)continue;
       const rg=new THREE.BufferGeometry();
@@ -264,7 +264,7 @@ export async function createVenueScanWorld({
     knownBounds:worldBounds,
     obstacles,
     quality:captureQuality,
-    metrics:{...summary,captureQualityScore:captureQuality?.score??null,captureQualityRating:captureQuality?.rating||null,trackedCameraPath:!!trackedPath?.usable,trackedMotionQuality:trackedPath?.meanQuality??null,trackedMotionConsistency:trackedPath?.consistency??null,trackedFeatureCount:trackedPath?.totalTracks??0,trackedPoseFrames:trackedPath?.framePoses?.filter(p=>Math.abs(Number(p.rollDeg)||0)>.05).length||0,maxTrackedRollDeg:trackedPath?.framePoses?.length?Math.max(...trackedPath.framePoses.map(p=>Math.abs(Number(p.rollDeg)||0))):0,poseCorrectedReferences:fusion?.metrics?.poseCorrectedReferences||0,maxReferenceRollDeg:fusion?.metrics?.maxReferenceRollDeg||0,autoObstacleCount:obstacles.length,referenceCount:fusion?.metrics?.referenceCount||1,fusedSurfels:fusion?.surfelCount||0,multiReferenceAgreementPct:fusion?Math.round((fusion.metrics.multiReferenceAgreement||0)*100):null,fusedConfidencePct:fusion?Math.round((fusion.metrics.averageConfidence||0)*100):null},
+    metrics:{...summary,captureQualityScore:captureQuality?.score??null,captureQualityRating:captureQuality?.rating||null,trackedCameraPath:!!trackedPath?.usable,trackedMotionQuality:trackedPath?.meanQuality??null,trackedMotionConsistency:trackedPath?.consistency??null,trackedFeatureCount:trackedPath?.totalTracks??0,trackedPoseFrames:trackedPath?.framePoses?.filter(p=>Math.abs(Number(p.rollDeg)||0)>.05).length||0,maxTrackedRollDeg:trackedPath?.framePoses?.length?Math.max(...trackedPath.framePoses.map(p=>Math.abs(Number(p.rollDeg)||0))):0,poseCorrectedReferences:fusion?.metrics?.poseCorrectedReferences||0,maxReferenceRollDeg:fusion?.metrics?.maxReferenceRollDeg||0,acceptedReferences:fusion?.metrics?.acceptedReferences??(fusion?.metrics?.referenceCount||1),rejectedReferences:fusion?.metrics?.rejectedReferences||0,averageReferenceScore:fusion?.metrics?.averageReferenceScore??null,autoObstacleCount:obstacles.length,referenceCount:fusion?.metrics?.referenceCount||1,fusedSurfels:fusion?.surfelCount||0,multiReferenceAgreementPct:fusion?Math.round((fusion.metrics.multiReferenceAgreement||0)*100):null,fusedConfidencePct:fusion?Math.round((fusion.metrics.averageConfidence||0)*100):null},
     sourceFrames:sourceFrameIds,
     reconstructionMode,
     referenceViewCount:referenceMeshes.length,

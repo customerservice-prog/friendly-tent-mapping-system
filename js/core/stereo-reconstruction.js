@@ -434,10 +434,10 @@ export function fuseMultiReferenceSurfels({
 
   voxelFt=clamp(finite(voxelFt,.42),.16,1.25);
   const voxels=new Map(),referenceMetrics=[],referenceResults=[];
-  function addPoint(x,y,z,r,g,b,confidence,refSlot,supportViews){
+  function addPoint(x,y,z,r,g,b,confidence,refSlot,supportViews,referenceWeight=1){
     if(!Number.isFinite(x)||!Number.isFinite(y)||!Number.isFinite(z)||z<=0)return;
     const kx=Math.round(x/voxelFt),ky=Math.round(y/voxelFt),kz=Math.round(z/voxelFt),key=kx+'|'+ky+'|'+kz;
-    const weight=Math.max(.02,finite(confidence,.1))*(1+.10*Math.max(0,finite(supportViews,1)-1));
+    const weight=Math.max(.02,finite(confidence,.1))*(1+.10*Math.max(0,finite(supportViews,1)-1))*clamp(finite(referenceWeight,1),.15,1);
     let cell=voxels.get(key);
     if(!cell){cell={x:0,y:0,z:0,r:0,g:0,b:0,w:0,confidence:0,refs:new Set(),points:0};voxels.set(key,cell);}
     cell.x+=x*weight;cell.y+=y*weight;cell.z+=z*weight;cell.r+=r*weight;cell.g+=g*weight;cell.b+=b*weight;
@@ -456,9 +456,15 @@ export function fuseMultiReferenceSurfels({
         fovDeg,horizonY,eyeHeightFt,step,maxDisparity,patchRadius,verticalSearch,minConfidence,maxDepthFt,minDepthFt
       });
     }
-    referenceMetrics.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,rollRad:ref.rollRad,...result.metrics});
-    referenceResults.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,rollRad:ref.rollRad,result});
-    const cr=Math.cos(ref.rollRad),sr=Math.sin(ref.rollRad);
+    const rm=result.metrics||{},coverage=clamp(finite(rm.validRatio,0),0,1),confidenceScore=clamp(finite(rm.averageConfidence,0),0,1),agreement=rm.multiViewAgreement==null ? .45 : clamp(finite(rm.multiViewAgreement,0),0,1);
+    const geometryScore=clamp((coverage/.36)*.38+(confidenceScore/.22)*.34+(agreement/.50)*.28,0,1);
+    const extremeRollPenalty=Math.abs(ref.rollRad)>8*Math.PI/180 ? .72 : 1;
+    const referenceScore=clamp(geometryScore*extremeRollPenalty,0,1);
+    const accepted=refIndex===primary||referenceScore>=.34;
+    referenceMetrics.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,rollRad:ref.rollRad,referenceScore,accepted,...result.metrics});
+    referenceResults.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,rollRad:ref.rollRad,referenceScore,accepted,result});
+    if(!accepted)continue;
+    const cr=Math.cos(ref.rollRad),sr=Math.sin(ref.rollRad),referenceWeight=refIndex===primary?1:Math.max(.35,referenceScore);
     for(let i=0;i<result.valid.length;i++){
       if(!result.valid[i]||result.confidence[i]<minConfidence*.72)continue;
       const localX=result.positions[i*3],localY=result.positions[i*3+1]-eyeHeightFt,z=result.positions[i*3+2];
@@ -466,7 +472,7 @@ export function fuseMultiReferenceSurfels({
       addPoint(
         x,y,z,
         result.colors[i*3],result.colors[i*3+1],result.colors[i*3+2],
-        result.confidence[i],slot,result.supportViews?.[i]||1
+        result.confidence[i],slot,result.supportViews?.[i]||1,referenceWeight
       );
     }
   }
@@ -491,8 +497,11 @@ export function fuseMultiReferenceSurfels({
       surfelCount,
       multiReferenceAgreement:agreement,
       averageConfidence:avgConfidence,
-      poseCorrectedReferences:refs.filter(i=>Math.abs(ordered[i]?.rollRad||0)>.0005).length,
-      maxReferenceRollDeg:Math.round(Math.max(0,...refs.map(i=>Math.abs(ordered[i]?.rollRad||0)))*180/Math.PI*10)/10,
+      poseCorrectedReferences:referenceResults.filter(r=>r.accepted&&Math.abs(r.rollRad||0)>.0005).length,
+      acceptedReferences:referenceResults.filter(r=>r.accepted).length,
+      rejectedReferences:referenceResults.filter(r=>!r.accepted).length,
+      averageReferenceScore:referenceResults.length?referenceResults.reduce((n,r)=>n+(r.referenceScore||0),0)/referenceResults.length:0,
+      maxReferenceRollDeg:Math.round(Math.max(0,...referenceResults.filter(r=>r.accepted).map(r=>Math.abs(r.rollRad||0)))*180/Math.PI*10)/10,
       quality:surfelCount>650&&agreement>.24&&avgConfidence>.16?'good':surfelCount>220&&avgConfidence>.10?'usable':'weak'
     }
   };

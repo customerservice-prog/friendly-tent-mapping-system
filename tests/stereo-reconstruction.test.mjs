@@ -189,3 +189,32 @@ test('pose-aware fusion rotates reference geometry before voxel agreement',()=>{
   assert.ok(fused.metrics.maxReferenceRollDeg>=1);
   assert.ok(fused.referenceResults.some(r=>Math.abs(r.rollRad)>.01));
 });
+
+test('weak reference reconstruction is rejected instead of ghosting the fused world',()=>{
+  const scene=shiftedMultiView();
+  const flat=image(scene.center.width,scene.center.height,()=>[128,128,128]);
+  const captures=[
+    {image:scene.views[0].image,offsetFt:-3},
+    {image:flat,offsetFt:-2},
+    {image:scene.views[2].image,offsetFt:-1},
+    {image:scene.center,offsetFt:0},
+    {image:scene.views[3].image,offsetFt:1},
+    {image:scene.views[4].image,offsetFt:2},
+    {image:scene.views[5].image,offsetFt:3}
+  ];
+  const primary=reconstructMultiViewGrid({
+    center:scene.center,views:captures.filter(c=>c.offsetFt!==0),
+    fovDeg:60,horizonY:.35,step:4,maxDisparity:12,minConfidence:.05
+  });
+  const fused=fuseMultiReferenceSurfels({
+    captures,primaryIndex:3,primaryResult:primary,referenceIndices:[1,3,5],
+    fovDeg:60,horizonY:.35,step:5,maxDisparity:12,minConfidence:.05,voxelFt:.35
+  });
+  assert.equal(fused.metrics.referenceCount,3);
+  assert.equal(fused.metrics.rejectedReferences,1);
+  assert.equal(fused.metrics.acceptedReferences,2);
+  const weak=fused.referenceResults.find(r=>r.referenceIndex===1);
+  assert.equal(weak.accepted,false);
+  assert.ok(weak.referenceScore<.34);
+  assert.ok(fused.referenceResults.find(r=>r.referenceIndex===3).accepted);
+});
