@@ -1,0 +1,219 @@
+/* Photo controls belong to the workspace chrome, never over the venue image. */
+.photo-preview-mode { --photo-toolbar-height:58px; }
+.photo-preview-mode .canvas-view-controls {
+  inset:0 0 auto!important;
+  height:var(--photo-toolbar-height);
+  padding:7px 12px;
+  box-sizing:border-box;
+  display:flex;
+  flex-wrap:nowrap;
+  gap:7px;
+  background:#fbfcfa;
+  border-bottom:1px solid #dce4dd;
+  pointer-events:auto;
+}
+.photo-preview-mode #canvas {
+  top:var(--photo-toolbar-height)!important;
+  height:calc(100% - var(--photo-toolbar-height))!important;
+  background:#17221c!important;
+}
+.photo-preview-mode #view3dMatchPhoto,
+.photo-preview-mode #sceneSettingLabel,
+.photo-preview-mode #canvasHint,
+.photo-edit-mode .canvas-view-controls { display:none!important; }
+.photo-preview-mode .canvas-view-controls > button,
+.photo-preview-mode .canvas-view-controls .scene-controls summary {
+  min-height:44px;
+  flex-shrink:0;
+  padding:10px 13px;
+  border:1px solid #d6e0d8;
+  border-radius:8px;
+  background:#fff;
+  box-shadow:none;
+  color:#294b39;
+  font-size:12px;
+  font-weight:650;
+  line-height:22px;
+}
+.photo-preview-mode #view3dAdjustPhoto {
+  order:-2;
+  background:#214d38;
+  color:#fff;
+  border-color:#214d38;
+}
+.photo-preview-mode #view3dAdjustPhoto:hover { background:#173d2a; color:#fff; }
+.photo-preview-mode #view3dFit { order:-1; }
+.photo-preview-mode .scene-controls summary::after { margin-left:7px; }
+.photo-scale-status {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  margin-left:auto;
+  padding-left:8px;
+  color:#6a6555;
+  font-size:12px;
+  line-height:1.4;
+  white-space:nowrap;
+}
+.photo-scale-status[hidden] { display:none; }
+.photo-scale-status::before {
+  content:'';
+  width:6px;
+  height:6px;
+  flex-shrink:0;
+  border-radius:50%;
+  background:#b58739;
+}
+.photo-scale-status[data-confirmed=true] { color:#456450; }
+.photo-scale-status[data-confirmed=true]::before { background:#548460; }
+.photo-preview-mode .property-fit-panel { top:calc(var(--photo-toolbar-height) + 8px); }
+.photo-preview-mode .scene-panel { left:auto; right:0; }
+.photo-model-mode #canvasHint { max-width:400px; font-size:11px; white-space:normal; }
+.photo-model-mode { --photo-toolbar-height:84px; }
+.photo-model-mode .canvas-view-controls {
+  inset:0 0 auto!important;
+  height:var(--photo-toolbar-height);
+  box-sizing:border-box;
+  display:flex;
+  flex-wrap:wrap;
+  align-content:start;
+  gap:2px 7px;
+  padding:7px 12px;
+  background:#fbfcfa;
+  border-bottom:1px solid #dce4dd;
+  pointer-events:auto;
+}
+.photo-model-mode #canvas { top:var(--photo-toolbar-height)!important; height:calc(100% - var(--photo-toolbar-height))!important; }
+.photo-model-mode #sceneSettingLabel,
+.photo-model-mode #view3dTimelapseBuild,
+.photo-model-mode #view3dTimelapseBreak { display:none!important; }
+.photo-model-mode .canvas-view-controls > button,
+.photo-model-mode .scene-controls summary { min-height:44px; padding:10px 12px; border-radius:8px; font-size:12px; line-height:22px; box-shadow:none; }
+.photo-model-mode #canvasHint { flex:1 0 100%; max-width:none; padding:3px 0 0; margin:0; background:none; color:#647369; font-size:11px!important; }
+
+/* Calibration is an explicit editing step with the preview always one click away. */
+.photo-edit-mode .photo-workspace { min-height:0; background:#17221c; color:#294637; }
+.photo-edit-mode .photo-workspace-toolbar {
+  grid-template-columns:minmax(150px,1fr) auto;
+  gap:7px 12px;
+  padding:10px 14px;
+  background:#fbfcfa;
+  border-bottom:1px solid #dce4dd;
+  box-shadow:none;
+  flex:0 0 auto;
+}
+.photo-edit-mode .photo-workspace-title strong { font-size:13px; letter-spacing:0; }
+.photo-edit-mode .photo-workspace-title span { font-size:11px; color:#68766b; }
+.photo-edit-mode .photo-workspace-tools { gap:6px; overflow:visible; padding:0; }
+.photo-edit-mode .photo-workspace-tools .btn-chip,
+.photo-edit-mode .photo-mark-tools summary,
+.photo-edit-mode .photo-calibration-panel .btn-chip {
+  min-height:44px;
+  padding:9px 11px;
+  border:1px solid #d6e0d8;
+  border-radius:8px;
+  background:#fff;
+  color:#294b39;
+  font-size:12px;
+  font-weight:650;
+  line-height:24px;
+  white-space:nowrap;
+}
+.photo-edit-mode .photo-workspace-tools .btn-chip.active { background:#e9f1eb; border-color:#a8bfaf; color:#214d38; }
+.photo-edit-mode [data-photo-done] { background:#214d38!important; border-color:#214d38!important; color:#fff!important; }
+.photo-calibration-panel {
+  grid-column:1/-1;
+  display:grid;
+  grid-template-columns:minmax(320px,1fr) minmax(300px,1fr);
+  gap:8px 22px;
+  padding:10px 0 0;
+  border-top:1px solid #e2e8e1;
+}
+.photo-calibration-panel[hidden] { display:none; }
+.photo-reference-fields,.photo-perspective-fields { display:flex; gap:10px; align-items:end; }
+.photo-calibration-panel label { display:grid; gap:4px; min-width:0; flex:1; color:#55675a; font-size:11px; }
+.photo-calibration-panel input[type=number] { width:100%; box-sizing:border-box; min-height:40px; padding:8px; border:1px solid #cbd9cf; border-radius:7px; background:#fff; color:#244733; font-size:14px; }
+.photo-calibration-panel input[type=range] { width:100%; height:40px; margin:0; accent-color:#346b49; }
+.photo-calibration-panel p { grid-column:1/-1; margin:0; font-size:11px; line-height:1.45; color:#778276; }
+.photo-edit-mode .photo-workspace-hint { color:#596c5d; text-align:left; font-size:11px; line-height:1.4; }
+.photo-edit-mode [data-photo-tool=move] { display:none; }
+.photo-perspective-tools { align-self:end; }
+.photo-perspective-tools > summary { min-height:36px; display:flex; align-items:center; gap:8px; font-size:11px; font-weight:650; cursor:pointer; color:#496551; }
+.photo-perspective-tools > summary::after { content:'⌄'; }
+.photo-perspective-tools[open] > summary::after { content:'⌃'; }
+.photo-perspective-tools[open] .photo-perspective-fields { margin-bottom:4px; }
+.photo-preview-mode .rs-help,.photo-edit-mode .rs-help { display:none!important; }
+.photo-preview-mode .event-pass-bar,.photo-edit-mode .event-pass-bar,.photo-model-mode .event-pass-bar { padding:7px 14px; }
+.photo-preview-mode .event-pass-bar strong,.photo-edit-mode .event-pass-bar strong,.photo-model-mode .event-pass-bar strong { font-size:13px; }
+.photo-mark-tools { position:relative; }
+.photo-mark-tools summary { cursor:pointer; list-style:none; }
+.photo-mark-tools summary::after { content:'⌄'; margin-left:7px; }
+.photo-mark-tools summary::-webkit-details-marker { display:none; }
+.photo-mark-tools > .photo-workspace-tools {
+  position:absolute;
+  top:calc(100% + 8px);
+  right:0;
+  width:205px;
+  display:grid;
+  padding:12px;
+  border:1px solid #d6e0d8;
+  border-radius:10px;
+  background:#fff;
+  box-shadow:0 12px 30px #183b2629;
+  z-index:20;
+}
+.photo-edit-mode .photo-geometry-type { width:100%; max-width:none; min-height:44px; background:#f3f7f2; color:#294b39; border-color:#d6e0d8; }
+.photo-edit-mode .photo-workspace-viewport { background:#17221c; }
+.photo-edit-mode .photo-workspace-stage { border-radius:2px; box-shadow:none; }
+
+@media(max-width:900px) {
+  .photo-preview-mode { --photo-toolbar-height:84px; }
+  .photo-preview-mode .canvas-view-controls { flex-wrap:wrap; gap:2px 7px; align-content:start; padding:7px 10px; }
+  .photo-scale-status { flex:1 0 100%; padding:3px 0 0; font-size:11px; }
+  .photo-edit-mode .photo-workspace-toolbar { grid-template-columns:1fr; }
+  .photo-edit-mode .photo-workspace-tools { justify-content:flex-start; }
+  .photo-calibration-panel { grid-template-columns:1fr; gap:7px; }
+  .photo-edit-mode .photo-workspace-title { flex-direction:row; flex-wrap:wrap; gap:5px 10px; align-items:baseline; }
+}
+@media(max-width:650px) {
+  .photo-model-mode .canvas-view-controls { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-template-rows:44px 18px; gap:2px 4px; padding:7px 8px; }
+  .photo-model-mode .canvas-view-controls > button,.photo-model-mode .scene-controls summary { min-width:0; padding:10px 4px; font-size:11px; white-space:nowrap; }
+  .photo-model-mode #canvasHint { grid-column:1/-1; }
+  .photo-model-mode:has(#view3dMeasureClear:not([hidden])) { --photo-toolbar-height:130px; }
+  .photo-model-mode:has(#view3dMeasureClear:not([hidden])) .canvas-view-controls { grid-template-rows:44px 44px 18px; }
+  .photo-preview-mode .canvas-view-controls { gap:2px 5px; padding:7px 8px; }
+  .photo-preview-mode .canvas-view-controls > button,
+  .photo-preview-mode .canvas-view-controls .scene-controls summary { padding:10px 9px; font-size:12px; }
+  .photo-preview-mode .scene-controls { position:static; }
+  .photo-preview-mode .scene-panel { top:calc(var(--photo-toolbar-height) + 7px); right:8px; left:auto; }
+  .photo-edit-mode .photo-workspace-toolbar { padding:8px; gap:6px; max-height:65%; overflow:auto; }
+  .photo-edit-mode .photo-workspace-tools { flex-wrap:wrap; }
+  .photo-edit-mode .photo-workspace-tools .btn-chip,
+  .photo-edit-mode .photo-mark-tools summary,
+  .photo-edit-mode .photo-calibration-panel .btn-chip { padding:9px 8px; font-size:11px; }
+  .photo-edit-mode .photo-mark-tools { margin-left:auto; }
+  .photo-calibration-panel { padding-top:7px; }
+  .photo-reference-fields,.photo-perspective-fields { gap:7px; }
+  .photo-calibration-panel input[type=number] { font-size:16px; }
+  .photo-calibration-panel label { font-size:10px; }
+  .photo-calibration-panel p { display:none; }
+  .photo-edit-mode .photo-workspace-hint { font-size:10px; }
+  .photo-preview-mode .event-pass-bar:has(>button:only-of-type):not(:has(a)),
+  .photo-edit-mode .event-pass-bar:has(>button:only-of-type):not(:has(a)),
+  .photo-model-mode .event-pass-bar:has(>button:only-of-type):not(:has(a)) { flex-wrap:nowrap; gap:8px; padding:7px 8px; }
+  .photo-preview-mode .event-pass-bar > span,.photo-edit-mode .event-pass-bar > span,.photo-model-mode .event-pass-bar > span { flex:1 1 auto; min-width:0; }
+  .photo-preview-mode .event-pass-bar button,.photo-edit-mode .event-pass-bar button,.photo-model-mode .event-pass-bar button { flex:0 1 136px; min-width:0; padding:7px 8px; font-size:11px; }
+  .photo-preview-mode .event-pass-bar strong,.photo-edit-mode .event-pass-bar strong,.photo-model-mode .event-pass-bar strong { font-size:12px; }
+  .photo-preview-mode .event-pass-bar small,.photo-edit-mode .event-pass-bar small,.photo-model-mode .event-pass-bar small { font-size:10px; }
+}
+@media(max-width:370px) {
+  .photo-preview-mode .canvas-view-controls,
+  .photo-model-mode .canvas-view-controls { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); grid-template-rows:44px 18px; gap:2px 4px; padding:7px 8px; }
+  .photo-preview-mode .canvas-view-controls > button,
+  .photo-preview-mode .canvas-view-controls .scene-controls summary,
+  .photo-model-mode .canvas-view-controls > button,
+  .photo-model-mode .canvas-view-controls .scene-controls summary { min-width:0; padding:10px 4px!important; font-size:11px!important; white-space:nowrap; }
+  .photo-preview-mode .photo-scale-status,
+  .photo-model-mode #canvasHint { grid-column:1/-1; }
+  .designer-toolbar .view-toggle-btn { padding:8px 2px!important; }
+}

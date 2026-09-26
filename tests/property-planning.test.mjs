@@ -9,7 +9,7 @@ function snapshot(overrides={}){
     photoSite:{id:'photo-site',isSite:true,widthFt:70,lengthFt:90},
     tent,
     photoTentPlacement:{x:25,y:25,rotationDeg:0},
-    photoCalibration:{autoEstimated:false},
+    photoCalibration:{autoEstimated:false,scaleConfirmed:true,frontLeft:{x:.1,y:.9},frontRight:{x:.9,y:.9},backRight:{x:.7,y:.5},backLeft:{x:.3,y:.5}},
     photoGeometry:[{id:'boundary',type:'fence',x:0,y:88,widthFt:70,depthFt:1}],
     surfaceType:'grass',
     objects:[],
@@ -105,4 +105,18 @@ test('an untouched single photo does not report a positive property fit',()=>{
   assert.equal(plan.active,false);assert.equal(summarizePropertyFit(plan).kind,'neutral');
   const uncalibrated=evaluatePropertyScene(snapshot({photoCalibration:{autoEstimated:true}}));
   assert.equal(uncalibrated.active,false);assert.equal(uncalibrated.source,'photo-needs-calibration');
+});
+
+test('a measured flag never promotes collapsed, crossed, collinear or tiny marks into a fit claim',()=>{
+  const invalid=[
+    [{x:.5,y:.5},{x:.5,y:.5},{x:.5,y:.5},{x:.5,y:.5}],
+    [{x:.2,y:.2},{x:.8,y:.8},{x:.8,y:.2},{x:.2,y:.8}],
+    [{x:.1,y:.5},{x:.3,y:.5},{x:.7,y:.5},{x:.9,y:.5}],
+    [{x:.5,y:.5},{x:.505,y:.5},{x:.505,y:.505},{x:.5,y:.505}],
+  ];
+  for(const [frontLeft,frontRight,backRight,backLeft] of invalid){
+    const result=evaluatePropertyScene(snapshot({photoCalibration:{version:2,autoEstimated:false,scaleConfirmed:true,frontLeft,frontRight,backRight,backLeft}}));
+    assert.equal(result.active,false);assert.equal(result.overall,'unknown');assert.equal(summarizePropertyFit(result).kind,'neutral');
+  }
+  assert.equal(evaluatePropertyScene(snapshot({photoCalibration:{...snapshot().photoCalibration,scaleConfirmed:false}})).active,false,'moving the corners alone does not establish measured scale');
 });
