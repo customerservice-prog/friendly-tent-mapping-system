@@ -110,3 +110,32 @@
 .venue-scan-baseline{display:grid;gap:6px;margin-top:12px;padding:11px;border-radius:11px;background:rgba(255,255,255,.78);color:#43594a;font-size:11px;font-weight:750}.venue-scan-baseline>div{display:flex;align-items:center;gap:7px}.venue-scan-baseline input{width:90px;padding:8px;border:1px solid #c9d6cb;border-radius:8px;background:#fff;color:#233b2a;font:800 13px system-ui}.venue-scan-baseline small{font-size:10px;line-height:1.4;color:#748278;font-weight:600}
 .venue-scan-ready{display:flex;flex-direction:column;gap:2px;margin-top:11px;padding:10px 11px;border-radius:10px;background:#e7f5ea;color:#285f39}.venue-scan-ready strong{font-size:12px}.venue-scan-ready span{font-size:10px}.venue-scan-clear{margin-top:10px}
 @media(max-width:620px){.venue-scan-frame-grid{grid-template-columns:1fr}.venue-scan-frame{min-height:86px}.venue-scan-guide{display:none}}
+
+
+/* Full rental library */
+.all-rentals-intro{margin:0 0 14px;padding:13px 14px;border:1px solid #d7e1d9;border-radius:14px;background:linear-gradient(145deg,#f8fbf8,#eef5ef)}
+.all-rentals-intro strong{display:block;color:#203c2a;font-size:14px}.all-rentals-intro p{margin:4px 0 0;color:#617166;font-size:11px;line-height:1.45}
+.rental-category{margin:0 0 18px}.rental-category .drawer-section-title{position:sticky;top:-1px;z-index:2;padding:7px 2px;background:linear-gradient(#fff 75%,rgba(255,255,255,0));}
+.accessory-card{min-height:208px}.accessory-photo{object-fit:cover;background:#eef2ed}
+.accessory-model{display:grid;place-items:center;width:100%;min-height:92px;border-radius:12px;background:radial-gradient(circle at 50% 38%,#fff 0,#eef4ef 62%,#dfe8e1 100%);color:#315a3d}
+.accessory-model .accessory-icon{width:58px;height:58px;filter:drop-shadow(0 5px 9px rgba(32,60,42,.12))}
+.accessory-icon{width:1.25em;height:1.25em}
+.accessory-model--foam-machine{color:#168cb7;background:radial-gradient(circle at 52% 36%,#effcff,#d9f4fb 63%,#cbeaf3)}
+.accessory-model--cotton-candy{color:#cb6f9c;background:radial-gradient(circle,#fff1f8,#f9ddea)}
+.accessory-model--popcorn{color:#b5292b;background:radial-gradient(circle,#fff6d7,#f7ddb3)}
+.accessory-model--snow-cone{color:#2d8fb7;background:radial-gradient(circle,#eefbff,#d7eff8)}
+.accessory-model--chocolate-fountain{color:#70402c;background:radial-gradient(circle,#fff4e8,#ead3bb)}
+.accessory-model--fan{color:#53656e}.accessory-model--speaker{color:#202426}.accessory-model--generator{color:#bc4f29}.accessory-model--connect-four{color:#1c5caa}
+.inspector-accessory-photo{width:100%;max-height:190px;object-fit:contain;border-radius:12px;background:#f4f6f3}
+.inspector-accessory-icon{display:grid;place-items:center;min-height:140px;border-radius:14px;background:#f1f5f1;color:#315a3d}.inspector-accessory-icon .accessory-icon{width:82px;height:82px}
+.accessory-placement-preview{display:grid;place-items:center;width:58px;height:58px;border-radius:13px;background:#edf5ef;color:#315a3d}.accessory-placement-preview .accessory-icon{width:42px;height:42px}
+.catalog-empty{padding:16px;border:1px dashed #cbd7cd;border-radius:13px;background:#f9fbf9}.catalog-empty strong{display:block;color:#294936}.catalog-empty p{margin:6px 0 0;color:#69786d;font-size:11px}
+.plan2d-object.accessory{border:1.5px solid rgba(42,92,57,.62);background:rgba(231,242,233,.78);border-radius:8px;overflow:visible}
+.plan2d-object.accessory .plan2d-table-top{inset:0;background:transparent!important;border:0;box-shadow:none}
+.plan-accessory-symbol{position:absolute;inset:0;display:grid;place-items:center;color:#2d5c3c;text-align:center;overflow:hidden}
+.plan-accessory-symbol .accessory-icon{width:min(54%,42px);height:min(54%,42px);opacity:.92}
+.plan-accessory-symbol span{position:absolute;left:3px;right:3px;bottom:2px;padding:1px 3px;border-radius:5px;background:rgba(255,255,255,.84);font:700 8px/1.1 system-ui;color:#233b2a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plan2d-object.accessory--red-carpet,.plan2d-object.accessory--floor-runner{background:rgba(157,28,44,.74);border-color:#8f1426}
+.plan2d-object.accessory--red-carpet .plan-accessory-symbol,.plan2d-object.accessory--floor-runner .plan-accessory-symbol{color:#fff}
+.plan2d-object.accessory--foam-machine{box-shadow:0 0 0 3px rgba(85,195,229,.16)}
+@media(max-width:760px){.accessory-card{min-height:180px}.accessory-model{min-height:76px}.rental-category{margin-bottom:14px}}
