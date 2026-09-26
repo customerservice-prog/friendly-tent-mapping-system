@@ -100,7 +100,7 @@ export function evaluatePropertyScene(snapshot) {
   }
   const rentals=(snapshot.objects||[]).filter(item=>item && item.kind!=='dance').map(item=>{
     const placed=rentalPlacement(item,snapshot);
-    const clearance=item.kind==='chair'?0.5:item.kind==='table'?1:item.kind==='inflatable'?2:0.5;
+    const clearance=item.kind==='chair'?0.5:item.kind==='table'?1:item.kind==='inflatable'?2:item.kind==='accessory'?(Number(item.heightFt||0)>4?1.5:1):0.5;
     return {
       id:item.id,
       kind:item.kind,
