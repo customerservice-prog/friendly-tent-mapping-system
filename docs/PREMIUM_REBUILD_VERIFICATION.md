@@ -11,6 +11,7 @@ Original audit baseline: `2b35cd6`. Integrated main: `67a92cb` (PR #145). Branch
 - New inventory DOM flow passed: search for foam, place, rotate, duplicate, undo/redo, reopen serialized design, add inflatable while retaining tent, review both items.
 - Existing equipment-editing regression passed.
 - 3D controller tests passed with real Three.js geometry and a stub renderer; all 11 inflatable profiles and all new accessory profiles construct finite geometry. Meshes expose the correct selectable item ID; motion does not mutate placement.
+- Full Chromium photo flow passed: file uploads/compression, three-view preview with unverified metadata, photo drag/calibration, saved scene, fit panel, Measure and Walk. Updated the previous metric-accuracy assertion to require explicit uncertainty; scan controls also disclose unverified dimensions.
 - Photo renderer tests passed with updated assertions: a single photo is camera matched, fabricated vegetation/structures are absent, and estimated scan provenance remains unverified.
 - Real Chromium tests passed at 1440×940 and 390×844 with a local server and isolated edit entitlement: search, place, undo, mixed scene, actual WebGL mount, review and no document horizontal overflow. No page JavaScript exceptions occurred. Updated screenshots were visually inspected.
 - Read-only Friendly production product API returned 245 records, including the active Foam Party Machine without a visual mapping. The resolver was checked against that response; no production catalog writes were performed.

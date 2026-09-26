@@ -489,12 +489,12 @@ function setMeasurementResult(result){
 function setPhoto3dModeUi(mode){
   var matched=$('view3dMatchPhoto'),orbit=$('view3dOrbit360'),walk=$('view3dWalk'),isOrbit=mode==='360',isWalk=mode==='walk',isMatched=mode==='matched',scanReady=metricScanReady();
   if(matched){matched.classList.toggle('active',isMatched);matched.setAttribute('aria-pressed',String(isMatched));}
-  if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));orbit.textContent=scanReady?'3D Scan':'3D Scan';orbit.title=scanReady?'Orbit the measured multi-view reconstruction inside its captured field of view':'Capture a Space Scan first';}
+  if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));orbit.textContent=scanReady?'3D Scan':'3D Scan';orbit.title=scanReady?'Orbit the estimated depth preview within the captured views; dimensions unverified':'Capture a Space Scan first';}
   if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk Scan';}
   if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto){
     var runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;
     var views=runtime?.metrics?.viewCount||runtime?.sourceFrames?.length||3,agreement=runtime?.metrics?.multiReferenceAgreementPct??runtime?.metrics?.multiViewAgreementPct;
-    $('canvasHint').textContent=isWalk?'Walk Scan · measured Space Scan · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?('3D Scan · '+views+' real views'+(agreement!=null?' · '+agreement+'% spatial agreement':'')+' · orbit limited to captured geometry'):runtime?.loading?'Building metric depth from the scan…':scanReady?'Matched View · choose 3D Scan for measured depth':'Photo Match · one image is not treated as 360 · record a Space Scan for real 3D depth';
+    $('canvasHint').textContent=isWalk?'Walk Scan · estimated scene, dimensions unverified · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?('3D Scan · estimated depth, dimensions unverified · '+views+' real views'+(agreement!=null?' · '+agreement+'% spatial agreement':'')+' · orbit limited to captured geometry'):runtime?.loading?'Estimating depth from captured views…':scanReady?'Matched View · choose 3D Scan for estimated depth':'Photo Match · one image is not treated as 360 · record a Space Scan for an estimated depth preview';
   }
 }
 function renderViews(conflicts){
