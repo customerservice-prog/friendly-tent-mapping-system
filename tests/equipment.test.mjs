@@ -4,6 +4,7 @@ import {liveCatalog} from '../js/data/catalog.js';
 import {summarizeEvent} from '../js/core/eventSummary.js';
 import {chairPositions} from '../js/core/seating.js';
 import {inferVisualModel} from '../js/data/visualResolver.js';
+import {equipmentType} from '../js/data/equipment.js';
 
 test('complete tent dimensions resolve without truncating 100 to 10 or guessing unsupported models',()=>{
  assert.equal(inferVisualModel({category:'tent',name:'40 x 100 Pole Tent'}),'pole-40x100');
@@ -40,4 +41,11 @@ test('round and rectangular seat layouts produce the requested count outside the
   assert.equal(positions.length,count);
   for(const p of positions)assert.ok(Math.abs(p.x)>item.widthFt/2 || Math.abs(p.y)>item.depthFt/2);
  }
+});
+
+test('explicit equipment visual model ids override name inference and legacy aliases stay compatible',()=>{
+ assert.equal(equipmentType({name:'Mystery effect',visual_model_id:'foam-machine'}),'foam-machine');
+ assert.equal(equipmentType({name:'Legacy booth',visual_model_id:'photo-booth'}),'photobooth');
+ assert.equal(equipmentType({name:'Legacy blocks',visual_model_id:'tumbling-blocks'}),'tumbling-timbers');
+ assert.equal(equipmentType({name:'Mystery effect',visual_model_id:'not-a-real-model'}),null);
 });
