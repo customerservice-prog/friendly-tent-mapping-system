@@ -69,32 +69,43 @@ function patchScore(a,b,w,h,ax,ay,bx,by,r){
   }
   return err/Math.max(1,energy);
 }
-function estimateFarFieldRegistration(center,target,w,h,{maxShiftX=12,maxShiftY=5,patchRadius=2}={}){
-  // Handheld scans rarely keep identical yaw/pitch. Estimate a coarse far-field
-  // image registration first so camera drift is not interpreted as parallax.
-  // Samples come from the upper/middle image where distant structures usually
-  // live; a small zero-shift regularizer avoids subtracting genuine parallax.
-  const points=[];
-  const y0=Math.max(patchRadius+2,Math.round(h*.12)),y1=Math.min(h-patchRadius-2,Math.round(h*.64));
-  const x0=Math.max(patchRadius+maxShiftX+2,Math.round(w*.12)),x1=Math.min(w-patchRadius-maxShiftX-2,Math.round(w*.88));
-  const step=Math.max(8,Math.round(Math.min(w,h)/11));
+function estimateCaptureRegistration(center,target,w,h,{direction=1,maxShiftX=14,maxShiftY=5,patchRadius=2}={}){
+  // Estimate handheld pitch/roll translation and, only when the scene contains
+  // enough depth variation, a conservative yaw-like horizontal offset. A
+  // constant-depth scene is intentionally left with x=0 because horizontal
+  // image shift is then indistinguishable from true stereo parallax.
+  const matches=[];
+  const y0=Math.max(patchRadius+maxShiftY+2,Math.round(h*.12)),y1=Math.min(h-patchRadius-maxShiftY-2,Math.round(h*.82));
+  const x0=Math.max(patchRadius+maxShiftX+2,Math.round(w*.10)),x1=Math.min(w-patchRadius-maxShiftX-2,Math.round(w*.90));
+  const step=Math.max(7,Math.round(Math.min(w,h)/12));
   for(let y=y0;y<=y1;y+=step)for(let x=x0;x<=x1;x+=step){
-    if(localContrast(center,w,h,x,y,patchRadius+1)>=8)points.push([x,y]);
-  }
-  if(points.length<6)return {x:0,y:0,score:Infinity,samples:points.length};
-  let best={x:0,y:0,score:Infinity,samples:points.length};
-  for(let dy=-maxShiftY;dy<=maxShiftY;dy++)for(let dx=-maxShiftX;dx<=maxShiftX;dx++){
-    const scores=[];
-    for(const [x,y] of points){
+    if(localContrast(center,w,h,x,y,patchRadius+1)<8)continue;
+    let best={score:Infinity,dx:0,dy:0},second=Infinity;
+    for(let dy=-maxShiftY;dy<=maxShiftY;dy++)for(let dx=-maxShiftX;dx<=maxShiftX;dx++){
       const score=patchScore(center,target,w,h,x,y,x+dx,y+dy,patchRadius);
-      if(Number.isFinite(score))scores.push(score);
+      if(score<best.score){second=best.score;best={score,dx,dy};}
+      else if(score<second)second=score;
     }
-    if(scores.length<Math.max(5,points.length*.55))continue;
-    const raw=percentile(scores,.5);
-    const regularized=raw+Math.abs(dx)*.0025+Math.abs(dy)*.008;
-    if(regularized<best.score)best={x:dx,y:dy,score:regularized,rawScore:raw,samples:scores.length};
+    if(!Number.isFinite(best.score)||best.score>.78)continue;
+    const separation=Number.isFinite(second)?(second-best.score)/Math.max(.0001,second):0;
+    if(separation<.02&&best.score>.22)continue;
+    matches.push(best);
   }
-  return best;
+  if(matches.length<6)return {x:0,y:0,score:Infinity,samples:matches.length,horizontalCorrected:false};
+  const dys=matches.map(m=>m.dy),dxs=matches.map(m=>m.dx),scores=matches.map(m=>m.score);
+  const y=Math.round(percentile(dys,.5)||0),q10=percentile(dxs,.10)||0,q90=percentile(dxs,.90)||0,spread=q90-q10;
+  // With real depth variation, near points move farther than distant points.
+  // The directional extreme closest to the far field estimates camera yaw.
+  // Require a meaningful spread so we never erase all disparity from a flat scene.
+  let x=0,horizontalCorrected=false;
+  if(spread>=3){
+    x=Math.round(direction>0?q10:q90);
+    // Keep correction conservative; the farthest visible surface still has
+    // finite parallax and should not be treated as infinity.
+    x=Math.trunc(x*.75);
+    horizontalCorrected=Math.abs(x)>0;
+  }
+  return {x,y,score:percentile(scores,.5),samples:matches.length,spreadPx:spread,horizontalCorrected};
 }
 function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,verticalSearch,registrationX=0,registrationY=0}){
   let best={score:Infinity,d:0,dy:0},second=Infinity;
@@ -160,8 +171,8 @@ export function reconstructStereoGrid({
   maxDisparity=Math.max(4,Math.min(Math.floor(w*.24),Math.round(finite(maxDisparity,28))));
   const centerGray=gray(center),leftGray=gray(left),rightGray=gray(right);
   const registrationLimit=Math.max(4,Math.min(14,Math.round(w*.08)));
-  const leftRegistration=estimateFarFieldRegistration(centerGray,leftGray,w,h,{maxShiftX:registrationLimit,maxShiftY:Math.max(2,verticalSearch+2),patchRadius});
-  const rightRegistration=estimateFarFieldRegistration(centerGray,rightGray,w,h,{maxShiftX:registrationLimit,maxShiftY:Math.max(2,verticalSearch+2),patchRadius});
+  const leftRegistration=estimateCaptureRegistration(centerGray,leftGray,w,h,{direction:1,maxShiftX:registrationLimit,maxShiftY:Math.max(2,verticalSearch+2),patchRadius});
+  const rightRegistration=estimateCaptureRegistration(centerGray,rightGray,w,h,{direction:-1,maxShiftX:registrationLimit,maxShiftY:Math.max(2,verticalSearch+2),patchRadius});
   const focalPx=w/(2*Math.tan(fovDeg*Math.PI/360));
   const halfBaseline=baselineFt/2;
   const margin=maxDisparity+patchRadius+2;
@@ -276,7 +287,7 @@ export function reconstructMultiViewGrid({
   const centerGray=gray(center),registrationLimit=Math.max(4,Math.min(14,Math.round(w*.08)));
   const targets=usable.map(v=>{
     const targetGray=gray(v.image);
-    const registration=estimateFarFieldRegistration(centerGray,targetGray,w,h,{maxShiftX:registrationLimit,maxShiftY:Math.max(3,verticalSearch+2),patchRadius});
+    const registration=estimateCaptureRegistration(centerGray,targetGray,w,h,{direction:v.offsetFt<0?1:-1,maxShiftX:registrationLimit,maxShiftY:Math.max(3,verticalSearch+2),patchRadius});
     return {...v,gray:targetGray,registration};
   });
   const focalPx=w/(2*Math.tan(fovDeg*Math.PI/360)),maxOffset=Math.max(...targets.map(v=>Math.abs(v.offsetFt)),.2);
