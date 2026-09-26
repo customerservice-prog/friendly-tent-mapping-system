@@ -110,8 +110,12 @@ export function estimateTrackedCameraPath(frames,{centerIndex}={}){
   const leftTotal=steps.slice(0,centerIndex).reduce((a,b)=>a+b,0),rightTotal=steps.slice(centerIndex).reduce((a,b)=>a+b,0);
   if(leftTotal<=0||rightTotal<=0)return {usable:false,reason:'insufficient-bilateral-motion',offsetFactors:[],pairs};
   const offsets=new Array(frames.length).fill(0);
-  let run=0;for(let i=centerIndex-1;i>=0;i--){run+=steps[i];offsets[i]=-.5*(run/leftTotal);}
-  run=0;for(let i=centerIndex+1;i<frames.length;i++){run+=steps[i-1];offsets[i]=.5*(run/rightTotal);}
+  // A video's temporal midpoint need not be halfway along the physical path.
+  // Preserve the independently entered TOTAL baseline while allowing asymmetric
+  // travel on either side. Normalizing each half to .5 distorted variable-speed scans.
+  const totalMotion=leftTotal+rightTotal;
+  let run=0;for(let i=centerIndex-1;i>=0;i--){run+=steps[i];offsets[i]=-run/totalMotion;}
+  run=0;for(let i=centerIndex+1;i<frames.length;i++){run+=steps[i-1];offsets[i]=run/totalMotion;}
   const meanQuality=pairs.reduce((s,p)=>s+p.motion.quality,0)/pairs.length;
   const rolls=new Array(frames.length).fill(0);
   let roll=0;for(let i=centerIndex-1;i>=0;i--){roll-=pairs[i].motion.rollReliable?pairs[i].motion.rollDeg:0;roll=clamp(roll,-10,10);rolls[i]=roll;}
@@ -127,6 +131,7 @@ export function estimateTrackedCameraPath(frames,{centerIndex}={}){
     meanQuality:Number(meanQuality.toFixed(3)),
     consistency:Number(consistent.toFixed(3)),
     totalTracks:pairs.reduce((s,p)=>s+(p.motion?.trackCount||0),0),
+    centerBaselineFraction:leftTotal/totalMotion,
     poseAxes:{translationX:'tracked-relative',roll:'tracked-similarity',translationY:'unresolved',translationZ:'unresolved',yaw:'unresolved',pitch:'unresolved'},
     method:'multi-frame-feature-tracking'
   };

@@ -27,11 +27,12 @@ test('feature-tracked camera path follows variable walking speed instead of equa
   const path=estimateTrackedCameraPath(frames,{centerIndex:3});
   assert.equal(path.usable,true);
   assert.equal(path.offsetFactors.length,7);
-  assert.equal(path.offsetFactors[0],-.5);
+  assert.ok(Math.abs(path.offsetFactors[0]+7/18)<.035);
   assert.equal(path.offsetFactors[3],0);
-  assert.equal(path.offsetFactors[6],.5);
+  assert.ok(Math.abs(path.offsetFactors[6]-11/18)<.035);
+  assert.ok(Math.abs(path.offsetFactors[6]-path.offsetFactors[0]-1)<.001,'total entered baseline is preserved');
   assert.ok(path.offsetFactors[1] < -.25 && path.offsetFactors[1] > -.45);
-  assert.ok(path.offsetFactors[4] > .08 && path.offsetFactors[4] < .22);
+  assert.ok(path.offsetFactors[4] > .12 && path.offsetFactors[4] < .22);
   assert.ok(path.offsetFactors[5] > path.offsetFactors[4]);
   assert.ok(path.totalTracks>20);
   assert.ok(path.consistency>.7);

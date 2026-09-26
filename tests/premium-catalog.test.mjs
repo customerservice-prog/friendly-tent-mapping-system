@@ -31,7 +31,7 @@ test('legacy seeds, consumables, packages and tabletop items never become fake f
 });
 
 
-test('effects, climate and entertainment equipment resolve to animated premium profiles',()=>{
+test('operating effects animate while unattended games remain stationary',()=>{
  const products=[
   {id:'bubble',name:'Bubble Machine',category:'other'},
   {id:'fog',name:'Fog Machine',category:'other'},
@@ -49,5 +49,5 @@ test('effects, climate and entertainment equipment resolve to animated premium p
  assert.equal(byId('heater').type,'heater');
  assert.equal(byId('karaoke').type,'karaoke');
  assert.equal(byId('screen').type,'screen');
- for(const row of rows)assert.equal(row.animated,true,row.name+' should use live 3D motion');
+ for(const row of rows)assert.equal(row.animated,!['cornhole','connect4'].includes(row.productId),row.name+' motion must follow its supported operation');
 });

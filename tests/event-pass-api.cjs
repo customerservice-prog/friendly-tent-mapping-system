@@ -48,15 +48,18 @@ const orderAccess = load('server/src/friendlyOrderAccess.js', { crypto: require(
 } } });
 const pass = load('server/src/eventPass.js', { './db': db, './pricing': pricing, './eventPassEmail': mailQueue, stripe: Stripe });
 const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass, './friendlyOrderAccess': orderAccess });
-const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession, '../middleware/requireAuth': authz, '../access': { resolveAccess: async ({isStaff}) => ({isStaff}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
-const designs = load('server/src/routes/designs.js', { express, '../db': db, '../middleware/requireAuth': authz, '../eventPassAccess': access, '../auth': auth, '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession });
-const backgrounds = load('server/src/routes/designBackgrounds.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession, '../middleware/requireAuth': authz, '../eventPassAccess': access });
+const projects = load('server/src/designProjects.js', { crypto: require('crypto'), './db': db, './dashboardHttpSession': dashboardHttpSession, './dashboardSessions': dashboardSessions, './middleware/requireAuth': authz, './eventPassAccess': access, './auth': auth });
+const consumer = load('server/src/routes/consumerEventPass.js', { express, '../designProjects': projects, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession, '../middleware/requireAuth': authz, '../access': { resolveAccess: async ({isStaff}) => ({isStaff}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
+const designs = load('server/src/routes/designs.js', { express, '../designProjects': projects, '../db': db, '../middleware/requireAuth': authz, '../eventPassAccess': access, '../auth': auth, '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession });
+const backgrounds = load('server/src/routes/designBackgrounds.js', { express, '../designProjects': projects, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession, '../middleware/requireAuth': authz, '../eventPassAccess': access });
 const quotes = load('server/src/routes/quoteRequests.js', { express, crypto: require('crypto'), '../db': db, '../mailer': { getMailer: () => null }, '../middleware/requireAuth': { requireTenantRole: () => (req,res,next) => next() }, '../orderProviders/quoteRequestOrderProvider': {}, '../outboundWebhook': {}, '../eventPass': pass, '../eventPassAccess': access });
 const webhook = load('server/src/routes/stripeWebhook.js', { express, '../db': db, '../pricing': pricing, stripe: Stripe, '../eventPass': pass, '../orderProviders/quoteRequestOrderProvider': {} });
 const app = express(); app.use('/webhook', express.raw({ type: 'application/json' }), webhook); app.use(express.json()); app.use('/api/consumer', consumer); app.use('/api/consumer', backgrounds); app.use('/api/tenants', designs); app.use('/api/tenants', backgrounds); app.use('/api/tenants', quotes); app.use((err, req, res, next) => res.status(err.status || 500).json({ error: err.message }));
 const tenant = '10000000-0000-4000-8000-000000000001', other = '10000000-0000-4000-8000-000000000002';
 let server, base;
 async function request(url, body, signature, method, authorization) {
+  // Existing payment/ownership scenarios use a freshly observed revision; explicit conflict tests live in design-projects-api.cjs.
+  if (method === 'PATCH' && body && body.expectedRevision === undefined) { const id = url.split('/').pop(); const row = (await pg.query('SELECT revision FROM designs WHERE id=$1', [id])).rows[0]; body = { ...body, expectedRevision: row?.revision || 1 }; }
   const r = await fetch(base + url, { method: method || (body ? 'POST' : 'GET'), headers: { 'Content-Type': 'application/json', ...(signature ? { 'stripe-signature': signature } : {}), ...(authorization ? { Authorization: 'Bearer ' + authorization } : {}) }, body: body ? JSON.stringify(body) : undefined });
   return { status: r.status, body: await r.text().then(t => { try { return JSON.parse(t); } catch { return t; } }) };
 }
@@ -78,6 +81,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY,email text,password_hash text); CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text);`);
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/020_dashboard_sessions.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/021_account_security.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/022_design_projects.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/004_entitlements.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/011_event_pass_access_email.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/012_friendly_order_access.sql'), 'utf8'));
@@ -98,7 +102,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   const adminReopen=await request('/api/consumer/admin/designs/'+adminSaved.body.id,null,null,'GET',platformAdminToken); assert.equal(adminReopen.status,200); assert.equal(adminReopen.body.adminAccess,true); assert.deepEqual(adminReopen.body.scene,adminFurnished);
   assert.equal((await request('/api/consumer/admin/designs/'+adminSaved.body.id)).status,403,'saved design admin reopen never works without platform authentication');
   // Photo Match flushes the draft before uploading. Both writes must recognize
-  // authenticated staff, while a bearer token never replaces draft ownership.
+  // authenticated staff, with fresh tenant-scoped staff authorization or the owning customer capability.
   const configuredAdminToken=(await dashboardSessions.createDashboardSession({id:platformAdminId})).token;
   const tenantAdminSaved=await request('/api/tenants/friendly/designs',{scene:adminFurnished,anonymousSessionId:'tenant-admin-session'},null,'POST',configuredAdminToken);
   assert.equal(tenantAdminSaved.status,201,'configured platform admin saves Friendly layout without an Event Pass or claimed admin flag');
@@ -107,15 +111,15 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
     assert.equal((await request(url,{scene:{...adminFurnished,eventName:'Updated by admin'},anonymousSessionId:sid},null,'PATCH',configuredAdminToken)).status,200,'admin pre-upload save succeeds');
     assert.equal((await photoRequest(url,sid,configuredAdminToken)).status,201,'admin Photo Match upload succeeds after saving');
     const cookieHeaders={Origin:'https://rentsketch.com','Sec-Fetch-Site':'same-origin',Cookie:'__Host-rentsketch_dashboard='+configuredAdminToken,'X-RentSketch-CSRF':dashboardHttpSession.publicDashboardSession(configuredAdminToken).csrfToken};
-    const cookieSave=await fetch(base+url,{method:'PATCH',headers:{...cookieHeaders,'Content-Type':'application/json'},body:JSON.stringify({scene:adminFurnished,anonymousSessionId:sid})});
+    const cookieSave=await fetch(base+url,{method:'PATCH',headers:{...cookieHeaders,'Content-Type':'application/json'},body:JSON.stringify({scene:adminFurnished,anonymousSessionId:sid,expectedRevision:(await pg.query('SELECT revision FROM designs WHERE id=$1',[id])).rows[0].revision})});
     assert.equal(cookieSave.status,200,'same-origin cookie admin save succeeds');
     const cookiePhoto=await fetch(base+url+'/background-photo',{method:'POST',headers:{...cookieHeaders,'Content-Type':'image/jpeg','X-RentSketch-Session':sid},body:Buffer.from([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0xff,0xd9])});
     assert.equal(cookiePhoto.status,201,'same-origin cookie admin photo upload succeeds');
     const badCsrf={...cookieHeaders,'X-RentSketch-CSRF':'bad'};
-    assert.equal((await fetch(base+url,{method:'PATCH',headers:{...badCsrf,'Content-Type':'application/json'},body:JSON.stringify({scene:adminFurnished,anonymousSessionId:sid})})).status,403,'invalid CSRF never downgrades to anonymous save');
+    assert.equal((await fetch(base+url,{method:'PATCH',headers:{...badCsrf,'Content-Type':'application/json'},body:JSON.stringify({scene:adminFurnished,anonymousSessionId:sid,expectedRevision:(await pg.query('SELECT revision FROM designs WHERE id=$1',[id])).rows[0].revision})})).status,403,'invalid CSRF never downgrades to anonymous save');
     assert.equal((await fetch(base+url+'/background-photo',{method:'POST',headers:{...badCsrf,'Content-Type':'image/jpeg','X-RentSketch-Session':sid},body:Buffer.from([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0xff,0xd9])})).status,403,'invalid CSRF never downgrades to anonymous photo upload');
 
-    assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:'wrong-session'},null,'PATCH',configuredAdminToken)).status,404,'staff payment exemption does not bypass draft ownership');
+    assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:'wrong-session'},null,'PATCH',configuredAdminToken)).status,200,'verified platform admin edits a customer project without learning its owner capability');
     assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:sid},null,'PATCH')).status,402,'same saved draft is not publicly editable after admin signs out');
     assert.equal((await photoRequest(url,sid)).status,402,'same furnished design cannot upload photos without pass or authenticated staff');
   }
@@ -130,7 +134,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
     const url='/api/tenants/friendly/designs/'+saved.body.id;
     assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:sid},null,'PATCH',token)).status,200);
     assert.equal((await photoRequest(url,sid,token)).status,201,role+' may upload a photo after the save');
-    assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:'wrong-session'},null,'PATCH',token)).status,404);
+    assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:'wrong-session'},null,'PATCH',token)).status,200,'authorized tenant staff can edit customer projects');
     assert.equal((await request('/api/tenants/lakeside/designs/'+saved.body.id,{scene:adminFurnished,anonymousSessionId:sid},null,'PATCH',token)).status,404,'staff token cannot cross the design tenant boundary');
     assert.equal((await request('/api/consumer/designs',{scene:adminFurnished,anonymousSessionId:sid},null,'POST',token)).status,402,'tenant staff does not receive generic platform-admin privileges');
   }
@@ -152,7 +156,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
     assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:'tenant-admin-session'},null,'PATCH',token)).status,402,label+' cannot gain a staff save exemption');
     assert.equal((await photoRequest(url,'tenant-admin-session',token)).status,402,label+' cannot gain a staff photo exemption');
   }
-  console.log('PASS authenticated photo saves: configured platform admin and tenant owner/admin/staff create, update and upload; owner sessions remain required; unpaid, viewer, wrong-tenant, invalid, expired, unconfigured-admin and shared-view tokens stay blocked. Real routes and access policy, isolated database.');
+  console.log('PASS authenticated photo saves: configured platform admin and tenant owner/admin/staff create, update and upload; customer owner capabilities or authorized staff are required; unpaid, viewer, wrong-tenant, invalid, expired, unconfigured-admin and shared-view tokens stay blocked. Real routes and access policy, isolated database.');
   env.EVENT_PASS_ENABLED = 'false'; assert.equal((await request('/api/consumer/event-pass/offer?tenant=friendly')).body.required, false); env.EVENT_PASS_ENABLED = 'true';
   assert.equal((await request('/api/consumer/event-pass/offer?tenant=lakeside')).body.required, false);
   const previewSession = { tenant: 'friendly', anonymousSessionId: 'isolated-preview-session' };
@@ -221,7 +225,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   const recoveredByPrivateLink = await request('/api/consumer/event-pass/restore', { recoveryToken });
   assert.equal(recoveredByPrivateLink.body.id, d.id, 'emailed link restores the same event on a new device');
   assert.equal(recoveredByPrivateLink.body.analyticsPurchase, undefined, 'private-link restores do not replay purchase analytics');
-  assert.equal((await request('/api/consumer/designs/' + d.id)).status, 401, 'a design UUID alone cannot fetch a paid layout');
+  assert.equal((await request('/api/consumer/designs/' + d.id)).status, 404, 'a generic endpoint cannot fetch a tenant paid layout by UUID');
   assert.equal((await request('/api/tenants/friendly/designs/' + d.id, { scene: furnished, anonymousSessionId: 'owner-private-token' }, null, 'PATCH')).status, 200, 'paid owner can save furniture');
   assert.equal((await photoRequest('/api/tenants/friendly/designs/'+d.id,'owner-private-token')).status,201,'active Event Pass owner can upload after saving');
   assert.equal((await photoRequest('/api/tenants/friendly/designs/'+d.id,'wrong-session')).status,403,'a paid entitlement does not replace photo ownership');

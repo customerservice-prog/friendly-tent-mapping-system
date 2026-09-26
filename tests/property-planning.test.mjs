@@ -120,3 +120,10 @@ test('a measured flag never promotes collapsed, crossed, collinear or tiny marks
   }
   assert.equal(evaluatePropertyScene(snapshot({photoCalibration:{...snapshot().photoCalibration,scaleConfirmed:false}})).active,false,'moving the corners alone does not establish measured scale');
 });
+
+test('failed independent scan check suppresses clearance claims; an incomplete check remains unverified',()=>{
+ const data=snapshot({photoGeometry:[],scanGeometry:[{id:'distant',type:'obstacle',x:1,y:1,widthFt:1,depthFt:1,heightFt:2}],scanValidation:{status:'failed'}});
+ const failed=evaluatePropertyScene(data);assert.equal(failed.active,false);assert.equal(failed.source,'scan-check-failed');assert.equal(summarizePropertyFit(failed).kind,'neutral');
+ const insufficient=evaluatePropertyScene({...data,scanValidation:{status:'insufficient'}});assert.equal(insufficient.scanCheckStatus,'insufficient');if(insufficient.overall==='fits')assert.equal(summarizePropertyFit(insufficient).kind,'neutral');
+ const valid=evaluatePropertyScene({...data,scanValidation:{status:'valid'}});assert.equal(valid.scanCheckStatus,'valid');assert.equal(valid.verified,undefined,'passing one distance never verifies a property');
+});

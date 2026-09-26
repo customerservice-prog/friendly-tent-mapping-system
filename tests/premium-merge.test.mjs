@@ -60,8 +60,10 @@ test('tabletop, consumables, and upgrades never reappear as duplicate floor rent
   }
   const plate = document.querySelector('[data-id="plate"]');
   assert.ok(plate, 'the plate remains available through table styling');
-  assert.equal(plate.dataset.role, 'inventory-open');
-  assert.equal(plate.dataset.drawer, 'tables');
+  assert.equal(plate.dataset.role, 'inventory-context');
+  assert.equal(plate.dataset.contextKind, 'tabletop');
+  assert.equal(plate.dataset.id, 'plate', 'the exact catalog product enters the compatible-table selection flow');
+  assert.equal(plate.dataset.drawer, undefined, 'a product action no longer discards its identity by opening a generic drawer');
 });
 
 test('a saved accessory contributes one count on the shared product equipment card', () => {

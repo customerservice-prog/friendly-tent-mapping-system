@@ -10,7 +10,7 @@ export function installPhotoProjectionParity(renderer){
   const wrapped=function(camera,...args){
     // Three's 2D background quad writes clip coordinates directly and does not
     // use the camera projection. Its own winding must stay unchanged.
-    if(!camera?.userData?.photoProjection?.mirrored||args[2]?.name==='BackgroundMaterial')return original.call(this,camera,...args);
+    if(!camera?.userData?.photoProjection?.mirrored||args[2]?.name==='BackgroundMaterial'||args[2]?.userData?.photoClipSpace)return original.call(this,camera,...args);
     const state=renderer.state,setMaterial=state.setMaterial;
     state.setMaterial=function(material,frontFaceCW){return setMaterial.call(this,material,!frontFaceCW);};
     try{return original.call(this,camera,...args);}

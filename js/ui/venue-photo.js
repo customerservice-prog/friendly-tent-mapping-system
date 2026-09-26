@@ -1,3 +1,5 @@
+import { normalizeScanCheck } from '../core/scan-validation.js';
+import { scanValidationPanel } from './scan-validation-panel.js';
 const MAX_SOURCE_BYTES = 25 * 1024 * 1024;
 const TARGET_BYTES = 3.4 * 1024 * 1024;
 const MAX_SCAN_VIDEO_BYTES = 250 * 1024 * 1024;
@@ -39,6 +41,7 @@ export function normalizeVenueScan(value,apiBase){
     return {...photo,sampleIndex:Number.isFinite(Number(sample.sampleIndex))?Number(sample.sampleIndex):index,offsetFactor:clamp(sample.offsetFactor,-.55,.55,0)};
   }).filter(Boolean).sort((a,b)=>a.offsetFactor-b.offsetFactor);
   const roles=new Set(frames.map(f=>f.role));
+  const center=frames.find(f=>f.role==='center'),check=normalizeScanCheck(value.validationCheck);
   return {
     version:samples.length>=5?2:1,
     accuracy:'unverified',
@@ -48,6 +51,7 @@ export function normalizeVenueScan(value,apiBase){
     fovDeg:clamp(value.fovDeg,40,90,62),
     captureMethod:value.captureMethod==='video'?'video':'manual',
     baselineFactor:clamp(value.baselineFactor,.4,1.05,1),
+    validationCheck:check.sourceFrameId===(center?.id||center?.url)?check:normalizeScanCheck(null),
     frames,
     samples
   };
@@ -68,8 +72,9 @@ export function venueScanPanel(value){
       '<strong>'+label+'</strong><span>'+(frame?'Captured':'Choose photo')+'</span>'+
       '<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-role="venue-scan-file" data-scan-role="'+role+'">'+
     '</label>';}).join('')+'</div>'+
-    '<label class="venue-scan-baseline"><span>Distance from left photo to right photo</span><div><input type="number" min="2" max="20" step=".5" value="'+scan.baselineFt+'" data-role="venue-scan-baseline"><strong>ft</strong></div><small>For best results, move about 6 ft total. Enter a measured distance. Camera settings and movement are still estimated; this does not certify scale or fit.</small></label>'+
+    '<label class="venue-scan-baseline"><span>'+(scan.captureMethod==='video'?'Total distance travelled during the video':'Distance from left photo to right photo')+'</span><div><input type="number" min="2" max="20" step=".5" value="'+scan.baselineFt+'" data-role="venue-scan-baseline"><strong>ft</strong></div><small>For best results, move about 6 ft total. Enter a measured distance. '+(scan.captureMethod==='video'?'The sampled part of the video uses an estimated share of that travel; check a separate physical distance below. ':'')+'Camera settings and movement are still estimated; this does not certify scale or fit.</small></label>'+
     (ready?'<div class="venue-scan-ready"><strong>'+((scan.samples?.length||0)>=5?(scan.samples.length+'-view'):'3-view')+' views captured</strong><span>Open 3D View to check an estimated depth preview. Missing surfaces stay unknown; verify dimensions on site.</span></div>':'<p class="equipment-note">Capture three distinct positions for a depth preview. One photo provides estimated placement from its original viewpoint; it does not measure the property.</p>')+
+    (ready?scanValidationPanel(scan,window.RENTSKETCH_SCAN_RECONSTRUCTION):'')+
     (scan.frames.length?'<button type="button" class="btn-tertiary venue-scan-clear" data-role="venue-scan-clear">Clear Space Scan</button>':'')+
   '</section>';
 }

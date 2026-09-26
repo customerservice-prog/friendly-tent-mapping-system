@@ -1,7 +1,8 @@
-import { assessCaptureFrames } from '../core/capture-quality.js';
-import { estimateTrackedCameraPath } from '../core/scan-motion.js';
+import { scanCaptureGuidance } from '../core/capture-quality.js';
+import { evaluateScanValidation, scanInputFingerprint, scanFrameFingerprint, SCAN_MEASUREMENT_POLICY } from '../core/scan-validation.js';
+import { cachedScanReconstruction } from './scan-job-client.js';
 import * as THREE from 'three';
-import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
+import { stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
 
 function loadImage(url){
   return new Promise((resolve,reject)=>{
@@ -88,84 +89,32 @@ export async function createVenueScanWorld({
   const frames=normalizedFrames(scan),samples=normalizedSamples(scan);
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   const requestedBaselineFt=Math.max(1,Math.min(30,Number(scan.baselineFt)||6)),baselineFactor=Math.max(.4,Math.min(1.05,Number(scan.baselineFactor)||1)),baselineFt=requestedBaselineFt*baselineFactor;
-  let centerImage,centerData,result,fusion=null,multiImages=null,multiSamples=null,multiCenterIndex=-1,reconstructionMode='stereo-3',sourceFrameIds=[],captureQuality=null,trackedPath=null;
-  if(samples.length>=5){
-    const images=await Promise.all(samples.map(sample=>loadImage(sample.url)));multiImages=images;multiSamples=samples;
-    if(signal?.aborted)throw new DOMException('Aborted','AbortError');
-    let centerIndex=0,bestCenter=Infinity;
-    samples.forEach((sample,index)=>{const d=Math.abs(sample.offsetFactor);if(d<bestCenter){bestCenter=d;centerIndex=index;}});multiCenterIndex=centerIndex;
-    centerImage=images[centerIndex];
-    const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
-    const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
-    const working=images.map(image=>imageData(image,width,height));
-    captureQuality=assessCaptureFrames(working);if(!captureQuality.usable){group.userData={ready:false,error:'capture-quality',quality:captureQuality,setNight(){}};return group;}
-    trackedPath=estimateTrackedCameraPath(working,{centerIndex});
-    if(trackedPath.usable&&trackedPath.offsetFactors.length===samples.length){
-      multiSamples=samples.map((sample,i)=>{
-        const pose=trackedPath.framePoses?.[i]||{};
-        return {...sample,offsetFactor:trackedPath.offsetFactors[i],timedOffsetFactor:sample.offsetFactor,rollDeg:Number(pose.rollDeg)||0,poseAxes:trackedPath.poseAxes||null};
-      });
-    }else multiSamples=samples;
-    centerData=working[centerIndex];const center=centerData,views=[];
-    for(let i=0;i<working.length;i++){
-      if(i===centerIndex)continue;
-      views.push({image:working[i],offsetFt:multiSamples[i].offsetFactor*baselineFt});
-    }
-    result=reconstructMultiViewGrid({
-      center,views,
-      fovDeg:Number(scan.fovDeg)||62,
-      horizonY:Number(calibration?.horizonY)||.34,
-      eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
-      step:mobile?5:4,
-      maxDisparity:mobile?22:30,
-      patchRadius:2,
-      verticalSearch:3,
-      maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
-    });
-    fusion=fuseMultiReferenceSurfels({
-      captures:working.map((image,i)=>({image,offsetFt:multiSamples[i].offsetFactor*baselineFt,rollRad:(Number(multiSamples[i].rollDeg)||0)*Math.PI/180})),
-      primaryIndex:centerIndex,
-      primaryResult:result,
-      referenceIndices:[centerIndex-2,centerIndex,centerIndex+2],
-      fovDeg:Number(scan.fovDeg)||62,
-      horizonY:Number(calibration?.horizonY)||.34,
-      eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
-      step:mobile?7:6,
-      maxDisparity:mobile?20:28,
-      patchRadius:2,
-      verticalSearch:3,
-      minConfidence:.10,
-      maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
-      voxelFt:mobile?.56:.42
-    });
-    reconstructionMode=(trackedPath?.usable?'feature-tracked-':'timed-')+'multireference-'+samples.length;
-    sourceFrameIds=samples.map(s=>s.id).filter(Boolean);
-  }else{
-    const [leftImage,centerLoaded,rightImage]=await Promise.all([
-      loadImage(frames.left.url),loadImage(frames.center.url),loadImage(frames.right.url)
-    ]);
-    centerImage=centerLoaded;
-    if(signal?.aborted)throw new DOMException('Aborted','AbortError');
-    const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
-    const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
-    const left=imageData(leftImage,width,height),center=imageData(centerImage,width,height),right=imageData(rightImage,width,height);centerData=center;
-    captureQuality=assessCaptureFrames([left,center,right]);if(!captureQuality.usable){group.userData={ready:false,error:'capture-quality',quality:captureQuality,setNight(){}};return group;}
-    result=reconstructStereoGrid({
-      left,center,right,baselineFt,
-      fovDeg:Number(scan.fovDeg)||62,
-      horizonY:Number(calibration?.horizonY)||.34,
-      eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
-      step:mobile?5:4,
-      maxDisparity:mobile?20:26,
-      patchRadius:2,
-      verticalSearch:2,
-      maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
-    });
-    sourceFrameIds=[frames.left.id,frames.center.id,frames.right.id].filter(Boolean);
+  const sourceSamples=samples.length>=5?samples:[frames.left,frames.center,frames.right];
+  const images=await Promise.all(sourceSamples.map(sample=>loadImage(sample.url)));
+  if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+  let centerIndex=samples.length>=5?samples.reduce((best,s,i)=>Math.abs(s.offsetFactor)<Math.abs(samples[best].offsetFactor)?i:best,0):1;
+  const centerImage=images[centerIndex],aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
+  if(aspect<.25||aspect>4||images.some(image=>Math.abs(((image.naturalHeight||image.height)/(image.naturalWidth||image.width))/aspect-1)>.03)){
+    group.userData={ready:false,error:'capture-aspect',quality:{usable:false,issues:['Use the same camera orientation and zoom for every scan frame.']},setNight(){}};return group;
   }
+  // Preserve image aspect: stretching a portrait capture into a landscape grid
+  // corrupts vertical geometry and any independent distance check.
+  const edge=mobile?128:176,width=Math.round(edge/Math.max(1,aspect)),height=Math.round(width*aspect);
+  const working=images.map(image=>imageData(image,width,height)),centerData=working[centerIndex];
+  const jobInput={frames:working,offsetFactors:samples.map(s=>s.offsetFactor),centerIndex,baselineFt,fovDeg:Number(scan.fovDeg)||62,horizonY:Number(calibration?.horizonY)||.34,eyeHeightFt:Number(scan.eyeHeightFt)||5.6,maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),mobile};
+  const inputFingerprint=scanInputFingerprint({sources:sourceSamples.map(s=>[s.id,s.url,s.offsetFactor]),pixels:scanFrameFingerprint(working),...jobInput,frames:undefined});
+  const job=await cachedScanReconstruction(inputFingerprint,jobInput,{signal});
+  const {result,fusion,captureQuality,trackedPath,reconstructionMode}=job;
+  const sourceFrameId=sourceSamples[centerIndex].id||sourceSamples[centerIndex].url;
+  const validation=evaluateScanValidation(result,{check:scan.validationCheck,captureQuality,trackedPath,sourceFrameId,inputFingerprint});
+  const captureGuidance=scanCaptureGuidance({quality:captureQuality,path:trackedPath,validation});
+  if(!result){group.userData={mode:'estimated-stereo-preview',ready:false,error:job.error||'capture-quality',quality:captureQuality,validation,captureGuidance,measurementPolicy:{...SCAN_MEASUREMENT_POLICY},setNight(){}};return group;}
+  const multiImages=samples.length>=5?images:null,multiCenterIndex=centerIndex;
+  const multiSamples=samples.length>=5?samples.map((sample,i)=>({...sample,offsetFactor:job.offsetFactors[i],rollDeg:Number(trackedPath?.framePoses?.[i]?.rollDeg)||0})):null;
+  const sourceFrameIds=sourceSamples.map(s=>s.id).filter(Boolean);
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   if(result.metrics.validCount<45||result.metrics.triangleCount<30){
-    group.userData={mode:'estimated-stereo-preview',ready:false,error:'not-enough-overlap',metrics:stereoReconstructionSummary(result),setNight(){}};
+    group.userData={mode:'estimated-stereo-preview',ready:false,error:'not-enough-overlap',metrics:stereoReconstructionSummary(result),quality:captureQuality,validation,captureGuidance,measurementPolicy:{...SCAN_MEASUREMENT_POLICY},setNight(){}};
     return group;
   }
 
@@ -182,7 +131,7 @@ export async function createVenueScanWorld({
   group.add(supportGround);
 
   const geometry=new THREE.BufferGeometry();
-  geometry.setAttribute('position',new THREE.BufferAttribute(result.positions,3));
+  geometry.setAttribute('position',new THREE.BufferAttribute(result.positions.slice(),3));
   geometry.setAttribute('uv',new THREE.BufferAttribute(result.uvs,2));
   geometry.setIndex(new THREE.BufferAttribute(result.indices,1));
   geometry.computeVertexNormals();
@@ -217,7 +166,9 @@ export async function createVenueScanWorld({
       const image=multiImages[ref.referenceIndex],sample=multiSamples[ref.referenceIndex],rr=ref.result;
       if(!image||!sample||!rr?.indices?.length)continue;
       const rg=new THREE.BufferGeometry();
-      rg.setAttribute('position',new THREE.BufferAttribute(rr.positions,3));
+      // The worker result is cached across held-out-check edits. Render-time
+      // roll correction must not rotate those shared vertices a second time.
+      rg.setAttribute('position',new THREE.BufferAttribute(rr.positions.slice(),3));
       rg.setAttribute('uv',new THREE.BufferAttribute(rr.uvs,2));
       rg.setIndex(new THREE.BufferAttribute(rr.indices,1));rg.computeVertexNormals();rg.computeBoundingSphere();
       const rt=textureFromImage(image),edgeFade=scanFeatherMask(),balancedColor=exposureMatchColor(centerRgb,averageImageRgb(image));
@@ -294,7 +245,12 @@ export async function createVenueScanWorld({
     ready:true,
     metric:false,
     accuracy:'unverified',
-    provenance:{geometry:'estimated stereo depth',scale:'user-entered baseline',cameraPoses:trackedPath?.usable?'feature-tracked lateral path + roll':'assumed',poseAxes:trackedPath?.poseAxes||null,unseenAreas:'not reconstructed'},
+    validation,
+    captureGuidance,
+    measurementPolicy:{...SCAN_MEASUREMENT_POLICY},
+    execution:job.execution,
+    inputFingerprint,
+    provenance:{geometry:'estimated stereo depth',scale:'user-entered baseline',sampledBaseline:scan.captureMethod==='video'?'time-fraction estimate of total travel':'entered left-to-right distance',cameraPoses:trackedPath?.usable?'feature-tracked lateral path + roll':'assumed',poseAxes:trackedPath?.poseAxes||null,unseenAreas:'not reconstructed'},
     baselineFt,
     requestedBaselineFt,
     baselineFactor,

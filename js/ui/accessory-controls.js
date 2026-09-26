@@ -40,7 +40,7 @@ export function accessoryCard(item,quantity=0){
   return '<button type="button" class="item-card equipment-card accessory-card" data-role="accessory-card" data-id="'+esc(item.id)+'">'+
     visual+
     '<span class="item-card-name">'+esc(item.name)+'</span>'+
-    '<span class="item-card-desc">'+(item.dimensionsConfirmed?'Measured ':'Illustrative ')+esc(item.widthFt)+' × '+esc(item.depthFt)+' ft'+(item.animated?' · animated 3D':'')+(quantity?' · '+quantity+' in layout':'')+'</span>'+
+    '<span class="item-card-desc">'+(item.dimensionsConfirmed?'Catalog dimensions: ':'Illustrative ')+esc(item.widthFt)+' × '+esc(item.depthFt)+' ft'+(item.animated?' · animated 3D':'')+(quantity?' · '+quantity+' in layout':'')+'</span>'+
     '<span class="item-card-price">'+price+'</span>'+
     '<span class="equipment-add">+ Place item</span></button>';
 }
@@ -63,8 +63,9 @@ export function accessoryInspector(item,product){
   return '<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button>'+
     '<h3>'+esc(product.name)+'</h3>'+
     (product.photoUrl?'<img class="equipment-model inspector-accessory-photo" src="'+esc(product.photoUrl)+'" alt="" loading="lazy">':'<div class="inspector-accessory-icon">'+accessoryIcon(product.accessoryType)+'</div>')+
-    '<p>'+esc(product.visualCategory)+' · '+(product.dimensionsConfirmed?'Measured ':'Illustrative ')+esc(product.widthFt)+' × '+esc(product.depthFt)+' ft footprint</p>'+
+    '<p>'+esc(product.visualCategory)+' · '+(product.dimensionsConfirmed?'Catalog dimensions: ':'Illustrative ')+esc(product.widthFt)+' × '+esc(product.depthFt)+' ft footprint</p>'+
     '<p><strong>'+price+'</strong>'+(product.animated?' · Animated in 3D':'')+'</p>'+
+    (product.operation?.supported?'<div class="equipment-operation"><button type="button" class="btn-secondary" data-role="equipment-operation" data-id="'+esc(item.id)+'" data-state="'+(item.operationState==='off'?'running':'off')+'">'+(item.operationState==='off'?'Start operating preview':'Stop operating preview')+'</button><p class="equipment-note">Visual preview only. Power, water and installation still need confirmation.</p></div>':'')+
     '<div class="inspector-actions">'+
       '<button type="button" class="btn-secondary" data-role="insp-rotate" data-id="'+esc(item.id)+'">Rotate 90°</button>'+
       '<button type="button" class="btn-secondary" data-role="insp-duplicate" data-id="'+esc(item.id)+'">Duplicate</button>'+

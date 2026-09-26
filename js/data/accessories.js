@@ -1,3 +1,4 @@
+import { equipmentAssetDescriptor, equipmentOperationProfile } from './asset-registry.js';
 // General rental visual catalog.
 // Anything not already handled by tents/tables/chairs/linens/lighting/dance floor
 // can still become a real placeable RentSketch object instead of disappearing
@@ -18,12 +19,13 @@ const PROFILES=[
   {test:/speaker|pa system|bluetooth/,type:'speaker',category:'Audio',w:2,d:2,h:4.5,animated:true},
   {test:/podium|lectern/,type:'podium',category:'Audio',w:2,d:2,h:4},
   {test:/microphone|mic stand/,type:'microphone',category:'Audio',w:1,d:1,h:5},
-  {test:/generator|power distribution|power box/,type:'generator',category:'Power',w:3,d:2.2,h:2.4,animated:true},
+  {test:/power distribution|power box/,type:'power-distribution',category:'Power',w:1.5,d:1,h:1.5},
+  {test:/generator/,type:'generator',category:'Power',w:3,d:2.2,h:2.4,animated:true},
   {test:/fan|mister|misting/,type:'fan',category:'Cooling',w:2.2,d:2.2,h:5,animated:true},
   {test:/heater/,type:'heater',category:'Climate',w:2.2,d:2.2,h:7,animated:true},
   {test:/cooler/,type:'cooler',category:'Service',w:3,d:2,h:2},
   {test:/trash|garbage/,type:'trash-can',category:'Service',w:2,d:2,h:3},
-  {test:/stanchion|velvet rope|crowd control/,type:'stanchion',category:'Event Accessories',w:5,d:1.5,h:3.5},
+  {test:/stanchion|velvet rope|crowd control/,type:'stanchion',category:'Event Accessories',w:1.2,d:1.2,h:3.2},
   {test:/red carpet|aisle runner/,type:'red-carpet',category:'Event Accessories',w:4,d:15,h:.08},
   {test:/cornhole/,type:'cornhole',category:'Games',w:8,d:12,h:1.2},
   {test:/connect ?4|connect four/,type:'connect-four',category:'Games',w:4,d:2,h:4.5},
@@ -81,7 +83,9 @@ export function accessoryCatalog(products,showPrices=true){
       widthFt:width,
       depthFt:depth,
       heightFt:height,
-      animated:!!p.animated,
+      animated:equipmentOperationProfile(p.type).supported,
+      operation:equipmentOperationProfile(p.type),
+      asset:equipmentAssetDescriptor({...product,dimensionsConfirmed:!!(sourceWidth&&sourceDepth)},p.type),
       dimensionsConfirmed:!!(sourceWidth&&sourceDepth),
       photoUrl:/^https?:\/\//i.test(product.photo_url||'')?product.photo_url:null,
       pricePerDay:showPrices&&Number.isFinite(price)?price:null,
@@ -114,6 +118,8 @@ export function accessoryItem(product,id,x,y){
     heightFt:product.heightFt,
     x,y,rotationDeg:0,
     animated:!!product.animated,
+    asset:product.asset||equipmentAssetDescriptor(product,product.accessoryType),
+    operationState:product.operation?.defaultState||equipmentOperationProfile(product.accessoryType).defaultState,
     dimensionsConfirmed:!!product.dimensionsConfirmed,
     photoUrl:product.photoUrl||null,
     pricePerDay:product.pricePerDay,

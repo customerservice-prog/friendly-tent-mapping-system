@@ -13,7 +13,7 @@ function scanSvg(n){
   }
   return '<svg xmlns="http://www.w3.org/2000/svg" width="192" height="128" viewBox="0 0 192 128"><rect width="192" height="128" fill="#9fc8e0"/><g transform="translate('+shift+' 0)"><rect y="54" width="192" height="74" fill="#658451"/><rect x="48" y="43" width="96" height="39" fill="#8297a2"/><path d="M43 44 L96 21 L149 44" fill="#3e4852"/><path d="M0 86 H192" stroke="#d8d8cc" stroke-width="3"/>'+marks+'</g></svg>';
 }
-let webOrigin='',apiOrigin='',uploads=[],savedPatches=[];
+let webOrigin='',apiOrigin='',uploads=[],savedPatches=[],savedRevision=1;
 const api=http.createServer((req,res)=>{
   const u=new URL(req.url,'http://api.local');
   const cors=()=>{res.setHeader('Access-Control-Allow-Origin',webOrigin||'*');res.setHeader('Access-Control-Allow-Methods','GET,POST,PATCH,DELETE,OPTIONS');res.setHeader('Access-Control-Allow-Headers','Content-Type,Authorization,X-RentSketch-Session');res.setHeader('Access-Control-Max-Age','60');res.setHeader('Cross-Origin-Resource-Policy','cross-origin');};
@@ -21,9 +21,14 @@ const api=http.createServer((req,res)=>{
   if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
   const json=(status,data)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};
   if(u.pathname==='/api/consumer/event-pass/offer')return json(200,{required:true,available:true,priceCents:999,durationDays:30,renewalPriceCents:499,renewalDurationDays:30,previewDurationSeconds:300,recurring:false});
-  if(u.pathname==='/api/consumer/event-pass/resume')return json(200,{id:'generic-photo-design',tenant:'generic',scene:savedPatches.at(-1)?.scene||{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},anonymousSessionId:'generic-photo-owner',active:true,renewable:true,expiresAt:'2099-01-01T00:00:00.000Z',customerEmail:'photo@example.invalid',accessUrl:'https://example.invalid/private'});
+  if(u.pathname==='/api/consumer/event-pass/resume')return json(200,{id:'generic-photo-design',revision:savedRevision,accessDesignId:'generic-photo-design',tenant:'generic',scene:savedPatches.at(-1)?.scene||{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},anonymousSessionId:'generic-photo-owner',active:true,renewable:true,expiresAt:'2099-01-01T00:00:00.000Z',customerEmail:'photo@example.invalid',accessUrl:'https://example.invalid/private'});
   if(u.pathname==='/api/consumer/designs/generic-photo-design'&&req.method==='PATCH'){
-    const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{try{savedPatches.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));}catch(_){}json(200,{ok:true,id:'generic-photo-design'});});return;
+    const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{
+      let body;try{body=JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch(_){return json(400,{error:'Invalid fixture request'});}
+      if(!Number.isInteger(body.expectedRevision))return json(428,{code:'revision_required',error:'Expected revision is required'});
+      if(body.expectedRevision!==savedRevision)return json(409,{code:'revision_conflict',currentRevision:savedRevision,error:'Project changed'});
+      savedPatches.push(body);savedRevision++;json(200,{ok:true,id:'generic-photo-design',revision:savedRevision,updatedAt:new Date().toISOString()});
+    });return;
   }
   if(u.pathname==='/api/consumer/designs/generic-photo-design/background-photo'&&req.method==='POST'){
     const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{
@@ -217,7 +222,11 @@ const web=http.createServer((req,res)=>{
     assert.equal(scanRuntime.metric,false,'estimated scan does not claim validated metric accuracy');
     assert.equal(scanRuntime.accuracy,'unverified');
     assert.equal(scanRuntime.mode,'estimated-stereo-preview');
-    assert.equal(scanRuntime.provenance.cameraPoses,'assumed');
+    assert.equal(scanRuntime.provenance.cameraPoses,'feature-tracked lateral path + roll');
+    assert.equal(scanRuntime.provenance.poseAxes.yaw,'unresolved','lateral tracking is not full camera pose recovery');
+    assert.equal(scanRuntime.execution,'worker','browser reconstruction uses the cancellable module worker');
+    assert.equal(scanRuntime.validation.status,'insufficient','no independent physical measurement means no passing check');
+    assert.equal(scanRuntime.measurementPolicy.siteDimensionsVerified,false);
     assert.ok(scanRuntime.metrics.triangles>0,'Space Scan produces connected 3D surface triangles');
     assert.ok(scanRuntime.metrics.coveragePct>0,'Space Scan reports real depth coverage');
     if(!(await page.locator('#drawer').isHidden()))await page.locator('#drawerClose').click();
@@ -273,13 +282,13 @@ const web=http.createServer((req,res)=>{
     const livePlan=await page.evaluate(()=>window.FriendlyBridge.getPropertyPlan());
     assert.equal(livePlan.active,true,'FriendlyBridge exposes reconstructed property planning result');
     const fitKind=await page.locator('#propertyFitBadge').getAttribute('data-kind');
-    const expectedKind=livePlan.overall==='fits'?'fits':livePlan.overall==='close'?'close':'blocked';
+    const expectedKind=livePlan.source==='scan-check-failed'||livePlan.overall==='fits'&&livePlan.source==='metric-scan-property'&&livePlan.scanCheckStatus!=='valid'?'neutral':livePlan.overall==='fits'?'fits':livePlan.overall==='close'?'close':'blocked';
     assert.equal(fitKind,expectedKind,'3D property-fit badge matches exact planning engine');
     await page.locator('#propertyFitBadge').click();
     assert.equal(await page.locator('#propertyFitPanel').isHidden(),false,'fit reasoning panel opens');
     assert.match(await page.locator('#propertyFitPanel').innerText(),/Planning check only/);
     assert.match(await page.locator('#view3dOrbit360').innerText(),/3D Scan/);
-    assert.match(await page.locator('#canvasHint').innerText(),/dimensions unverified/);assert.match(await page.locator('#canvasHint').innerText(),/3D Scan/);assert.match(await page.locator('#canvasHint').innerText(),/real views/);assert.match(await page.locator('#canvasHint').innerText(),/captured geometry/);
+    assert.match(await page.locator('#canvasHint').innerText(),/scale unverified/);assert.match(await page.locator('#canvasHint').innerText(),/3D Scan/);assert.match(await page.locator('#canvasHint').innerText(),/real views/);assert.match(await page.locator('#canvasHint').innerText(),/captured geometry/);
     await page.locator('#view3dMatchPhoto').click();
     assert.equal(await page.locator('#view3dMatchPhoto').getAttribute('aria-pressed'),'true','user can return to exact photo match');
     await page.locator('#viewMode3d').click();

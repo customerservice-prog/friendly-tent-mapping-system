@@ -22,7 +22,15 @@ async function activePass(designId) {
   return (await db.query("SELECT id,expires_at FROM entitlements WHERE design_id=$1 AND status='active' AND (expires_at IS NULL OR expires_at>now()) LIMIT 1", [designId])).rows[0] || null;
 }
 
+async function permissionDesign(design) {
+  if (!design?.project_root_id) return design;
+  const root = (await db.query('SELECT * FROM designs WHERE id=$1 AND tenant_id IS NOT DISTINCT FROM $2 AND project_root_id IS NULL', [design.project_root_id, design.tenant_id])).rows[0];
+  if (!root) { const error = new Error('The original event project is unavailable.'); error.status = 404; throw error; }
+  return root;
+}
+
 async function savePermission(tenant, design, scene) {
+  design = await permissionDesign(design);
   if (!isPassEnabled(tenant)) return null;
   if (design && await activePass(design.id)) return null;
   const paid = design && (await db.query("SELECT id FROM consumer_payments WHERE design_id=$1 AND status='paid' LIMIT 1", [design.id])).rows.length;
@@ -32,4 +40,4 @@ async function savePermission(tenant, design, scene) {
   return { error: paid ? 'Your Event Pass has expired. Renew to keep editing this event.' : 'Choose an Event Pass to arrange and save your event. The rental preview is free.', code: paid ? 'event_pass_expired' : 'event_pass_required' };
 }
 
-module.exports = { isPreviewScene, activePass, savePermission };
+module.exports = { isPreviewScene, activePass, savePermission, permissionDesign };

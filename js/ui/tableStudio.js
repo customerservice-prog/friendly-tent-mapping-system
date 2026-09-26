@@ -31,7 +31,7 @@ function renderTabletop(current){
 function applyWholeSetup(){
  const source=item();if(!source||options.onCommit)return;
  const targets=storeRef.getState().objects.filter(o=>o.kind==='table'&&o.tableId===source.tableId&&o.id!==source.id);if(!targets.length)return;
- const style={chairId:source.chairId,linenId:source.linenId||null,linenColor:source.linenColor||null,tabletop:source.tabletop||[]};
+ const style={chairId:source.chairId,linenId:source.linenId||null,linenProductId:source.linenProductId||null,linenColor:source.linenColor||null,tabletop:source.tabletop||[]};
  storeRef.replaceObjects(storeRef.getState().objects.map(o=>targets.some(t=>t.id===o.id)?{...o,...JSON.parse(JSON.stringify(style))}:o));
  dialog.querySelector('.ts-message').textContent=`Setup applied to ${targets.length} other ${targets.length===1?'table':'tables'}. One-per-seat items follow each table’s seat count. You can undo this change.`;
 }
@@ -64,7 +64,7 @@ function setMode(next){
  }).catch(()=>{if(token===loadToken)fallback();});}
 }
 function fallback(){clearTimeout(loadTimer);if(!storeRef||!dialog.open)return;view?.destroy();view=null;setMode('2d');dialog.querySelector('.ts-render-status').textContent='3D is unavailable here. Keep styling your table in the overhead view.';}
-function setLinen(id){const l=find(options.linens,id),colors=l?.colors||['White'];change({linenId:id||null,linenColor:id?(colors.includes(item().linenColor)?item().linenColor:colors[0]):null});}
+function setLinen(id){const l=find(options.linens,id),colors=l?.colors||['White'];change({linenId:id||null,linenProductId:l?.productId||null,linenColor:id?(colors.includes(item().linenColor)?item().linenColor:colors[0]):null});}
 function editTop(id,edit){const list=JSON.parse(JSON.stringify(item().tabletop||[]));edit(list,list.find(e=>e.productId===id));change({tabletop:list});}
 function ensure(){
  if(dialog)return;dialog=document.createElement('dialog');dialog.className='ts-dialog';dialog.setAttribute('aria-labelledby','tableStudioTitle');

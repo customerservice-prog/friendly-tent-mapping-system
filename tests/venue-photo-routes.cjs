@@ -1,10 +1,17 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const root=path.resolve(__dirname,'..');
 (async()=>{
-  const source=fs.readFileSync(path.join(root,'js/ui/venue-photo.js'),'utf8');
   const context=vm.createContext({console,setTimeout,clearTimeout});
-  const mod=new vm.SourceTextModule(source,{context,identifier:'venue-photo.js'});
-  await mod.link(()=>{throw new Error('venue-photo.js should not import dependencies');});
+  const cache=new Map();
+  function moduleFor(file){
+    if(cache.has(file))return cache.get(file);
+    const module=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,module);return module;
+  }
+  const mod=moduleFor(path.join(root,'js/ui/venue-photo.js'));
+  await mod.link((specifier,referencingModule)=>{
+    assert.ok(specifier.startsWith('.'),'photo routing uses local production modules');
+    return moduleFor(path.resolve(path.dirname(referencingModule.identifier),specifier));
+  });
   await mod.evaluate();
   const route=mod.namespace.venuePhotoRoutes;
   let r=route({api:'https://api.test/',slug:'generic',designId:'abc 123'});
@@ -14,5 +21,7 @@ const root=path.resolve(__dirname,'..');
   assert.equal(r.upload,'https://api.test/api/tenants/friendly/designs/tenant-design/background-photo');
   assert.equal(r.remove('p1'),'https://api.test/api/tenants/friendly/designs/tenant-design/background-photo/p1');
   assert.equal(route({api:'',slug:'generic',designId:'x'}),null);
+  const normalized=mod.namespace.normalizeVenueScan({metric:true,accuracy:'validated',validation:{status:'valid'}},'https://api.test');
+  assert.equal(normalized.accuracy,'unverified');assert.equal(normalized.validation,undefined,'linked validation code does not trust saved verdict flags');
   console.log('PASS venue photo routing: generic/Event Pass uses /api/consumer; tenant designs use /api/tenants/:slug.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

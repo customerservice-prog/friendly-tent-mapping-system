@@ -55,10 +55,17 @@ async function setup(query, options = {}) {
         return {ok:false,status:402,json:async()=>({error:'Choose an Event Pass to arrange and save your event. The rental preview is free.'})};
       }
       const id=(url.match(/\/designs\/([^/?#]+)$/)||[])[1]||'draft-owned';
-      draft = { id, scene: body.scene, tenant: new URL(w.location.href).searchParams.get('tenant')||'generic', anonymousSessionId: body.anonymousSessionId, active: false };
-      data = { id: draft.id };
+      const previous=draft||options.adminDesign||options.restored||options.resumed||options.saved;
+      if((request.method||'GET')==='GET')data=previous;
+      else {
+        const currentRevision=previous?.revision||1;
+        if(request.method==='PATCH'&&body.expectedRevision!==currentRevision)return {ok:false,status:409,json:async()=>({code:'revision_conflict',error:'Fixture project changed',currentRevision})};
+        draft = { id, revision:request.method==='PATCH'?currentRevision+1:1, scene:body.scene, tenant:new URL(w.location.href).searchParams.get('tenant')||'generic', anonymousSessionId:body.anonymousSessionId, active:false };
+        data = { id:draft.id, revision:draft.revision };
+      }
     }
     else throw Error('Unexpected API request ' + url);
+    if(data?.id&&data.scene)data={revision:1,...data};
     return { ok: true, status: 200, json: async () => data };
   };
   const context = dom.getInternalVMContext(), cache = new Map();
@@ -302,12 +309,13 @@ async function applyAdminPhoto(t,saveUrl,saveMethod,session) {
   t = await setup('?tenant=friendly&payment=success&design=forged');
   assert.equal(t.w.document.body.classList.contains('rs-pass-preview'), true); assert.doesNotMatch(t.w.document.getElementById('eventPassBar').textContent, /Event Pass active/);
   t.dom.window.close();
-  t = await setup('?tenant=friendly#eventPass=cs_live_fixturecheckout', { restored: { ...emptyFrame, active: false, expiresAt: new Date(Date.now() - 86400000).toISOString() } });
+  t = await setup('?tenant=friendly#eventPass=cs_live_fixturecheckout', { restored: { ...emptyFrame, id:'alternative-owned', accessDesignId:'original-paid-event', active: false, expiresAt: new Date(Date.now() - 86400000).toISOString() } });
   t.w.document.querySelector('[data-buy-pass]').click(); await wait(10); assert.match(t.w.document.querySelector('.paywall-price').textContent, /\$4.99/);
   Object.defineProperty(t.w, 'parent', { value: { postMessage() {} } });
   t.w.document.querySelector('#passEmail').value = 'buyer@example.invalid';
   t.w.document.querySelector('.paywall-modal form').dispatchEvent(new t.w.Event('submit', { bubbles: true, cancelable: true })); await wait(30);
   assert.equal(t.calls.filter(c => c.url.endsWith('/renewal-checkout-session')).length, 1, 'expired design can renew without a forbidden save first');
+  assert.match(t.calls.find(c=>c.url.endsWith('/renewal-checkout-session')).url,/\/designs\/original-paid-event\/event-pass\/renewal-checkout-session$/,'alternative renews its original event access');
   assert.equal(t.calls.filter(c => c.method === 'PATCH').length, 0);
   t.dom.window.close();
   t = await setup('?tenant=friendly', { offer: { required: false } });

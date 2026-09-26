@@ -1,0 +1,46 @@
+/* Manual photo composition: controls outside the photograph, source-image outlines inside it. */
+.photo-mask-panel { grid-column:1/-1; border-top:1px solid #dce5dc; padding-top:8px; color:#365340; min-width:0; }
+.photo-mask-panel[hidden],.photo-lighting-controls[hidden] { display:none!important; }
+.photo-mask-panel p,.photo-lighting-controls p { font-size:11px; line-height:1.45; margin:0 0 8px; color:#617164; }
+.photo-mask-actions { display:flex; flex-wrap:wrap; gap:6px; margin:7px 0; }
+.photo-mask-actions .btn-chip,.photo-lighting-controls .btn-chip { min-height:44px; border:1px solid #ccdacd; background:#fff; color:#29503a; border-radius:8px; padding:8px 12px; font-size:12px; }
+.photo-mask-actions .btn-chip:disabled { opacity:.45; cursor:default; }
+.photo-mask-fields { display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:9px; align-items:end; }
+.photo-mask-fields label,.photo-lighting-fields label { display:grid; gap:4px; font-size:11px; min-width:0; color:#4b6453; }
+.photo-mask-fields input:not([type=checkbox]),.photo-mask-fields select { box-sizing:border-box; width:100%; min-width:0; min-height:40px; border:1px solid #ccdacd; border-radius:7px; background:#fff; color:#294d38; padding:7px; font-size:13px; }
+.photo-mask-fields input[type=range],.photo-lighting-fields input[type=range] { width:100%; min-height:32px; margin:0; padding:0; accent-color:#346b49; }
+.photo-mask-fields .photo-mask-visible { display:flex; align-items:center; min-height:44px; gap:6px; }
+.photo-mask-visible input { width:18px; height:18px; accent-color:#346b49; }
+.photo-mask-feather { position:relative; }
+.photo-mask-feather output { position:absolute; right:0; top:0; }
+.photo-mask-status { min-height:16px; margin-bottom:0!important; }
+.photo-mask-outline .photo-mask-shape { fill:#14b8a638; stroke:#dffcf0; stroke-width:2; vector-effect:non-scaling-stroke; cursor:pointer; }
+.photo-mask-outline.selected .photo-mask-shape { fill:#0f766e35; stroke:#27d8b9; }
+.photo-mask-outline.disabled .photo-mask-shape { stroke-dasharray:6 5; fill:#71809622; }
+.photo-mask-handle { fill:#fff; stroke:#165d47; stroke-width:2; vector-effect:non-scaling-stroke; cursor:grab; }
+.photo-mask-handle.selected { fill:#27d8b9; }
+.photo-mask-midpoint { fill:#a5f3d3; stroke:#1e7052; stroke-width:1.5; vector-effect:non-scaling-stroke; cursor:copy; }
+.photo-mask-draft polygon,.photo-mask-draft polyline { fill:#1ac5ac25; stroke:#b7ffdf; stroke-dasharray:5 4; stroke-width:2; vector-effect:non-scaling-stroke; pointer-events:none; }
+.photo-mask-draft circle { fill:#fff; stroke:#17674d; stroke-width:2; vector-effect:non-scaling-stroke; }
+.photo-lighting-controls { border-top:1px solid #dbe5dc; margin-top:10px; padding-top:4px; }
+.photo-lighting-controls > summary { display:flex!important; align-items:center; width:100%; box-sizing:border-box; border:0!important; padding:8px 0!important; min-height:44px; background:transparent!important; color:#294b39!important; font-size:12px!important; }
+.photo-lighting-fields { display:grid; grid-template-columns:1fr 1fr; gap:8px 14px; }
+.photo-lighting-fields label { position:relative; padding-top:17px; }
+.photo-lighting-fields output { position:absolute; right:0; top:0; font-variant-numeric:tabular-nums; color:#6e7f71; }
+.photo-lighting-direction { margin-top:7px!important; }
+@media(max-width:900px) { .photo-mask-fields { grid-template-columns:1fr 1fr; } }
+@media(max-width:650px) {
+  .photo-mask-panel p { font-size:10px; margin-bottom:5px; }
+  .photo-mask-actions { margin:4px 0; gap:5px; }
+  .photo-mask-actions .btn-chip { padding:7px 8px; font-size:11px; }
+  .photo-mask-fields { gap:5px 8px; }
+  .photo-mask-fields input:not([type=range]):not([type=checkbox]),.photo-mask-fields select { font-size:16px; }
+  .photo-edit-mode .photo-workspace-tools .btn-chip,.photo-edit-mode .photo-mark-tools summary { padding-left:6px; padding-right:6px; }
+}
+.photo-mask-select-field label { display:grid; gap:4px; font-size:11px; }
+.photo-mask-select-field select { box-sizing:border-box; max-width:100%; width:100%; min-height:40px; padding:7px; border:1px solid #ccdacd; border-radius:7px; background:#fff; color:#294d38; font-size:13px; }
+.photo-mask-properties > summary { cursor:pointer; min-height:44px; display:flex; align-items:center; font-size:12px; font-weight:600; }
+.photo-mask-properties > summary::after { content:'⌄'; margin-left:8px; }
+.photo-mask-properties[open] > summary::after { content:'⌃'; }
+@media(max-width:650px) { .photo-mask-select-field select { font-size:16px; } }
+.photo-preview-mode .scene-panel:has(.photo-lighting-controls) { width:310px; max-width:calc(100vw - 24px); box-sizing:border-box; max-height:min(660px,calc(100dvh - 330px)); overflow-y:auto; overscroll-behavior:contain; }

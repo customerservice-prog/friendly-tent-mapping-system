@@ -22,3 +22,10 @@ test('fullscreen photograph background keeps its own clip-space winding',()=>{
   const calls=[],state={setMaterial(m,cw){calls.push(cw);}},renderer={state,renderBufferDirect(camera,scene,geometry,material){state.setMaterial(material,false);}};
   installPhotoProjectionParity(renderer);renderer.renderBufferDirect({userData:{photoProjection:{mirrored:true}}},null,null,{name:'BackgroundMaterial'});assert.equal(calls.at(-1),false);
 });
+
+test('manual foreground clip-space pixels keep winding while rental geometry is mirrored',()=>{
+ const calls=[],state={setMaterial(m,cw){calls.push(cw);}},renderer={state,renderBufferDirect(camera,scene,geometry,material){state.setMaterial(material,false);}};
+ installPhotoProjectionParity(renderer);const photo={userData:{photoProjection:{mirrored:true}}};
+ renderer.renderBufferDirect(photo,null,null,{userData:{photoClipSpace:true}});assert.equal(calls.at(-1),false);
+ renderer.renderBufferDirect(photo,null,null,{name:'Rental fabric'});assert.equal(calls.at(-1),true);
+});

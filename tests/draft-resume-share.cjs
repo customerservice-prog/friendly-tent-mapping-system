@@ -29,7 +29,7 @@ async function sharedRestore(){
 async function authenticatedSaves(){
  for(const slug of ['friendly','generic']){
   const dom=new JSDOM('<!doctype html><body></body>',{url:'https://rentsketch.com/designer/?tenant='+slug,runScripts:'outside-only'}),w=dom.window;
-  let scene={tentId:'frame-20x20',objects:[]},missingDraft=false,pendingJson=null;
+  let scene={tentId:'frame-20x20',objects:[]},missingDraft=false,pendingJson=null,revision=0;
   let staff={id:'first-session',csrfToken:'first-csrf',expiresAt:'2099-01-01T00:00:00.000Z'};
   const calls=[];w.Headers=Headers;
   w.RENTSKETCH_API_URL='https://api.test';w.RENTSKETCH_TENANT_SLUG=slug;w.RENTSKETCH_CATALOG_READY=true;
@@ -39,9 +39,9 @@ async function authenticatedSaves(){
   w.fetch=async(url,options)=>{
    if(url==='/staff-api/api/auth/me')return{ok:!!staff,status:staff?200:401,json:async()=>({session:staff})};
    const headers=Object.fromEntries(new Headers(options.headers).entries());
-   calls.push({url,method:options.method,headers,credentials:options.credentials,body:JSON.parse(options.body)});
+   calls.push({url,method:options.method,headers,credentials:options.credentials,body:options.body?JSON.parse(options.body):null});
    if(missingDraft&&options.method==='PATCH'){missingDraft=false;return{ok:false,status:404,json:async()=>({error:'Draft not found for this session'})};}
-   return{ok:true,status:200,json:async()=>pendingJson?await pendingJson:{id:'saved-design'}};
+   return{ok:true,status:200,json:async()=>pendingJson?await pendingJson:{id:'saved-design',revision:++revision}};
   };
   w.eval(fs.readFileSync(path.join(root,'js/ui/dashboard-session.js'),'utf8'));
   w.eval(source);w.RentSketchStartAutosave();
@@ -49,8 +49,11 @@ async function authenticatedSaves(){
   assert.equal(calls[0].method,'POST');assert.equal(calls[0].headers['x-rentsketch-csrf'],'first-csrf');
   staff={...staff,id:'renewed-session',csrfToken:'renewed-csrf'};w.RentSketchDashboardSession.accept(staff);
   scene={...scene,surfaceType:'concrete'};missingDraft=true;
+  await assert.rejects(w.RentSketchAutosave.flush(),/Draft not found/,'missing saved project is not silently recreated');
+  assert.equal(w.RentSketchAutosave.getDesignId(),'saved-design');
   await w.RentSketchAutosave.flush();
-  assert.deepEqual(calls.slice(1).map(c=>c.method),['PATCH','POST'],'missing draft recreation follows the update');
+  assert.deepEqual(calls.slice(1).map(c=>c.method),['PATCH','PATCH'],'retry retains the original project');
+  assert.equal(calls[1].body.expectedRevision,1,'update is bound to the last known server revision');
   for(const call of calls.slice(1))assert.equal(call.headers['x-rentsketch-csrf'],'renewed-csrf','update and recreate use current cookie session CSRF');
   let release;pendingJson=new Promise(resolve=>{release=resolve;});scene={...scene,eventName:'Staff pending write'};
   const pending=w.RentSketchAutosave.flush();await wait(20);
@@ -67,4 +70,4 @@ async function authenticatedSaves(){
   dom.window.close();
  }
 }
-(async()=>{await localResume();await sharedRestore();await authenticatedSaves();console.log('PASS draft resume: automatic 180-day local continuation and signed shared-layout read-only restore, and authenticated create/update/recreate saves.');})().catch(e=>{console.error(e);process.exitCode=1});
+(async()=>{await localResume();await sharedRestore();await authenticatedSaves();console.log('PASS draft resume: automatic 180-day local continuation and signed shared-layout read-only restore, and authenticated revision-aware saves and missing-project recovery.');})().catch(e=>{console.error(e);process.exitCode=1});
