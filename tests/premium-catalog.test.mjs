@@ -29,3 +29,25 @@ test('legacy seeds, consumables, packages and tabletop items never become fake f
  const products=[{id:'seed',name:'White Resin Chair',category:'chair',external_id:'resin-white',visual_model_id:'resin-white'},{id:'plate',name:'Dinner Plate',category:'other'},{id:'sugar',name:'Cotton Candy Floss Sugar - Grape',category:'other'},{id:'pkg',name:'Foam Party Package',category:'package'},{id:'machine',name:'Cotton Candy Machine/Floss Maker',category:'other'},{id:'booth4',name:'Photobooth (4-Hour) With Attendant',category:'other'},{id:'booth6',name:'Photobooth (6-Hour) No Attendant',category:'other'},{id:'extra',name:'Photobooth Extra Hour (Attended)',category:'other'}];
  const rows=equipmentCatalog(products,false,new Set());assert.deepEqual(rows.map(p=>p.productId),['machine','booth4','booth6']);assert.equal(rows[0].type,'cotton-candy');assert.equal(rows[1].type,'photobooth');assert.equal(rows[2].type,'photobooth');
 });
+
+
+test('effects, climate and entertainment equipment resolve to animated premium profiles',()=>{
+ const products=[
+  {id:'bubble',name:'Bubble Machine',category:'other'},
+  {id:'fog',name:'Fog Machine',category:'other'},
+  {id:'confetti',name:'Confetti Launcher Machine',category:'other'},
+  {id:'heater',name:'Patio Heater',category:'other'},
+  {id:'karaoke',name:'Karaoke System',category:'other'},
+  {id:'screen',name:'Projection Screen',category:'other'},
+  {id:'cornhole',name:'Cornhole',category:'other'},
+  {id:'connect4',name:'Giant Connect Four',category:'other'},
+ ];
+ const rows=equipmentCatalog(products,false,new Set()),byId=id=>rows.find(r=>r.productId===id);
+ assert.equal(byId('bubble').type,'bubble-machine');
+ assert.equal(byId('fog').type,'fog-machine');
+ assert.equal(byId('confetti').type,'confetti-machine');
+ assert.equal(byId('heater').type,'heater');
+ assert.equal(byId('karaoke').type,'karaoke');
+ assert.equal(byId('screen').type,'screen');
+ for(const row of rows)assert.equal(row.animated,true,row.name+' should use live 3D motion');
+});
