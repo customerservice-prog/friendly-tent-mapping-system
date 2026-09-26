@@ -22,6 +22,18 @@ function textureFromImage(image){
   tex.minFilter=THREE.LinearMipmapLinearFilter;tex.magFilter=THREE.LinearFilter;tex.anisotropy=4;
   return tex;
 }
+function scanFeatherMask(size=128){
+  const c=document.createElement('canvas');c.width=c.height=size;
+  const x=c.getContext('2d'),img=x.createImageData(size,size);
+  const smooth=t=>t*t*(3-2*t);
+  for(let y=0;y<size;y++)for(let xx=0;xx<size;xx++){
+    const u=xx/(size-1),v=y/(size-1),edge=Math.min(u,1-u,v,1-v);
+    const a=smooth(Math.max(0,Math.min(1,(edge-.018)/.085))),i=(y*size+xx)*4,val=Math.round(a*255);
+    img.data[i]=img.data[i+1]=img.data[i+2]=255;img.data[i+3]=val;
+  }
+  x.putImageData(img,0,0);
+  const tex=new THREE.CanvasTexture(c);tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.needsUpdate=true;return tex;
+}
 function averageLowerColor(imageDataValue){
   const {data,width,height}=imageDataValue||{};
   if(!data||!width||!height)return new THREE.Color(0x6f805e);
@@ -161,10 +173,10 @@ export async function createVenueScanWorld({
   geometry.setIndex(new THREE.BufferAttribute(result.indices,1));
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
-  const map=textureFromImage(centerImage);
+  const map=textureFromImage(centerImage),centerFeather=scanFeatherMask();
   const material=new THREE.MeshStandardMaterial({
-    map,roughness:1,metalness:0,side:THREE.DoubleSide,
-    transparent:false,color:0xffffff,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1
+    map,alphaMap:centerFeather,roughness:1,metalness:0,side:THREE.DoubleSide,
+    transparent:true,alphaTest:.025,depthWrite:true,color:0xffffff,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1
   });
   const mesh=new THREE.Mesh(geometry,material);mesh.name='Metric venue reconstruction mesh';
   mesh.castShadow=false;mesh.receiveShadow=true;
@@ -190,8 +202,8 @@ export async function createVenueScanWorld({
       rg.setAttribute('position',new THREE.BufferAttribute(rr.positions,3));
       rg.setAttribute('uv',new THREE.BufferAttribute(rr.uvs,2));
       rg.setIndex(new THREE.BufferAttribute(rr.indices,1));rg.computeVertexNormals();rg.computeBoundingSphere();
-      const rt=textureFromImage(image);
-      const rm=new THREE.MeshStandardMaterial({map:rt,roughness:1,metalness:0,side:THREE.DoubleSide,transparent:false,color:0xffffff,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
+      const rt=textureFromImage(image),edgeFade=scanFeatherMask();
+      const rm=new THREE.MeshStandardMaterial({map:rt,alphaMap:edgeFade,roughness:1,metalness:0,side:THREE.DoubleSide,transparent:true,alphaTest:.025,depthWrite:true,color:0xffffff,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
       const refMesh=new THREE.Mesh(rg,rm);refMesh.name='Metric venue reference mesh '+ref.referenceIndex;
       refMesh.castShadow=false;refMesh.receiveShadow=true;
       const rollRad=Number(ref.rollRad)||0;
