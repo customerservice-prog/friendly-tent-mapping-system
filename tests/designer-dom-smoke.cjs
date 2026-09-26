@@ -104,6 +104,19 @@ async function moduleAt(file){const m=moduleFor(file);if(m.status==='unlinked')a
   assert.equal(b.getScene().needDance,false);
   window.document.getElementById('btnRedo').click();
   assert.equal(b.getScene().objects.filter(o=>o.kind==='dance').length,4);
+  // The complete Rentals rail accepts placeable live-catalog accessories too.
+  b.ACCESSORIES.push({id:'accessory-foam-test',productId:'foam-test',name:'Foam Machine',accessoryType:'foam-machine',visualCategory:'Effects',widthFt:2.5,depthFt:2.5,heightFt:2.5,animated:true,photoUrl:null,pricePerDay:175});
+  b.refreshAll();
+  const rentalsButton=window.document.querySelector('[data-drawer="rentals"]');
+  assert.equal(rentalsButton.hidden,false);
+  rentalsButton.click();
+  const foamCard=window.document.querySelector('[data-role="accessory-card"][data-id="accessory-foam-test"]');
+  assert.ok(foamCard,'live accessory appears in All Rentals');
+  foamCard.click();window.document.querySelector('#placementConfirm').click();
+  const foam=b.getScene().objects.find(o=>o.accessoryId==='accessory-foam-test');
+  assert.ok(foam&&foam.kind==='accessory');
+  assert.equal(foam.animated,true);
+  assert.equal(b.computeLineItems().find(line=>line.productId==='foam-test').amount,175);
   console.log('PASS: exact preview → table → seats/chairs/linen → duplicate/rotate/delete/undo/redo → complete review → return → optional suggestion keeps tent and respects capacity → one undo restores layout; no network writes');
   dom.window.close();
 })().catch(error=>{console.error(error);dom.window.close();process.exitCode=1;});

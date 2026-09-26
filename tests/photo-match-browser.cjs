@@ -171,6 +171,7 @@ const web=http.createServer((req,res)=>{
     await page.locator('.photo-workspace').waitFor();
     assert.equal(await page.locator('[data-photo-item="__photo_tent__"]').count(),1,'tent is independently draggable on the photo');
     assert.equal(await page.locator('[data-photo-item="qa-photo-table"]').count(),1,'rental is rendered over the real photo');
+    await page.locator('[data-photo-item="qa-photo-table"]').waitFor({state:'visible',timeout:10000});
     // The successful reconstruction notice can overlap the SVG briefly; dismiss
     // it so this remains a test of the Photo View drag target, not z-index timing.
     await page.evaluate(()=>document.getElementById('layoutNotice')?.remove());

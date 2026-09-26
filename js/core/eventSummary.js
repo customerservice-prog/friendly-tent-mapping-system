@@ -18,6 +18,7 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
     if(wallCounts.window) add(null,wallCounts.window,'sidewall','Window 10 ft Sidewall — confirm pricing','Window 10 ft Sidewall');
   }
   const inflatables=new Map();for(const o of objects)if(o.kind==='inflatable')inflatables.set(o.inflatableId,(inflatables.get(o.inflatableId)||0)+1);inflatables.forEach((qty,id)=>add(find(catalog.inflatables,id),qty,'inflatable','Inflatable — confirm selection'));
+  const accessories=new Map();for(const o of objects)if(o.kind==='accessory')accessories.set(o.accessoryId,(accessories.get(o.accessoryId)||0)+1);accessories.forEach((qty,id)=>add(find(catalog.accessories,id),qty,'accessory','Rental item — confirm selection'));
   const tables = new Map(), chairs = new Map(), linens = new Map();
   for(const object of objects) {
     if(object.kind==='chair')chairs.set(object.chairId,(chairs.get(object.chairId)||0)+1);

@@ -113,3 +113,18 @@ test('walk speeds stay in feet per second and sprint remains faster',()=>{
   assert.equal(walkSpeedFtPerSecond({mobile:false,sprint:true}),15);
   assert.ok(walkSpeedFtPerSecond({mobile:true})<walkSpeedFtPerSecond({mobile:false}));
 });
+
+
+test('standing accessory rentals block walk mode while floor runners stay passable',()=>{
+  const site={widthFt:50,lengthFt:60};
+  const items=[
+    {id:'foam',kind:'accessory',x:24,y:30,widthFt:3,depthFt:3,heightFt:2.5},
+    {id:'carpet',kind:'accessory',x:10,y:10,widthFt:4,depthFt:15,heightFt:.06},
+  ];
+  const foam=walkPositionBlocked({worldX:0.5,worldZ:1.5,site,items});
+  assert.equal(foam.blocked,true);
+  assert.equal(foam.blocker.id,'foam');
+  const carpetWorldX=10+2-site.widthFt/2,carpetWorldZ=10+7.5-site.lengthFt/2;
+  const carpet=walkPositionBlocked({worldX:carpetWorldX,worldZ:carpetWorldZ,site,items});
+  assert.equal(carpet.blocked,false,'low-profile runner should not behave like a wall');
+});
