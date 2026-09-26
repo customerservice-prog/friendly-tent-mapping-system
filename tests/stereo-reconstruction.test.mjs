@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../js/core/stereo-reconstruction.js';
+import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, refineReconstructionSurface, stereoReconstructionSummary, stereoObstacleRects } from '../js/core/stereo-reconstruction.js';
 
 function image(width,height,fn){
   const data=new Uint8ClampedArray(width*height*4);
@@ -137,4 +137,29 @@ test('multi-reference fusion combines spatial support from several reference cam
   assert.ok(Array.from(fused.supportReferences).some(v=>v>=2),'some spatial surfels are confirmed by more than one reference camera');
   assert.ok(fused.metrics.multiReferenceAgreement>0,'fusion reports cross-reference spatial agreement');
   assert.ok(fused.metrics.averageConfidence>0);
+});
+
+
+test('edge-aware refinement smooths same-surface depth without erasing a discontinuity',()=>{
+  const cols=5,rows=3,width=50,height=30,focalPx=40,horizonY=.4,eyeHeightFt=5.6;
+  const xSamples=[5,15,25,35,45],ySamples=[5,15,25],total=cols*rows;
+  const depths=new Float32Array([
+    20,20.8,20.2,40,40.5,
+    20.3,21.2,20.4,40.2,41,
+    20,20.7,20.1,40.3,40.8
+  ]);
+  const valid=new Uint8Array(total).fill(1),positions=new Float32Array(total*3);
+  for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+    const i=gy*cols+gx,d=depths[i],px=xSamples[gx],py=ySamples[gy];
+    positions[i*3]=(px-width/2)/focalPx*d;
+    positions[i*3+1]=eyeHeightFt-(py-horizonY*height)/focalPx*d;
+    positions[i*3+2]=d;
+  }
+  const result={cols,rows,width,height,focalPx,horizonY,eyeHeightFt,xSamples,ySamples,depths,valid,positions,metrics:{}};
+  const beforeNear=result.depths[6],beforeFar=result.depths[8];
+  refineReconstructionSurface(result,{passes:2,strength:.3,relativeDepthThreshold:.06,absoluteDepthThresholdFt:1});
+  assert.ok(result.depths[6]<beforeNear,'near surface outlier is pulled toward its neighbors');
+  assert.ok(result.depths[8]>.95*beforeFar,'far surface is not collapsed into the near surface');
+  assert.ok(result.depths[7]-result.depths[6]>15,'large real depth edge stays intact');
+  assert.equal(result.metrics.surfaceRefined,true);
 });
