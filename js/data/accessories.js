@@ -44,9 +44,10 @@ const PROFILES=[
 ];
 
 function profileFor(product){
-  const text=normal((product.name||'')+' '+(product.external_id||'')+' '+(product.category||''));
-  if(/bounce|water ?slide|waterslide|inflatable|obstacle course/.test(text))return {exclude:'inflatable'};
-  if(/dance floor/.test(text))return {exclude:'dance-floor'};
+  const identity=normal((product.name||'')+' '+(product.external_id||''));
+  const text=normal(identity+' '+(product.category||''));
+  if(/bounce|water ?slide|waterslide|inflatable|obstacle course/.test(identity))return {exclude:'inflatable'};
+  if(/dance floor/.test(identity))return {exclude:'dance-floor'};
   for(const p of PROFILES)if(p.test.test(text))return p;
   const cat=normal(product.category);
   if(cat==='game'||cat==='games')return {type:'game',category:'Games',w:4,d:4,h:4};
