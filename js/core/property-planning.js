@@ -90,6 +90,11 @@ export function evaluatePropertyScene(snapshot) {
   if(snapshot.photoCalibration?.autoEstimated!==false||snapshot.photoCalibration?.scaleConfirmed!==true||!photoCalibrationValidity(snapshot.photoCalibration).valid){
     return {active:false,source:'photo-needs-calibration',tent:null,rentals:[],counts:{fits:0,close:0,blocked:0},overall:'unknown',color:'neutral'};
   }
+  // A held-out segment checks one reconstruction distance. A failure prevents
+  // clearance claims from that depth model; a pass never verifies the property.
+  if((snapshot.scanGeometry||[]).length&&snapshot.scanValidation?.status==='failed'){
+    return {active:false,source:'scan-check-failed',tent:null,rentals:[],counts:{fits:0,close:0,blocked:0},overall:'unknown',color:'neutral',scanCheckStatus:'failed'};
+  }
   const {site,usablePolygon,obstacles,manualObstacles,scanObstacles}=propertyPlanningInput(snapshot);
   let tent=null;
   if (snapshot.tent && !snapshot.tent.isSite) {
@@ -122,6 +127,7 @@ export function evaluatePropertyScene(snapshot) {
   return {
     active:true,
     source:scanObstacles.length?'metric-scan-property':'photo-property',
+    scanCheckStatus:scanObstacles.length?(snapshot.scanValidation?.status||'insufficient'):null,
     obstacleSources:{manual:manualObstacles.length,metricDepth:scanObstacles.length},
     site:{widthFt:site.widthFt,lengthFt:site.lengthFt},
     usablePolygon,
@@ -136,6 +142,7 @@ export function evaluatePropertyScene(snapshot) {
 }
 
 export function summarizePropertyFit(plan) {
+  if(plan?.source==='scan-check-failed')return {label:'Scan distance check failed',detail:'The independent distance differs from the depth preview. Retake or correct the scan before using its estimated clearances. Verify site dimensions in person.',kind:'neutral'};
   if(plan?.source==='photo-needs-calibration')return {label:'Set photo scale first',detail:'Align a measured ground rectangle and enter its width and depth before checking the model. A photo alone does not establish scale; vertical perspective and site clearance still need verification.',kind:'neutral'};
   if(plan?.source==='photo-needs-boundaries')return {label:'Outline your usable space',detail:'A photo alone cannot establish boundaries or confirm fit. Adjust the ground and trace obstacles in Photo View; verify actual site dimensions with staff.',kind:'neutral'};
   if(!plan?.active){if(plan?.source==='metric-scan-needs-boundaries')return {label:'Trace boundaries to check fit',detail:'The Space Scan has estimated depth, but automatic obstacle boundaries are not yet reliable. Trace the house, fence or no-place areas in Photo View before using the fit result.',kind:'neutral'};return {label:'Site fit unavailable',detail:'Upload and calibrate a venue photo to check the estimated property model.',kind:'neutral'};}
@@ -156,5 +163,6 @@ export function summarizePropertyFit(plan) {
   }
   const clearance=tent?.clearanceFt||0;
   const metric=plan?.source==='metric-scan-property';
+  if(metric&&plan.scanCheckStatus!=='valid')return {label:'Scan clearances unverified',detail:'The depth model shows no current overlap, but its independent distance check is incomplete. Measure critical site clearances before booking.',kind:'neutral'};
   return {label:metric?'Estimated clearance check':'Model clearance check',detail:metric?(tent?('Tent footprint and '+clearance+' ft installation clearance avoid the current depth-derived obstacles. Confirm critical clearances on site.'):'Placed rentals avoid the current depth-derived obstacles. Confirm critical clearances on site.'):(tent?('Tent footprint and '+clearance+' ft installation clearance fit this model. Verify actual measurements and site conditions.'):'Placed rentals fit this model. Verify actual measurements and site conditions.'),kind:'fits'};
 }

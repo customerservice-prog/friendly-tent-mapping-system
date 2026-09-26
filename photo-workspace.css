@@ -215,5 +215,38 @@
   .photo-model-mode .canvas-view-controls .scene-controls summary { min-width:0; padding:10px 4px!important; font-size:11px!important; white-space:nowrap; }
   .photo-preview-mode .photo-scale-status,
   .photo-model-mode #canvasHint { grid-column:1/-1; }
-  .designer-toolbar .view-toggle-btn { padding:8px 2px!important; }
+  .designer-toolbar .view-toggle { display:grid; grid-template-columns:1fr 1.3fr 1fr; gap:0; padding:2px; box-sizing:border-box; }
+  .designer-toolbar .view-toggle:has(#viewModePhoto[hidden]) { grid-template-columns:1fr 1fr; }
+  .designer-toolbar .view-toggle-btn { padding:8px 2px!important; font-size:10px!important; letter-spacing:0; white-space:nowrap; }
+}
+
+/* View controls expose intentional photo zoom; the projection uses the same transform. */
+#photoZoomControls { border-top:1px solid #dbe5dc; padding-top:8px; margin-top:10px; }
+#photoZoomControls[hidden] { display:none; }
+#photoZoomControls label { display:grid; gap:5px; }
+#photoZoomControls input { width:100%; min-height:36px; accent-color:#386d4b; }
+#photoZoomControls output { float:right; color:#587763; }
+#btnProjects { width:auto; display:inline-flex; align-items:center; justify-content:center; gap:6px; min-width:44px; padding:8px 12px; font-size:13px; }
+.workspace-help { min-height:44px; }
+.scan-validation { margin-top:20px; padding-top:18px; border-top:1px solid #dde6df; }
+.scan-validation h5 { margin:0 0 8px; font-size:14px; color:#244b35; }
+.scan-validation p { font-size:12px; line-height:1.55; color:#65746b; }
+.scan-check-coordinates { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+.scan-check-coordinates label { font-size:11px; display:grid; gap:4px; }
+.scan-check-coordinates input { min-height:40px; min-width:0; width:100%; box-sizing:border-box; border:1px solid #cbd9ce; border-radius:7px; padding:8px; font-size:14px; }
+.scan-check-result { padding:12px; border:1px solid #d6e1d7; border-radius:10px; background:#f4f7f3; font-size:12px; line-height:1.55; }
+.scan-check-result[data-status=failed] { background:#fff4ee; border-color:#e5c9b9; }
+.scan-check-result[data-status=valid] { background:#edf6ee; border-color:#abcaae; }
+.scan-check-result dl { display:grid; grid-template-columns:1fr auto; gap:5px 10px; margin:8px 0; }
+.scan-check-result dt,.scan-check-result dd { margin:0; }
+@media(max-width:1100px) {
+ .designer-toolbar #btnQuickPrint,.designer-toolbar #btnQuickShare { display:none!important; }
+}
+@media(max-width:650px) {
+ .designer-toolbar { grid-template-columns:minmax(0,1fr) 44px 44px 44px; }
+ .designer-toolbar #btnDesignerHelp { display:none!important; }
+ .designer-toolbar #btnProjects { grid-row:1; grid-column:2; width:44px; min-height:44px; padding:8px; font-size:23px; }
+ #btnProjects .project-button-label { display:none; }
+ .scan-check-coordinates input { font-size:16px; }
+ .scene-panel { max-height:calc(100dvh - 210px); overflow:auto; }
 }

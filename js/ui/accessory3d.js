@@ -1,3 +1,7 @@
+import { createEquipment } from './equipment-motion3d.js';
+import { createHeroEquipment } from './hero-equipment3d.js';
+import { attachEquipmentOperation } from './equipment-operation.js';
+import { canonicalEquipmentType, equipmentAssetDescriptor } from '../data/asset-registry.js';
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
@@ -77,7 +81,7 @@ function createGenerator(item){
   const top=box(2.1,.25,1.25,0x2c3133,.65,.35);top.position.y=1.85;g.add(top);
   const exhaust=cyl(.12,.8,0x555d60);exhaust.position.set(.9,2.2,.45);g.add(exhaust);
   label(g,item.name,1.85,.32,.95,-.91);
-  g.userData.update=t=>{g.position.y=Math.sin(t*20)*.006;exhaust.rotation.y=t*.3;};return g;
+  g.userData.update=t=>{frame.position.y=.95+Math.sin(t*20)*.003;};return g;
 }
 function createCooler(item){
   const g=new THREE.Group();g.name='Cooler';
@@ -118,13 +122,13 @@ function createConnectFour(){
   }return g;
 }
 function createBlocks(){
-  const g=new THREE.Group();g.name='Animated tumbling blocks';
+  const g=new THREE.Group();g.name='Tumbling blocks';
   const blocks=[];
   for(let layer=0;layer<10;layer++)for(let i=0;i<3;i++){
     const swap=layer%2===1,b=box(swap ? .7 : 2.1,.28,swap ? 2.1 : .7,0xd4a56d,.87,.02);
     b.position.set(swap?-.7+i*.7:0,.2+layer*.29,swap?0:-.7+i*.7);g.add(b);blocks.push(b);
   }
-  g.userData.update=t=>{const top=blocks.slice(-6);top.forEach((b,i)=>b.rotation.y=Math.sin(t*.65+i)*.015);};return g;
+  return g;
 }
 function concessionBase(item,color=0xf4f2ea){
   const g=new THREE.Group();const body=box(2.2,2.4,1.8,color,.72,.06);body.position.y=1.45;g.add(body);wheels(g,2.2,1.8,.22);label(g,item.name,1.65,.28,1.55,-.91);return g;
@@ -152,7 +156,7 @@ function createFountain(item){
   const flow=new THREE.Group();g.add(flow);
   for(let i=0;i<4;i++){const tray=cyl(.55-i*.1,.12,0x5b2f1f);tray.position.y=2.15+i*.45;flow.add(tray);}
   const center=cyl(.09,1.7,0x4c271c);center.position.y=2.75;flow.add(center);
-  g.userData.update=t=>{flow.rotation.y=t*.8;flow.children.forEach((x,i)=>x.scale.setScalar(1+Math.sin(t*3+i)*.018));};return g;
+  g.userData.update=t=>{flow.children.forEach((x,i)=>x.scale.setScalar(1+Math.sin(t*3+i)*.018));};return g;
 }
 function createPodium(){
   const g=new THREE.Group();g.name='Podium';
@@ -167,7 +171,7 @@ function createPhotoBooth(item){
   const camera=sphere(.18,0x171717);camera.position.set(0,4.95,-.82);g.add(camera);
   const flash=sphere(.11,0xffffff);flash.position.set(.48,4.95,-.84);g.add(flash);
   label(g,item.name,1.7,.35,1.7,-.72);
-  g.userData.update=t=>{const pulse=Math.sin(t*.8)>0.97?2.8:1;flash.scale.setScalar(pulse);};return g;
+  g.userData.update=t=>{screen.material.emissive.setHex(0x153549);screen.material.emissiveIntensity=.15+Math.sin(t*.7)*.012;};return g;
 }
 function createBar(item){
   const g=new THREE.Group();g.name='Event bar';
@@ -196,6 +200,11 @@ export function createAccessory3d(item){
     widthFt:item.modelWidthFt||(quarterTurn?item.depthFt:item.widthFt),
     depthFt:item.modelDepthFt||(quarterTurn?item.widthFt:item.depthFt),
   };
+  const type=canonicalEquipmentType(item.accessoryType);
+  const product={...item,type,externalId:item.externalId||item.asset?.source?.externalId};
+  const hero=createHeroEquipment(product,item);
+  if(hero){hero.userData.itemId=item.id;hero.userData.kind='accessory';return hero;}
+  if(['power-distribution','speaker','generator','photobooth','chocolate-fountain','red-carpet','cornhole','connect-four','tumbling-timbers','heater','stage'].includes(type)){const model=createEquipment({...item,visualType:type,rotationDeg:0});model.userData.kind='accessory';return model;}
   let g;
   switch(item.accessoryType){
     case 'foam-machine':g=createFoam(item);break;
@@ -220,12 +229,13 @@ export function createAccessory3d(item){
     case 'backdrop':g=createBackdrop(item);break;
     default:g=createGeneric(item);
   }
-  g.userData.itemId=item.id;g.userData.kind='accessory';g.userData.animated=!!item.animated;
+  g.userData.itemId=item.id;g.userData.kind='accessory';g.userData.asset=equipmentAssetDescriptor(product,type);
+  const update=g.userData.update;attachEquipmentOperation(g,type,item,update);
   return g;
 }
 
 export function updateAnimatedAccessories(root,time){
   if(!root)return false;let changed=false;
-  root.traverse(o=>{if(typeof o.userData?.update==='function'){o.userData.update(time);changed=true;}});
+  root.traverse(o=>{if(typeof o.userData?.update==='function'){const result=o.userData.update(time);if(result!==false)changed=true;}});
   return changed;
 }

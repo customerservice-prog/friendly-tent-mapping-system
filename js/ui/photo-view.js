@@ -1,3 +1,6 @@
+import { normalizePhotoComposition } from '../core/photo-composition.js';
+import { createPhotoCompositionEditor } from './photo-composition-editor.js';
+export { syncLightingControls } from './photo-lighting-controls.js';
 import {
   normalizePhotoCalibration, defaultPhotoCalibration, worldToPhoto, photoToWorld,
   objectPhotoPolygon, objectPhotoCenter, normalizePhotoGeometry, geometryPhotoPolygon,
@@ -5,6 +8,7 @@ import {
 } from '../core/photo-geometry.js';
 
 let container=null,root=null,stage=null,img=null,svg=null,toolbar=null,currentData=null,callbacks={};
+let maskEditor=null;
 let resizeObserver=null,tool='move',drag=null,draftGeom=null,selectedGeomId=null,referenceInputsDirty=false;
 const NS='http://www.w3.org/2000/svg';
 
@@ -54,11 +58,12 @@ function fitStage(){
 function updateHint(){
   const out=root?.querySelector('[data-photo-hint]');if(!out)return;
   if(tool==='calibrate')out.textContent='Mark the four corners of a real rectangle on level ground, then enter its measured width and depth. A photo cannot determine scale by itself.';
+  else if(tool==='mask')out.textContent='Foreground outlines preserve real photo details in front of rentals. They apply only to this fixed Photo View.';
   else if(tool==='geometry')out.textContent='Drag across the photo to mark a house, fence, tree, obstacle, or no-place zone.';
   else out.textContent='Drag the tent or any rental anywhere on the real venue photo. Select one to rotate it.';
 }
 export function setTool(next){
-  tool=next||'move';
+  tool=next||'move';maskEditor?.setActive(tool==='mask');
   const panel=root?.querySelector('[data-photo-calibration-panel]');if(panel)panel.hidden=tool!=='calibrate';root?.querySelectorAll('[data-photo-tool]').forEach(b=>b.classList.toggle('active',b.dataset.photoTool===tool));updateHint();renderOverlay();
 }
 function renderToolbar(){
@@ -68,7 +73,8 @@ function renderToolbar(){
       '<button type="button" class="btn-chip active" data-photo-tool="move">Move rentals</button>'+
       '<button type="button" class="btn-chip" data-photo-tool="calibrate">Set scale</button>'+
       '<button type="button" class="btn-chip" data-photo-done>Preview</button>'+
-      '<details class="photo-mark-tools"><summary>Mark obstacles</summary><div class="photo-workspace-tools">'+
+      '<button type="button" class="btn-chip" data-photo-tool="mask">Foreground</button>'+
+      '<details class="photo-mark-tools"><summary>Obstacles</summary><div class="photo-workspace-tools">'+
         '<select class="photo-geometry-type" data-photo-geometry-type aria-label="Obstacle type">'+
         '<option value="house">House / building</option><option value="fence">Fence / wall</option><option value="tree">Tree / tall object</option><option value="obstacle">Obstacle</option><option value="no-place">No-place zone</option></select>'+
         '<button type="button" class="btn-chip" data-photo-tool="geometry">Trace obstacle</button>'+
@@ -83,7 +89,9 @@ function renderToolbar(){
       '<button type="button" class="btn-chip" data-photo-auto>Reset estimates</button></div>'+
       '<p>Place the horizon at camera eye level, not along a roof or fence. Lens and height remain estimates. Verify clearance on site.</p></details>'+
     '</div>'+
+    '<div class="photo-mask-panel" data-photo-mask-panel hidden></div>'+
     '<div class="photo-workspace-hint" data-photo-hint></div>';
+  maskEditor=createPhotoCompositionEditor({panel:toolbar.querySelector('[data-photo-mask-panel]'),svg,getValue:()=>currentData.photoComposition,onChange:next=>{currentData={...currentData,photoComposition:next};callbacks.onCompositionChange?.(next);},onRender:renderOverlay});
   toolbar.addEventListener('click',e=>{
     const toolBtn=e.target.closest('[data-photo-tool]');if(toolBtn){setTool(toolBtn.dataset.photoTool);return;}
     if(e.target.closest('[data-photo-done]')){callbacks.onDone?.();return;}
@@ -176,7 +184,7 @@ function renderDraftGeometry(){
 }
 function renderOverlay(){
   if(!svg||!currentData)return;
-  svg.replaceChildren();renderGround();renderGeometry();renderObjects();renderDraftGeometry();
+  svg.replaceChildren();if(tool==='mask')maskEditor?.render();else{renderGround();renderGeometry();renderObjects();renderDraftGeometry();}
   const remove=root?.querySelector('[data-photo-remove-geometry]');if(remove)remove.disabled=!selectedGeomId;
 }
 function dragCalibration(name,p){
@@ -187,6 +195,7 @@ function dragCalibration(name,p){
   applyCalibration(next);
 }
 function pointerDown(e){
+  if(tool==='mask'){maskEditor?.pointerDown(e,pointFromEvent(e));return;}
   const handle=e.target.closest?.('[data-cal-handle]');
   if(handle&&tool==='calibrate'){
     e.preventDefault();e.stopPropagation();drag={kind:'calibration',name:handle.dataset.calHandle,pointerId:e.pointerId,original:calibration()};
@@ -204,6 +213,7 @@ function applyLivePhotoPlacement(item){
   renderOverlay();
 }
 function pointerMove(e){
+  if(tool==='mask'){maskEditor?.pointerMove(e,pointFromEvent(e));return;}
   if(!drag)return;
   const p=pointFromEvent(e);if(!p)return;
   if(drag.kind==='calibration'){dragCalibration(drag.name,p);return;}
@@ -221,6 +231,7 @@ function pointerMove(e){
   drag.live=item;applyLivePhotoPlacement(item);
 }
 function pointerUp(e){
+  if(tool==='mask'){maskEditor?.pointerUp(e);return;}
   if(!drag)return;
   const finished=drag;drag=null;
   if(e.type==='pointercancel'){
@@ -251,7 +262,7 @@ function renderImage(){
 }
 export function mount(containerEl,data,cbs){
   container=containerEl;callbacks=cbs||{};referenceInputsDirty=false;
-  currentData={...data,objects:(data.objects||[]).map(o=>({...o})),photoCalibration:normalizePhotoCalibration(data.photoCalibration,data.photoSite||data.tent,data.backgroundPhoto),photoGeometry:normalizePhotoGeometry(data.photoGeometry,data.photoSite||data.tent)};
+  currentData={...data,photoComposition:normalizePhotoComposition(data.photoComposition),objects:(data.objects||[]).map(o=>({...o})),photoCalibration:normalizePhotoCalibration(data.photoCalibration,data.photoSite||data.tent,data.backgroundPhoto),photoGeometry:normalizePhotoGeometry(data.photoGeometry,data.photoSite||data.tent)};
   root=el('div','photo-workspace');toolbar=el('div','photo-workspace-toolbar');
   const viewport=el('div','photo-workspace-viewport');stage=el('div','photo-workspace-stage');
   img=el('img','photo-workspace-image');img.alt='Uploaded venue photo';img.crossOrigin='anonymous';img.decoding='async';
@@ -265,10 +276,11 @@ export function mount(containerEl,data,cbs){
   fitStage();renderOverlay();
 }
 export function update(data){
-  currentData={...data,objects:(data.objects||[]).map(o=>({...o})),photoCalibration:normalizePhotoCalibration(data.photoCalibration,data.photoSite||data.tent,data.backgroundPhoto),photoGeometry:normalizePhotoGeometry(data.photoGeometry,data.photoSite||data.tent)};
-  renderImage();fitStage();syncCalibrationControls();renderOverlay();
+  currentData={...data,photoComposition:normalizePhotoComposition(data.photoComposition),objects:(data.objects||[]).map(o=>({...o})),photoCalibration:normalizePhotoCalibration(data.photoCalibration,data.photoSite||data.tent,data.backgroundPhoto),photoGeometry:normalizePhotoGeometry(data.photoGeometry,data.photoSite||data.tent)};
+  maskEditor?.sync();renderImage();fitStage();syncCalibrationControls();renderOverlay();
 }
 export function unmount(){
+  maskEditor?.destroy();maskEditor=null;
   window.removeEventListener('pointerup',pointerUp,true);window.removeEventListener('pointercancel',pointerUp,true);
   resizeObserver?.disconnect();resizeObserver=null;if(container)container.replaceChildren();
   container=root=stage=img=svg=toolbar=null;currentData=null;callbacks={};drag=draftGeom=null;selectedGeomId=null;tool='move';referenceInputsDirty=false;

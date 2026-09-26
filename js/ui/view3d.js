@@ -1,5 +1,7 @@
 import { makeTent } from './tent3d.js';
 import { installPhotoProjectionParity } from './photo-projection-renderer.js';
+import { createPhotoForegroundLayer } from './photo-foreground3d.js';
+import { normalizePhotoComposition, foregroundMaskAt, photoLightingPosition } from '../core/photo-composition.js';
 import { createEquipment } from './equipment-motion3d.js';
 import { createInflatable, createInflatableActivity } from './inflatable3d.js';
 import { createAccessory3d, updateAnimatedAccessories } from './accessory3d.js';
@@ -100,6 +102,7 @@ export function init(container,callbacks={}) {
   const photoCanvas=document.createElement('canvas'),photoCtx=photoCanvas.getContext('2d',{alpha:false});
   function newPhotoTexture(){const texture=new THREE.CanvasTexture(photoCanvas);texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearFilter;texture.magFilter=THREE.LinearFilter;return texture;}
   let photoTexture=newPhotoTexture();
+  const photoForeground=createPhotoForegroundLayer();scene.add(photoForeground.mesh);
   let photoImage=null,photoUrl='',photoLoadSeq=0;
   let marketingFootprint=null,marketingDetails=null;
   const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment(),env=pmrem.fromScene(room,.04);
@@ -243,7 +246,7 @@ export function init(container,callbacks={}) {
     }).catch(err=>{
       if(err?.name==='AbortError')return;
       console.warn('[RentSketch] Space Scan reconstruction failed',err);
-      scanWorld.userData={ready:false,loading:false,error:String(err?.message||err)};
+      scanWorld.userData={ready:false,loading:false,error:String(err?.message||err),validation:{status:'insufficient',label:'Check unavailable',reasons:['Depth reconstruction did not complete.'],scope:'held-out-segment-only',metric:false},measurementPolicy:{scope:'held-out-segment-only',siteDimensionsVerified:false,mayClaimMetricAccuracy:false}};
       callbacks.onScanReconstruction?.(scanWorld.userData);syncPhotoPresentation();invalidate();
     });
     return true;
@@ -336,6 +339,7 @@ export function init(container,callbacks={}) {
   }
   function syncPhotoPresentation(){
     const photo=hasVenuePhoto(),immersive=photo&&(cameraMode==='photo360'||cameraMode==='walk'),matched=photo&&cameraMode==='outside',walking=walk.isActive(),metric=immersive&&hasReadyMetricScan();
+    if(!matched)photoForeground.hide();
     // A completed Space Scan replaces the flat photo planes in immersive mode.
     // The single photo remains available for Matched View and as a fallback while
     // reconstruction is still loading.
@@ -371,14 +375,15 @@ export function init(container,callbacks={}) {
     const baseShade=Math.max(0,Math.min(.45,Number(p.shade)||0)),shade=Math.min(.62,baseShade+(night?.16:0));
     if(shade>0){photoCtx.fillStyle='rgba(0,0,0,'+shade+')';photoCtx.fillRect(0,0,w,h);}
     photoTexture.needsUpdate=true;
+    photoForeground.update({sourceCanvas:photoCanvas,rect,imageWidth:iw,composition:state.photoComposition,sourceKey:photoUrl+'|'+shade,visible:cameraMode==='outside'});
     if(cameraMode!=='photo360'&&cameraMode!=='walk'&&scene.background!==photoTexture){if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();scene.background=photoTexture;}
     return true;
   }
   function loadVenuePhoto(photo){
     const url=photo&&/^https?:\/\//i.test(photo.url||'')?photo.url:'';
-    if(!url){photoUrl='';photoImage=null;clearPhotoStage();clearLocal360();clearScanWorld();return;}
+    if(!url){photoUrl='';photoImage=null;photoForeground.hide();clearPhotoStage();clearLocal360();clearScanWorld();return;}
     if(url===photoUrl&&photoImage){paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();rebuildVenueScanWorld();syncPhotoPresentation();return;}
-    photoUrl=url;photoImage=null;const seq=++photoLoadSeq,img=new Image();img.crossOrigin='anonymous';img.decoding='async';
+    photoUrl=url;photoImage=null;photoForeground.hide();const seq=++photoLoadSeq,img=new Image();img.crossOrigin='anonymous';img.decoding='async';
     img.onload=function(){if(destroyed||seq!==photoLoadSeq||url!==photoUrl)return;photoImage=img;paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();rebuildVenueScanWorld();syncPhotoPresentation();if(cameraMode==='outside')frame(state.photoSite||state.tent);invalidate();};
     img.onerror=function(){if(seq!==photoLoadSeq)return;console.warn('[RentSketch] venue background could not load');};
     img.src=url;
@@ -449,6 +454,7 @@ export function init(container,callbacks={}) {
     state.photoSite=state.photoSite||{id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(50,t.widthFt+20),lengthFt:Math.max(60,t.lengthFt+20)};
     state.photoCalibration=normalizePhotoCalibration(state.photoCalibration,state.photoSite,state.backgroundPhoto);
     state.photoGeometry=normalizePhotoGeometry(state.photoGeometry,state.photoSite);
+    state.photoComposition=normalizePhotoComposition(state.photoComposition);
     const setting=sceneSetting(t,state.surfaceType),photoMode=!!state.backgroundPhoto?.url,nextEnvironment=JSON.stringify([state.photoLayoutModel?'model':photoMode?'photo':setting,t.widthFt,t.lengthFt,t.planningArea,state.photoSite?.widthFt,state.photoSite?.lengthFt,state.photoCalibration,state.photoGeometry]);
     state.photoMode=photoMode;
     hemi.groundColor.setHex(photoMode?0xb7b8b4:0x667052);sun.color.setHex(photoMode?0xfffbf5:0xfff3df);sun.position.set(-35,48,hasVenuePhoto()?-28:28);
@@ -466,6 +472,7 @@ export function init(container,callbacks={}) {
     }
     if(nextEnvironment!==environmentKey){if(environment){scene.remove(environment);disposeGroup(environment);}environment=state.photoLayoutModel?makePhotoLayoutGround(state.photoSite||t):photoMode?createPhotoEnvironment(state.photoSite||t,state.photoCalibration,state.photoGeometry):createEnvironment(t.planningArea?{...t,...t.planningArea}:t,state.surfaceType);if(!photoMode&&t.planningArea)environment.position.set((t.planningArea.widthFt-t.widthFt)/2,0,(t.planningArea.lengthFt-t.lengthFt)/2);environment.userData.setNight(night);const photoShadow=environment.getObjectByName('Venue photo shadow catcher');if(photoShadow)photoShadow.material.opacity=.28;scene.add(environment);environmentKey=nextEnvironment;if(weather){scene.remove(weather);disposeGroup(weather);}weather=createWeather(t,{mobile});weather.userData.setNight(night);weather.userData.setWeather(weatherMode);weather.userData.setPhotoMode?.(photoMode);scene.add(weather);}
     else weather?.userData.setPhotoMode?.(photoMode);
+    applySceneLighting();
     if(photoMode)syncPhotoPresentation();else generatedBackground();
     const anchor=state.anchoringMethod||(t.type==='pole'?'stake':setting==='driveway'?'ballast':'stake');
     const nextStructure=JSON.stringify([t.id,t.type,t.widthFt,t.lengthFt,t.centerPoles,anchor,state.sidewalls||[],photoMode?state.photoTentPlacement:null,photoMode?state.photoSite:null]);
@@ -616,6 +623,10 @@ export function init(container,callbacks={}) {
       const geo=new THREE.BufferGeometry().setFromPoints(pts),mat=new THREE.LineBasicMaterial({color:0xffd54f,depthTest:false});
       const line=new THREE.Line(geo,mat);line.name='Measurement line';line.renderOrder=50;measurementGroup.add(line);
       measureResult=measureWorldPoints({x:measureA.x,y:measureA.y,z:measureA.z},{x:measureB.x,y:measureB.y,z:measureB.z});
+      if(state?.photoMode&&!state?.photoLayoutModel){
+        measureResult={...measureResult,estimated:true,verified:false,checkStatus:scanWorld.userData.validation?.status||'insufficient',measurementPolicy:scanWorld.userData.measurementPolicy||{scope:'held-out-segment-only',siteDimensionsVerified:false,mayClaimMetricAccuracy:false}};
+        measureResult.formatted+=' · estimate';
+      }
       const label=makeMeasureLabel(measureResult.formatted);label.position.copy(measureA).lerp(measureB,.5);label.position.y=.9;measurementGroup.add(label);
     }else measureResult=null;
     invalidate();
@@ -637,7 +648,14 @@ export function init(container,callbacks={}) {
   function getMeasurement(){return measureResult?{...measureResult,pointA:measureA?{x:measureA.x,y:measureA.y,z:measureA.z}:null,pointB:measureB?{x:measureB.x,y:measureB.y,z:measureB.z}:null}:null;}
   function pointerRay(e){const r=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);raycaster.setFromCamera(pointer,camera);return raycaster;}
   function groundPoint(e,height=0){const v=new THREE.Vector3();groundPlane.constant=-height;return pointerRay(e).ray.intersectPlane(groundPlane,v)?v:null;}
-  function hit(e){scene.updateMatrixWorld(true);pointerRay(e);return raycaster.intersectObjects(state?.photoMode?[...furniture.children,...structure.children]:furniture.children,true).find(h=>h.object.userData.photoTent||h.object.userData.itemId||h.object.userData.kind==='danceGroup');}
+  function hit(e){
+    // Image masks hide rentals in this fixed viewpoint only. Do not select an
+    // invisible rental through a traced fence/tree; no physical obstacle is made.
+    if(hasVenuePhoto()&&cameraMode==='outside'&&photoImage){
+      const r=renderer.domElement.getBoundingClientRect(),rect=photoImageRect(r.width,r.height,photoImage.naturalWidth||photoImage.width,photoImage.naturalHeight||photoImage.height,state.backgroundPhoto);
+      if(foregroundMaskAt(state.photoComposition,{x:(e.clientX-r.left-rect.x)/rect.width,y:(e.clientY-r.top-rect.y)/rect.height}))return null;
+    }
+    scene.updateMatrixWorld(true);pointerRay(e);return raycaster.intersectObjects(state?.photoMode?[...furniture.children,...structure.children]:furniture.children,true).find(h=>h.object.userData.photoTent||h.object.userData.itemId||h.object.userData.kind==='danceGroup');}
   function photoPlacementFor(o){
     if(!o)return {x:0,y:0,rotationDeg:0};
     if(o.photoPlacement&&Number.isFinite(Number(o.photoPlacement.x))&&Number.isFinite(Number(o.photoPlacement.y))){
@@ -816,7 +834,26 @@ export function init(container,callbacks={}) {
     }
   }
   loop();document.addEventListener('visibilitychange',invalidate);
-  function setNight(value){night=!!value;generatedBackground();syncPhotoFog();const photo=hasVenuePhoto();hemi.groundColor.setHex(photo?0xb7b8b4:0x667052);sun.color.setHex(photo?0xfffbf5:0xfff3df);sun.position.set(-35,48,photo?-28:28);hemi.intensity=night?.7:weatherMode==='rain'?1.25:photo?1.85:1.65;sun.intensity=night?.25:weatherMode==='rain'?.65:photo?2.4:3.2;fill.intensity=night?.4:photo?.85:.7;renderer.toneMappingExposure=night?1.18:1.05;weather?.userData.setNight(night);weather?.userData.setPhotoMode?.(hasVenuePhoto()||state?.photoLayoutModel);environment?.userData.setNight(night);local360.userData.setNight?.(night);scanWorld.userData.setNight?.(night);lightGroup?.userData.setNight?.(night);renderer.shadowMap.needsUpdate=true;invalidate();}
+  function applySceneLighting(){
+    const photo=hasVenuePhoto(),light=normalizePhotoComposition(state?.photoComposition).lighting;
+    hemi.groundColor.setHex(photo?0xb7b8b4:0x667052);sun.color.setHex(photo?0xfffbf5:0xfff3df);
+    if(photo){const position=photoLightingPosition(light);sun.position.set(position.x,position.y,position.z);}
+    else sun.position.set(-35,48,28);
+    hemi.intensity=photo?light.ambient*(night?.38:1):night?.7:weatherMode==='rain'?1.25:1.65;
+    sun.intensity=photo?light.intensity*(night?.104:weatherMode==='rain'?.27:1):night?.25:weatherMode==='rain'?.65:3.2;
+    fill.intensity=photo?light.ambient*.46*(night?.47:1):night?.4:.7;
+    // PCF supports a controllable filter radius; PCFSoft ignores radius.
+    const shadowType=photo?THREE.PCFShadowMap:THREE.PCFSoftShadowMap;
+    if(renderer.shadowMap.type!==shadowType){renderer.shadowMap.type=shadowType;scene.traverse(part=>{for(const material of (Array.isArray(part.material)?part.material:[part.material]))if(material)material.needsUpdate=true;});}
+    sun.shadow.radius=photo?light.shadowSoftness:1;
+    const catcher=environment?.getObjectByName('Venue photo shadow catcher');if(catcher)catcher.material.opacity=light.shadowOpacity;
+    renderer.toneMappingExposure=night?1.18:1.05;renderer.shadowMap.needsUpdate=true;
+  }
+  function previewPhotoComposition(value){
+    if(!state||destroyed)return;
+    state={...state,photoComposition:normalizePhotoComposition(value)};applySceneLighting();paintVenuePhoto();invalidate();
+  }
+  function setNight(value){night=!!value;generatedBackground();syncPhotoFog();applySceneLighting();weather?.userData.setNight(night);weather?.userData.setPhotoMode?.(hasVenuePhoto()||state?.photoLayoutModel);environment?.userData.setNight(night);local360.userData.setNight?.(night);scanWorld.userData.setNight?.(night);lightGroup?.userData.setNight?.(night);invalidate();}
   function setScene(options={}){
     showStyling=options.styling!==false;if(styling)styling.visible=showStyling;
     weatherMode=options.weather==='rain'?'rain':'clear';showGuests=!!options.guests;motion=options.motion!==false;
@@ -954,7 +991,7 @@ export function init(container,callbacks={}) {
     if(destroyed||!state?.tent)return null;
     try{scanWorld.userData.updateView?.(camera);renderer.render(scene,camera);return renderer.domElement.toDataURL('image/jpeg',.9);}catch(_){return null;}
   }
-  const api={inside,reception,setScene,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();env.dispose();container.replaceChildren();}};
+  const api={inside,reception,setScene,previewPhotoComposition,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();photoForeground.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();env.dispose();container.replaceChildren();}};
   // A watch-only sample must not replace the real designer renderer.
   if(callbacks.registerActive !== false)active=api;return api;
 }
@@ -963,6 +1000,7 @@ export function rebuild(s){active?.rebuild(s);}
 export function fitCamera(){active?.fitCamera();}
 export function fitTentPreview(){active?.fitCamera();}
 export function night(v){active?.night(v);}
+export function previewPhotoComposition(value){active?.previewPhotoComposition(value);}
 export function playTimelapse(mode){active?.playTimelapse(mode);}
 
 export { lighting as makeLighting };

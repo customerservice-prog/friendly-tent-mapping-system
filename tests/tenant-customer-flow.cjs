@@ -2,7 +2,7 @@
 const {JSDOM}=require('jsdom'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'..'),html=fs.readFileSync(path.join(root,'designer/index.html'),'utf8');
 const dom=new JSDOM(html,{url:'https://rentsketch.com/designer/?tenant=lakeside&embed=1&focus=tent&autoplace=1&view=2d&productId=lake-tent',runScripts:'outside-only',pretendToBeVisual:true});
-const w=dom.window,requests=[],messages=[];let release;const catalogGate=new Promise(resolve=>release=resolve);
+const w=dom.window,requests=[],messages=[];let release,savedDesign;const catalogGate=new Promise(resolve=>release=resolve);
 w.AbortController=AbortController;w.ResizeObserver=class{observe(){}disconnect(){}};w.alert=s=>messages.push(s);
 const products=[
  {id:'lake-tent',external_id:'lake:20x20-frame',category:'tent',visual_model_id:'frame-20x20',name:'Lakeside White Frame Tent',price_per_day:399},
@@ -14,7 +14,11 @@ w.fetch=async(url,options={})=>{
  requests.push({url,method:options.method||'GET',body:options.body&&JSON.parse(options.body)});
  if(url.endsWith('/products')){await catalogGate;return{ok:true,json:async()=>({products})};}
  if(url.endsWith('/api/tenants/lakeside')){await catalogGate;return{ok:true,json:async()=>({slug:'lakeside',name:'Lakeside Events',primaryColor:'#553399',showPrices:true})};}
- if(url.endsWith('/lakeside/designs'))return{ok:true,json:async()=>({id:'lake-design'})};
+ if(url.endsWith('/lakeside/designs')){savedDesign={id:'lake-design',revision:1,scene:JSON.parse(options.body).scene};return{ok:true,status:201,json:async()=>savedDesign};}
+ if(url.endsWith('/lakeside/designs/lake-design')){
+  if(options.method==='PATCH'){const body=JSON.parse(options.body);assert.equal(body.expectedRevision,savedDesign.revision);savedDesign={...savedDesign,...body,revision:savedDesign.revision+1};}
+  return{ok:true,status:200,json:async()=>savedDesign};
+ }
  if(url.endsWith('/lakeside/quote-requests'))return{ok:true,json:async()=>({id:'mock-quote',notificationSent:true})};
  throw new Error('Unexpected request: '+url);
 };

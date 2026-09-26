@@ -12,8 +12,9 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
   const tent = find(catalog.tents,scene.tentId);
   if(includeTent && scene.tentId) add(tent,1,'tent','Tent — confirm selection');
   if(includeTent && scene.tentId && Array.isArray(scene.sidewalls)) {
-    const wallCounts={solid:0,window:0};
-    scene.sidewalls.forEach(w=>{if(w&&wallCounts[w.type]!==undefined)wallCounts[w.type]++;});
+    const wallCounts={solid:0,window:0},exactWalls=new Map();
+    scene.sidewalls.forEach(w=>{if(!w)return;if(w.productId){const entry=exactWalls.get(w.productId)||new Set();entry.add(w.panelId||w.id);exactWalls.set(w.productId,entry);}else if(wallCounts[w.type]!==undefined)wallCounts[w.type]++;});
+    exactWalls.forEach((panels,id)=>{const product=(catalog.contextual||[]).find(p=>p.kind==='sidewall'&&p.productId===id)||{productId:id,name:'Sidewall — confirm catalog item',pricePerDay:null};add(product,panels.size,'sidewall','Sidewall — confirm selection');});
     if(wallCounts.solid) add(null,wallCounts.solid,'sidewall','Solid 10 ft Sidewall — confirm pricing','Solid 10 ft Sidewall');
     if(wallCounts.window) add(null,wallCounts.window,'sidewall','Window 10 ft Sidewall — confirm pricing','Window 10 ft Sidewall');
   }
@@ -40,19 +41,19 @@ export function summarizeEvent(scene, catalog, {includeTent = true} = {}) {
     tables.set(object.tableId,(tables.get(object.tableId) || 0) + 1);
     if(object.seatCount > 0) chairs.set(object.chairId,(chairs.get(object.chairId) || 0) + Number(object.seatCount));
     if(object.linenId) {
-      const key = JSON.stringify([object.linenId,object.linenColor || 'White']);
+      const key = JSON.stringify([object.linenId,object.linenColor || 'White',object.linenProductId||null]);
       linens.set(key,(linens.get(key) || 0) + 1);
     }
   }
   tables.forEach((qty,id) => add(find(catalog.tables,id),qty,'table','Table — confirm selection'));
   chairs.forEach((qty,id) => add(find(catalog.chairs,id),qty,'chair','Chairs — confirm selection'));
-  linens.forEach((qty,key) => {const [id,color]=JSON.parse(key),linen=find(catalog.linens,id);add(linen,qty,'linen','Linen',color+' '+(linen ? linen.name : 'Linen'));lines[lines.length-1].selectedColor=color;});
+  linens.forEach((qty,key) => {const [id,color,productId]=JSON.parse(key),linen=productId?((catalog.linens||[]).find(p=>p.productId===productId)||{productId,name:'Linen — confirm catalog item',pricePerDay:null}):find(catalog.linens,id);add(linen,qty,'linen','Linen',color+' '+(linen ? linen.name : 'Linen'));lines[lines.length-1].selectedColor=color;});
   const tabletop=new Map();for(const object of objects.filter(o=>o.kind==='table'))for(const entry of object.tabletop||[]){const key=JSON.stringify([entry.productId,entry.color||null]);tabletop.set(key,(tabletop.get(key)||0)+tabletopQuantity(entry,object));}
   tabletop.forEach((qty,key)=>{const [id,color]=JSON.parse(key),product=find(catalog.tabletop||TABLETOP,id);add(product,qty,'tabletop','Tabletop rental — confirm selection',product?(color?color+' ':'')+product.name:null);if(color&&qty)lines[lines.length-1].selectedColor=color;});
   const sections = objects.filter(o=>o.kind === 'dance');
   add(catalog.danceSection,sections.length,'dance_floor','3×3 Dance Floor Section');
   if(scene.lightingId && scene.lightingId !== 'lighting-none') {
-    const lighting=catalog.lightingForTent?catalog.lightingForTent(scene.lightingId,tent):find(catalog.lighting,scene.lightingId);
+    const lighting=scene.lightingProductId?((catalog.contextual||[]).find(p=>p.kind==='lighting'&&p.productId===scene.lightingProductId)||{productId:scene.lightingProductId,name:'Lighting — confirm catalog item',pricePerDay:null}):catalog.lightingForTent?catalog.lightingForTent(scene.lightingId,tent):find(catalog.lighting,scene.lightingId);
     add(lighting,1,'lighting','Lighting — confirm selection',null,lighting && lighting.dynamic ? catalog.tentLightingPrice(tent) : undefined);
   }
   if(includeTent&&tent?.type!=='pole'&&tent&&!tent.isSite&&['concrete','asphalt','deck'].includes(scene.surfaceType))add(null,1,'installation','Concrete ballast setup — confirm quantity and pricing');

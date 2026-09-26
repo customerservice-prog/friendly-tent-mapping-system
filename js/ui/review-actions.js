@@ -2,7 +2,7 @@
 (function(){
 'use strict';
 var quoteSubmitting=false;
-function allowPaidAction(){var slug=window.RENTSKETCH_TENANT_SLUG||new URLSearchParams(location.search).get('tenant')||'generic';if(!['friendly','generic'].includes(slug)||window.RentSketchEventPass?.canEdit()===true)return true;window.RentSketchEventPass?.requestAccess();return false;}
+function allowPaidAction(){if(window.RENTSKETCH_SHARED_READONLY)return false;var slug=window.RENTSKETCH_TENANT_SLUG||new URLSearchParams(location.search).get('tenant')||'generic';if(!['friendly','generic'].includes(slug)||window.RentSketchEventPass?.canEdit()===true)return true;window.RentSketchEventPass?.requestAccess();return false;}
 function $(id){return document.getElementById(id);}function tenant(){return window.ACTIVE_TENANT||{};}function bridge(){return window.FriendlyBridge||{};}
 function details(){return{name:($('customerName')||{}).value||'',email:($('customerEmail')||{}).value||'',date:($('customerDate')||{}).value||''};}function scene(){var b=bridge();return b.getScene?b.getScene():null;}
 function summaryText(){var b=bridge(),s=scene(),t=tenant(),d=details();if(!s)return'RentSketch event layout';var tent=(b.TENTS||[]).find(function(x){return x.id===s.tentId;}),tables=(s.objects||[]).filter(function(x){return x.kind==='table';}),seats=tables.reduce(function(n,x){return n+(Number(x.seatCount)||0);},0);return['RentSketch Event Plan',t.name||'',s.eventName||'',d.name?('Customer: '+d.name):'',d.email?('Email: '+d.email):'',d.date?('Event date: '+d.date):'',s.guestCount?('Guests: '+s.guestCount):'',tent?('Tent: '+tent.name):'',tables.length?('Tables: '+tables.length):'',seats?('Planned seats: '+seats):'',quoteItems(s).map(function(line){return line.qty+' × '+line.label+' — '+(line.amount==null?'Confirm pricing':'$'+Number(line.amount).toFixed(2));}).join('\n'),'Visual planning draft — final pricing, availability, placement, anchoring and installation must be confirmed by the rental company.'].filter(Boolean).join('\n');}
@@ -10,25 +10,11 @@ function quoteItems(s){var b=bridge(),lines=b.computeLineItems?b.computeLineItem
 function estimate(lines,s){if(!lines.length||lines.some(function(x){return x.amount==null;}))return null;return lines.reduce(function(n,x){return n+Math.round(Number(x.amount)*100);},0)/100;}
 function download(){if(!allowPaidAction())return;var payload={version:1,createdAt:new Date().toISOString(),tenant:{slug:window.RENTSKETCH_TENANT_SLUG||'',name:tenant().name||''},customer:details(),scene:scene(),pricing:bridge().currentReviewPricing?.()||null};var blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='rentsketch-event-plan.json';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);}
 async function share(){
- if(!allowPaidAction())return;
- var text=summaryText(),url=null,s=scene(),slug=window.RENTSKETCH_TENANT_SLUG||new URLSearchParams(location.search).get('tenant')||'generic';
- try{
-   var verified=window.RentSketchEventPass?.getAccessUrl?.();
-   if(verified)url=verified;
-   else if(slug!=='generic'){
-     var autosave=window.RentSketchAutosave;
-     if(!autosave?.flush)throw new Error('Your design is still saving. Please try again in a moment.');
-     var id=await autosave.flush();
-     if(!id)throw new Error('Your design could not be saved yet.');
-     var shared=await jsonFetch(window.RENTSKETCH_API_URL+'/api/tenants/'+encodeURIComponent(slug)+'/designs/'+encodeURIComponent(id)+'/share',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({anonymousSessionId:autosave.getSessionId()})});
-     url=shared.url||null;
-   }
-   var payload={title:'RentSketch Event Plan',text:text};if(url)payload.url=url;
-   if(navigator.share){await navigator.share(payload);return;}
-   var copied=url||text;await navigator.clipboard.writeText(copied);
-   alert(url?'Private layout link copied. Anyone with the link can view this saved layout.':'Event plan summary copied to your clipboard.');
- }catch(e){if(e&&e.name==='AbortError')return;prompt(url?'Copy your private layout link:':'Copy your event plan:',url||text);}
+ if(!allowPaidAction()||window.RENTSKETCH_SHARED_READONLY)return;
+ if(window.RentSketchProjects?.share){await window.RentSketchProjects.share();return;}
+ alert('Project sharing is still loading. Try again in a moment.');
 }
+
 function sessionId(){var k='rentsketch-anon-session';try{var id=localStorage.getItem(k);if(!id){id=(crypto.randomUUID?crypto.randomUUID():'rs-'+Date.now()+'-'+Math.random().toString(36).slice(2));localStorage.setItem(k,id);}return id;}catch(e){return null;}}
 async function jsonFetch(url,options){var r=await fetch(url,options),data={};try{data=await r.json();}catch(e){}if(!r.ok)throw new Error(data.error||('Request failed ('+r.status+')'));return data;}
 function notifyParent(type,detail){if(!window.parent||window.parent===window)return false;try{window.parent.postMessage(Object.assign({type:type},detail||{}),'*');return true;}catch(e){return false;}}

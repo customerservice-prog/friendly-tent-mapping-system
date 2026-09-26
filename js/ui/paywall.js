@@ -292,13 +292,13 @@
       try {
         // Expired passes are read-only: renew their saved design without
         // attempting a forbidden edit before payment.
-        var auto = autosave(), id = renewal && verified.id ? verified.id : await auto.flush();
+        var auto = autosave(), id = renewal && verified.id ? (verified.accessDesignId || verified.id) : await auto.prepareCheckoutDraft();
         if (!id) throw new Error('Your design could not be saved. Please try again.');
         var result = await api('/designs/' + encodeURIComponent(id) + '/event-pass/' + (renewal ? 'renewal-checkout-session' : 'checkout-session'), {
           customerEmail: view.querySelector('#passEmail').value.trim(), anonymousSessionId: auto.getSessionId(),
         });
         if (result.active) {
-          var resumed = await api('/event-pass/resume', { designId: id, anonymousSessionId: auto.getSessionId() });
+          var resumed = await api('/event-pass/resume', { designId: auto.getDesignId() || id, anonymousSessionId: auto.getSessionId() });
           restoreScene(resumed); closeModal(); continueProduct(); return;
         }
         if (!result.url || new URL(result.url).origin !== 'https://checkout.stripe.com') throw new Error('Secure checkout did not return a valid link.');
@@ -322,7 +322,8 @@
       await getOffer();
       if (!offer.required || active()) { continueProduct(); return true; }
       if (returning && !ready) throw new Error('Your saved event is still being restored. Please try again in a moment.');
-      var auto = autosave(), id = await auto.flush();
+      if (verified?.renewable) { await showPurchase(); return false; }
+      var auto = autosave(), id = await auto.prepareCheckoutDraft();
       if (!id) throw new Error('Your design could not be saved. Please try again.');
       var result = await api('/designs/' + encodeURIComponent(id) + '/event-pass/checkout-session', {
         customerEmail: '', anonymousSessionId: auto.getSessionId(),

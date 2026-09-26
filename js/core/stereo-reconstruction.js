@@ -1,10 +1,9 @@
 /*
  * RentSketch local multi-view stereo reconstruction.
  *
- * This is intentionally a metric, deterministic first step toward a real venue
- * digital twin. It does NOT invent the unseen property. Instead it uses three
- * overlapping captures (left / center / right) and image disparity to estimate
- * real depth in feet from a user-provided camera baseline.
+ * This deterministic preview uses image disparity to estimate depth expressed
+ * in feet from a user-provided camera baseline. Those units do not establish
+ * real-world accuracy. It does not reconstruct unseen parts of the property.
  *
  * The output is a textured depth-mesh grid suitable for Three.js. It is much
  * closer to an actual 3D reconstruction than the old single-photo backdrop:
@@ -16,8 +15,8 @@
  *  - zoom/focal length does not change between captures,
  *  - left-to-right baseline is known approximately in feet.
  *
- * Later this contract can be swapped for SfM / Gaussian Splatting without
- * changing RentSketch's world-registration or rental-geometry layers.
+ * Full six-degree-of-freedom camera poses, lens distortion and unseen geometry
+ * remain unresolved. Independent check distances never calibrate this solver.
  */
 
 function finite(value,fallback=0){
@@ -70,10 +69,9 @@ function patchScore(a,b,w,h,ax,ay,bx,by,r){
   return err/Math.max(1,energy);
 }
 function estimateCaptureRegistration(center,target,w,h,{direction=1,maxShiftX=14,maxShiftY=5,patchRadius=2}={}){
-  // Estimate handheld pitch/roll translation and, only when the scene contains
-  // enough depth variation, a conservative yaw-like horizontal offset. A
-  // constant-depth scene is intentionally left with x=0 because horizontal
-  // image shift is then indistinguishable from true stereo parallax.
+  // Register vertical image drift only. Horizontal image shift is entangled
+  // with actual depth; treating the farthest visible surface as infinity erased
+  // real parallax and biased every metric prediction in varied-depth scenes.
   const matches=[];
   const y0=Math.max(patchRadius+maxShiftY+2,Math.round(h*.12)),y1=Math.min(h-patchRadius-maxShiftY-2,Math.round(h*.82));
   const x0=Math.max(patchRadius+maxShiftX+2,Math.round(w*.10)),x1=Math.min(w-patchRadius-maxShiftX-2,Math.round(w*.90));
@@ -94,18 +92,7 @@ function estimateCaptureRegistration(center,target,w,h,{direction=1,maxShiftX=14
   if(matches.length<6)return {x:0,y:0,score:Infinity,samples:matches.length,horizontalCorrected:false};
   const dys=matches.map(m=>m.dy),dxs=matches.map(m=>m.dx),scores=matches.map(m=>m.score);
   const y=Math.round(percentile(dys,.5)||0),q10=percentile(dxs,.10)||0,q90=percentile(dxs,.90)||0,spread=q90-q10;
-  // With real depth variation, near points move farther than distant points.
-  // The directional extreme closest to the far field estimates camera yaw.
-  // Require a meaningful spread so we never erase all disparity from a flat scene.
-  let x=0,horizontalCorrected=false;
-  if(spread>=3){
-    x=Math.round(direction>0?q10:q90);
-    // Keep correction conservative; the farthest visible surface still has
-    // finite parallax and should not be treated as infinity.
-    x=Math.trunc(x*.75);
-    horizontalCorrected=Math.abs(x)>0;
-  }
-  return {x,y,score:percentile(scores,.5),samples:matches.length,spreadPx:spread,horizontalCorrected};
+  return {x:0,y,score:percentile(scores,.5),samples:matches.length,spreadPx:spread,horizontalCorrected:false,unresolvedYaw:true};
 }
 function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,verticalSearch,registrationX=0,registrationY=0}){
   let best={score:Infinity,d:0,dy:0},second=Infinity;
@@ -127,15 +114,15 @@ function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,ver
 function chooseDisparity(leftMatch,rightMatch){
   const candidates=[leftMatch,rightMatch].filter(m=>m&&m.d>0&&Number.isFinite(m.score)&&m.confidence>.08);
   if(!candidates.length)return null;
-  if(candidates.length===1)return {d:candidates[0].d,confidence:candidates[0].confidence,score:candidates[0].score};
+  if(candidates.length===1)return {d:candidates[0].d,confidence:candidates[0].confidence,score:candidates[0].score,views:1,bilateral:false};
   const [a,b]=candidates;
   const rel=Math.abs(a.d-b.d)/Math.max(1,Math.max(a.d,b.d));
   if(rel<.36){
     const wa=Math.max(.05,a.confidence),wb=Math.max(.05,b.confidence);
-    return {d:(a.d*wa+b.d*wb)/(wa+wb),confidence:clamp((a.confidence+b.confidence)*.58,0,1),score:Math.min(a.score,b.score)};
+    return {d:(a.d*wa+b.d*wb)/(wa+wb),confidence:clamp((a.confidence+b.confidence)*.58,0,1),score:Math.min(a.score,b.score),views:2,bilateral:true,disagreement:rel};
   }
   const best=a.confidence>=b.confidence?a:b;
-  return {d:best.d,confidence:best.confidence*.72,score:best.score};
+  return {d:best.d,confidence:best.confidence*.72,score:best.score,views:1,bilateral:false,disagreement:rel};
 }
 function sampleColor(image,x,y){
   const {data,width,height}=image;
@@ -210,6 +197,7 @@ export function reconstructStereoGrid({
   const cols=xs.length,rows=ys.length,total=cols*rows;
   const positions=new Float32Array(total*3),uvs=new Float32Array(total*2),colors=new Float32Array(total*3);
   const depths=new Float32Array(total),confidence=new Float32Array(total),valid=new Uint8Array(total);
+  const observed=new Uint8Array(total),supportViews=new Uint8Array(total),bilateral=new Uint8Array(total),disparities=new Float32Array(total);
   const validDepths=[],validConf=[];
   const horizonPx=horizonY*h;
   for(let gy=0;gy<rows;gy++){
@@ -226,16 +214,23 @@ export function reconstructStereoGrid({
       const rm=bestMatch(centerGray,rightGray,w,h,x,y,{direction:-1,maxDisparity,patchRadius,verticalSearch,registrationX:rightRegistration.x,registrationY:rightRegistration.y});
       const match=chooseDisparity(lm,rm);
       if(!match||match.confidence<minConfidence)continue;
-      const depth=clamp(focalPx*halfBaseline/Math.max(.5,match.d),minDepthFt,maxDepthFt);
+      const depth=focalPx*halfBaseline/Math.max(.5,match.d);
+      // Out-of-range disparities are missing evidence, not a surface at the
+      // near/far clipping plane. Clamping used to fabricate flat geometry.
+      if(depth<minDepthFt||depth>maxDepthFt)continue;
       const worldX=(x-w/2)/focalPx*depth;
       const worldY=eyeHeightFt-(y-horizonPx)/focalPx*depth;
       positions[index*3]=worldX;positions[index*3+1]=worldY;positions[index*3+2]=depth;
       depths[index]=depth;confidence[index]=match.confidence;valid[index]=1;
+      observed[index]=1;supportViews[index]=match.views;bilateral[index]=match.bilateral&&match.disagreement<=.15?1:0;disparities[index]=match.d;
       validDepths.push(depth);validConf.push(match.confidence);
     }
   }
 
-  // Fill only small holes from neighboring metric samples. Large untextured
+  const measurementPositions=Float32Array.from(positions);
+  // Fill only small holes for presentation. The observed mask and untouched
+  // measurement positions prevent interpolation/smoothing from certifying a check.
+  // Large untextured
   // areas (usually sky) intentionally remain absent instead of becoming fake 3D.
   for(let pass=0;pass<2;pass++){
     const fill=[];
@@ -280,9 +275,9 @@ export function reconstructStereoGrid({
   const quality=validRatio>.42&&avgConfidence>.24?'good':validRatio>.20&&avgConfidence>.14?'usable':'weak';
   return {
     width:w,height:h,cols,rows,xSamples:xs,ySamples:ys,
-    positions,uvs,colors,depths,confidence,valid,indices:new Uint32Array(indices),
+    positions,measurementPositions,uvs,colors,depths,confidence,valid,observed,supportViews,bilateral,disparities,indices:new Uint32Array(indices),
     focalPx,baselineFt,fovDeg,horizonY,eyeHeightFt,
-    metrics:{validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,triangleCount:indices.length/3,quality,surfaceSmoothingAvgFt:smoothed.averageDelta,surfaceSmoothingMaxFt:smoothed.maxDelta,cameraRegistration:{left:leftRegistration,right:rightRegistration}}
+    metrics:{validCount,totalSamples:total,validRatio,observedCount:observed.reduce((s,v)=>s+v,0),bilateralCount:bilateral.reduce((s,v)=>s+v,0),medianDepthFt,averageConfidence:avgConfidence,triangleCount:indices.length/3,quality,surfaceSmoothingAvgFt:smoothed.averageDelta,surfaceSmoothingMaxFt:smoothed.maxDelta,cameraRegistration:{left:leftRegistration,right:rightRegistration}}
   };
 }
 
@@ -331,6 +326,7 @@ export function reconstructMultiViewGrid({
   const cols=xs.length,rows=ys.length,total=cols*rows;
   const positions=new Float32Array(total*3),uvs=new Float32Array(total*2),colors=new Float32Array(total*3);
   const depths=new Float32Array(total),confidence=new Float32Array(total),valid=new Uint8Array(total),supportViews=new Uint8Array(total);
+  const observed=new Uint8Array(total),bilateral=new Uint8Array(total),disparities=new Float32Array(total);
   const horizonPx=horizonY*h;
 
   function weightedMedian(candidates){
@@ -349,7 +345,10 @@ export function reconstructMultiViewGrid({
     const meanConfidence=pool.reduce((s,c)=>s+c.confidence*c.weight,0)/Math.max(.0001,weightSum);
     const supportFactor=clamp(pool.length/Math.min(4,targets.length),.25,1);
     const consistencyFactor=consistent.length>=2?1:.62;
-    return {depth,confidence:clamp(meanConfidence*supportFactor*consistencyFactor,0,1),views:pool.length};
+    const spread=pool.length>1?(Math.max(...pool.map(c=>c.depth))-Math.min(...pool.map(c=>c.depth)))/Math.max(1,depth):Infinity;
+    const left=pool.filter(c=>c.offsetFt<0),right=pool.filter(c=>c.offsetFt>0);
+    const checkDisparity=left.length&&right.length?Math.min(Math.max(...left.map(c=>c.disparity)),Math.max(...right.map(c=>c.disparity))):0;
+    return {depth,confidence:clamp(meanConfidence*supportFactor*consistencyFactor,0,1),views:pool.length,bilateral:!!left.length&&!!right.length&&spread<=.15,minDisparity:checkDisparity};
   }
 
   for(let gy=0;gy<rows;gy++){
@@ -366,10 +365,11 @@ export function reconstructMultiViewGrid({
         const scaledMax=Math.max(4,Math.min(maxDisparity,Math.round(maxDisparity*(.40+.60*absOffset/maxOffset))));
         const match=bestMatch(centerGray,target.gray,w,h,x,y,{direction,maxDisparity:scaledMax,patchRadius,verticalSearch,registrationX:target.registration.x,registrationY:target.registration.y});
         if(!match||match.d<=0||match.confidence<minConfidence)continue;
-        const depth=clamp(focalPx*absOffset/Math.max(.5,match.d),minDepthFt,maxDepthFt);
+        const depth=focalPx*absOffset/Math.max(.5,match.d);
+        if(depth<minDepthFt||depth>maxDepthFt)continue;
         const baselineWeight=.55+.45*Math.sqrt(absOffset/maxOffset);
         const weight=Math.max(.015,match.confidence*baselineWeight);
-        candidates.push({depth,confidence:match.confidence,weight,offsetFt:target.offsetFt});
+        candidates.push({depth,confidence:match.confidence,weight,offsetFt:target.offsetFt,disparity:match.d});
       }
       const fused=fuse(candidates);
       if(!fused||fused.confidence<minConfidence*.78)continue;
@@ -378,9 +378,11 @@ export function reconstructMultiViewGrid({
       positions[index*3+1]=eyeHeightFt-(y-horizonPx)/focalPx*depth;
       positions[index*3+2]=depth;
       depths[index]=depth;confidence[index]=fused.confidence;supportViews[index]=fused.views;valid[index]=1;
+      observed[index]=1;bilateral[index]=fused.bilateral?1:0;disparities[index]=fused.minDisparity;
     }
   }
 
+  const measurementPositions=Float32Array.from(positions);
   for(let pass=0;pass<2;pass++){
     const fill=[];
     for(let gy=1;gy<rows-1;gy++)for(let gx=1;gx<cols-1;gx++){
@@ -425,14 +427,14 @@ export function reconstructMultiViewGrid({
   const quality=validRatio>.44&&avgConfidence>.23&&strongMultiView>.55?'good':validRatio>.20&&avgConfidence>.13?'usable':'weak';
   return {
     width:w,height:h,cols,rows,xSamples:xs,ySamples:ys,
-    positions,uvs,colors,depths,confidence,valid,supportViews,indices:new Uint32Array(indices),
+    positions,measurementPositions,uvs,colors,depths,confidence,valid,observed,bilateral,disparities,supportViews,indices:new Uint32Array(indices),
     focalPx,fovDeg,horizonY,eyeHeightFt,viewCount:targets.length+1,
     metrics:{
-      validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,
+      validCount,totalSamples:total,validRatio,observedCount:observed.reduce((s,v)=>s+v,0),bilateralCount:bilateral.reduce((s,v)=>s+v,0),medianDepthFt,averageConfidence:avgConfidence,
       triangleCount:indices.length/3,quality,viewCount:targets.length+1,
       averageViewsPerPoint:avgViews,multiViewAgreement:strongMultiView,
       surfaceSmoothingAvgFt:smoothedMulti.averageDelta,surfaceSmoothingMaxFt:smoothedMulti.maxDelta,
-      cameraRegistrations:targets.map(t=>({offsetFt:t.offsetFt,x:t.registration.x,y:t.registration.y,score:Number.isFinite(t.registration.rawScore)?t.registration.rawScore:null}))
+      cameraRegistrations:targets.map(t=>({offsetFt:t.offsetFt,...t.registration,score:Number.isFinite(t.registration.score)?t.registration.score:null}))
     }
   };
 }

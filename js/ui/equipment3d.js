@@ -1,3 +1,4 @@
+import { equipmentAssetDescriptor } from '../data/asset-registry.js';
 import { makeTabletop } from './tabletop3d.js';
 // Detailed rental geometry, in feet. The existing layout store remains authoritative.
 import * as THREE from 'three';
@@ -169,12 +170,14 @@ export function makeTable(o) {
   const plastic=p.silhouette==='banquet-rect'&&o.tableId==='banquet-6ft',topMat=plastic?mat('#f3f1e7',{roughness:.62}):wood;
   wood.name='Wood tabletop';metal.name='Folding table supports';feet.name='Table feet';
   if(p.silhouette==='fillchill-tub'){
-    const tub=mat('#ecebe4',{roughness:.43});tub.name='Fill and Chill basin';
+    const tub=mat('#22272a',{roughness:.74});tub.name='Fill and Chill basin';
+    const legs=mat('#24292c',{metalness:.3,roughness:.6});legs.name='Black folding basin supports';
+    g.userData.asset=equipmentAssetDescriptor(tableById(o.tableId)||{},'fill-chill');
     box(g,p.w,.12,p.d,tub,0,p.height-.38,0,.055);
-    for(const z of [-p.d/2,p.d/2])box(g,p.w,.4,.12,tub,0,p.height-.18,z,.04);
-    for(const x of [-p.w/2,p.w/2])box(g,.12,.4,p.d,tub,x,p.height-.18,0,.04);
+    for(const z of [-p.d/2+.06,p.d/2-.06])box(g,p.w,.4,.12,tub,0,p.height-.2,z,.04);
+    for(const x of [-p.w/2+.06,p.w/2-.06])box(g,.12,.4,p.d-.12,tub,x,p.height-.2,0,.04);
     add(g,new THREE.CylinderGeometry(.07,.07,.016,12),metal,p.w*.3,p.height-.31,0,'Basin drain');
-    tableLegs(g,{...p,height:p.height-.4},metal,feet);
+    tableLegs(g,{...p,height:p.height-.4},legs,feet);
   } else if(p.silhouette==='cocktail-pedestal'){
     add(g,new THREE.CylinderGeometry(p.w/2,p.w/2,.1,48),wood,0,p.height-.05,0);
     rod(g,[0,.08,0],[0,p.height-.1,0],.075,metal,12);

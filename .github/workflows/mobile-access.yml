@@ -8,7 +8,7 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,6 +20,9 @@ jobs:
       - run: /tmp/mobile-qa/node_modules/.bin/playwright install --with-deps chromium
       - run: NODE_PATH=/tmp/mobile-qa/node_modules node tests/mobile-access-browser.cjs
       - run: NODE_PATH=/tmp/mobile-qa/node_modules node tests/photo-match-browser.cjs
+      - run: NODE_PATH=/tmp/mobile-qa/node_modules RENTSKETCH_QA_OUT=qa-contextual-picker node tests/contextual-picker-browser.cjs
+      - run: NODE_PATH=/tmp/mobile-qa/node_modules RENTSKETCH_QA_DIR=qa-project-workspace node tests/project-workspace-browser.cjs
+      - run: NODE_PATH=/tmp/mobile-qa/node_modules RENTSKETCH_QA_OUT=qa-photo-composition node tests/photo-composition-browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -27,3 +30,6 @@ jobs:
           path: |
             qa-mobile-access/
             qa-photo-match/
+            qa-contextual-picker/
+            qa-project-workspace/
+            qa-photo-composition/

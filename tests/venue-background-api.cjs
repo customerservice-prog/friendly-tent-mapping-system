@@ -1,7 +1,7 @@
 // Venue/background photo ownership + capability URL regression. No production writes.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {PGlite}=require('@electric-sql/pglite'),express=require('express');
-const root=path.resolve(__dirname,'..'),pg=new PGlite(),db={query:(sql,args)=>pg.query(sql,args)};
+const root=path.resolve(__dirname,'..'),pg=new PGlite(),db={query:(sql,args)=>pg.query(sql,args),pool:{connect:async()=>({query:(sql,args)=>pg.query(sql,args),release(){}})}};
 function load(file,deps){
  const mod={exports:{}};
  vm.runInNewContext(fs.readFileSync(path.join(root,file),'utf8'),{
@@ -14,7 +14,7 @@ const routes=load('server/src/routes/designBackgrounds.js',{
  express,crypto:require('node:crypto'),'../db':db,
  '../dashboardHttpSession':{getDashboardToken:req=>String(req.headers.authorization||'').startsWith('Bearer ')?req.headers.authorization.slice(7):null},'../dashboardSessions':{verifyDashboardToken:async()=>({userId:'nobody'})},
  '../middleware/requireAuth':{isConfiguredPlatformAdmin:async()=>false},
- '../eventPassAccess':{savePermission:async()=>null}
+ '../eventPassAccess':{savePermission:async()=>null,permissionDesign:async design=>design}
 });
 const app=express();app.use('/api/tenants',routes);app.use('/api/consumer',routes);app.use((err,req,res,next)=>{console.error(err);if(err?.type==='entity.too.large')return res.status(413).json({error:'Request too large'});res.status(500).json({error:err.message});});
 let server,base;
@@ -32,6 +32,7 @@ async function send(url,{method='GET',session,body,type}={}){
  `);
  await pg.exec(fs.readFileSync(path.join(root,'server/migrations/018_design_background_photos.sql'),'utf8'));
  await pg.exec(fs.readFileSync(path.join(root,'server/migrations/019_generic_design_background_photos.sql'),'utf8'));
+ await pg.exec(fs.readFileSync(path.join(root,'server/migrations/022_design_projects.sql'),'utf8'));
  const tenant='00000000-0000-4000-8000-000000000001';
  await pg.query("INSERT INTO tenants(id,slug) VALUES($1,'friendly')",[tenant]);
  const design=(await pg.query("INSERT INTO designs(tenant_id,anonymous_session_id,scene) VALUES($1,'owner-session',$2) RETURNING id",[tenant,{tentId:'frame-20x20',objects:[]}])).rows[0];
@@ -66,5 +67,20 @@ async function send(url,{method='GET',session,body,type}={}){
  assert.equal((await send('/api/consumer/designs/'+generic.id+'/background-photo/'+genericPhotoId,{method:'DELETE',session:'wrong-session'})).status,403);
  assert.equal((await send('/api/consumer/designs/'+generic.id+'/background-photo/'+genericPhotoId,{method:'DELETE',session:'generic-owner-session'})).status,200);
  assert.equal((await send(genericPath)).status,404);
-  console.log('PASS venue photo API: tenant + generic/Event Pass, design ownership, private capability URL, binary round-trip, tamper rejection and owner-only removal.');
+ // A named checkpoint retains its source image after the live scene changes.
+ const historical=await send('/api/tenants/friendly/designs/'+design.id+'/background-photo',{method:'POST',session:'owner-session',type:'image/jpeg',body:jpeg});
+ assert.equal(historical.status,201);
+ const checkpoint=(await pg.query('INSERT INTO design_revisions(design_id,name,source_revision,snapshot) VALUES($1,$2,1,$3) RETURNING id',[design.id,'Original photo',{scene:{backgroundPhoto:{id:historical.body.id,url:'http://fixture'+historical.body.path},objects:[]}}])).rows[0];
+ const removeHistorical='/api/tenants/friendly/designs/'+design.id+'/background-photo/'+historical.body.id;
+ r=await send(removeHistorical,{method:'DELETE',session:'owner-session'});
+ assert.equal(r.status,200);assert.equal(r.body.retained,true,'named checkpoints retain the old source photo');
+ assert.equal((await send(historical.body.path)).status,200,'historical photo capability still resolves');
+ // An alternative can retain the same asset independently of a checkpoint.
+ const alternative=(await pg.query('INSERT INTO designs(tenant_id,anonymous_session_id,scene,project_root_id) VALUES($1,$2,$3,$4) RETURNING id',[tenant,'owner-session',{backgroundPhoto:{id:historical.body.id},objects:[]},design.id])).rows[0];
+ await pg.query('DELETE FROM design_revisions WHERE id=$1',[checkpoint.id]);
+ assert.equal((await send(removeHistorical,{method:'DELETE',session:'owner-session'})).body.retained,true,'alternative keeps the shared asset alive');
+ await pg.query('UPDATE designs SET scene=$1 WHERE id=$2',[{objects:[]},alternative.id]);
+ assert.equal((await send(removeHistorical,{method:'DELETE',session:'owner-session'})).body.retained,false);
+ assert.equal((await send(historical.body.path)).status,404,'unreferenced photo can be removed');
+ console.log('PASS venue photo API: tenant + generic ownership, private capability round-trip, tamper rejection, removal and checkpoint/alternative photo retention.');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{server?.close();await pg.close();});

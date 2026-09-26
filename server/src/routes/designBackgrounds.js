@@ -4,11 +4,15 @@ const { verifyDashboardToken } = require('../dashboardSessions');
 const crypto = require('crypto');
 const db = require('../db');
 const { isConfiguredPlatformAdmin } = require('../middleware/requireAuth');
-const { savePermission } = require('../eventPassAccess');
+const { savePermission, permissionDesign } = require('../eventPassAccess');
 
 const router = express.Router();
-const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
+const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(error => {
+  if ([403,404,413].includes(error.status)) return res.status(error.status).json({ error: error.message, ...(error.code ? { code: error.code } : {}) });
+  next(error);
+});
 const MAX_BYTES = 4 * 1024 * 1024;
+const MAX_PROJECT_BYTES = 256 * 1024 * 1024, MAX_PROJECT_PHOTOS = 128;
 const rawPhoto = express.raw({ type: ['image/jpeg', 'image/png', 'image/webp'], limit: MAX_BYTES });
 
 function clean(value, max) {
@@ -55,14 +59,37 @@ async function staffAllowed(req, tenant) {
   }
 }
 async function editPermission(req, tenant, design) {
-  if (await staffAllowed(req, tenant)) return { ok: true, ownerSession: design.anonymous_session_id || null };
+  if (await staffAllowed(req, tenant)) return { ok: true, staff: true, ownerSession: design.anonymous_session_id || null };
+  const ownership = await permissionDesign(design);
   const session = clean(req.headers['x-rentsketch-session'], 160);
-  if (!session || !design.anonymous_session_id || session !== design.anonymous_session_id) {
+  if (!session || !ownership.anonymous_session_id || session !== ownership.anonymous_session_id) {
     return { ok: false, status: 403, body: { error: 'This design does not belong to this editing session.' } };
   }
   const denied = await savePermission(tenant, design, design.scene);
   if (denied) return { ok: false, status: 402, body: denied };
   return { ok: true, ownerSession: session };
+}
+
+// Photo IDs occur in backgroundPhoto and scan frame/sample URLs. Checking the
+// complete bounded JSON also protects future scene representations. False
+// positives retain an asset; they never delete a referenced customer's photo.
+const unreferencedPhoto = `NOT EXISTS(SELECT 1 FROM designs d WHERE d.tenant_id IS NOT DISTINCT FROM design_background_photos.tenant_id
+  AND position(design_background_photos.id::text in d.scene::text)>0)
+  AND NOT EXISTS(SELECT 1 FROM design_revisions r JOIN designs d ON d.id=r.design_id
+    WHERE d.tenant_id IS NOT DISTINCT FROM design_background_photos.tenant_id
+      AND position(design_background_photos.id::text in r.snapshot::text)>0)`;
+
+async function withPhotoProjectLock(design, permission, work) {
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const root = (await client.query('SELECT id,anonymous_session_id FROM designs WHERE id=$1 AND tenant_id IS NOT DISTINCT FROM $2 FOR UPDATE', [design.project_root_id || design.id, design.tenant_id])).rows[0];
+    if (!root || (!permission.staff && root.anonymous_session_id !== permission.ownerSession)) {
+      const error = new Error('This design does not belong to this editing session.'); error.status = 403; throw error;
+    }
+    const result = await work(client, root.id); await client.query('COMMIT'); return result;
+  } catch (error) { await client.query('ROLLBACK'); throw error; }
+  finally { client.release(); }
 }
 
 
@@ -78,19 +105,25 @@ async function storePhoto(req, res, tenant, design, pathPrefix) {
 
   const accessToken = crypto.randomBytes(24).toString('base64url');
   const tenantId = tenant?.id || design.tenant_id || null;
-  const result = await db.query(
-    `INSERT INTO design_background_photos
+  const result = await withPhotoProjectLock(design, permission, async (client, rootId) => {
+    const quota = (await client.query(`SELECT count(*) AS count,COALESCE(sum(p.byte_size),0) AS bytes FROM design_background_photos p
+      JOIN designs d ON d.id=p.design_id WHERE d.id=$1 OR d.project_root_id=$1`, [rootId])).rows[0];
+    if (Number(quota.count) >= MAX_PROJECT_PHOTOS || Number(quota.bytes) + req.body.length > MAX_PROJECT_BYTES) {
+      const error = new Error('This project has reached its photo storage limit (128 photos or 256 MiB across alternatives). Remove unused captures, start a separate project, or contact rental staff. Saved checkpoints keep their photos.');
+      error.status = 413; error.code = 'project_photo_limit'; throw error;
+    }
+    const inserted = await client.query(`INSERT INTO design_background_photos
        (design_id,tenant_id,anonymous_session_id,access_token_hash,mime_type,byte_size,image_bytes)
      VALUES($1,$2,$3,$4,$5,$6,$7) RETURNING id,created_at`,
-    [design.id, tenantId, permission.ownerSession, tokenHash(accessToken), detected, req.body.length, req.body]
-  );
-  await db.query(
+    [design.id, tenantId, permission.ownerSession, tokenHash(accessToken), detected, req.body.length, req.body]);
+    await client.query(
     `DELETE FROM design_background_photos
-      WHERE design_id=$1 AND id NOT IN (
+      WHERE design_id=$1 AND ${unreferencedPhoto} AND id NOT IN (
         SELECT id FROM design_background_photos WHERE design_id=$1 ORDER BY created_at DESC LIMIT 16
       )`,
-    [design.id]
-  );
+    [design.id]);
+    return inserted;
+  });
   const id = result.rows[0].id;
   const path = pathPrefix + encodeURIComponent(id) + '?t=' + encodeURIComponent(accessToken);
   return res.status(201).json({ id, path, mimeType: detected, byteSize: req.body.length, createdAt: result.rows[0].created_at });
@@ -133,8 +166,8 @@ router.delete('/:slug/designs/:id/background-photo/:photoId', wrap(async (req, r
   if (!design) return res.status(404).json({ error: 'Design not found' });
   const permission = await editPermission(req, tenant, design);
   if (!permission.ok) return res.status(permission.status).json(permission.body);
-  await db.query('DELETE FROM design_background_photos WHERE id=$1 AND design_id=$2 AND tenant_id=$3', [req.params.photoId, design.id, tenant.id]);
-  res.json({ ok: true });
+  const removed = await withPhotoProjectLock(design, permission, client => client.query(`DELETE FROM design_background_photos WHERE id=$1 AND design_id=$2 AND tenant_id=$3 AND ${unreferencedPhoto} RETURNING id`, [req.params.photoId, design.id, tenant.id]));
+  res.json({ ok: true, retained: !removed.rows.length });
 }));
 
 
@@ -163,12 +196,12 @@ router.delete('/designs/:id/background-photo/:photoId', wrap(async (req, res) =>
   if (!design) return res.status(404).json({ error: 'Design not found' });
   const permission = await editPermission(req, null, design);
   if (!permission.ok) return res.status(permission.status).json(permission.body);
-  await db.query(
+  const removed = await withPhotoProjectLock(design, permission, client => client.query(
     `DELETE FROM design_background_photos
-      WHERE id=$1 AND design_id=$2`,
+      WHERE id=$1 AND design_id=$2 AND ${unreferencedPhoto} RETURNING id`,
     [req.params.photoId, design.id]
-  );
-  res.json({ ok: true });
+  ));
+  res.json({ ok: true, retained: !removed.rows.length });
 }));
 
 module.exports = router;

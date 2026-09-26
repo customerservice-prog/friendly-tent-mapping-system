@@ -1,4 +1,5 @@
 const { getDashboardToken } = require('../dashboardHttpSession');
+const projects = require('../designProjects');
 const { clientIp } = require('../clientIp');
 // POST/GET routes for the RentSketch Direct Consumer "Event Pass".
 // This is a SEPARATE payment type from the Friendly rental deposit
@@ -16,7 +17,7 @@ const { signToken, verifyToken } = require('../auth');
 const { isConfiguredPlatformAdmin } = require('../middleware/requireAuth');
 const { resolveAccess } = require('../access');
 const { getStripe, isPassEnabled, passOffer, paymentReadiness, fulfillEventPass, PASS_KINDS } = require('../eventPass');
-const { savePermission } = require('../eventPassAccess');
+const { savePermission, permissionDesign } = require('../eventPassAccess');
 const { accessUrl, emailReadiness, queueRecovery, processEmails } = require('../eventPassEmail');
 const { lookupOrder, claimOrder, refreshOrderAccess, orderAccessReady } = require('../friendlyOrderAccess');
 const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
@@ -92,14 +93,15 @@ async function designTenant(design) {
 
 async function designResponse(design) {
     const tenant = await designTenant(design);
-    const order = await refreshOrderAccess(design.id, true);
-    const booking = (await query("SELECT * FROM entitlements WHERE design_id=$1 AND source='friendly_order' LIMIT 1", [design.id])).rows[0];
-    const active = (await query("SELECT * FROM entitlements WHERE design_id=$1 AND status='active' AND (expires_at IS NULL OR expires_at>now()) ORDER BY expires_at DESC NULLS LAST LIMIT 1", [design.id])).rows[0];
-    const paid = (await query("SELECT id,customer_email FROM consumer_payments WHERE design_id=$1 AND status='paid' ORDER BY created_at DESC LIMIT 1", [design.id])).rows[0];
-    const expiresAt = active?.expires_at || (await query('SELECT expires_at FROM entitlements WHERE design_id=$1 ORDER BY created_at DESC LIMIT 1', [design.id])).rows[0]?.expires_at || null;
-    const email = paid ? (await query('SELECT status FROM event_pass_emails WHERE receipt_payment_id=$1', [paid.id])).rows[0] : booking && (await query('SELECT status FROM event_pass_emails WHERE design_ids @> $1::jsonb AND customer_email=$2 ORDER BY created_at DESC LIMIT 1', [JSON.stringify([design.id]),booking.customer_email])).rows[0];
-    return { id: design.id, tenant: tenant?.slug || 'generic', scene: design.scene,
-        anonymousSessionId: design.anonymous_session_id, active: !!active,
+    const accessDesign = await permissionDesign(design);
+    const order = await refreshOrderAccess(accessDesign.id, true);
+    const booking = (await query("SELECT * FROM entitlements WHERE design_id=$1 AND source='friendly_order' LIMIT 1", [accessDesign.id])).rows[0];
+    const active = (await query("SELECT * FROM entitlements WHERE design_id=$1 AND status='active' AND (expires_at IS NULL OR expires_at>now()) ORDER BY expires_at DESC NULLS LAST LIMIT 1", [accessDesign.id])).rows[0];
+    const paid = (await query("SELECT id,customer_email FROM consumer_payments WHERE design_id=$1 AND status='paid' ORDER BY created_at DESC LIMIT 1", [accessDesign.id])).rows[0];
+    const expiresAt = active?.expires_at || (await query('SELECT expires_at FROM entitlements WHERE design_id=$1 ORDER BY created_at DESC LIMIT 1', [accessDesign.id])).rows[0]?.expires_at || null;
+    const email = paid ? (await query('SELECT status FROM event_pass_emails WHERE receipt_payment_id=$1', [paid.id])).rows[0] : booking && (await query('SELECT status FROM event_pass_emails WHERE design_ids @> $1::jsonb AND customer_email=$2 ORDER BY created_at DESC LIMIT 1', [JSON.stringify([accessDesign.id]),booking.customer_email])).rows[0];
+    return { ...projects.detail(design, tenant), id: design.id, tenant: tenant?.slug || 'generic', scene: design.scene,
+        anonymousSessionId: accessDesign.anonymous_session_id, active: !!active,
         expiresAt, renewable: !!paid, includedWithOrder: !!booking, orderNumber: order?.orderNumber || null,
         customerEmail: paid?.customer_email || booking?.customer_email || null,
         accessUrl: paid || booking ? accessUrl(design, tenant?.slug || 'generic', paid?.customer_email || booking.customer_email, expiresAt) : null,
@@ -178,8 +180,8 @@ router.post('/order-access/request', wrap(async (req, res) => {
 router.post('/event-pass/resume', wrap(async (req, res) => {
     const { designId, anonymousSessionId } = req.body || {};
     if (!designId || !anonymousSessionId) return res.status(400).json({ error: 'Design and session are required' });
-    const design = (await query('SELECT * FROM designs WHERE id=$1 AND anonymous_session_id=$2', [designId, anonymousSessionId])).rows[0];
-    if (!design) return res.status(404).json({ error: 'Saved design not found for this browser' });
+    const design = (await query('SELECT * FROM designs WHERE id=$1', [designId])).rows[0];
+    if (!design || (await permissionDesign(design)).anonymous_session_id !== anonymousSessionId) return res.status(404).json({ error: 'Saved design not found for this browser' });
     res.setHeader('Cache-Control', 'no-store');
     res.json(await designResponse(design));
 }));
@@ -192,6 +194,7 @@ router.get('/admin/designs/:designId', wrap(async (req, res) => {
     const tenant = await designTenant(design);
     res.setHeader('Cache-Control', 'no-store');
     res.json({
+        ...projects.detail(design, tenant, true),
         id: design.id,
         tenant: tenant?.slug || 'generic',
         scene: design.scene,
@@ -219,8 +222,9 @@ router.post('/event-pass/restore', wrap(async (req, res) => {
         const design = (await query('SELECT * FROM designs WHERE id=$1', [payload.designId])).rows[0];
         if (!design) return res.status(404).json({ error: 'Saved draft not found' });
         if (expectedKind === 'consumer_design_recovery') {
-            const paid = await query("SELECT id FROM consumer_payments WHERE design_id=$1 AND status='paid' AND lower(customer_email)=$2 LIMIT 1", [design.id, String(payload.email || '').trim().toLowerCase()]);
-            const booking = await query("SELECT id FROM entitlements WHERE design_id=$1 AND source='friendly_order' AND lower(customer_email)=$2 LIMIT 1", [design.id, String(payload.email || '').trim().toLowerCase()]);
+            const accessDesign = await permissionDesign(design);
+            const paid = await query("SELECT id FROM consumer_payments WHERE design_id=$1 AND status='paid' AND lower(customer_email)=$2 LIMIT 1", [accessDesign.id, String(payload.email || '').trim().toLowerCase()]);
+            const booking = await query("SELECT id FROM entitlements WHERE design_id=$1 AND source='friendly_order' AND lower(customer_email)=$2 LIMIT 1", [accessDesign.id, String(payload.email || '').trim().toLowerCase()]);
             if (!paid.rows.length && !booking.rows.length) return res.status(404).json({ error: 'Event not found for this access link' });
         }
         res.setHeader('Cache-Control', 'no-store');
@@ -302,6 +306,7 @@ function checkout(renewal) {
         if (!design || !body.anonymousSessionId || body.anonymousSessionId !== design.anonymous_session_id) {
             return res.status(404).json({ error: 'Save this design in your browser before checkout' });
         }
+        if (design.project_root_id) return res.status(409).json({ error: 'Manage the Event Pass on the original project. All alternatives share that access.', code: 'project_root_checkout', accessDesignId: (await permissionDesign(design)).id });
         const tenant = await designTenant(design), offer = passOffer(tenant);
         if (!isPassEnabled(tenant)) return res.status(409).json({ error: 'This designer does not require an Event Pass' });
         const current = await designResponse(design);
@@ -350,21 +355,7 @@ router.post('/designs/:designId/event-pass/renewal-checkout-session', checkout(t
 // attached (tenant_id is NULL). Anonymous by default - no login
 // required. This is what the Event Pass checkout below is gated on;
 // tenant-attached designs use POST /api/tenants/:slug/designs instead.
-router.post('/designs', wrap(async (req, res) => {
-    const admin = await platformAdminRequest(req);
-    const { scene, eventType, guestCount, estimateTotal, anonymousSessionId, schemaVersion } = req.body || {};
-    if (!scene) {
-        return res.status(400).json({ error: 'scene is required' });
-    }
-    const denied = admin ? null : await savePermission(null, null, scene);
-    if (denied) return res.status(402).json(denied);
-    const result = await query(
-        `INSERT INTO designs (tenant_id, owner_user_id, anonymous_session_id, schema_version, event_type, guest_count, scene, estimate_total)
-         VALUES (NULL, $1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-        [admin?.userId || null, anonymousSessionId || null, schemaVersion || 1, eventType || null, guestCount || null, scene, estimateTotal || null]
-    );
-    res.status(201).json(result.rows[0]);
-}));
+router.post('/designs', projects.handler(req => projects.create(req, true), 201));
 
 // POST /api/consumer/designs/recovery-link
 // A consumer who paid for an Event Pass on one device/browser has no
@@ -423,36 +414,22 @@ router.get('/designs/recover', async (req, res) => {
 // a designId, never the scene itself. Scoped to tenant_id IS NULL, the
 // same rule PATCH below uses, so this can never be used to read a rental
 // company's tenant-attached design data.
-router.get('/designs/:designId', wrap(async (req, res) => {
-    const owner = req.headers['x-rentsketch-session'];
-    if (!owner) return res.status(401).json({ error: 'Open your private event link to access this design.' });
-    const result = await query(
-        'SELECT id, event_type, guest_count, scene, estimate_total, schema_version FROM designs WHERE id = $1 AND tenant_id IS NULL AND anonymous_session_id=$2',
-        [req.params.designId, owner]
-    );
-    const design = result.rows[0];
-    if (!design) return res.status(404).json({ error: 'Design not found' });
-    res.json({
-        id: design.id,
-        eventType: design.event_type,
-        guestCount: design.guest_count,
-        scene: design.scene,
-        estimateTotal: design.estimate_total,
-        schemaVersion: design.schema_version,
-    });
-}));
+// Register the same project contract for legacy NULL and generic-tenant designs.
+projects.register(router, '/designs', true);
 
 // GET /api/consumer/designs/:designId/entitlement
 // Server-authoritative check: does this design currently have an active
 // entitlement? The frontend must use this - not the Stripe success URL - to
 // decide whether to unlock editing.
-router.get('/designs/:designId/entitlement', async (req, res) => {
+router.get('/designs/:designId/entitlement', wrap(async (req, res) => {
+    const current = (await query('SELECT * FROM designs WHERE id=$1', [req.params.designId])).rows[0];
+    const accessDesign = current ? await permissionDesign(current) : null;
     const result = await query(
         `SELECT * FROM entitlements
          WHERE design_id = $1 AND status = 'active' AND (expires_at IS NULL OR expires_at > now())
          ORDER BY expires_at DESC NULLS LAST
          LIMIT 1`,
-        [req.params.designId]
+        [accessDesign?.id || req.params.designId]
     );
     const entitlement = result.rows[0];
     if (!entitlement) {
@@ -464,7 +441,7 @@ router.get('/designs/:designId/entitlement', async (req, res) => {
         expiresAt: entitlement.expires_at,
         capabilities: entitlement.capabilities,
     });
-});
+}));
 
 // GET /api/consumer/designs/:designId/access
 // THE authoritative access-resolution endpoint (see server/src/access.js).
@@ -507,27 +484,7 @@ router.get('/designs/:designId/access', wrap(async (req, res) => {
 
 // Paid editing applies to every save, including designs that have never paid.
 // A bare rental preview can be checkpointed so Checkout restores that rental.
-router.patch('/designs/:designId', wrap(async (req, res) => {
-    const admin = await platformAdminRequest(req);
-    const { scene, eventType, guestCount, estimateTotal, anonymousSessionId } = req.body || {};
-    if (!scene) return res.status(400).json({ error: 'scene is required' });
-    if (!anonymousSessionId) return res.status(400).json({ error: 'anonymousSessionId is required to update a draft' });
-    const design = (await query("SELECT * FROM designs WHERE id=$1 AND anonymous_session_id=$2 AND (tenant_id IS NULL OR tenant_id=(SELECT id FROM tenants WHERE slug='generic'))", [req.params.designId, anonymousSessionId])).rows[0];
-    if (!design) return res.status(404).json({ error: 'Design not found' });
-    const denied = admin ? null : await savePermission(null, design, scene);
-    if (denied) return res.status(402).json(denied);
-
-    const result = await query(
-        `UPDATE designs SET scene = $1, event_type = COALESCE($2, event_type),
-         guest_count = COALESCE($3, guest_count), estimate_total = COALESCE($4, estimate_total),
-         updated_at = now()
-         WHERE id = $5 AND anonymous_session_id = $6 AND (tenant_id IS NULL OR tenant_id=(SELECT id FROM tenants WHERE slug='generic'))
-         RETURNING id`,
-        [scene, eventType || null, guestCount || null, estimateTotal || null, req.params.designId, anonymousSessionId]
-    );
-    if (!result.rows[0]) return res.status(404).json({ error: 'Design not found' });
-    res.json({ ok: true, id: req.params.designId });
-}));
+router.patch('/designs/:designId', projects.handler(req => projects.update(req, true)));
 
 
 module.exports = router;

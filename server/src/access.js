@@ -6,6 +6,7 @@ const FULL_CAPABILITIES = ['view','edit','save','3d','export','share'];
 async function findActiveEntitlement(designId){if(!designId)return null;const r=await db.query(`SELECT * FROM entitlements WHERE design_id=$1 AND status='active' AND (expires_at IS NULL OR expires_at>now()) ORDER BY expires_at DESC NULLS LAST LIMIT 1`,[designId]);return r.rows[0]||null;}
 async function resolveAccess({design,tenant,isStaff}){
   if(isStaff)return {context:'staff',access:'included',reason:'staff',expiresAt:null,capabilities:FULL_CAPABILITIES,paymentRequired:false,price:null,currency:'usd',tenant:tenant?tenant.slug:null};
+  if(design?.project_root_id){const root=(await db.query('SELECT * FROM designs WHERE id=$1 AND tenant_id IS NOT DISTINCT FROM $2 AND project_root_id IS NULL',[design.project_root_id,design.tenant_id])).rows[0];design=root||null;}
   const entitlement=design?await findActiveEntitlement(design.id):null;
   if(!tenant){
     if(entitlement)return {context:'consumer',access:'paid',reason:entitlement.source,expiresAt:entitlement.expires_at,capabilities:entitlement.capabilities,paymentRequired:false,price:null,currency:'usd',tenant:null};

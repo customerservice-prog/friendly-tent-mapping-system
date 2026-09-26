@@ -28,17 +28,21 @@ function meanDifference(a,b){
   }
   return count?total/count:null;
 }
-function centeredCorrelation(a,b){
-  if(!a?.data||!b?.data||a.data.length!==b.data.length)return null;
-  let sa=0,sb=0,n=0;
-  for(let i=0;i<a.data.length;i+=32){sa+=.2126*a.data[i]+.7152*a.data[i+1]+.0722*a.data[i+2];sb+=.2126*b.data[i]+.7152*b.data[i+1]+.0722*b.data[i+2];n++;}
-  if(!n)return null;const ma=sa/n,mb=sb/n;let num=0,da=0,db=0;
-  for(let i=0;i<a.data.length;i+=32){
-    const va=(.2126*a.data[i]+.7152*a.data[i+1]+.0722*a.data[i+2])-ma;
-    const vb=(.2126*b.data[i]+.7152*b.data[i+1]+.0722*b.data[i+2])-mb;
-    num+=va*vb;da+=va*va;db+=vb*vb;
+function registeredOverlap(a,b){
+  // Unregistered same-pixel correlation rejects exactly the lateral parallax
+  // a scan needs. Search a bounded translation before assessing shared texture.
+  const aa=grayFrame(a),bb=grayFrame(b),w=aa.width,h=aa.height;
+  if(!w||!h||w!==bb.width||h!==bb.height)return {correlation:0,dx:0,dy:0};
+  const maxX=Math.min(28,Math.round(w*.20)),maxY=Math.min(8,Math.round(h*.08));let best={correlation:-1,dx:0,dy:0};
+  for(let dy=-maxY;dy<=maxY;dy++)for(let dx=-maxX;dx<=maxX;dx++){
+    let sa=0,sb=0,saa=0,sbb=0,sab=0,n=0;
+    for(let y=maxY+2;y<h-maxY-2;y+=4)for(let x=maxX+2;x<w-maxX-2;x+=4){
+      const va=aa.pixels[y*w+x],vb=bb.pixels[(y+dy)*w+x+dx];sa+=va;sb+=vb;saa+=va*va;sbb+=vb*vb;sab+=va*vb;n++;
+    }
+    const da=saa-sa*sa/Math.max(1,n),db=sbb-sb*sb/Math.max(1,n),correlation=da>0&&db>0?(sab-sa*sb/n)/Math.sqrt(da*db):-1;
+    if(correlation>best.correlation)best={correlation,dx,dy};
   }
-  return da>0&&db>0?num/Math.sqrt(da*db):null;
+  return best;
 }
 export function assessCaptureFrames(frames){
   const issues=[],warnings=[];
@@ -50,10 +54,10 @@ export function assessCaptureFrames(frames){
     if(s.sharpness<18)issues.push(`View ${index+1} is too blurry. Move more slowly and keep the phone steady.`);
     else if(s.sharpness<34)warnings.push(`View ${index+1} is a little soft; a steadier scan will improve depth.`);
   });
-  const differences=[],correlations=[];
+  const differences=[],correlations=[],registrations=[];
   for(let i=1;i<frames.length;i++){
     const difference=meanDifference(frames[i-1],frames[i]);if(difference!=null)differences.push(difference);
-    const correlation=centeredCorrelation(frames[i-1],frames[i]);if(correlation!=null)correlations.push(correlation);
+    const registration=registeredOverlap(frames[i-1],frames[i]),correlation=registration.correlation;registrations.push(registration);if(correlation!=null)correlations.push(correlation);
     if(difference!=null&&difference<.7)issues.push(`Views ${i} and ${i+1} appear almost identical. Move sideways to capture a new viewpoint.`);
     if(difference!=null&&difference>46)warnings.push(`Views ${i} and ${i+1} changed a lot. Keep the same area centered while moving sideways.`);
     if(correlation!=null&&correlation<.18)issues.push(`Views ${i} and ${i+1} do not overlap enough. Keep the same yard features visible in every view.`);
@@ -77,6 +81,14 @@ export function assessCaptureFrames(frames){
     accuracy:'unverified',
     scaleSource:'user-entered baseline',
     cameraPoses:'assumed',
-    metrics:{averageSharpness:Math.round(avgSharp),averageTexture:Math.round(avgTexture),averageFrameDifference:Number(motion.toFixed(1)),averageOverlap:Number(overlap.toFixed(2))}
+    metrics:{averageSharpness:Math.round(avgSharp),averageTexture:Math.round(avgTexture),averageFrameDifference:Number(motion.toFixed(1)),averageOverlap:Number(overlap.toFixed(2)),overlapMethod:'translation-compensated-correlation',registrations}
   };
+}
+
+export function scanCaptureGuidance({quality,path,validation}={}){
+  if(quality?.issues?.length)return {action:'retake',title:'Improve the capture',steps:quality.issues.slice(0,3)};
+  if(path&&!path.usable)return {action:'retake',title:'Keep one steady sideways path',steps:['Move in one direction with the phone level. Do not pan in place.','Keep the same textured features visible across every frame.','Measure the total camera travel independently from the check segment.']};
+  if(validation?.status==='failed')return {action:'review-check',title:'Review the independent distance',steps:validation.reasons};
+  if(validation?.status==='valid')return {action:'verify-site',title:'One segment checked',steps:['The checked segment agrees within tolerance. Other surfaces and installation clearances still need on-site verification.']};
+  return {action:'add-check',title:'Check a separate physical distance',steps:['Choose two visible points at least 3 ft apart in the center photo.','Measure their direct distance with a tape or laser. Do not reuse the camera travel distance.','Mark those points and compare the scan prediction before relying on scale.']};
 }
