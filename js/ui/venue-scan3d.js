@@ -34,6 +34,18 @@ function scanFeatherMask(size=128){
   x.putImageData(img,0,0);
   const tex=new THREE.CanvasTexture(c);tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.needsUpdate=true;return tex;
 }
+function averageImageRgb(image){
+  const w=image?.naturalWidth||image?.width||0,h=image?.naturalHeight||image?.height||0;if(!w||!h)return [1,1,1];
+  const c=document.createElement('canvas');c.width=48;c.height=36;
+  const x=c.getContext('2d',{willReadFrequently:true,alpha:false});x.drawImage(image,0,0,c.width,c.height);
+  const d=x.getImageData(0,0,c.width,c.height).data;let r=0,g=0,b=0,n=0;
+  for(let yy=5;yy<c.height-4;yy+=2)for(let xx=5;xx<c.width-4;xx+=2){const i=(yy*c.width+xx)*4;r+=d[i];g+=d[i+1];b+=d[i+2];n++;}
+  return n?[r/n/255,g/n/255,b/n/255]:[1,1,1];
+}
+function exposureMatchColor(referenceRgb,targetRgb){
+  const safe=(a,b)=>Math.max(.82,Math.min(1.18,(a+.04)/(b+.04)));
+  return new THREE.Color(safe(referenceRgb[0],targetRgb[0]),safe(referenceRgb[1],targetRgb[1]),safe(referenceRgb[2],targetRgb[2]));
+}
 function averageLowerColor(imageDataValue){
   const {data,width,height}=imageDataValue||{};
   if(!data||!width||!height)return new THREE.Color(0x6f805e);
@@ -173,7 +185,7 @@ export async function createVenueScanWorld({
   geometry.setIndex(new THREE.BufferAttribute(result.indices,1));
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
-  const map=textureFromImage(centerImage),centerFeather=scanFeatherMask();
+  const map=textureFromImage(centerImage),centerFeather=scanFeatherMask(),centerRgb=averageImageRgb(centerImage);
   const material=new THREE.MeshStandardMaterial({
     map,alphaMap:centerFeather,roughness:1,metalness:0,side:THREE.DoubleSide,
     transparent:true,alphaTest:.025,depthWrite:true,color:0xffffff,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1
@@ -202,8 +214,8 @@ export async function createVenueScanWorld({
       rg.setAttribute('position',new THREE.BufferAttribute(rr.positions,3));
       rg.setAttribute('uv',new THREE.BufferAttribute(rr.uvs,2));
       rg.setIndex(new THREE.BufferAttribute(rr.indices,1));rg.computeVertexNormals();rg.computeBoundingSphere();
-      const rt=textureFromImage(image),edgeFade=scanFeatherMask();
-      const rm=new THREE.MeshStandardMaterial({map:rt,alphaMap:edgeFade,roughness:1,metalness:0,side:THREE.DoubleSide,transparent:true,alphaTest:.025,depthWrite:true,color:0xffffff,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
+      const rt=textureFromImage(image),edgeFade=scanFeatherMask(),balancedColor=exposureMatchColor(centerRgb,averageImageRgb(image));
+      const rm=new THREE.MeshStandardMaterial({map:rt,alphaMap:edgeFade,roughness:1,metalness:0,side:THREE.DoubleSide,transparent:true,alphaTest:.025,depthWrite:true,color:balancedColor,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
       const refMesh=new THREE.Mesh(rg,rm);refMesh.name='Metric venue reference mesh '+ref.referenceIndex;
       refMesh.castShadow=false;refMesh.receiveShadow=true;
       const rollRad=Number(ref.rollRad)||0;
@@ -290,8 +302,25 @@ export async function createVenueScanWorld({
     reconstructionMode,
     referenceViewCount:referenceMeshes.length,
     cameraOrigin:{x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8},
+    presentationMode:'overview',
+    setPresentationMode(mode){
+      group.userData.presentationMode=mode==='walk'?'walk':'overview';
+      if(group.userData.presentationMode==='overview'){
+        const anchor=referenceMeshes[0];
+        for(const candidate of referenceMeshes)candidate.visible=candidate===anchor;
+        group.userData.activeReferenceIndex=anchor.userData.referenceIndex;
+        group.userData.activeReferenceOffsetFt=anchor.userData.referenceOffsetFt;
+      }
+    },
     updateView(camera){
       if(referenceMeshes.length<2||!camera)return;
+      if(group.userData.presentationMode!=='walk'){
+        const anchor=referenceMeshes[0];
+        for(const candidate of referenceMeshes)candidate.visible=candidate===anchor;
+        group.userData.activeReferenceIndex=anchor.userData.referenceIndex;
+        group.userData.activeReferenceOffsetFt=anchor.userData.referenceOffsetFt;
+        return;
+      }
       const cameraX=Number(camera.position?.x)||0,cameraZ=Number(camera.position?.z)||0;
       let best=referenceMeshes[0],bestDistance=Infinity;
       for(const candidate of referenceMeshes){
@@ -304,9 +333,7 @@ export async function createVenueScanWorld({
       const currentDx=cameraX-(Number(current.userData.referenceOffsetFt)||0);
       const currentDz=cameraZ-(-siteLength/2-8);
       const currentDistance=currentDx*currentDx+currentDz*currentDz*.10;
-      // Hold the current real camera until another reference is meaningfully
-      // closer. This removes rapid whole-photo flicker near midpoint boundaries.
-      const chosen=best!==current&&bestDistance<currentDistance*.72?best:current;
+      const chosen=best!==current&&bestDistance<currentDistance*.68?best:current;
       for(const candidate of referenceMeshes)candidate.visible=candidate===chosen;
       group.userData.activeReferenceIndex=chosen.userData.referenceIndex;
       group.userData.activeReferenceOffsetFt=chosen.userData.referenceOffsetFt;
