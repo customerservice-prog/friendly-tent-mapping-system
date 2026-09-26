@@ -71,7 +71,8 @@ const web=http.createServer((req,res)=>{
     await context.addCookies([{url:apiOrigin,name:'unrelated-api-cookie',value:'must-not-send',httpOnly:true}]);
     await context.addInitScript(()=>{
       localStorage.setItem('rentsketch-anon-session','generic-photo-owner');
-      localStorage.setItem('rentsketch-autosave:generic',JSON.stringify({id:'generic-photo-design',scene:{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},savedAt:new Date().toISOString(),tenant:'generic',anonymousSessionId:'generic-photo-owner'}));
+      // Seed only a first visit; reload must retain the actual saved device copy.
+      if(!localStorage.getItem('rentsketch-autosave:generic'))localStorage.setItem('rentsketch-autosave:generic',JSON.stringify({id:'generic-photo-design',scene:{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},savedAt:new Date().toISOString(),tenant:'generic',anonymousSessionId:'generic-photo-owner'}));
     });
     const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(/INVALID_VALUE|texSubImage2D|texStorage2D/.test(m.text()))errors.push(m.text());});
     await page.goto(webOrigin+'/designer/?tenant=generic&admin=1',{waitUntil:'networkidle'});
@@ -193,6 +194,7 @@ const web=http.createServer((req,res)=>{
     const yardItem=await page.evaluate(()=>window.FriendlyBridge.getScene().objects.find(o=>o.tableId==='banquet-6ft'));
     assert.ok(yardItem?.photoPlacement?.x>30&&yardItem.photoPlacement.y>30,'new rental is placed in yard beyond the 20 ft tent bounds');
     await page.evaluate(()=>window.RentSketchAutosave.flush());
+    const deviceCopy=await page.evaluate(()=>JSON.parse(localStorage.getItem('rentsketch-autosave:generic')));assert.equal(deviceCopy.pending,false,'explicit flush confirms the device scene has synced');assert.equal(deviceCopy.scene.backgroundPhoto.id,'photo-browser-fixture-3');
     console.log('PASS Photo customer journey: main tent drag and yard rental placement');
     await page.reload({waitUntil:'networkidle'});
     await page.waitForFunction(()=>window.RentSketchEventPass?.canEdit()&&window.FriendlyBridge?.getScene().backgroundPhoto);
