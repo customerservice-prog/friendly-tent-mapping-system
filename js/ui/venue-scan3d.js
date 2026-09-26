@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
+import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, refineReconstructionSurface, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
 
 function loadImage(url){
   return new Promise((resolve,reject)=>{
@@ -20,6 +20,18 @@ function textureFromImage(image){
   tex.minFilter=THREE.LinearMipmapLinearFilter;tex.magFilter=THREE.LinearFilter;tex.anisotropy=4;
   return tex;
 }
+export function spaceScanQualityProfile({mobile=false,deviceMemory,hardwareConcurrency}={}){
+  const memory=Number(deviceMemory),cores=Number(hardwareConcurrency);
+  if(mobile)return {tier:'mobile',width:160,maxHeight:168,primaryStep:4,fusionStep:6,maxDisparity:24,fusionDisparity:22,referenceSpan:2,voxelFt:.48,refinementPasses:1};
+  if((Number.isFinite(memory)&&memory<=4)||(Number.isFinite(cores)&&cores<=4))return {tier:'balanced',width:184,maxHeight:176,primaryStep:4,fusionStep:6,maxDisparity:28,fusionDisparity:26,referenceSpan:2,voxelFt:.42,refinementPasses:1};
+  if((Number.isFinite(memory)&&memory>=12)&&(Number.isFinite(cores)&&cores>=8))return {tier:'ultra',width:232,maxHeight:210,primaryStep:3,fusionStep:5,maxDisparity:34,fusionDisparity:30,referenceSpan:2,voxelFt:.30,refinementPasses:2};
+  return {tier:'high',width:208,maxHeight:192,primaryStep:3,fusionStep:5,maxDisparity:32,fusionDisparity:28,referenceSpan:2,voxelFt:.34,refinementPasses:2};
+}
+function currentDeviceProfile(mobile){
+  const n=typeof navigator!=='undefined'?navigator:{};
+  return spaceScanQualityProfile({mobile,deviceMemory:n.deviceMemory,hardwareConcurrency:n.hardwareConcurrency});
+}
+
 function averageLowerColor(imageDataValue){
   const {data,width,height}=imageDataValue||{};
   if(!data||!width||!height)return new THREE.Color(0x6f805e);
@@ -56,7 +68,7 @@ export async function createVenueScanWorld({
   const group=new THREE.Group();group.name='Metric Space Scan';
   group.userData={mode:'metric-stereo-scan',ready:false,setNight(){}};
   if(!hasMetricSpaceScan(scan)||!site)return group;
-  const frames=normalizedFrames(scan),samples=normalizedSamples(scan);
+  const frames=normalizedFrames(scan),samples=normalizedSamples(scan),quality=currentDeviceProfile(mobile);
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   const requestedBaselineFt=Math.max(1,Math.min(30,Number(scan.baselineFt)||6)),baselineFactor=Math.max(.4,Math.min(1.05,Number(scan.baselineFactor)||1)),baselineFt=requestedBaselineFt*baselineFactor;
   let centerImage,centerData,result,fusion=null,multiImages=null,multiSamples=null,multiCenterIndex=-1,reconstructionMode='stereo-3',sourceFrameIds=[];
@@ -67,7 +79,7 @@ export async function createVenueScanWorld({
     samples.forEach((sample,index)=>{const d=Math.abs(sample.offsetFactor);if(d<bestCenter){bestCenter=d;centerIndex=index;}});multiCenterIndex=centerIndex;
     centerImage=images[centerIndex];
     const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
-    const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
+    const width=quality.width,height=Math.max(96,Math.min(quality.maxHeight,Math.round(width*aspect)));
     const working=images.map(image=>imageData(image,width,height));
     centerData=working[centerIndex];const center=centerData,views=[];
     for(let i=0;i<working.length;i++){
@@ -79,27 +91,29 @@ export async function createVenueScanWorld({
       fovDeg:Number(scan.fovDeg)||62,
       horizonY:Number(calibration?.horizonY)||.34,
       eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
-      step:mobile?5:4,
-      maxDisparity:mobile?22:30,
-      patchRadius:2,
-      verticalSearch:3,
+      step:quality.primaryStep,
+      maxDisparity:quality.maxDisparity,
+      patchRadius:quality.tier==='ultra'||quality.tier==='high'?1:2,
+      verticalSearch:quality.tier==='mobile'?2:3,
       maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
     });
     fusion=fuseMultiReferenceSurfels({
       captures:working.map((image,i)=>({image,offsetFt:samples[i].offsetFactor*baselineFt})),
       primaryIndex:centerIndex,
       primaryResult:result,
-      referenceIndices:[centerIndex-2,centerIndex,centerIndex+2],
+      referenceIndices:quality.tier==='ultra'||quality.tier==='high'
+        ? [centerIndex-2,centerIndex-1,centerIndex,centerIndex+1,centerIndex+2]
+        : [centerIndex-2,centerIndex,centerIndex+2],
       fovDeg:Number(scan.fovDeg)||62,
       horizonY:Number(calibration?.horizonY)||.34,
       eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
-      step:mobile?7:6,
-      maxDisparity:mobile?20:28,
-      patchRadius:2,
-      verticalSearch:3,
+      step:quality.fusionStep,
+      maxDisparity:quality.fusionDisparity,
+      patchRadius:quality.tier==='ultra'||quality.tier==='high'?1:2,
+      verticalSearch:quality.tier==='mobile'?2:3,
       minConfidence:.10,
       maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
-      voxelFt:mobile?.56:.42
+      voxelFt:quality.voxelFt
     });
     reconstructionMode='multireference-'+samples.length;
     sourceFrameIds=samples.map(s=>s.id).filter(Boolean);
@@ -110,22 +124,23 @@ export async function createVenueScanWorld({
     centerImage=centerLoaded;
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
     const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
-    const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
+    const width=quality.width,height=Math.max(96,Math.min(quality.maxHeight,Math.round(width*aspect)));
     const left=imageData(leftImage,width,height),center=imageData(centerImage,width,height),right=imageData(rightImage,width,height);centerData=center;
     result=reconstructStereoGrid({
       left,center,right,baselineFt,
       fovDeg:Number(scan.fovDeg)||62,
       horizonY:Number(calibration?.horizonY)||.34,
       eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
-      step:mobile?5:4,
-      maxDisparity:mobile?20:26,
-      patchRadius:2,
+      step:quality.primaryStep,
+      maxDisparity:Math.max(22,quality.maxDisparity-2),
+      patchRadius:quality.tier==='ultra'||quality.tier==='high'?1:2,
       verticalSearch:2,
       maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
     });
     sourceFrameIds=[frames.left.id,frames.center.id,frames.right.id].filter(Boolean);
   }
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
+  refineReconstructionSurface(result,{passes:quality.refinementPasses,strength:quality.tier==='ultra'?.18:.22,relativeDepthThreshold:.06,absoluteDepthThresholdFt:1.0});
   if(result.metrics.validCount<45||result.metrics.triangleCount<30){
     group.userData={mode:'metric-stereo-scan',ready:false,error:'not-enough-overlap',metrics:stereoReconstructionSummary(result),setNight(){}};
     return group;
@@ -243,7 +258,7 @@ export async function createVenueScanWorld({
     captureConeDeg:118,
     knownBounds:worldBounds,
     obstacles,
-    metrics:{...summary,autoObstacleCount:obstacles.length,referenceCount:fusion?.metrics?.referenceCount||1,fusedSurfels:fusion?.surfelCount||0,multiReferenceAgreementPct:fusion?Math.round((fusion.metrics.multiReferenceAgreement||0)*100):null,fusedConfidencePct:fusion?Math.round((fusion.metrics.averageConfidence||0)*100):null},
+    metrics:{...summary,qualityTier:quality.tier,workingWidth:quality.width,autoObstacleCount:obstacles.length,referenceCount:fusion?.metrics?.referenceCount||1,fusedSurfels:fusion?.surfelCount||0,multiReferenceAgreementPct:fusion?Math.round((fusion.metrics.multiReferenceAgreement||0)*100):null,fusedConfidencePct:fusion?Math.round((fusion.metrics.averageConfidence||0)*100):null},
     sourceFrames:sourceFrameIds,
     reconstructionMode,
     referenceViewCount:referenceMeshes.length,
