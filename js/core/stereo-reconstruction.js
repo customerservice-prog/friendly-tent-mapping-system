@@ -274,8 +274,7 @@ export function reconstructMultiViewGrid({
     const image=view?.image,offsetFt=finite(view?.offsetFt,0);
     if(!image||Math.abs(offsetFt)<.20)return null;
     if(image.width!==w||image.height!==h)throw new Error('All multi-view scan frames must use the same working resolution.');
-    const rollRad=clamp(finite(capture?.rollRad,0),-.20,.20);
-    return {image,offsetFt,rollRad,index};
+    return {image,offsetFt,index};
   }).filter(Boolean);
   if(usable.length<2)throw new Error('Multi-view reconstruction needs captures on both sides of the center view.');
   const hasLeft=usable.some(v=>v.offsetFt<0),hasRight=usable.some(v=>v.offsetFt>0);
@@ -417,9 +416,9 @@ export function fuseMultiReferenceSurfels({
   voxelFt=.42,
 }={}){
   const ordered=(Array.isArray(captures)?captures:[]).map((capture,index)=>{
-    const image=capture?.image,offsetFt=finite(capture?.offsetFt,0);
+    const image=capture?.image,offsetFt=finite(capture?.offsetFt,0),rollRad=clamp(finite(capture?.rollRad,0),-.20,.20);
     if(!image||!image.width||!image.height||!Number.isFinite(offsetFt))return null;
-    return {image,offsetFt,index};
+    return {image,offsetFt,rollRad,index};
   }).filter(Boolean).sort((a,b)=>a.offsetFt-b.offsetFt);
   if(ordered.length<3)throw new Error('Multi-reference fusion needs at least three captures.');
   const w=ordered[0].image.width,h=ordered[0].image.height;
