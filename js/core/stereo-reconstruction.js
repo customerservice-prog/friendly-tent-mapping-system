@@ -274,7 +274,8 @@ export function reconstructMultiViewGrid({
     const image=view?.image,offsetFt=finite(view?.offsetFt,0);
     if(!image||Math.abs(offsetFt)<.20)return null;
     if(image.width!==w||image.height!==h)throw new Error('All multi-view scan frames must use the same working resolution.');
-    return {image,offsetFt,index};
+    const rollRad=clamp(finite(capture?.rollRad,0),-.20,.20);
+    return {image,offsetFt,rollRad,index};
   }).filter(Boolean);
   if(usable.length<2)throw new Error('Multi-view reconstruction needs captures on both sides of the center view.');
   const hasLeft=usable.some(v=>v.offsetFt<0),hasRight=usable.some(v=>v.offsetFt>0);
@@ -456,11 +457,13 @@ export function fuseMultiReferenceSurfels({
         fovDeg,horizonY,eyeHeightFt,step,maxDisparity,patchRadius,verticalSearch,minConfidence,maxDepthFt,minDepthFt
       });
     }
-    referenceMetrics.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,...result.metrics});
-    referenceResults.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,result});
+    referenceMetrics.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,rollRad:ref.rollRad,...result.metrics});
+    referenceResults.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,rollRad:ref.rollRad,result});
+    const cr=Math.cos(ref.rollRad),sr=Math.sin(ref.rollRad);
     for(let i=0;i<result.valid.length;i++){
       if(!result.valid[i]||result.confidence[i]<minConfidence*.72)continue;
-      const x=result.positions[i*3]+ref.offsetFt,y=result.positions[i*3+1],z=result.positions[i*3+2];
+      const localX=result.positions[i*3],localY=result.positions[i*3+1]-eyeHeightFt,z=result.positions[i*3+2];
+      const x=localX*cr-localY*sr+ref.offsetFt,y=localX*sr+localY*cr+eyeHeightFt;
       addPoint(
         x,y,z,
         result.colors[i*3],result.colors[i*3+1],result.colors[i*3+2],
@@ -489,6 +492,8 @@ export function fuseMultiReferenceSurfels({
       surfelCount,
       multiReferenceAgreement:agreement,
       averageConfidence:avgConfidence,
+      poseCorrectedReferences:refs.filter(i=>Math.abs(ordered[i]?.rollRad||0)>.0005).length,
+      maxReferenceRollDeg:Math.round(Math.max(0,...refs.map(i=>Math.abs(ordered[i]?.rollRad||0)))*180/Math.PI*10)/10,
       quality:surfelCount>650&&agreement>.24&&avgConfidence>.16?'good':surfelCount>220&&avgConfidence>.10?'usable':'weak'
     }
   };
