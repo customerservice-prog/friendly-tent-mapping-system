@@ -25,7 +25,7 @@ export function estimateFrameTranslation(reference,target,{maxXFraction=.18,maxY
  // avoids aliasing odd-pixel phone movement. Horizontal motion is searched but
  // intentionally not applied to stereo because horizontal disparity is depth.
  const coarseStride=w*h>18000?5:w*h>7000?4:3;
- for(let dy=-maxDy;dy<=maxDy;dy+=2)for(let dx=-maxDx;dx<=maxDx;dx+=2){
+ for(let dy=-maxDy;dy<=maxDy;dy++)for(let dx=-maxDx;dx<=maxDx;dx++){
   const hit=scoreAt(dx,dy,coarseStride);
   if(hit.score<best.score)best={dx,dy,...hit};
  }
