@@ -35,12 +35,14 @@ function scanFeatherMask(size=128){
   const tex=new THREE.CanvasTexture(c);tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.needsUpdate=true;return tex;
 }
 function averageImageRgb(image){
-  const w=image?.naturalWidth||image?.width||0,h=image?.naturalHeight||image?.height||0;if(!w||!h)return [1,1,1];
-  const c=document.createElement('canvas');c.width=48;c.height=36;
-  const x=c.getContext('2d',{willReadFrequently:true,alpha:false});x.drawImage(image,0,0,c.width,c.height);
-  const d=x.getImageData(0,0,c.width,c.height).data;let r=0,g=0,b=0,n=0;
-  for(let yy=5;yy<c.height-4;yy+=2)for(let xx=5;xx<c.width-4;xx+=2){const i=(yy*c.width+xx)*4;r+=d[i];g+=d[i+1];b+=d[i+2];n++;}
-  return n?[r/n/255,g/n/255,b/n/255]:[1,1,1];
+  try{
+    const w=image?.naturalWidth||image?.width||0,h=image?.naturalHeight||image?.height||0;if(!w||!h)return [1,1,1];
+    const c=document.createElement('canvas');c.width=48;c.height=36;
+    const x=c.getContext('2d',{willReadFrequently:true,alpha:false});x.drawImage(image,0,0,c.width,c.height);
+    const d=x.getImageData(0,0,c.width,c.height).data;let r=0,g=0,b=0,n=0;
+    for(let yy=5;yy<c.height-4;yy+=2)for(let xx=5;xx<c.width-4;xx+=2){const i=(yy*c.width+xx)*4;r+=d[i];g+=d[i+1];b+=d[i+2];n++;}
+    return n?[r/n/255,g/n/255,b/n/255]:[1,1,1];
+  }catch(_){return [1,1,1];}
 }
 function exposureMatchColor(referenceRgb,targetRgb){
   const safe=(a,b)=>Math.max(.82,Math.min(1.18,(a+.04)/(b+.04)));
