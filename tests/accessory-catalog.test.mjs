@@ -11,6 +11,8 @@ const products=[
   {id:'dance1',category:'dance_floor',name:'Dance Floor 3x3 Section',price_per_day:'35.00',active:true},
   {id:'fan1',category:'other',name:'20 inch Fan',price_per_day:'45.00',active:true},
   {id:'fountain1',category:'other',name:'Chocolate Fountain',price_per_day:'85.00',active:true},
+  {id:'delivery1',category:'other',name:'Delivery Fee',price_per_day:'50.00',active:true},
+  {id:'package1',category:'other',name:'20x20 Party Package',price_per_day:'425.00',active:true},
 ];
 
 test('live accessory catalog includes missing rental families and excludes duplicates',()=>{
@@ -23,6 +25,8 @@ test('live accessory catalog includes missing rental families and excludes dupli
   assert.ok(names.includes('Chocolate Fountain'));
   assert.ok(!names.includes('Crayon Bounce House'),'inflatables remain in the inflatable catalog');
   assert.ok(!names.includes('Dance Floor 3x3 Section'),'dance floor stays in its dedicated drawer');
+  assert.ok(!names.includes('Delivery Fee'),'fees are not placeable geometry');
+  assert.ok(!names.includes('20x20 Party Package'),'bundles are not treated as one physical object');
   const foam=items.find(x=>x.name==='Foam Machine');
   assert.equal(foam.accessoryType,'foam-machine');
   assert.equal(foam.visualCategory,'Effects');
