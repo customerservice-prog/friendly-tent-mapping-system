@@ -97,7 +97,7 @@ export function createInflatable(item,definition=byId(item.inflatableId)){
   cushion(w*.15,h-2,z,w*.42,2.4,.10,dark,.04);cushion(w*.13,h-2,z+.07,.65,.6,.05,white,.04);
   for(const side of [-1,1]){const q=new THREE.Mesh(new THREE.TorusGeometry(.85,.2,8,20),mats[1]);add(q,side*w*.29,3.3,-d*.40);}
  }
- root.traverse(o=>{if(o.isMesh){o.castShadow=o.receiveShadow=true;o.userData.itemId=item.id;}});root.userData.profile=p;root.userData.zones=zones;return root;
+ root.traverse(o=>{if(o.isMesh){o.castShadow=o.receiveShadow=true;o.userData.itemId=item.id;}});root.userData.profile=p;root.userData.zones=zones;root.userData.update=time=>{const breathe=Math.sin(time*1.75+(item.id?.length||0))*.008,wobble=Math.sin(time*1.17+(item.x||0)*.1)*.004;group.scale.set(1+breathe*.35,1+breathe,1-breathe*.22);group.rotation.z=wobble;if(water)water.opacity=.80+Math.sin(time*2.2)*.035;};return root;
 }
 
 // Child-sized articulated figures. Activities are decorative and stay in the
