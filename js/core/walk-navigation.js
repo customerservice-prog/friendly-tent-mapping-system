@@ -26,7 +26,7 @@ function polygonFor(entity,paddingFt=0){
   },Math.max(0,finite(paddingFt)));
 }
 
-export function walkBlockingObstacles({photoGeometry=[],items=[],blockRentalKinds=['inflatable']}={}){
+export function walkBlockingObstacles({photoGeometry=[],items=[],blockRentalKinds=['inflatable','accessory']}={}){
   const blockers=[];
   for(const g of photoGeometry||[]){
     if(!g)continue;
@@ -40,6 +40,7 @@ export function walkBlockingObstacles({photoGeometry=[],items=[],blockRentalKind
   const allowed=new Set(blockRentalKinds||[]);
   for(const item of items||[]){
     if(!item||!allowed.has(item.kind))continue;
+    if(item.kind==='accessory'&&Number(item.heightFt||0)<1.2)continue;
     const p=item.photoPlacement&&Number.isFinite(Number(item.photoPlacement.x))&&Number.isFinite(Number(item.photoPlacement.y))
       ? {...item,x:Number(item.photoPlacement.x),y:Number(item.photoPlacement.y),rotationDeg:finite(item.photoPlacement.rotationDeg,item.rotationDeg||0)}
       : item;
@@ -60,7 +61,7 @@ export function walkPositionBlocked({
   photoGeometry=[],
   items=[],
   bodyRadiusFt=.85,
-  blockRentalKinds=['inflatable'],
+  blockRentalKinds=['inflatable','accessory'],
 }={}){
   const s=siteSize(site);
   const layout=worldPointToLayout({x:finite(worldX),y:0,z:finite(worldZ)},s);
@@ -97,7 +98,7 @@ export function resolveWalkStep({
   photoGeometry=[],
   items=[],
   bodyRadiusFt=.85,
-  blockRentalKinds=['inflatable'],
+  blockRentalKinds=['inflatable','accessory'],
 }={}){
   const start={x:finite(from?.x),z:finite(from?.z)};
   const target={x:finite(to?.x,start.x),z:finite(to?.z,start.z)};
@@ -120,7 +121,7 @@ export function findSafeWalkStart({
   photoGeometry=[],
   items=[],
   bodyRadiusFt=.85,
-  blockRentalKinds=['inflatable'],
+  blockRentalKinds=['inflatable','accessory'],
 }={}){
   const s=siteSize(site);
   const candidates=[
