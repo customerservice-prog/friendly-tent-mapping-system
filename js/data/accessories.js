@@ -10,6 +10,8 @@ const normal=v=>String(v||'').toLowerCase().replace(/×/g,'x').replace(/[^a-z0-9
 const slug=v=>normal(v).replace(/\s+/g,'-');
 const finite=v=>{const n=Number(v);return Number.isFinite(n)&&n>0?n:null;};
 
+const NON_PLACEABLE=/\b(delivery|pickup|travel fee|mileage|damage waiver|deposit|security deposit|setup fee|set up fee|labor|late fee|exact time|rush fee|cleaning fee|tax|discount|coupon|credit|payment|balance|renewal|extra hour|additional hour|package|bundle|service charge|processing fee)\b/i;
+
 const PROFILES=[
   {test:/foam/,type:'foam-machine',category:'Effects',w:2.5,d:2.5,h:2.5,animated:true},
   {test:/photo ?booth|photobooth/,type:'photo-booth',category:'Entertainment',w:6,d:6,h:7,animated:true},
@@ -60,6 +62,8 @@ export function accessoryCatalog(products,showPrices=true){
   const out=[];
   for(const product of Array.isArray(products)?products:[]){
     if(!product||product.active===false||EXCLUDED_CATEGORIES.has(product.category))continue;
+    const searchable=String(product.name||'')+' '+String(product.external_id||'');
+    if(NON_PLACEABLE.test(searchable))continue;
     const p=profileFor(product);if(p.exclude)continue;
     const width=finite(product.width_ft)||finite(product.widthFt)||p.w;
     const depth=finite(product.length_ft)||finite(product.depth_ft)||finite(product.lengthFt)||finite(product.depthFt)||p.d;
