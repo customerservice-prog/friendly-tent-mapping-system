@@ -496,6 +496,10 @@ export function fuseMultiReferenceSurfels({
 
 export function stereoReconstructionSummary(result){
   const m=result?.metrics||{};
+  const registrations=Array.isArray(m.cameraRegistrations)?m.cameraRegistrations:
+    m.cameraRegistration?[m.cameraRegistration.left,m.cameraRegistration.right].filter(Boolean):[];
+  const driftPx=registrations.length?Math.max(...registrations.map(r=>Math.hypot(Number(r?.x)||0,Number(r?.y)||0))):0;
+  const horizontalCorrected=registrations.some(r=>r?.horizontalCorrected||Math.abs(Number(r?.x)||0)>0);
   return {
     quality:m.quality||'weak',
     coveragePct:Math.round((m.validRatio||0)*100),
@@ -504,7 +508,10 @@ export function stereoReconstructionSummary(result){
     triangles:Math.round(m.triangleCount||0),
     viewCount:Math.round(m.viewCount||result?.viewCount||3),
     averageViewsPerPoint:m.averageViewsPerPoint==null?null:Math.round(m.averageViewsPerPoint*10)/10,
-    multiViewAgreementPct:m.multiViewAgreement==null?null:Math.round(m.multiViewAgreement*100)
+    multiViewAgreementPct:m.multiViewAgreement==null?null:Math.round(m.multiViewAgreement*100),
+    cameraDriftPx:Math.round(driftPx*10)/10,
+    cameraRegistrationCorrected:registrations.some(r=>Math.abs(Number(r?.x)||0)>0||Math.abs(Number(r?.y)||0)>0),
+    horizontalRegistrationCorrected:horizontalCorrected
   };
 }
 
