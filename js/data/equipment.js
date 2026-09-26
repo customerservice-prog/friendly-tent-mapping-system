@@ -42,6 +42,10 @@ function price(value){if(value==null||value==='')return null;const n=Number(valu
 function metadata(product){const raw=product.metadata;return raw&&typeof raw==='object'?raw:{};}
 export function equipmentType(product){
   const n=String(product?.name||'').toLowerCase(),m=metadata(product||{});
+  const visual=String(product?.visual_model_id||'').trim();
+  const visualAliases={'photo-booth':'photobooth','tumbling-blocks':'tumbling-timbers'};
+  const mapped=visualAliases[visual]||visual;
+  if(mapped&&byType(mapped))return mapped;
   const explicit=m.equipmentType||m.equipment_type;
   if(explicit&&byType(explicit))return explicit;
   if(/foam/.test(n)&&/machine|cannon|party/.test(n))return 'foam-machine';
