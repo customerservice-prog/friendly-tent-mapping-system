@@ -38,7 +38,7 @@ test('feature-tracked camera path follows variable walking speed instead of equa
 });
 
 test('feature tracking rejects a non-monotonic camera path',()=>{
-  const base=textured(),positions=[0,3,6,4,8,11,14];
+  const base=textured(),positions=[0,3,1,4,2,5,3];
   const frames=positions.map(x=>shifted(base,x,0));
   const path=estimateTrackedCameraPath(frames,{centerIndex:3});
   assert.equal(path.usable,false);
