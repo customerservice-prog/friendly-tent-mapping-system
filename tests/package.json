@@ -7,10 +7,10 @@
     "test:marketing": "node marketing-launch.cjs && node --experimental-vm-modules marketing-tour.cjs && node --experimental-vm-modules wedding-story.cjs"
   },
   "devDependencies": {
-    "jsdom": "30.1.0",
-    "three": "0.160.0",
     "@electric-sql/pglite": "0.5.8",
-    "express": "4.19.2",
-    "jsonwebtoken": "9.0.2"
+    "express": "4.22.3",
+    "jsdom": "30.1.0",
+    "jsonwebtoken": "9.0.3",
+    "three": "0.160.0"
   }
 }
