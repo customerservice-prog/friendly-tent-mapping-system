@@ -420,13 +420,17 @@ export function init(container,callbacks={}) {
       const site=state.photoSite||t,r=Math.max(Math.max(20,site.widthFt),Math.max(20,site.lengthFt));
       if(hasReadyMetricScan()){
         const origin=scanWorld.userData.cameraOrigin||{x:0,y:5.6,z:-site.lengthFt/2-8};
-        camera.fov=Number(state.venueScan?.fovDeg)||62;camera.updateProjectionMatrix();
-        camera.position.set(origin.x,origin.y,origin.z);controls.target.set(0,Math.min(5,origin.y*.62),Math.min(site.lengthFt*.08,7));
-        controls.minDistance=4;controls.maxDistance=Math.max(72,r*1.28);controls.maxPolarAngle=Math.PI*.49;
+        // 3D Scan is an overview, not a second Walk mode. Starting directly at
+        // eye level on the reconstruction origin magnified every depth artifact
+        // and made a good capture feel like a rough point-cloud demo.
+        camera.fov=46;camera.updateProjectionMatrix();
+        camera.position.set(origin.x,Math.max(9.5,origin.y+4.2),origin.z-2.5);
+        controls.target.set(0,Math.min(4.2,origin.y*.58),Math.min(site.lengthFt*.20,12));
+        controls.minDistance=6;controls.maxDistance=Math.max(82,r*1.35);controls.maxPolarAngle=Math.PI*.48;
         controls.update();
-        // This three-view scan contains measured geometry in the photographed
-        // forward sector, not behind the photographer. Keep orbiting inside the
-        // captured cone instead of exposing invented 360 scenery.
+        // Captured geometry exists only in the photographed forward sector.
+        // Keep the overview within that evidence instead of exposing an empty
+        // or invented rear hemisphere.
         const theta=controls.getAzimuthalAngle?.()||0,half=(Number(scanWorld.userData.captureConeDeg)||118)*Math.PI/360;
         controls.minAzimuthAngle=theta-half;controls.maxAzimuthAngle=theta+half;
         syncPhotoPresentation();invalidate();return;

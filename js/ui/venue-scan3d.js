@@ -22,6 +22,18 @@ function textureFromImage(image){
   tex.minFilter=THREE.LinearMipmapLinearFilter;tex.magFilter=THREE.LinearFilter;tex.anisotropy=4;
   return tex;
 }
+function scanFeatherMask(size=128){
+  const c=document.createElement('canvas');c.width=c.height=size;
+  const x=c.getContext('2d'),img=x.createImageData(size,size);
+  const smooth=t=>t*t*(3-2*t);
+  for(let y=0;y<size;y++)for(let xx=0;xx<size;xx++){
+    const u=xx/(size-1),v=y/(size-1),edge=Math.min(u,1-u,v,1-v);
+    const a=smooth(Math.max(0,Math.min(1,(edge-.018)/.085))),i=(y*size+xx)*4,val=Math.round(a*255);
+    img.data[i]=img.data[i+1]=img.data[i+2]=255;img.data[i+3]=val;
+  }
+  x.putImageData(img,0,0);
+  const tex=new THREE.CanvasTexture(c);tex.minFilter=THREE.LinearFilter;tex.magFilter=THREE.LinearFilter;tex.needsUpdate=true;return tex;
+}
 function averageLowerColor(imageDataValue){
   const {data,width,height}=imageDataValue||{};
   if(!data||!width||!height)return new THREE.Color(0x6f805e);
@@ -147,9 +159,12 @@ export async function createVenueScanWorld({
   // holes outside the reconstructed mesh. No invented trees/houses are added.
   const siteWidth=Math.max(20,Number(site.widthFt)||50),siteLength=Math.max(20,Number(site.lengthFt)||60);
   const groundColor=averageLowerColor(centerData),groundDay=groundColor.clone();
-  const groundMaterial=new THREE.MeshStandardMaterial({color:groundColor,roughness:1,metalness:0});
-  const supportGround=new THREE.Mesh(new THREE.PlaneGeometry(Math.max(80,siteWidth*1.45),Math.max(100,siteLength*1.5)),groundMaterial);
-  supportGround.name='Metric scan support ground';supportGround.rotation.x=-Math.PI/2;supportGround.position.y=-.10;supportGround.receiveShadow=true;supportGround.renderOrder=-10;
+  // Customer presentation: keep a restrained floor only under the defined venue.
+  // The old oversized opaque plane made the reconstruction look like a synthetic
+  // video-game slab and amplified every hole at the scan boundary.
+  const groundMaterial=new THREE.MeshStandardMaterial({color:groundColor,roughness:1,metalness:0,transparent:true,opacity:.16,depthWrite:false});
+  const supportGround=new THREE.Mesh(new THREE.PlaneGeometry(siteWidth*1.08,siteLength*1.08),groundMaterial);
+  supportGround.name='Scan shadow support';supportGround.rotation.x=-Math.PI/2;supportGround.position.set(0,-.12,0);supportGround.receiveShadow=true;supportGround.renderOrder=-12;
   group.add(supportGround);
 
   const geometry=new THREE.BufferGeometry();
@@ -158,10 +173,10 @@ export async function createVenueScanWorld({
   geometry.setIndex(new THREE.BufferAttribute(result.indices,1));
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
-  const map=textureFromImage(centerImage);
+  const map=textureFromImage(centerImage),centerFeather=scanFeatherMask();
   const material=new THREE.MeshStandardMaterial({
-    map,roughness:.96,metalness:0,side:THREE.DoubleSide,
-    transparent:false,color:0xffffff
+    map,alphaMap:centerFeather,roughness:1,metalness:0,side:THREE.DoubleSide,
+    transparent:true,alphaTest:.025,depthWrite:true,color:0xffffff,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1
   });
   const mesh=new THREE.Mesh(geometry,material);mesh.name='Metric venue reconstruction mesh';
   mesh.castShadow=false;mesh.receiveShadow=true;
@@ -187,8 +202,8 @@ export async function createVenueScanWorld({
       rg.setAttribute('position',new THREE.BufferAttribute(rr.positions,3));
       rg.setAttribute('uv',new THREE.BufferAttribute(rr.uvs,2));
       rg.setIndex(new THREE.BufferAttribute(rr.indices,1));rg.computeVertexNormals();rg.computeBoundingSphere();
-      const rt=textureFromImage(image);
-      const rm=new THREE.MeshStandardMaterial({map:rt,roughness:.96,metalness:0,side:THREE.DoubleSide,transparent:false,color:0xffffff});
+      const rt=textureFromImage(image),edgeFade=scanFeatherMask();
+      const rm=new THREE.MeshStandardMaterial({map:rt,alphaMap:edgeFade,roughness:1,metalness:0,side:THREE.DoubleSide,transparent:true,alphaTest:.025,depthWrite:true,color:0xffffff,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
       const refMesh=new THREE.Mesh(rg,rm);refMesh.name='Metric venue reference mesh '+ref.referenceIndex;
       refMesh.castShadow=false;refMesh.receiveShadow=true;
       const rollRad=Number(ref.rollRad)||0;
@@ -232,8 +247,14 @@ export async function createVenueScanWorld({
     const pm=new THREE.PointsMaterial({size,sizeAttenuation:true,vertexColors:true,transparent:true,opacity,depthWrite:true});
     const points=new THREE.Points(pg,pm);points.name=name;points.position.copy(mesh.position);points.renderOrder=order;group.add(points);return points;
   }
-  addSurfelCloud('Metric venue reconstruction surfels',pts,cols,mobile?.28:.20,.48,-1);
-  addSurfelCloud('Metric venue reconstruction strong surfels',strongPts,strongCols,mobile?.36:.27,.80,-.5);
+  // The surfel cloud is useful for reconstruction diagnostics but looks noisy
+  // and unfinished to customers. Keep it available only for explicit developer
+  // debugging; production presentation uses the textured surface meshes.
+  const showDebugSurfels=globalThis.RENTSKETCH_SCAN_DEBUG===true;
+  if(showDebugSurfels){
+    addSurfelCloud('Metric venue reconstruction surfels',pts,cols,mobile?.22:.16,.20,-1);
+    addSurfelCloud('Metric venue reconstruction strong surfels',strongPts,strongCols,mobile?.28:.21,.36,-.5);
+  }
 
   geometry.computeBoundingBox();
   const worldBounds=geometry.boundingBox?{
@@ -271,22 +292,31 @@ export async function createVenueScanWorld({
     cameraOrigin:{x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8},
     updateView(camera){
       if(referenceMeshes.length<2||!camera)return;
+      const cameraX=Number(camera.position?.x)||0,cameraZ=Number(camera.position?.z)||0;
       let best=referenceMeshes[0],bestDistance=Infinity;
       for(const candidate of referenceMeshes){
-        const dx=(Number(camera.position?.x)||0)-(Number(candidate.userData.referenceOffsetFt)||0);
-        const dz=(Number(camera.position?.z)||0)-(-siteLength/2-8);
-        const distance=dx*dx+dz*dz*.12;
+        const dx=cameraX-(Number(candidate.userData.referenceOffsetFt)||0);
+        const dz=cameraZ-(-siteLength/2-8);
+        const distance=dx*dx+dz*dz*.10;
         if(distance<bestDistance){bestDistance=distance;best=candidate;}
       }
-      for(const candidate of referenceMeshes)candidate.visible=candidate===best;
-      group.userData.activeReferenceIndex=best.userData.referenceIndex;
-      group.userData.activeReferenceOffsetFt=best.userData.referenceOffsetFt;
+      const current=referenceMeshes.find(candidate=>candidate.visible)||referenceMeshes[0];
+      const currentDx=cameraX-(Number(current.userData.referenceOffsetFt)||0);
+      const currentDz=cameraZ-(-siteLength/2-8);
+      const currentDistance=currentDx*currentDx+currentDz*currentDz*.10;
+      // Hold the current real camera until another reference is meaningfully
+      // closer. This removes rapid whole-photo flicker near midpoint boundaries.
+      const chosen=best!==current&&bestDistance<currentDistance*.72?best:current;
+      for(const candidate of referenceMeshes)candidate.visible=candidate===chosen;
+      group.userData.activeReferenceIndex=chosen.userData.referenceIndex;
+      group.userData.activeReferenceOffsetFt=chosen.userData.referenceOffsetFt;
     },
     setNight(value){
       for(const refMesh of referenceMeshes)refMesh.material?.color?.setScalar(value?.48:1);
-      groundMaterial.color.copy(groundDay).multiplyScalar(value?.48:1);
+      groundMaterial.color.copy(groundDay).multiplyScalar(value?.62:1);
+      groundMaterial.opacity=value?.10:.16;
       for(const child of group.children){
-        if(child.isPoints&&child.material)child.material.opacity=value?.44:.72;
+        if(child.isPoints&&child.material)child.material.opacity=value?.12:.20;
       }
     }
   };
