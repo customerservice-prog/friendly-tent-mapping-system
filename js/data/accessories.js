@@ -66,8 +66,9 @@ export function accessoryCatalog(products,showPrices=true){
     const searchable=String(product.name||'')+' '+String(product.external_id||'');
     if(NON_PLACEABLE.test(searchable))continue;
     const p=profileFor(product);if(p.exclude)continue;
-    const width=finite(product.width_ft)||finite(product.widthFt)||p.w;
-    const depth=finite(product.length_ft)||finite(product.depth_ft)||finite(product.lengthFt)||finite(product.depthFt)||p.d;
+    const sourceWidth=finite(product.width_ft)||finite(product.widthFt),sourceDepth=finite(product.length_ft)||finite(product.depth_ft)||finite(product.lengthFt)||finite(product.depthFt);
+    const width=sourceWidth||p.w;
+    const depth=sourceDepth||p.d;
     const height=finite(product.height_ft)||finite(product.metadata?.heightFt)||finite(product.heightFt)||p.h;
     const raw=product.price_per_day,price=raw==null||raw===''?null:Number(raw);
     out.push({
@@ -81,6 +82,7 @@ export function accessoryCatalog(products,showPrices=true){
       depthFt:depth,
       heightFt:height,
       animated:!!p.animated,
+      dimensionsConfirmed:!!(sourceWidth&&sourceDepth),
       photoUrl:/^https?:\/\//i.test(product.photo_url||'')?product.photo_url:null,
       pricePerDay:showPrices&&Number.isFinite(price)?price:null,
       sourceCategory:product.category||'other',
@@ -109,6 +111,7 @@ export function accessoryItem(product,id,x,y){
     heightFt:product.heightFt,
     x,y,rotationDeg:0,
     animated:!!product.animated,
+    dimensionsConfirmed:!!product.dimensionsConfirmed,
     photoUrl:product.photoUrl||null,
     pricePerDay:product.pricePerDay,
   };
