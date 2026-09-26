@@ -194,7 +194,7 @@ export async function createVenueScanWorld({
   const material=new THREE.MeshBasicMaterial({
     map,alphaMap:centerFeather,side:THREE.DoubleSide,
     transparent:true,alphaTest:.025,depthWrite:true,color:0xffffff,
-    polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,toneMapped:false
+    polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,toneMapped:false,fog:false
   });
   const mesh=new THREE.Mesh(geometry,material);mesh.name='Metric venue reconstruction mesh';
   mesh.castShadow=false;mesh.receiveShadow=false;
