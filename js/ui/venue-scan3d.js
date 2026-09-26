@@ -188,12 +188,16 @@ export async function createVenueScanWorld({
   geometry.computeVertexNormals();
   geometry.computeBoundingSphere();
   const map=textureFromImage(centerImage),centerFeather=scanFeatherMask(),centerRgb=averageImageRgb(centerImage);
-  const material=new THREE.MeshStandardMaterial({
-    map,alphaMap:centerFeather,roughness:1,metalness:0,side:THREE.DoubleSide,
-    transparent:true,alphaTest:.025,depthWrite:true,color:0xffffff,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1
+  // Reconstructed photo evidence should read like the real photograph, not a
+  // freshly lit 3D sculpture. Using an unlit material prevents small triangle
+  // normals from turning depth noise into visible bright/dark wrinkles.
+  const material=new THREE.MeshBasicMaterial({
+    map,alphaMap:centerFeather,side:THREE.DoubleSide,
+    transparent:true,alphaTest:.025,depthWrite:true,color:0xffffff,
+    polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,toneMapped:false
   });
   const mesh=new THREE.Mesh(geometry,material);mesh.name='Metric venue reconstruction mesh';
-  mesh.castShadow=false;mesh.receiveShadow=true;
+  mesh.castShadow=false;mesh.receiveShadow=false;
   // The reconstruction is solved in the center camera's coordinate system.
   // Register it to RentSketch's feet-based world with the camera just outside
   // the near edge of the calibrated photo site, facing +Z.
@@ -217,9 +221,9 @@ export async function createVenueScanWorld({
       rg.setAttribute('uv',new THREE.BufferAttribute(rr.uvs,2));
       rg.setIndex(new THREE.BufferAttribute(rr.indices,1));rg.computeVertexNormals();rg.computeBoundingSphere();
       const rt=textureFromImage(image),edgeFade=scanFeatherMask(),balancedColor=exposureMatchColor(centerRgb,averageImageRgb(image));
-      const rm=new THREE.MeshStandardMaterial({map:rt,alphaMap:edgeFade,roughness:1,metalness:0,side:THREE.DoubleSide,transparent:true,alphaTest:.025,depthWrite:true,color:balancedColor,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1});
+      const rm=new THREE.MeshBasicMaterial({map:rt,alphaMap:edgeFade,side:THREE.DoubleSide,transparent:true,alphaTest:.025,depthWrite:true,color:balancedColor,polygonOffset:true,polygonOffsetFactor:1,polygonOffsetUnits:1,toneMapped:false});
       const refMesh=new THREE.Mesh(rg,rm);refMesh.name='Metric venue reference mesh '+ref.referenceIndex;
-      refMesh.castShadow=false;refMesh.receiveShadow=true;
+      refMesh.castShadow=false;refMesh.receiveShadow=false;
       const rollRad=Number(ref.rollRad)||0;
       if(Math.abs(rollRad)>.0005){
         rg.translate(0,-(Number(scan.eyeHeightFt)||5.6),0);
@@ -302,6 +306,7 @@ export async function createVenueScanWorld({
     metrics:{...summary,captureQualityScore:captureQuality?.score??null,captureQualityRating:captureQuality?.rating||null,trackedCameraPath:!!trackedPath?.usable,trackedMotionQuality:trackedPath?.meanQuality??null,trackedMotionConsistency:trackedPath?.consistency??null,trackedFeatureCount:trackedPath?.totalTracks??0,trackedPoseFrames:trackedPath?.framePoses?.filter(p=>Math.abs(Number(p.rollDeg)||0)>.05).length||0,maxTrackedRollDeg:trackedPath?.framePoses?.length?Math.max(...trackedPath.framePoses.map(p=>Math.abs(Number(p.rollDeg)||0))):0,poseCorrectedReferences:fusion?.metrics?.poseCorrectedReferences||0,maxReferenceRollDeg:fusion?.metrics?.maxReferenceRollDeg||0,acceptedReferences:fusion?.metrics?.acceptedReferences??(fusion?.metrics?.referenceCount||1),rejectedReferences:fusion?.metrics?.rejectedReferences||0,averageReferenceScore:fusion?.metrics?.averageReferenceScore??null,autoObstacleCount:obstacles.length,referenceCount:fusion?.metrics?.referenceCount||1,fusedSurfels:fusion?.surfelCount||0,multiReferenceAgreementPct:fusion?Math.round((fusion.metrics.multiReferenceAgreement||0)*100):null,fusedConfidencePct:fusion?Math.round((fusion.metrics.averageConfidence||0)*100):null},
     sourceFrames:sourceFrameIds,
     reconstructionMode,
+    photoFaithfulMaterial:true,
     referenceViewCount:referenceMeshes.length,
     cameraOrigin:{x:0,y:Number(scan.eyeHeightFt)||5.6,z:-siteLength/2-8},
     presentationMode:'overview',
