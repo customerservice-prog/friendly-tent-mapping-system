@@ -1,4 +1,5 @@
 import { createInflatable, createInflatableActivity } from './inflatable3d.js';
+import { createAccessory3d, updateAnimatedAccessories } from './accessory3d.js';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
@@ -495,8 +496,8 @@ export function init(container,callbacks={}) {
       disposeGroup(furniture);rendered.clear();const df=[];
       for(const o of mappedObjects){
         if(o.kind==='dance'){df.push(o);continue;}
-        if(!['table','inflatable','chair'].includes(o.kind))continue;
-        const q=o.kind==='inflatable'?createInflatable(o):o.kind==='chair'?makeStandaloneChair(o):table(o);
+        if(!['table','inflatable','chair','accessory'].includes(o.kind))continue;
+        const q=o.kind==='inflatable'?createInflatable(o):o.kind==='chair'?makeStandaloneChair(o):o.kind==='accessory'?createAccessory3d(o):table(o);
         q.position.set(o.x+o.widthFt/2-sceneSpace.widthFt/2,0,o.y+o.depthFt/2-sceneSpace.lengthFt/2);
         q.rotation.y=-(Number(o.rotationDeg||0)||0)*Math.PI/180;
         furniture.add(q);rendered.set(o.id,q);
@@ -522,7 +523,7 @@ export function init(container,callbacks={}) {
       disposeGroup(ghost);
       if(data.placement){
         const items=data.placement.objects;
-        if(items[0]?.kind==='chair')ghost.add(makeStandaloneChair(items[0]));else if(items[0]?.kind==='inflatable')ghost.add(createInflatable(items[0]));else if(items[0]?.kind==='table')ghost.add(table({...items[0],x:0,y:0}));
+        if(items[0]?.kind==='chair')ghost.add(makeStandaloneChair(items[0]));else if(items[0]?.kind==='inflatable')ghost.add(createInflatable(items[0]));else if(items[0]?.kind==='accessory')ghost.add(createAccessory3d(items[0]));else if(items[0]?.kind==='table')ghost.add(table({...items[0],x:0,y:0}));
         else{const q=dance(items.map(o=>({...o,x:o.x-data.placement.x,y:o.y-data.placement.y})),{widthFt:data.placement.widthFt,lengthFt:data.placement.depthFt});if(q)ghost.add(q);}
         ghost.traverse(o=>{if(o.material){o.material.transparent=true;o.material.opacity=.64;o.material.depthWrite=false;}o.castShadow=false;});
       }ghostKey=nextGhost;
@@ -767,7 +768,7 @@ export function init(container,callbacks={}) {
   }
   renderer.domElement.addEventListener('pointerdown',down);renderer.domElement.addEventListener('pointermove',move);renderer.domElement.addEventListener('pointerup',up);renderer.domElement.addEventListener('pointercancel',up);
   const ro=new ResizeObserver(resize);ro.observe(container);resize();
-  function loop(now=0){if(destroyed)return;raf=requestAnimationFrame(loop);const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;if(walk.isActive()){if(walk.update(dt))dirty=true;}else controls.update();if(container.clientWidth&&container.clientHeight&&!document.hidden&&!document.body.classList.contains('table-studio-open')&&!document.body.classList.contains('rs-preview-expired')){if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){weather?.userData.update(animationTime);if(showGuests){guests?.userData.update(animationTime);inflatableActivity?.userData.update(animationTime);renderer.shadowMap.needsUpdate=true;}animationTime=0;dirty=true;}if(dirty){updatePhotoStageViewFade();scanWorld.userData.updateView?.(camera);renderer.render(scene,camera);dirty=false;}}}
+  function loop(now=0){if(destroyed)return;raf=requestAnimationFrame(loop);const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;if(walk.isActive()){if(walk.update(dt))dirty=true;}else controls.update();if(container.clientWidth&&container.clientHeight&&!document.hidden&&!document.body.classList.contains('table-studio-open')&&!document.body.classList.contains('rs-preview-expired')){if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){weather?.userData.update(animationTime);if(showGuests){guests?.userData.update(animationTime);inflatableActivity?.userData.update(animationTime);}if(updateAnimatedAccessories(furniture,now/1000))renderer.shadowMap.needsUpdate=true;animationTime=0;dirty=true;}if(dirty){updatePhotoStageViewFade();scanWorld.userData.updateView?.(camera);renderer.render(scene,camera);dirty=false;}}}
   loop();document.addEventListener('visibilitychange',invalidate);
   function setNight(value){night=!!value;generatedBackground();syncPhotoFog();hemi.intensity=night?.7:weatherMode==='rain'?1.25:1.65;sun.intensity=night?.25:weatherMode==='rain'?.65:3.2;fill.intensity=night?.4:.7;renderer.toneMappingExposure=night?1.18:1.05;weather?.userData.setNight(night);weather?.userData.setPhotoMode?.(hasVenuePhoto());environment?.userData.setNight(night);local360.userData.setNight?.(night);scanWorld.userData.setNight?.(night);lightGroup?.userData.setNight?.(night);renderer.shadowMap.needsUpdate=true;invalidate();}
   function setScene(options={}){
