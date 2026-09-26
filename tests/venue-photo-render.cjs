@@ -10,10 +10,11 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
   drawImage(){draws++;},fillRect(){},strokeRect(){},beginPath(){},arc(){},fill(){},stroke(){},moveTo(){},lineTo(){},clearRect(){},save(){},restore(){},translate(){},rotate(){},scale(){},setTransform(){},measureText:()=>({width:20})
  },{get:(t,k)=>t[k]||(()=>{})});
  w.HTMLCanvasElement.prototype.getContext=()=>ctx;w.matchMedia=()=>({matches:false});
- Object.defineProperties(container,{clientWidth:{get:()=>900},clientHeight:{get:()=>600}});
- let renderer,control,clock=0,frames=new Map();
+ let viewportWidth=900,viewportHeight=600,resizeScene;
+ Object.defineProperties(container,{clientWidth:{get:()=>viewportWidth},clientHeight:{get:()=>viewportHeight}});
+ let renderer,control,clock=0,frames=new Map(),photoMoves=[];
  class Renderer{
-  constructor(){renderer=this;this.domElement=w.document.createElement('canvas');this.domElement.getBoundingClientRect=()=>({left:0,top:0,width:900,height:600});this.domElement.toDataURL=()=> 'data:image/jpeg;base64,venue-fixture';this.shadowMap={};}
+  constructor(){renderer=this;this.domElement=w.document.createElement('canvas');this.domElement.getBoundingClientRect=()=>({left:0,top:0,width:viewportWidth,height:viewportHeight});this.domElement.toDataURL=()=> 'data:image/jpeg;base64,venue-fixture';this.shadowMap={};}
   setPixelRatio(){}setSize(){}render(scene,camera){this.scene=scene;this.camera=camera;}dispose(){this.disposed=true;}
  }
  class Controls{
@@ -28,7 +29,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  }
  const context=vm.createContext({
   console,document:w.document,window:w,Image:FakeImage,
-  ResizeObserver:class{constructor(fn){this.fn=fn;}observe(){}disconnect(){}},
+  ResizeObserver:class{constructor(fn){this.fn=fn;resizeScene=fn;}observe(){}disconnect(){}},
   requestAnimationFrame:fn=>{frames.set(++clock,fn);return clock;},cancelAnimationFrame:id=>frames.delete(id),performance:{now:()=>0}
  }),cache=new Map();
  const overrides={WebGLRenderer:Renderer,PMREMGenerator:PMREM};
@@ -37,7 +38,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  function moduleFor(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,m);return m;}
  async function load(file){const m=moduleFor(file);if(m.status==='unlinked')await m.link((s,ref)=>s==='three'?three:s.endsWith('/OrbitControls.js')?orbit:moduleFor(s.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',s.slice(13)):path.resolve(path.dirname(ref.identifier),s)));return m;}
  const mod=await load(path.join(root,'js/ui/view3d.js'));await mod.evaluate();
- const view=mod.namespace.init(container,{});
+ const view=mod.namespace.init(container,{onPhotoMove:(id,p)=>photoMoves.push({id,...p})});
  const data={tent:{id:'frame-20x20',type:'frame',widthFt:20,lengthFt:20,centerPoles:[]},surfaceType:'grass',objects:[],lightingId:'lighting-none'};
  const photoSite={id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:70,lengthFt:90};
  const photoCalibration={version:1,horizonY:.34,frontLeft:{x:.06,y:.95},frontRight:{x:.94,y:.95},backRight:{x:.72,y:.47},backLeft:{x:.28,y:.47},autoEstimated:false};
@@ -87,6 +88,34 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  assert.equal(continuation.visible,false,'single-photo mode keeps the obsolete generic continuation hidden');
  assert.equal(control.enabled,false,'single-photo Matched View remains camera-locked');
  assert.equal(scene.background,matchedBackground,'single-photo view keeps the trusted photo pinned to its calibrated camera');
+ // Compare actual renderer projection with the SVG photo mapping, including
+ // off-centre crops and narrow screens. Merely checking camera state missed this.
+ const geometry=await load(path.join(root,'js/core/photo-geometry.js'));await geometry.evaluate();
+ for(const [vw,vh] of [[900,600],[1900,740],[360,640]]){
+   viewportWidth=vw;viewportHeight=vh;resizeScene();
+   const rect=geometry.namespace.photoImageRect(vw,vh,1600,1000,{focusX:24,focusY:72,zoom:1.2});
+   for(const [x,z] of [[0,0],[70,0],[70,90],[0,90],[35,45],[24,28],[44,48]]){
+     const photo=geometry.namespace.worldToPhoto(x,z,photoSite,photoCalibration),actual=new THREE.Vector3(x-35,0,z-45).project(renderer.camera);
+     assert.ok(Math.abs((actual.x+1)*vw/2-(rect.x+photo.x*rect.width))<.01,'3D ground X agrees with the photo to <0.01px at '+vw);
+     assert.ok(Math.abs((1-actual.y)*vh/2-(rect.y+photo.y*rect.height))<.01,'3D ground Y agrees with the photo to <0.01px at '+vw);
+   }
+ }
+ viewportWidth=900;viewportHeight=600;resizeScene();
+ const lockedMatrix=renderer.camera.projectionMatrix.toArray();
+ assert.equal(view.inside(),false,'interior camera cannot be entered behind a flat photograph');
+ assert.equal(view.reception(),false,'automatic party view cannot move the fixed-photo camera');
+ assert.deepEqual(renderer.camera.projectionMatrix.toArray(),lockedMatrix);
+ let tentMesh;scene.traverse(o=>{if(o.userData.kind==='tent')tentMesh=o;});scene.updateMatrixWorld(true);
+ const roof=tentMesh.children[0],roofCenter=new THREE.Box3().setFromObject(roof).getCenter(new THREE.Vector3()).project(renderer.camera);
+ const px=(roofCenter.x+1)*450,py=(1-roofCenter.y)*300;
+ function pointer(type,x,y){const event=new w.MouseEvent(type,{clientX:x,clientY:y,button:0});Object.defineProperties(event,{pointerId:{value:1},pointerType:{value:'mouse'}});renderer.domElement.dispatchEvent(event);}
+ pointer('pointerdown',px,py);pointer('pointermove',px+40,py+10);pointer('pointerup',px+40,py+10);
+ assert.ok(photoMoves.some(p=>p.id==='__photo_tent__'&&(Math.abs(p.x-24)>1||Math.abs(p.y-28)>1)),'dragging the visible tent itself persists its changed photo placement');
+ const placed=tentMesh.position.clone(),committed=photoMoves.length;
+ scene.updateMatrixWorld(true);const nextPoint=new THREE.Box3().setFromObject(roof).getCenter(new THREE.Vector3()).project(renderer.camera),cx=(nextPoint.x+1)*450,cy=(1-nextPoint.y)*300;
+ pointer('pointerdown',cx,cy);pointer('pointermove',cx-60,cy+20);pointer('pointercancel',cx-60,cy+20);
+ let restoredTent;scene.traverse(o=>{if(o.userData.kind==='tent')restoredTent=o;});
+ assert.ok(restoredTent.position.distanceTo(placed)<.001,'cancelled tent drag restores its visible position');assert.equal(photoMoves.length,committed,'cancel never commits a tent move');
  const photoGround=scene.getObjectByName('Photo ground projection'),photoBackdrop=scene.getObjectByName('Photo backdrop projection');
  assert.ok(photoGround.material.alphaMap?.isCanvasTexture,'photo evidence still carries a soft mask for metric-scan fallback');
  assert.equal(photoGround.material.depthWrite,false,'transparent photo evidence does not occlude future metric geometry');

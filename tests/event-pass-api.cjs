@@ -29,11 +29,12 @@ class Stripe {
 const pricing = require('../server/src/pricing');
 function load(file, deps) {
   const mod = { exports: {} };
-  vm.runInNewContext(fs.readFileSync(path.join(root, file), 'utf8'), { module: mod, exports: mod.exports, require: id => { if (!(id in deps)) throw Error('Unexpected dependency ' + id); return deps[id]; }, process: { env }, console, Date, Buffer, URL, setTimeout, clearTimeout, setInterval, AbortController }, { filename: file });
+  vm.runInNewContext(fs.readFileSync(path.join(root, file), 'utf8'), { module: mod, exports: mod.exports, require: id => { if(id==='../clientIp')return require('../server/src/clientIp'); if (!(id in deps)) throw Error('Unexpected dependency ' + id); return deps[id]; }, process: { env }, console, Date, Buffer, URL, setTimeout, clearTimeout, setInterval, AbortController }, { filename: file });
   return mod.exports;
 }
 const auth = { signToken: (p, o) => jwt.sign(p, 'isolated-test-secret', o), verifyToken: s => jwt.verify(s, 'isolated-test-secret') };
-const authz = load('server/src/middleware/requireAuth.js', { '../auth': auth, '../db': db });
+const dashboardSessions = load('server/src/dashboardSessions.js', { crypto: require('crypto'), './db': db, './auth': auth });
+const authz = load('server/src/middleware/requireAuth.js', { '../dashboardSessions': dashboardSessions, '../db': db });
 const email = load('server/src/eventPassEmail.js', { crypto: require('crypto'), './db': db, './auth': auth, './outboundWebhook': { validateWebhookUrl: () => ({ ok: false }) }, './mailer': { getMailer: () => ({ send: async (to, subject, text) => { if (failEmail) throw Error('isolated SMTP outage'); deliveries.push({ to, subject, text }); return {}; } }) } });
 // Keep worker ticks explicit so simulated Postgres transactions cannot interleave
 // through the single PGlite connection. Production uses distinct pooled clients.
@@ -46,9 +47,9 @@ const orderAccess = load('server/src/friendlyOrderAccess.js', { crypto: require(
 } } });
 const pass = load('server/src/eventPass.js', { './db': db, './pricing': pricing, './eventPassEmail': mailQueue, stripe: Stripe });
 const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass, './friendlyOrderAccess': orderAccess });
-const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../middleware/requireAuth': authz, '../access': { resolveAccess: async () => ({}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
-const designs = load('server/src/routes/designs.js', { express, '../db': db, '../middleware/requireAuth': authz, '../eventPassAccess': access, '../auth': auth });
-const backgrounds = load('server/src/routes/designBackgrounds.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../middleware/requireAuth': authz, '../eventPassAccess': access });
+const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../middleware/requireAuth': authz, '../access': { resolveAccess: async ({isStaff}) => ({isStaff}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
+const designs = load('server/src/routes/designs.js', { express, '../db': db, '../middleware/requireAuth': authz, '../eventPassAccess': access, '../auth': auth, '../dashboardSessions': dashboardSessions });
+const backgrounds = load('server/src/routes/designBackgrounds.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../middleware/requireAuth': authz, '../eventPassAccess': access });
 const quotes = load('server/src/routes/quoteRequests.js', { express, crypto: require('crypto'), '../db': db, '../mailer': { getMailer: () => null }, '../middleware/requireAuth': { requireTenantRole: () => (req,res,next) => next() }, '../orderProviders/quoteRequestOrderProvider': {}, '../outboundWebhook': {}, '../eventPass': pass, '../eventPassAccess': access });
 const webhook = load('server/src/routes/stripeWebhook.js', { express, '../db': db, '../pricing': pricing, stripe: Stripe, '../eventPass': pass, '../orderProviders/quoteRequestOrderProvider': {} });
 const app = express(); app.use('/webhook', express.raw({ type: 'application/json' }), webhook); app.use(express.json()); app.use('/api/consumer', consumer); app.use('/api/consumer', backgrounds); app.use('/api/tenants', designs); app.use('/api/tenants', backgrounds); app.use('/api/tenants', quotes); app.use((err, req, res, next) => res.status(500).json({ error: err.message }));
@@ -73,7 +74,8 @@ async function draft(t = tenant) {
 const buy = (d, extra = {}, renewal = false) => request('/api/consumer/designs/' + d.id + '/event-pass/' + (renewal ? 'renewal-' : '') + 'checkout-session', { customerEmail: 'buyer@example.invalid', anonymousSessionId: 'owner-private-token', ...extra });
 const restore = id => request('/api/consumer/event-pass/restore', { checkoutSessionId: id });
 (async () => {
-  await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY,email text); CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text);`);
+  await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY,email text,password_hash text); CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text);`);
+  await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/020_dashboard_sessions.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/004_entitlements.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/011_event_pass_access_email.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/012_friendly_order_access.sql'), 'utf8'));
@@ -83,7 +85,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   await pg.query('INSERT INTO tenants VALUES($1,$2),($3,$4)', [tenant, 'friendly', other, 'lakeside']);
   const platformAdminId='10000000-0000-4000-8000-000000000099';
   await pg.query('INSERT INTO users(id,email) VALUES($1,$2)',[platformAdminId,env.PLATFORM_ADMIN_EMAIL]);
-  const platformAdminToken=auth.signToken({userId:platformAdminId,isPlatformAdmin:true},{expiresIn:'1h'});
+  const platformAdminToken=(await dashboardSessions.createDashboardSession({id:platformAdminId})).token;
   server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); base = 'http://127.0.0.1:' + server.address().port;
   let r = await request('/api/consumer/event-pass/offer?tenant=friendly'); assert.equal(r.body.priceCents, 999); assert.equal(r.body.durationDays, 30); assert.equal(r.body.required, true); assert.equal(r.body.paymentMode, 'test');
   const adminOffer=await request('/api/consumer/event-pass/offer?tenant=generic',null,null,'GET',platformAdminToken); assert.equal(adminOffer.status,200); assert.equal(adminOffer.body.required,false); assert.equal(adminOffer.body.adminAccess,true);
@@ -95,7 +97,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   assert.equal((await request('/api/consumer/admin/designs/'+adminSaved.body.id)).status,403,'saved design admin reopen never works without platform authentication');
   // Photo Match flushes the draft before uploading. Both writes must recognize
   // authenticated staff, while a bearer token never replaces draft ownership.
-  const configuredAdminToken=auth.signToken({userId:platformAdminId},{expiresIn:'1h'});
+  const configuredAdminToken=(await dashboardSessions.createDashboardSession({id:platformAdminId})).token;
   const tenantAdminSaved=await request('/api/tenants/friendly/designs',{scene:adminFurnished,anonymousSessionId:'tenant-admin-session'},null,'POST',configuredAdminToken);
   assert.equal(tenantAdminSaved.status,201,'configured platform admin saves Friendly layout without an Event Pass or claimed admin flag');
   for(const [basePath,id,sid] of [['/api/consumer/designs',adminSaved.body.id,'platform-admin-session'],['/api/tenants/friendly/designs',tenantAdminSaved.body.id,'tenant-admin-session']]){
@@ -110,9 +112,10 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
     const id='20000000-0000-4000-8000-'+String(index+1).padStart(12,'0'),sid='tenant-'+role+'-session';
     await pg.query('INSERT INTO users(id,email) VALUES($1,$2)',[id,role+'@example.invalid']);
     await pg.query('INSERT INTO tenant_memberships(tenant_id,user_id,role) VALUES($1,$2,$3)',[tenant,id,role]);
-    const token=auth.signToken({userId:id},{expiresIn:'1h'});
+    const token=(await dashboardSessions.createDashboardSession({id})).token;
     const saved=await request('/api/tenants/friendly/designs',{scene:adminFurnished,anonymousSessionId:sid},null,'POST',token);
     assert.equal(saved.status,201,role+' may save within the verified tenant');
+    assert.equal((await request('/api/consumer/designs/'+saved.body.id+'/access',null,null,'GET',token)).body.isStaff,true,role+' access reflects current tenant membership');
     const url='/api/tenants/friendly/designs/'+saved.body.id;
     assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:sid},null,'PATCH',token)).status,200);
     assert.equal((await photoRequest(url,sid,token)).status,201,role+' may upload a photo after the save');
@@ -124,14 +127,15 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
   await pg.query('INSERT INTO users(id,email) VALUES($1,$2),($3,$4)',[viewerId,'viewer@example.invalid',outsiderId,'outsider@example.invalid']);
   await pg.query('INSERT INTO tenant_memberships(tenant_id,user_id,role) VALUES($1,$2,$3),($4,$5,$6)',[tenant,viewerId,'viewer',other,outsiderId,'owner']);
   const deniedStaffTokens=[
-    ['viewer',auth.signToken({userId:viewerId},{expiresIn:'1h'})],
-    ['wrong tenant owner',auth.signToken({userId:outsiderId},{expiresIn:'1h'})],
+    ['viewer',(await dashboardSessions.createDashboardSession({id:viewerId})).token],
+    ['wrong tenant owner',(await dashboardSessions.createDashboardSession({id:outsiderId})).token],
     ['unconfigured admin claim',auth.signToken({userId:outsiderId,isPlatformAdmin:true},{expiresIn:'1h'})],
     ['expired admin',auth.signToken({userId:platformAdminId},{expiresIn:-1})],
     ['invalid token','invalid-token'],
     ['shared-view token',auth.signToken({kind:'tenant_design_share',designId:tenantAdminSaved.body.id,tenantSlug:'friendly'},{expiresIn:'1h'})],
   ];
   for(const [label,token] of deniedStaffTokens){
+    assert.equal((await request('/api/consumer/designs/'+tenantAdminSaved.body.id+'/access',null,null,'GET',token)).body.isStaff,false,label+' does not receive staff access');
     const url='/api/tenants/friendly/designs/'+tenantAdminSaved.body.id;
     assert.equal((await request('/api/tenants/friendly/designs',{scene:adminFurnished,anonymousSessionId:'unpaid-session'},null,'POST',token)).status,402,label+' cannot create furnished designs without a pass');
     assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:'tenant-admin-session'},null,'PATCH',token)).status,402,label+' cannot gain a staff save exemption');

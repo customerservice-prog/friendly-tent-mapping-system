@@ -12,7 +12,7 @@ function load(file,deps){
 }
 const routes=load('server/src/routes/designBackgrounds.js',{
  express,crypto:require('node:crypto'),'../db':db,
- '../auth':{verifyToken:()=>({userId:'nobody'})},
+ '../dashboardSessions':{verifyDashboardToken:async()=>({userId:'nobody'})},
  '../middleware/requireAuth':{isConfiguredPlatformAdmin:async()=>false},
  '../eventPassAccess':{savePermission:async()=>null}
 });

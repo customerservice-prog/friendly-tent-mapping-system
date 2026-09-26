@@ -4,7 +4,7 @@ import {mountReviewPricing,currentReviewPricing,reviewDeliveryZip,restoreReviewD
 import './js/ui/designer-help.js';
 import { sitePanel } from './js/ui/site-controls.js';
 import { normalizeVenuePhoto, normalizeVenueScan, extractVenueScanVideo, uploadVenuePhoto, deleteVenuePhoto } from './js/ui/venue-photo.js';
-import { defaultPhotoCalibration, normalizePhotoCalibration, normalizePhotoGeometry } from './js/core/photo-geometry.js';
+import { defaultPhotoCalibration, normalizePhotoCalibration, normalizePhotoGeometry, rentalPhotoPlacement } from './js/core/photo-geometry.js';
 import { evaluatePropertyScene, summarizePropertyFit } from './js/core/property-planning.js';
 import { TABLETOP } from './js/data/tabletop.js';
 // Friendly Event Designer - v2 client-side logic
@@ -176,7 +176,7 @@ async function chooseVenuePhoto(file,input){
     try{await window.RentSketchAutosave?.flush?.();photoSaved=true;}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
     if(photoSaved&&previous?.id&&previous.id!==photo.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
     if(photoSaved)venueScanPhotos(previousScan).filter(f=>f.id!==photo.id&&f.id!==previous?.id).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
-    showLayoutNotice('Photo applied. Your real venue is now showing in 3D.',6500);
+    showLayoutNotice('Photo ready. Adjust the ground corners and drag rentals into place. Photo scale is estimated; verify dimensions on site.',6500);
     return true;
   }catch(err){
     console.error('[RentSketch] venue photo failed',err);
@@ -375,7 +375,7 @@ function propertyFitDetails(plan){
 function renderPropertyFit(plan){
   var button=$('propertyFitBadge'),panel=$('propertyFitPanel');
   if(!button||!panel)return;
-  var show=state.viewMode==='3d'&&!!state.backgroundPhoto&&(!!plan?.active||plan?.source==='metric-scan-needs-boundaries');
+  var show=state.viewMode==='3d'&&!!state.backgroundPhoto;
   button.hidden=!show;
   if(!show){panel.hidden=true;return;}
   var summary=summarizePropertyFit(plan),kind=summary.kind||'neutral';
@@ -398,7 +398,7 @@ function handleSelect(id){state.selectedId=id;closeDrawer();refreshAll();}functi
 }
 function handlePhotoSelect(id){
   state.selectedPhotoId=id||null;
-  if(id&&id!=='__photo_tent__')state.selectedId=id;
+  state.selectedId=id&&id!=='__photo_tent__'?id:null;
   renderViews(getConflicts());
 }
 function handlePhotoPlacement(id,placement){
@@ -411,14 +411,17 @@ function handlePhotoPlacement(id,placement){
   state.selectedPhotoId=id;window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));renderViews(getConflicts());return true;
 }
 function updatePhotoCalibration(cal){
+  if(!requireEventEditing())return false;
   var snap=buildSnapshot([]);state.photoCalibration=normalizePhotoCalibration(cal,snap.photoSite);
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));renderViews(getConflicts());
 }
 function addPhotoGeometry(geom){
+  if(!requireEventEditing())return false;
   var snap=buildSnapshot([]);state.photoGeometry=normalizePhotoGeometry([...(state.photoGeometry||[]),geom],snap.photoSite);
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));renderViews(getConflicts());
 }
 function removePhotoGeometry(id){
+  if(!requireEventEditing())return false;
   state.photoGeometry=(state.photoGeometry||[]).filter(g=>g.id!==id);
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));renderViews(getConflicts());
 }
@@ -443,8 +446,8 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20260925-space-scan-5').then(function(mod){
-      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){
+    import('./js/ui/view3d.js?v=20260926-photo-security-2').then(function(mod){
+      var snap=view3dPendingSnapshot||buildSnapshot(getConflicts()),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPhotoSelect:handlePhotoSelect,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){
         window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());
         if(info?.ready){
           if(view3dMod?.orbit360?.())setPhoto3dModeUi('360');
@@ -488,21 +491,25 @@ function setMeasurementResult(result){
 }
 function setPhoto3dModeUi(mode){
   var matched=$('view3dMatchPhoto'),orbit=$('view3dOrbit360'),walk=$('view3dWalk'),isOrbit=mode==='360',isWalk=mode==='walk',isMatched=mode==='matched',scanReady=metricScanReady();
-  if(matched){matched.classList.toggle('active',isMatched);matched.setAttribute('aria-pressed',String(isMatched));}
+  if(matched&&!$('view3dAdjustPhoto')){var adjust=document.createElement('button');adjust.id='view3dAdjustPhoto';adjust.type='button';adjust.className='btn-chip';adjust.textContent='Adjust photo';adjust.addEventListener('click',function(){setViewMode('photo');});matched.after(adjust);}
+  if($('view3dAdjustPhoto'))$('view3dAdjustPhoto').hidden=!(state.viewMode==='3d'&&state.backgroundPhoto);
+  if(matched){matched.classList.toggle('active',isMatched);matched.setAttribute('aria-pressed',String(isMatched));matched.textContent='Photo preview';}
   if(orbit){orbit.classList.toggle('active',isOrbit);orbit.setAttribute('aria-pressed',String(isOrbit));orbit.textContent=scanReady?'3D Scan':'3D Scan';orbit.title=scanReady?'Orbit the estimated depth preview within the captured views; dimensions unverified':'Capture a Space Scan first';}
   if(walk){walk.classList.toggle('active',isWalk);walk.setAttribute('aria-pressed',String(isWalk));walk.textContent=isWalk?'Exit Walk':'Walk Scan';}
   if($('canvasHint')&&state.viewMode==='3d'&&state.backgroundPhoto){
     var runtime=window.RENTSKETCH_SCAN_RECONSTRUCTION;
     var views=runtime?.metrics?.viewCount||runtime?.sourceFrames?.length||3,agreement=runtime?.metrics?.multiReferenceAgreementPct??runtime?.metrics?.multiViewAgreementPct;
-    $('canvasHint').textContent=isWalk?'Walk Scan · estimated scene, dimensions unverified · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?('3D Scan · estimated depth, dimensions unverified · '+views+' real views'+(agreement!=null?' · '+agreement+'% spatial agreement':'')+' · orbit limited to captured geometry'):runtime?.loading?'Estimating depth from captured views…':scanReady?'Matched View · choose 3D Scan for estimated depth':'Photo Match · one image is not treated as 360 · record a Space Scan for an estimated depth preview';
+    $('canvasHint').textContent=isWalk?'Walk Scan · estimated scene, dimensions unverified · WASD / arrow keys to move · drag to look · Esc exits':isOrbit&&scanReady?('3D Scan · estimated depth, dimensions unverified · '+views+' real views'+(agreement!=null?' · '+agreement+'% spatial agreement':'')+' · orbit limited to captured geometry'):runtime?.loading?'Estimating depth from captured views…':scanReady?'Matched View · choose 3D Scan for estimated depth':'Drag rentals to place · Photo scale is estimated · Use Space Scan for depth';
   }
 }
 function renderViews(conflicts){
   var s=buildSnapshot(conflicts),photo3d=s.backgroundPhoto&&state.viewMode==='3d',scan3d=photo3d&&metricScanReady(),propertyPlan=evaluatePropertyScene(s);
   renderPropertyFit(propertyPlan);
-  if($('sceneSettingLabel'))$('sceneSettingLabel').textContent=scan3d?'Metric Space Scan':s.backgroundPhoto?'Your venue photo':(sceneSetting(s.tent,s.surfaceType)==='backyard'?'Backyard setting':'Paved driveway setting');
+  if($('sceneSettingLabel'))$('sceneSettingLabel').textContent=scan3d?'Estimated Space Scan':s.backgroundPhoto?'Your venue photo':(sceneSetting(s.tent,s.surfaceType)==='backyard'?'Backyard setting':'Paved driveway setting');
   if($('viewModePhoto'))$('viewModePhoto').hidden=!s.backgroundPhoto;
   if($('view3dMatchPhoto'))$('view3dMatchPhoto').hidden=!photo3d;
+  if($('view3dAdjustPhoto'))$('view3dAdjustPhoto').hidden=!photo3d;
+  if($('view3dInside'))$('view3dInside').hidden=state.viewMode!=='3d'||!!state.backgroundPhoto;
   if($('view3dOrbit360'))$('view3dOrbit360').hidden=!scan3d;
   if($('view3dWalk'))$('view3dWalk').hidden=!scan3d;
   if($('view3dMeasure'))$('view3dMeasure').hidden=!scan3d;
@@ -515,12 +522,13 @@ function setViewMode(mode){
   if(mode!=='3d'&&view3dMod?.isMeasuring?.()){view3dMod.setMeasureMode(false);setMeasureUi(false);}
   if(mode!=='3d'&&view3dMod?.isWalking?.())view3dMod.exitWalk();
   state.viewMode=mode;renderPropertyFit(currentPropertyPlan());
+  if($('view3dAdjustPhoto'))$('view3dAdjustPhoto').hidden=!(mode==='3d'&&state.backgroundPhoto);
   if($('sceneControls'))$('sceneControls').hidden=mode!=='3d';
   if($('sceneSettingLabel'))$('sceneSettingLabel').hidden=mode!=='3d';
   [['plan','viewModePlan'],['photo','viewModePhoto'],['3d','viewMode3d']].forEach(function(pair){var b=$(pair[1]);if(!b)return;b.classList.toggle('active',mode===pair[0]);b.setAttribute('aria-selected',String(mode===pair[0]));});
   if($('viewModePhoto'))$('viewModePhoto').hidden=!state.backgroundPhoto;
   if($('canvasHint'))$('canvasHint').textContent=mode==='3d'?'Drag to look around · Pinch or scroll to zoom':mode==='photo'?'Drag rentals anywhere on the real photo · Calibrate perspective for better 3D':'Select an item · Drag to move';
-  if($('view3dFit'))$('view3dFit').hidden=mode!=='3d';if($('view3dInside'))$('view3dInside').hidden=mode!=='3d';if($('view3dMatchPhoto'))$('view3dMatchPhoto').hidden=!(mode==='3d'&&state.backgroundPhoto);if($('view3dOrbit360'))$('view3dOrbit360').hidden=!(mode==='3d'&&state.backgroundPhoto&&metricScanReady());if($('view3dWalk'))$('view3dWalk').hidden=!(mode==='3d'&&state.backgroundPhoto&&metricScanReady());if($('view3dMeasure'))$('view3dMeasure').hidden=!(mode==='3d'&&(!state.backgroundPhoto||metricScanReady()));if($('view3dMeasureClear'))$('view3dMeasureClear').hidden=mode!=='3d'||!view3dMod?.getMeasurement?.();
+  if($('view3dFit'))$('view3dFit').hidden=mode!=='3d';if($('view3dInside'))$('view3dInside').hidden=mode!=='3d'||!!state.backgroundPhoto;if($('view3dMatchPhoto'))$('view3dMatchPhoto').hidden=!(mode==='3d'&&state.backgroundPhoto);if($('view3dOrbit360'))$('view3dOrbit360').hidden=!(mode==='3d'&&state.backgroundPhoto&&metricScanReady());if($('view3dWalk'))$('view3dWalk').hidden=!(mode==='3d'&&state.backgroundPhoto&&metricScanReady());if($('view3dMeasure'))$('view3dMeasure').hidden=!(mode==='3d'&&(!state.backgroundPhoto||metricScanReady()));if($('view3dMeasureClear'))$('view3dMeasureClear').hidden=mode!=='3d'||!view3dMod?.getMeasurement?.();
   var planEl=$('plan2d'),photoEl=$('photoView'),canvasEl=$('canvas');
   if(planEl)planEl.style.display=mode==='plan'?'flex':'none';
   if(photoEl)photoEl.style.display=mode==='photo'?'block':'none';
@@ -705,8 +713,10 @@ document.querySelectorAll('.rail-btn').forEach(function(button){var icon=railIco
 
 // Pending placement stays outside the authoritative store until confirmation.
 function startPlacement(objects,label,previewId,extra){if(!requireEventEditing())return false;
+  var photoMode=!!state.backgroundPhoto&&state.viewMode!=='plan';
+  if(photoMode){var snap=buildSnapshot([]);objects=objects.map(function(o){return rentalPhotoPlacement(o,snap.tent,snap.photoSite,state.photoTentPlacement);});if(state.viewMode==='photo')setViewMode('3d');}
   var x=Math.min(...objects.map(o=>o.x)),y=Math.min(...objects.map(o=>o.y));
-  pendingPlacement={objects:objects,label:label,x:x,y:y,widthFt:Math.max(...objects.map(o=>o.x+o.widthFt))-x,depthFt:Math.max(...objects.map(o=>o.y+o.depthFt))-y,...extra};
+  pendingPlacement={objects:objects,label:label,x:x,y:y,widthFt:Math.max(...objects.map(o=>o.x+o.widthFt))-x,depthFt:Math.max(...objects.map(o=>o.y+o.depthFt))-y,photoMode:photoMode,...extra};
   state.selectedId=null;closeDrawer();$('sceneControls').open=false;
   var bar=$('placementBar');bar.hidden=false;bar.querySelector('.placement-preview').innerHTML=equipmentPreview(previewId);
   $('placementName').textContent=label;$('placementRotate').hidden=!['table','inflatable','chair','equipment','accessory'].includes(objects[0].kind);
@@ -721,7 +731,7 @@ function beginDancePlacement(ft,id){
   startPlacement(positions.map(pos=>({id:newItemId(),kind:'dance',widthFt:3,depthFt:3,x:pos.x,y:pos.y})),ft+' × '+ft+' ft Dance Floor','dance-floor',{danceSizeId:id});
 }
 function movePlacement(centerX,centerY){if(!requireEventEditing())return false;
-  if(!pendingPlacement)return;var p=pendingPlacement,t=layoutSpace().planningArea||layoutSpace();
+  if(!pendingPlacement)return;var p=pendingPlacement,t=p.photoMode?buildSnapshot([]).photoSite:layoutSpace().planningArea||layoutSpace();
   var x=Math.max(0,Math.min(t.widthFt-p.widthFt,centerX-p.widthFt/2)),y=Math.max(0,Math.min(t.lengthFt-p.depthFt,centerY-p.depthFt/2));
   var dx=x-p.x,dy=y-p.y;p.objects=p.objects.map(o=>({...o,x:o.x+dx,y:o.y+dy}));p.x=x;p.y=y;
   renderViews(getConflicts());
@@ -730,6 +740,7 @@ function clearPlacement(){pendingPlacement=null;$('placementBar').hidden=true;do
 function cancelPlacement(){if(!pendingPlacement)return;clearPlacement();refreshAll();}
 function confirmPlacement(){if(!requireEventEditing())return false;
   if(!pendingPlacement)return;var p=pendingPlacement;clearPlacement();state.selectedId=p.objects[0].id;
+  if(p.photoMode){var t=layoutSpace();p.objects=p.objects.map(function(o){return {...o,photoPlacement:{x:o.x,y:o.y,rotationDeg:o.rotationDeg||0},x:Math.max(0,Math.min(t.widthFt-o.widthFt,o.x)),y:Math.max(0,Math.min(t.lengthFt-o.depthFt,o.y))};});}
   if(p.danceSizeId){state.danceFloorSizeId=p.danceSizeId;store.replaceObjects(store.getState().objects.filter(o=>o.kind!=='dance').concat(p.objects));}
   else{var item=p.objects[0];if(item.kind==='table'){tableDraft.activeItemId=item.id;state.lastTableConfig={tableId:item.tableId,chairId:item.chairId,seatCount:item.seatCount,linenId:item.linenId};}store.addObject(item);}
   refreshAll();

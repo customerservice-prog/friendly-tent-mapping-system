@@ -43,37 +43,70 @@ export function calibrationPoints(value,tent){
   return [c.frontLeft,c.frontRight,c.backRight,c.backLeft];
 }
 export function worldToPhoto(x,y,tent,calibration){
-  const c=normalizePhotoCalibration(calibration,tent),w=Math.max(1,Number(tent?.widthFt||50)),l=Math.max(1,Number(tent?.lengthFt||60));
-  const u=Number(x)/w,v=Number(y)/l;
-  const fl=c.frontLeft,fr=c.frontRight,br=c.backRight,bl=c.backLeft;
-  return {
-    x:(1-v)*((1-u)*fl.x+u*fr.x)+v*((1-u)*bl.x+u*br.x),
-    y:(1-v)*((1-u)*fl.y+u*fr.y)+v*((1-u)*bl.y+u*br.y)
-  };
+  const h=photoHomography(tent,calibration),d=h[6]*x+h[7]*y+1;
+  return {x:(h[0]*x+h[1]*y+h[2])/d,y:(h[3]*x+h[4]*y+h[5])/d};
 }
-function bilinearUv(u,v,c){
-  const fl=c.frontLeft,fr=c.frontRight,br=c.backRight,bl=c.backLeft;
-  return {
-    x:(1-v)*((1-u)*fl.x+u*fr.x)+v*((1-u)*bl.x+u*br.x),
-    y:(1-v)*((1-u)*fl.y+u*fr.y)+v*((1-u)*bl.y+u*br.y)
-  };
+function solve(matrix){
+  const a=matrix.map(row=>row.slice()),n=a.length;
+  for(let k=0;k<n;k++){
+    let pivot=k;for(let i=k+1;i<n;i++)if(Math.abs(a[i][k])>Math.abs(a[pivot][k]))pivot=i;
+    if(Math.abs(a[pivot][k])<1e-10)return null;
+    [a[k],a[pivot]]=[a[pivot],a[k]];const d=a[k][k];for(let j=k;j<=n;j++)a[k][j]/=d;
+    for(let i=0;i<n;i++)if(i!==k){const f=a[i][k];for(let j=k;j<=n;j++)a[i][j]-=f*a[k][j];}
+  }
+  return a.map(row=>row[n]);
+}
+// One projective mapping is shared by the SVG plan, 3D rendering and pointers.
+// Four user marks establish correspondence, not measured site accuracy.
+const homographies=new Map();
+export function photoHomography(tent,calibration){
+  const c=normalizePhotoCalibration(calibration,tent),w=Math.max(1,Number(tent?.widthFt||50)),l=Math.max(1,Number(tent?.lengthFt||60)),rows=[];
+  const key=JSON.stringify([w,l,c.frontLeft,c.frontRight,c.backRight,c.backLeft]);
+  if(homographies.has(key))return homographies.get(key);
+  [[0,0,c.frontLeft],[w,0,c.frontRight],[w,l,c.backRight],[0,l,c.backLeft]].forEach(([x,y,p])=>{
+    rows.push([x,y,1,0,0,0,-p.x*x,-p.x*y,p.x],[0,0,0,x,y,1,-p.y*x,-p.y*y,p.y]);
+  });
+  const h=solve(rows)||[1/w,0,0,0,-1/l,1,0,0];
+  if(homographies.size>=32)homographies.delete(homographies.keys().next().value);homographies.set(key,h);return h;
 }
 export function photoToWorld(nx,ny,tent,calibration,{clampToGround=true}={}){
-  const c=normalizePhotoCalibration(calibration,tent),w=Math.max(1,Number(tent?.widthFt||50)),l=Math.max(1,Number(tent?.lengthFt||60));
-  let u=.5,v=.5;
-  // Newton solve the inverse bilinear mapping. Stable for normal convex ground quads.
-  for(let i=0;i<12;i++){
-    const p=bilinearUv(u,v,c),ex=p.x-nx,ey=p.y-ny;
-    if(Math.abs(ex)+Math.abs(ey)<1e-6)break;
-    const e=1e-4,pu=bilinearUv(u+e,v,c),pv=bilinearUv(u,v+e,c);
-    const a=(pu.x-p.x)/e,b=(pv.x-p.x)/e,cc=(pu.y-p.y)/e,d=(pv.y-p.y)/e,det=a*d-b*cc;
-    if(Math.abs(det)<1e-8)break;
-    const du=(d*ex-b*ey)/det,dv=(-cc*ex+a*ey)/det;
-    u-=du;v-=dv;
-  }
-  if(!Number.isFinite(u)||!Number.isFinite(v))return null;
-  if(clampToGround){u=Math.max(0,Math.min(1,u));v=Math.max(0,Math.min(1,v));}
-  return {x:u*w,y:v*l,u,v};
+  const h=photoHomography(tent,calibration),p=solve([[h[0]-nx*h[6],h[1]-nx*h[7],nx-h[2]],[h[3]-ny*h[6],h[4]-ny*h[7],ny-h[5]]]);
+  if(!p)return null;const w=Math.max(1,Number(tent?.widthFt||50)),l=Math.max(1,Number(tent?.lengthFt||60));
+  const x=clampToGround?Math.max(0,Math.min(w,p[0])):p[0],y=clampToGround?Math.max(0,Math.min(l,p[1])):p[1];
+  return {x,y,u:x/w,v:y/l};
+}
+
+export function photoImageRect(width,height,imageWidth,imageHeight,photo={}){
+  const zoom=clamp(photo.zoom,1,1.8,1),scale=Math.min(width/Math.max(1,imageWidth),height/Math.max(1,imageHeight))*zoom;
+  const w=imageWidth*scale,h=imageHeight*scale;
+  return {x:(width-w)*clamp(photo.focusX,0,100,50)/100,y:(height-h)*clamp(photo.focusY,0,100,50)/100,width:w,height:h};
+}
+
+// A projective photo camera: ground registration is exact to the supplied four
+// marks. Height uses an estimated focal length; this is not a measured camera.
+export function photoProjection(tent,calibration,width,height,imageWidth,imageHeight,photo={}){
+  const h=photoHomography(tent,calibration),w=Number(tent.widthFt),l=Number(tent.lengthFt);
+  const aspect=Math.max(.2,imageWidth/imageHeight),fy=1/(2*Math.tan(21*Math.PI/180)),fx=fy/aspect;
+  const a=[(h[0]-.5*h[6])/fx,(h[3]-.5*h[6])/fy,h[6]],b=[(h[1]-.5*h[7])/fx,(h[4]-.5*h[7])/fy,h[7]];
+  const cross=[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]],length=Math.hypot(...cross)||1;
+  const s=Math.sqrt(Math.hypot(...a)*Math.hypot(...b))/length,r=cross.map(v=>v*s);
+  const vertical=[fx*r[0]+.5*r[2],fy*r[1]+.5*r[2],r[2]];
+  const rows=[[h[0],vertical[0],h[1],h[2]+h[0]*w/2+h[1]*l/2],[h[3],vertical[1],h[4],h[5]+h[3]*w/2+h[4]*l/2],[h[6],vertical[2],h[7],1+h[6]*w/2+h[7]*l/2]];
+  const center=solve(rows.map(row=>[row[0],row[1],row[2],-row[3]]));
+  const rect=photoImageRect(width,height,imageWidth,imageHeight,photo),sx=2*rect.width/width,sy=-2*rect.height/height,ox=2*rect.x/width-1,oy=1-2*rect.y/height;
+  const near=.001,far=100,A=(far+near)/(far-near),B=-2*far*near/(far-near),matrix=[];
+  matrix.push(...rows[0].map((v,i)=>sx*v+ox*rows[2][i]),...rows[1].map((v,i)=>sy*v+oy*rows[2][i]),...rows[2].map((v,i)=>A*v+(i===3?B:0)),...rows[2]);
+  return {matrix,center,rect,accuracy:'unverified',heightEstimated:true};
+}
+
+export function photoTentTransform(tent,site,placement){
+  return {x:Number.isFinite(Number(placement?.x))?Number(placement.x):Math.max(0,(site.widthFt-tent.widthFt)/2),y:Number.isFinite(Number(placement?.y))?Number(placement.y):Math.max(0,(site.lengthFt-tent.lengthFt)/2),rotationDeg:Number(placement?.rotationDeg)||0};
+}
+export function rentalPhotoPlacement(item,tent,site,placement){
+  if(item.photoPlacement)return {...item,x:Number(item.photoPlacement.x)||0,y:Number(item.photoPlacement.y)||0,rotationDeg:Number(item.photoPlacement.rotationDeg)||0};
+  if(tent.isSite)return {...item};
+  const p=photoTentTransform(tent,site,placement),a=p.rotationDeg*Math.PI/180,dx=Number(item.x||0)+item.widthFt/2-tent.widthFt/2,dy=Number(item.y||0)+item.depthFt/2-tent.lengthFt/2;
+  return {...item,x:p.x+tent.widthFt/2+dx*Math.cos(a)-dy*Math.sin(a)-item.widthFt/2,y:p.y+tent.lengthFt/2+dx*Math.sin(a)+dy*Math.cos(a)-item.depthFt/2,rotationDeg:(Number(item.rotationDeg)||0)+p.rotationDeg};
 }
 export function rotatedFootprint(item){
   const w=Math.max(.1,Number(item?.widthFt||1)),d=Math.max(.1,Number(item?.depthFt||1)),cx=Number(item?.x||0)+w/2,cy=Number(item?.y||0)+d/2;

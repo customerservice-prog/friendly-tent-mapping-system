@@ -1,3 +1,4 @@
+const { clientIp } = require('../clientIp');
 const express = require('express');
 const db = require('../db');
 
@@ -19,7 +20,7 @@ function parseBody(req) {
 
 function rateLimited(req) {
   const now = Date.now();
-  const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim() || 'unknown';
+  const ip = clientIp(req);
   const bucket = buckets.get(ip) || { count: 0, until: now + 15 * 60 * 1000 };
   if (bucket.until < now) { bucket.count = 0; bucket.until = now + 15 * 60 * 1000; }
   bucket.count += 1;

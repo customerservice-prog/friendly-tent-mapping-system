@@ -1,4 +1,4 @@
-const { verifyToken } = require('../auth');
+const { verifyDashboardToken } = require('../dashboardSessions');
 const db = require('../db');
 
 const ROLE_LEVEL = { viewer: 10, staff: 20, admin: 30, owner: 40, platform_admin: 100 };
@@ -20,7 +20,7 @@ async function resolveTenantAuth(req) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return { status: 401, error: 'Missing bearer token' };
-  const payload = verifyToken(token);
+  const payload = await verifyDashboardToken(token);
   const platformAdmin = await isConfiguredPlatformAdmin(payload);
   const tenantResult = await db.query('SELECT * FROM tenants WHERE slug = $1', [req.params.slug]);
   const tenant = tenantResult.rows[0];
@@ -45,6 +45,7 @@ async function resolveTenantAuth(req) {
 }
 
 async function requireTenantAccess(req, res, next) {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const auth = await resolveTenantAuth(req);
     if (auth.error) return res.status(auth.status).json({ error: auth.error, trialEndsAt: auth.trialEndsAt });
@@ -60,6 +61,7 @@ function requireTenantRole(minimumRole) {
   const minimum = ROLE_LEVEL[minimumRole];
   if (!minimum) throw new Error('Unknown minimum tenant role: ' + minimumRole);
   return async function (req, res, next) {
+    res.setHeader('Cache-Control', 'no-store');
     try {
       const auth = await resolveTenantAuth(req);
       if (auth.error) return res.status(auth.status).json({ error: auth.error, trialEndsAt: auth.trialEndsAt });
@@ -76,11 +78,12 @@ function requireTenantRole(minimumRole) {
 }
 
 async function requirePlatformAdmin(req, res, next) {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) return res.status(401).json({ error: 'Missing bearer token' });
-    const payload = verifyToken(token);
+    const payload = await verifyDashboardToken(token);
     const platformAdmin = await isConfiguredPlatformAdmin(payload);
     if (!platformAdmin) return res.status(403).json({ error: 'Platform admin access required' });
     req.user = { ...payload, isPlatformAdmin: true, tenantRole: 'platform_admin' };

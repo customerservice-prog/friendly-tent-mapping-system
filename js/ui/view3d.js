@@ -17,7 +17,7 @@ import { byId as lightingById } from '../data/lighting.js';
 import { fitTentCamera } from './view3d-framing.js';
 import { createMarketingDetails } from './marketing-details.js';
 import { structuralProfile, computePerimeterStations } from '../data/tentStructure.js';
-import { normalizePhotoCalibration, normalizePhotoGeometry, photoCameraEstimate } from '../core/photo-geometry.js';
+import { normalizePhotoCalibration, normalizePhotoGeometry, photoCameraEstimate, photoProjection, photoImageRect, photoTentTransform, rentalPhotoPlacement } from '../core/photo-geometry.js';
 import { measureWorldPoints } from '../core/measurement.js';
 import { objectLocalDimensions } from '../core/world-space.js';
 
@@ -385,15 +385,13 @@ export function init(container,callbacks={}) {
   }
   function paintVenuePhoto(){
     if(!hasVenuePhoto()||!photoImage||photoUrl!==state.backgroundPhoto.url)return false;
-    const p=state.backgroundPhoto,wCss=Math.max(320,container.clientWidth||800),hCss=Math.max(240,container.clientHeight||600),aspect=wCss/hCss;
-    const w=Math.min(1920,Math.max(640,Math.round(wCss*(mobile?1.15:1.45)))),h=Math.max(360,Math.round(w/aspect));
+    const p=state.backgroundPhoto,wCss=Math.max(1,container.clientWidth||800),hCss=Math.max(1,container.clientHeight||600),aspect=wCss/hCss;
+    const w=Math.min(1920,Math.max(640,Math.round(wCss*(mobile?1.15:1.45)))),h=Math.max(1,Math.round(w/aspect));
     if(photoCanvas.width!==w||photoCanvas.height!==h){photoCanvas.width=w;photoCanvas.height=h;}
     const iw=photoImage.naturalWidth||photoImage.width,ih=photoImage.naturalHeight||photoImage.height;
     if(!iw||!ih)return false;
-    const zoom=Math.max(1,Math.min(1.8,Number(p.zoom)||1)),scale=Math.max(w/iw,h/ih)*zoom,dw=iw*scale,dh=ih*scale;
-    const fx=Math.max(0,Math.min(1,(Number(p.focusX)||50)/100)),fy=Math.max(0,Math.min(1,(Number(p.focusY)||50)/100));
-    const x=-(dw-w)*fx,y=-(dh-h)*fy;
-    photoCtx.fillStyle='#d8ddd8';photoCtx.fillRect(0,0,w,h);photoCtx.drawImage(photoImage,x,y,dw,dh);
+    const rect=photoImageRect(w,h,iw,ih,p);
+    photoCtx.fillStyle='#17211d';photoCtx.fillRect(0,0,w,h);photoCtx.drawImage(photoImage,rect.x,rect.y,rect.width,rect.height);
     const baseShade=Math.max(0,Math.min(.45,Number(p.shade)||0)),shade=Math.min(.62,baseShade+(night?.16:0));
     if(shade>0){photoCtx.fillStyle='rgba(0,0,0,'+shade+')';photoCtx.fillRect(0,0,w,h);}
     photoTexture.needsUpdate=true;
@@ -405,7 +403,7 @@ export function init(container,callbacks={}) {
     if(!url){photoUrl='';photoImage=null;clearPhotoStage();clearLocal360();clearScanWorld();return;}
     if(url===photoUrl&&photoImage){paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();rebuildVenueScanWorld();syncPhotoPresentation();return;}
     photoUrl=url;photoImage=null;const seq=++photoLoadSeq,img=new Image();img.crossOrigin='anonymous';img.decoding='async';
-    img.onload=function(){if(destroyed||seq!==photoLoadSeq||url!==photoUrl)return;photoImage=img;paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();rebuildVenueScanWorld();syncPhotoPresentation();invalidate();};
+    img.onload=function(){if(destroyed||seq!==photoLoadSeq||url!==photoUrl)return;photoImage=img;paintVenuePhoto();rebuildPhotoStage();rebuildLocal360();rebuildVenueScanWorld();syncPhotoPresentation();if(cameraMode==='outside')frame(state.photoSite||state.tent);invalidate();};
     img.onerror=function(){if(seq!==photoLoadSeq)return;console.warn('[RentSketch] venue background could not load');};
     img.src=url;
   }
@@ -443,10 +441,12 @@ export function init(container,callbacks={}) {
       controls.maxPolarAngle=Math.PI*.49;controls.update();syncPhotoPresentation();updatePhotoStageViewFade();invalidate();return;
     }
     if(hasVenuePhoto()&&state?.photoCalibration&&cameraMode==='outside'){
-      const site=state.photoSite||t,estimate=photoCameraEstimate(site,state.photoCalibration);
-      camera.fov=estimate.fov;camera.updateProjectionMatrix();
-      camera.position.set(...estimate.position);controls.target.set(...estimate.target);
-      controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*2.2);controls.update();invalidate();return;
+      const site=state.photoSite||t,p=state.backgroundPhoto,iw=photoImage?.naturalWidth||p.widthPx||1600,ih=photoImage?.naturalHeight||p.heightPx||1000;
+      const projection=photoProjection(site,state.photoCalibration,Math.max(1,container.clientWidth),Math.max(1,container.clientHeight),iw,ih,p),estimate=photoCameraEstimate(site,state.photoCalibration);
+      camera.fov=estimate.fov;camera.position.set(...(projection.center||estimate.position));controls.target.set(0,0,0);
+      controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*2.2);controls.update();camera.updateMatrixWorld(true);
+      camera.projectionMatrix.set(...projection.matrix).multiply(camera.matrixWorld);camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+      camera.userData.photoProjection={accuracy:'unverified',heightEstimated:true};invalidate();return;
     }
     if(t.isSite||t.planningArea){camera.fov=42;camera.updateProjectionMatrix();const box=new THREE.Box3().setFromObject(furniture);if(t.planningArea)box.union(new THREE.Box3().setFromObject(structure));const center=box.isEmpty()?new THREE.Vector3(0,3,0):box.getCenter(new THREE.Vector3()),size=box.isEmpty()?new THREE.Vector3(t.widthFt,10,t.lengthFt):box.getSize(new THREE.Vector3());const fit=fitTentCamera({widthFt:Math.max(8,size.x),lengthFt:Math.max(8,size.z)},Math.max(6,size.y),camera.aspect,camera.fov,2);const shift=center.clone().sub(new THREE.Vector3(...fit.target));camera.position.set(...fit.position).add(shift);controls.target.copy(center);controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*1.8);controls.update();invalidate();return;}if(cameraMode==='reception'){camera.fov=camera.aspect<1?65:52;camera.updateProjectionMatrix();camera.position.set(t.widthFt*.28,5.6,t.lengthFt*.46);controls.target.set(-t.widthFt*.08,2.2,-t.lengthFt*.18);controls.update();invalidate();return;}if(cameraMode==='inside'){camera.fov=50;camera.updateProjectionMatrix();const f=fitTentCamera(t,7,camera.aspect,camera.fov,0);camera.position.set(f.position[0],5.6,f.position[2]);controls.target.set(0,3.5,0);controls.update();invalidate();return;}camera.fov=36;camera.updateProjectionMatrix();const p=structuralProfile(t.type,t.widthFt,t.lengthFt),anchor=state?.anchoringMethod||(t.type==='pole'?'stake':'ballast'),f=fitTentCamera(t,p.peakHeightFt,camera.aspect,camera.fov,anchor==='stake'?(t.installationClearanceFt||5):2);camera.position.set(...f.position);controls.target.set(...f.target);controls.maxDistance=Math.max(260,camera.position.distanceTo(controls.target)*1.8);controls.update();invalidate();}
   function rebuild(data){
@@ -460,14 +460,7 @@ export function init(container,callbacks={}) {
     state.photoMode=photoMode;
     const sceneSpace=photoMode?(state.photoSite||t):t;
     const photoTent=state.photoTentPlacement||{x:Math.max(0,(sceneSpace.widthFt-t.widthFt)/2),y:Math.max(0,(sceneSpace.lengthFt-t.lengthFt)/2),rotationDeg:0};
-    const mappedObjects=photoMode?state.objects.map(o=>{
-      const pp=o.photoPlacement;
-      return {...o,...modelDimensionsFor(o),
-        x:pp&&Number.isFinite(Number(pp.x))?Number(pp.x):(t.isSite?Number(o.x||0):Number(photoTent.x||0)+Number(o.x||0)),
-        y:pp&&Number.isFinite(Number(pp.y))?Number(pp.y):(t.isSite?Number(o.y||0):Number(photoTent.y||0)+Number(o.y||0)),
-        rotationDeg:pp&&Number.isFinite(Number(pp.rotationDeg))?Number(pp.rotationDeg):(Number(o.rotationDeg||0)+Number(photoTent.rotationDeg||0))
-      };
-    }):state.objects;
+    const mappedObjects=photoMode?state.objects.map(o=>rentalPhotoPlacement({...o,...modelDimensionsFor(o)},t,sceneSpace,photoTent)):state.objects;
     loadVenuePhoto(state.backgroundPhoto);if(photoMode&&photoImage){rebuildPhotoStage();rebuildLocal360();rebuildVenueScanWorld();}else if(!photoMode)clearScanWorld();
     const nextContinuationKey=photoMode?JSON.stringify([state.photoSite?.widthFt,state.photoSite?.lengthFt,state.surfaceType]):'';
     if(nextContinuationKey!==photoContinuationKey){
@@ -490,6 +483,7 @@ export function init(container,callbacks={}) {
           const site=state.photoSite||t,tp=state.photoTentPlacement||{x:Math.max(0,(site.widthFt-t.widthFt)/2),y:Math.max(0,(site.lengthFt-t.lengthFt)/2),rotationDeg:0};
           tentMesh.position.set(Number(tp.x||0)+t.widthFt/2-site.widthFt/2,0,Number(tp.y||0)+t.lengthFt/2-site.lengthFt/2);
           tentMesh.rotation.y=-Number(tp.rotationDeg||0)*Math.PI/180;
+          tentMesh.traverse(part=>{if(part.isMesh)part.userData.photoTent=true;});
         }
         structure.add(tentMesh);
       }
@@ -532,11 +526,12 @@ export function init(container,callbacks={}) {
       }ghostKey=nextGhost;
     }
     ghost.visible=!!data.placement;
-    if(data.placement)ghost.position.set(data.placement.x+data.placement.widthFt/2-t.widthFt/2,.06,data.placement.y+data.placement.depthFt/2-t.lengthFt/2);
+    if(data.placement)ghost.position.set(data.placement.x+data.placement.widthFt/2-sceneSpace.widthFt/2,.06,data.placement.y+data.placement.depthFt/2-sceneSpace.lengthFt/2);
     syncPhotoPresentation();renderer.domElement.style.cursor=data.placement?'crosshair':(photoMode&&cameraMode==='outside'?'default':'grab');
     const nextLighting=[state.lightingId,t.id,t.widthFt,t.lengthFt].join(':');
     if(nextLighting!==lightingKey){if(lightGroup){scene.remove(lightGroup);disposeGroup(lightGroup);}lightGroup=lighting(t,state.lightingId);lightGroup.userData.setNight?.(night);scene.add(lightGroup);lightingKey=nextLighting;}
-    const selected=rendered.get(state.selectedId)||(danceMesh?.userData.itemIds.includes(state.selectedId)?danceMesh:null);
+    if(lightGroup){lightGroup.position.set(photoMode?photoTent.x+t.widthFt/2-sceneSpace.widthFt/2:0,0,photoMode?photoTent.y+t.lengthFt/2-sceneSpace.lengthFt/2:0);lightGroup.rotation.y=photoMode?-photoTent.rotationDeg*Math.PI/180:0;}
+    const selected=state.selectedPhotoId==='__photo_tent__'?structure.children[0]:(rendered.get(state.selectedId)||(danceMesh?.userData.itemIds.includes(state.selectedId)?danceMesh:null));
     selection.visible=!!selected;if(selected)selection.box.setFromObject(selected).expandByScalar(.12);
     if(callbacks.marketingOnly&&changed){
       if(marketingFootprint){scene.remove(marketingFootprint);disposeGroup(marketingFootprint);}
@@ -548,7 +543,7 @@ export function init(container,callbacks={}) {
       scene.add(marketingFootprint);
       marketingDetails=createMarketingDetails(t);scene.add(marketingDetails);
     }
-    const nextPhotoCameraKey=photoMode?JSON.stringify([state.photoSite,state.photoCalibration]):'';if(changed||nextPhotoCameraKey!==photoCameraKey){photoCameraKey=nextPhotoCameraKey;frame(photoMode?(state.photoSite||t):t);}invalidate();
+    const nextPhotoCameraKey=photoMode?JSON.stringify([state.photoSite,state.photoCalibration,state.backgroundPhoto]):'';if(changed||nextPhotoCameraKey!==photoCameraKey){photoCameraKey=nextPhotoCameraKey;frame(photoMode?(state.photoSite||t):t);}invalidate();
   }
   // Read-only marketing playback uses the same geometry and layout as the
   // designer. This API is available only to the isolated public sample.
@@ -601,7 +596,7 @@ export function init(container,callbacks={}) {
     if(marketingFootprint)marketingFootprint.visible=p>.04&&p<.89;
     renderer.shadowMap.needsUpdate=true;invalidate();
   }
-  function resize(){const w=Math.max(1,container.clientWidth||800),h=Math.max(1,container.clientHeight||600),aspect=w/h,changed=Math.abs(camera.aspect-aspect)>.01;camera.aspect=aspect;camera.updateProjectionMatrix();renderer.setSize(w,h,false);if(hasVenuePhoto())paintVenuePhoto();if(changed&&state?.tent)frame(state.tent);invalidate();}
+  function resize(){const w=Math.max(1,container.clientWidth||800),h=Math.max(1,container.clientHeight||600),aspect=w/h,changed=Math.abs(camera.aspect-aspect)>.01;camera.aspect=aspect;camera.updateProjectionMatrix();renderer.setSize(w,h,false);if(hasVenuePhoto())paintVenuePhoto();if(state?.tent&&(changed||hasVenuePhoto()&&cameraMode==='outside'))frame(state.tent);invalidate();}
   let measureMode=false,measureA=null,measureB=null,measureResult=null;
   function makeMeasureLabel(text){
     const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;
@@ -648,14 +643,14 @@ export function init(container,callbacks={}) {
   function getMeasurement(){return measureResult?{...measureResult,pointA:measureA?{x:measureA.x,y:measureA.y,z:measureA.z}:null,pointB:measureB?{x:measureB.x,y:measureB.y,z:measureB.z}:null}:null;}
   function pointerRay(e){const r=renderer.domElement.getBoundingClientRect();pointer.set((e.clientX-r.left)/r.width*2-1,-((e.clientY-r.top)/r.height)*2+1);raycaster.setFromCamera(pointer,camera);return raycaster;}
   function groundPoint(e){const v=new THREE.Vector3();return pointerRay(e).ray.intersectPlane(groundPlane,v)?v:null;}
-  function hit(e){pointerRay(e);return raycaster.intersectObjects(furniture.children,true).find(h=>h.object.userData.itemId||h.object.userData.kind==='danceGroup');}
+  function hit(e){scene.updateMatrixWorld(true);pointerRay(e);return raycaster.intersectObjects(state?.photoMode?[...furniture.children,...structure.children]:furniture.children,true).find(h=>h.object.userData.photoTent||h.object.userData.itemId||h.object.userData.kind==='danceGroup');}
   function photoPlacementFor(o){
     if(!o)return {x:0,y:0,rotationDeg:0};
     if(o.photoPlacement&&Number.isFinite(Number(o.photoPlacement.x))&&Number.isFinite(Number(o.photoPlacement.y))){
       return {x:Number(o.photoPlacement.x),y:Number(o.photoPlacement.y),rotationDeg:Number(o.photoPlacement.rotationDeg||0)||0};
     }
-    const t=state.tent,site=state.photoSite||t,tp=state.photoTentPlacement||{x:Math.max(0,(site.widthFt-t.widthFt)/2),y:Math.max(0,(site.lengthFt-t.lengthFt)/2),rotationDeg:0};
-    return {x:t.isSite?Number(o.x||0):Number(tp.x||0)+Number(o.x||0),y:t.isSite?Number(o.y||0):Number(tp.y||0)+Number(o.y||0),rotationDeg:Number(o.rotationDeg||0)+Number(tp.rotationDeg||0)};
+    const mapped=rentalPhotoPlacement(o,state.tent,state.photoSite||state.tent,state.photoTentPlacement);
+    return {x:mapped.x,y:mapped.y,rotationDeg:mapped.rotationDeg};
   }
   function down(e){
     if(callbacks.marketingOnly)return;
@@ -671,7 +666,8 @@ export function init(container,callbacks={}) {
       placementPointer=null;
       if(drag){
         if(state.photoMode){
-          if(drag.kind==='item'){
+          if(drag.kind==='tent')state.photoTentPlacement={...drag.origPhoto};
+          else if(drag.kind==='item'){
             const o=state.objects.find(x=>x.id===drag.id);if(o)o.photoPlacement=drag.origPhoto?{...drag.origPhoto}:o.photoPlacement;
           }else for(const a of drag.origPhoto||[]){const o=state.objects.find(x=>x.id===a.id);if(o)o.photoPlacement={x:a.x,y:a.y,rotationDeg:a.rotationDeg||0};}
         }else{
@@ -680,7 +676,7 @@ export function init(container,callbacks={}) {
         }
         furnitureKey='';
       }
-      drag=null;controls.enableRotate=true;rebuild(state);return;
+      if(drag?.kind==='tent')structureKey='';drag=null;controls.enableRotate=true;rebuild(state);return;
     }
     if(state?.placement){
       placementPointer={id:e.pointerId,x:e.clientX,y:e.clientY};const p=groundPoint(e);
@@ -688,9 +684,12 @@ export function init(container,callbacks={}) {
       if(p)callbacks.onPlacementMove?.(p.x+space.widthFt/2,p.z+space.lengthFt/2);return;
     }
     const h=hit(e),point=groundPoint(e);if(!h||!point||!state)return;
-    const u=h.object.userData,id=u.itemId||u.itemIds?.[0];
-    if(state.selectedId!==id){callbacks.onSelect?.(id);return;}
-    if(u.kind==='danceGroup'){
+    const u=h.object.userData,id=u.photoTent?'__photo_tent__':u.itemId||u.itemIds?.[0];
+    if(u.photoTent){
+      callbacks.onPhotoSelect?.(id);state.selectedPhotoId=id;
+      drag={kind:'tent',start:point.clone(),origPhoto:photoTentTransform(state.tent,state.photoSite,state.photoTentPlacement),danceStart:danceMesh?.position.clone()};
+    }else if(state.selectedId!==id){callbacks.onSelect?.(id);return;}
+    else if(u.kind==='danceGroup'){
       const originals=state.objects.filter(o=>u.itemIds.includes(o.id)).map(o=>({...o}));
       drag={kind:'dance',ids:u.itemIds,start:point.clone(),orig:originals,origPhoto:state.photoMode?originals.map(o=>({id:o.id,...photoPlacementFor(o)})):null,mesh:danceMesh.position.clone()};
     }else{
@@ -707,7 +706,16 @@ export function init(container,callbacks={}) {
     if(!drag||!state||pointers.size>1)return;
     const p=groundPoint(e);if(!p)return;
     const t=state.tent,space=state.photoMode?(state.photoSite||t):t,dx=p.x-drag.start.x,dz=p.z-drag.start.z;
-    if(drag.kind==='item'){
+    if(drag.kind==='tent'){
+      const a=drag.origPhoto,angle=a.rotationDeg*Math.PI/180,extentX=(Math.abs(Math.cos(angle))*t.widthFt+Math.abs(Math.sin(angle))*t.lengthFt)/2,extentY=(Math.abs(Math.sin(angle))*t.widthFt+Math.abs(Math.cos(angle))*t.lengthFt)/2;
+      const cx=Math.max(extentX,Math.min(space.widthFt-extentX,a.x+t.widthFt/2+dx)),cy=Math.max(extentY,Math.min(space.lengthFt-extentY,a.y+t.lengthFt/2+dz));
+      state.photoTentPlacement={x:cx-t.widthFt/2,y:cy-t.lengthFt/2,rotationDeg:a.rotationDeg};
+      structure.children[0]?.position.set(cx-space.widthFt/2,0,cy-space.lengthFt/2);
+      for(const o of state.objects)if(!o.photoPlacement){const q=rentalPhotoPlacement(o,t,space,state.photoTentPlacement);rendered.get(o.id)?.position.set(q.x+o.widthFt/2-space.widthFt/2,0,q.y+o.depthFt/2-space.lengthFt/2);}
+      if(danceMesh&&drag.danceStart&&state.objects.filter(o=>o.kind==='dance').every(o=>!o.photoPlacement))danceMesh.position.copy(drag.danceStart).add(new THREE.Vector3(state.photoTentPlacement.x-a.x,0,state.photoTentPlacement.y-a.y));
+      if(lightGroup)lightGroup.position.set(cx-space.widthFt/2,0,cy-space.lengthFt/2);
+      selection.visible=true;selection.box.setFromObject(structure.children[0]).expandByScalar(.12);
+    }else if(drag.kind==='item'){
       const o=state.objects.find(x=>x.id===drag.id);if(!o)return;
       if(state.photoMode){
         const a=drag.origPhoto,px=Math.max(0,Math.min(space.widthFt-o.widthFt,a.x+dx)),py=Math.max(0,Math.min(space.lengthFt-o.depthFt,a.y+dz));
@@ -747,17 +755,19 @@ export function init(container,callbacks={}) {
     if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;if(styling)styling.visible=showStyling;controls.enableRotate=true;
     if(e.type==='pointercancel'){
       if(state.photoMode){
-        if(finished.kind==='item'){
+        if(finished.kind==='tent')state.photoTentPlacement={...finished.origPhoto};
+        else if(finished.kind==='item'){
           const o=state.objects.find(x=>x.id===finished.id);if(o)o.photoPlacement=finished.origPhoto?{...finished.origPhoto}:o.photoPlacement;
         }else for(const a of finished.origPhoto||[]){const o=state.objects.find(x=>x.id===a.id);if(o)o.photoPlacement={x:a.x,y:a.y,rotationDeg:a.rotationDeg||0};}
       }else{
         const originals=finished.kind==='item'?[finished.orig]:finished.orig;
         state.objects=state.objects.map(o=>({...o,...originals.find(a=>a.id===o.id)}));
       }
-      furnitureKey='';rebuild(state);return;
+      if(finished.kind==='tent')structureKey='';furnitureKey='';rebuild(state);return;
     }
     if(state.photoMode){
-      if(finished.kind==='item'){
+      if(finished.kind==='tent')callbacks.onPhotoMove?.('__photo_tent__',{...state.photoTentPlacement});
+      else if(finished.kind==='item'){
         const o=state.objects.find(x=>x.id===finished.id);if(o?.photoPlacement)callbacks.onPhotoMove?.(o.id,{...o.photoPlacement});
       }else{
         for(const id of finished.ids){const o=state.objects.find(x=>x.id===id);if(o?.photoPlacement)callbacks.onPhotoMove?.(o.id,{...o.photoPlacement});}
@@ -786,7 +796,7 @@ export function init(container,callbacks={}) {
     if(destroyed)return;
     raf=requestAnimationFrame(loop);
     const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;
-    if(walk.isActive()){if(walk.update(dt))dirty=true;}else controls.update();
+    if(walk.isActive()){if(walk.update(dt))dirty=true;}else if(!(hasVenuePhoto()&&cameraMode==='outside'))controls.update();
     if(container.clientWidth&&container.clientHeight&&!document.hidden&&!document.body.classList.contains('table-studio-open')&&!document.body.classList.contains('rs-preview-expired')){
       if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;
       if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){
@@ -811,9 +821,9 @@ export function init(container,callbacks={}) {
     setNight(!!options.night);invalidate();
   }
   function stopWalk(){if(walk.isActive())walk.exit();}
-  function inside(){if(state?.tent){stopWalk();cameraMode='inside';syncPhotoPresentation();frame(state.tent);}}
+  function inside(){if(hasVenuePhoto())return false;if(state?.tent){stopWalk();cameraMode='inside';syncPhotoPresentation();frame(state.tent);return true;}return false;}
   // An eye-level reception view for the public tour; other designer views keep their existing framing.
-  function reception(){if(state?.tent){stopWalk();cameraMode='reception';syncPhotoPresentation();frame(state.tent);}}
+  function reception(){if(hasVenuePhoto())return false;if(state?.tent){stopWalk();cameraMode='reception';syncPhotoPresentation();frame(state.tent);return true;}return false;}
   function fitCamera(){if(state?.tent){if(measureMode)setMeasureMode(false);stopWalk();cameraMode='outside';syncPhotoPresentation();frame(state.tent);return true;}return false;}
   function matchPhoto(){if(!state?.tent||!hasVenuePhoto())return false;if(measureMode)setMeasureMode(false);stopWalk();cameraMode='outside';syncPhotoPresentation();frame(state.photoSite||state.tent);return true;}
   function orbit360(){if(!state?.tent||!hasVenuePhoto()||!hasReadyMetricScan())return false;if(measureMode)setMeasureMode(false);stopWalk();cameraMode='photo360';rebuildPhotoStage();syncPhotoPresentation();frame(state.photoSite||state.tent);return true;}
@@ -919,6 +929,7 @@ export function init(container,callbacks={}) {
   }
   function transitionCamera(mode='reception',duration=1250){
     cancelAnimationFrame(cameraAnimationFrame);
+    if(hasVenuePhoto()){matchPhoto();return;}
     if(!state?.tent)return;
     const startPosition=camera.position.clone(),startTarget=controls.target.clone(),startFov=camera.fov;
     if(mode==='inside')inside();else if(mode==='outside')fitCamera();else reception();

@@ -9,7 +9,8 @@ function snapshot(overrides={}){
     photoSite:{id:'photo-site',isSite:true,widthFt:70,lengthFt:90},
     tent,
     photoTentPlacement:{x:25,y:25,rotationDeg:0},
-    photoGeometry:[],
+    photoCalibration:{autoEstimated:false},
+    photoGeometry:[{id:'boundary',type:'fence',x:0,y:88,widthFt:70,depthFt:1}],
     surfaceType:'grass',
     objects:[],
     ...overrides,
@@ -83,7 +84,7 @@ test('metric depth obstacles participate in exact tent fit checks',()=>{
 });
 
 test('metric depth alone stays neutral until property boundaries are traced',()=>{
-  const plan=evaluatePropertyScene(snapshot({venueScan:{status:'ready',frames:[{role:'left'},{role:'center'},{role:'right'}]}}));
+  const plan=evaluatePropertyScene(snapshot({photoGeometry:[],venueScan:{status:'ready',frames:[{role:'left'},{role:'center'},{role:'right'}]}}));
   assert.equal(plan.active,false);
   assert.equal(plan.source,'metric-scan-needs-boundaries');
   const summary=summarizePropertyFit(plan);
@@ -96,4 +97,12 @@ test('without a photo property the adapter stays inactive instead of inventing f
   assert.equal(plan.active,false);
   assert.equal(plan.overall,'unknown');
   assert.equal(summarizePropertyFit(plan).kind,'neutral');
+});
+
+
+test('an untouched single photo does not report a positive property fit',()=>{
+  const plan=evaluatePropertyScene(snapshot({photoGeometry:[],photoCalibration:{autoEstimated:true}}));
+  assert.equal(plan.active,false);assert.equal(summarizePropertyFit(plan).kind,'neutral');
+  const uncalibrated=evaluatePropertyScene(snapshot({photoCalibration:{autoEstimated:true}}));
+  assert.equal(uncalibrated.active,false);assert.equal(uncalibrated.source,'photo-needs-calibration');
 });

@@ -1,8 +1,8 @@
 // Exercise the real POST/PATCH handlers against an isolated in-memory DB adapter.
 const fs=require('node:fs'),vm=require('node:vm'),path=require('node:path'),assert=require('node:assert/strict');
-const handlers={},writes=[],router={post:(p,f)=>handlers.post=f,patch:(p,f)=>handlers.patch=f,get(){}};
+const handlers={},writes=[],router={post:(p,f)=>{if(p==='/:slug/designs')handlers.post=f;},patch:(p,f)=>{if(p==='/:slug/designs/:id')handlers.patch=f;},get(){}};
 const db={query:async(sql,args)=>{if(sql.startsWith('SELECT id,slug FROM tenants'))return{rows:[{id:'tenant-fixture'}]};if(sql.startsWith('SELECT * FROM designs'))return{rows:[{id:'design-fixture'}]};writes.push({sql,args});return{rows:[{id:'design-fixture'}]};}};
-const context={Buffer,console,module:{exports:{}},require:name=>name==='express'?{Router:()=>router}:name==='../db'?db:name==='../eventPassAccess'?{savePermission:async()=>null}:name.includes('requireAuth')?{requireTenantAccess(){}}:(()=>{throw Error('Unexpected dependency '+name);})()};
+const context={Buffer,console,module:{exports:{}},require:name=>name==='../clientIp'?require('../server/src/clientIp'):name==='express'?{Router:()=>router}:name==='../db'?db:name==='../auth'?{}:name==='../dashboardSessions'?{}:name==='../eventPassAccess'?{savePermission:async()=>null}:name.includes('requireAuth')?{requireTenantAccess(){}}:(()=>{throw Error('Unexpected dependency '+name);})()};
 vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../server/src/routes/designs.js'),'utf8'),context);
 async function request(method,scene,session='test-session'){let status=200,body;const res={status(n){status=n;return this;},json(v){body=v;return this;}};await handlers[method]({params:{slug:'test-company',id:'design-fixture'},headers:{},socket:{remoteAddress:'127.0.0.1'},body:{scene,anonymousSessionId:session}},res);return{status,body};}
 (async()=>{

@@ -1,5 +1,6 @@
 const db = require('./db');
 const { hashPassword, verifyPassword } = require('./auth');
+const { revokeUserDashboardSessions } = require('./dashboardSessions');
 
 async function verifyWrittenPassword(email, password) {
   const check = await db.query('SELECT id, password_hash, is_platform_admin FROM users WHERE email = $1', [email]);
@@ -39,10 +40,16 @@ async function bootstrapPlatformAdmin() {
 
   if (forceReset) {
     const passwordHash = await hashPassword(password);
-    await db.query(
-      'UPDATE users SET password_hash = $1, display_name = COALESCE(NULLIF($2, \'\'), display_name), is_platform_admin = true WHERE email = $3',
-      [passwordHash, displayName, email]
-    );
+    const client = await db.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        'UPDATE users SET password_hash = $1, display_name = COALESCE(NULLIF($2, \'\'), display_name), is_platform_admin = true WHERE email = $3',
+        [passwordHash, displayName, email]
+      );
+      await revokeUserDashboardSessions(existing.rows[0].id, client);
+      await client.query('COMMIT');
+    } catch (err) { await client.query('ROLLBACK'); throw err; } finally { client.release(); }
     await verifyWrittenPassword(email, password);
     console.log(`[bootstrap] Platform admin password reset for ${email}.`);
   } else {

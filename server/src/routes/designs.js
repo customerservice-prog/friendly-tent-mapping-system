@@ -1,4 +1,6 @@
+const { clientIp } = require('../clientIp');
 const express = require('express');
+const { verifyDashboardToken } = require('../dashboardSessions');
 const db = require('../db');
 const { requireTenantAccess, isConfiguredPlatformAdmin } = require('../middleware/requireAuth');
 const { savePermission } = require('../eventPassAccess');
@@ -10,9 +12,6 @@ const buckets = new Map();
 const MAX_SCENE_BYTES = 192 * 1024;
 const MAX_OBJECTS = 500;
 
-function clientIp(req) {
-  return (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').toString().split(',')[0].trim();
-}
 function limited(key) {
   const now = Date.now(), windowMs = 60 * 60 * 1000, max = 120;
   let b = buckets.get(key);
@@ -60,7 +59,7 @@ async function staffAllowed(req, tenant) {
   const header = String(req.headers.authorization || '');
   if (!header.startsWith('Bearer ')) return false;
   try {
-    const payload = verifyToken(header.slice(7));
+    const payload = await verifyDashboardToken(header.slice(7));
     if (await isConfiguredPlatformAdmin(payload)) return true;
     if (!payload.userId) return false;
     const row = (await db.query(

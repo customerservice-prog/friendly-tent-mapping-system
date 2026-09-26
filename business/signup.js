@@ -20,7 +20,7 @@
       var data = await response.json();
       if (!response.ok) throw Error(data.error || 'Your workspace could not be created. Please try again.');
       try {
-        localStorage.setItem('rentsketch_dashboard_token',data.token);
+        window.RentSketchDashboardSession.accept(data.token);
         localStorage.setItem('rentsketch_dashboard_tenant',data.tenant.slug);
       } catch (_) {
         // Account creation succeeded even if browser storage is unavailable.

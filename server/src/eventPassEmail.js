@@ -2,7 +2,7 @@ const crypto = require('crypto');
 const db = require('./db');
 const { signToken } = require('./auth');
 const { getMailer } = require('./mailer');
-const { validateWebhookUrl } = require('./outboundWebhook');
+const { validateWebhookUrl, postWebhook } = require('./outboundWebhook');
 
 function accessUrl(design, tenantSlug, email, expiresAt) {
   // The private link outlives the editing term by 30 days so the customer can
@@ -24,13 +24,10 @@ async function relay(type, data) {
   if (!config) throw new Error('access_email_not_configured');
   const body = JSON.stringify({ id: crypto.randomUUID(), type, createdAt: new Date().toISOString(), data });
   const signature = crypto.createHmac('sha256', config.secret).update(body).digest('hex');
-  const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 22000);
-  try {
-    const response = await fetch(config.url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-RentSketch-Signature': signature }, body, redirect: 'error', signal: controller.signal });
-    const result = await response.json();
-    if (!response.ok || !result.ok || result.accessEmailVersion !== 1) throw new Error('access_email_delivery_failed');
-    return result;
-  } finally { clearTimeout(timeout); }
+  const response = await postWebhook(config.url, { headers: { 'Content-Type': 'application/json', 'X-RentSketch-Signature': signature }, body, timeoutMs: 22000 });
+  const result = await response.json();
+  if (!response.ok || !result.ok || result.accessEmailVersion !== 1) throw new Error('access_email_delivery_failed');
+  return result;
 }
 
 let readiness, checking;

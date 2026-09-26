@@ -7,8 +7,8 @@
   var ROUTES = ['login', 'overview', 'requests', 'products', 'branding', 'analytics', 'billing', 'install', 'superadmin'];
 
  function platformTenantView() { try { return new URLSearchParams(window.location.search).get('tenantView') === '1'; } catch (_) { return false; } }
- function getToken() { return localStorage.getItem(TOKEN_KEY); }
-  function setToken(t) { if (t) { localStorage.setItem(TOKEN_KEY, t); } else { localStorage.removeItem(TOKEN_KEY); } }
+ function getToken() { return window.RentSketchDashboardSession ? window.RentSketchDashboardSession.getToken() : localStorage.getItem(TOKEN_KEY); }
+  function setToken(t) { if (window.RentSketchDashboardSession) { if(t) window.RentSketchDashboardSession.accept(t); else window.RentSketchDashboardSession.clear('signed-out'); } else if(t) localStorage.setItem(TOKEN_KEY,t); else localStorage.removeItem(TOKEN_KEY); }
   function getActiveTenant() { return localStorage.getItem(TENANT_KEY); }
   function setActiveTenant(slug) { if (slug) { localStorage.setItem(TENANT_KEY, slug); } else { localStorage.removeItem(TENANT_KEY); } }
 
@@ -52,10 +52,12 @@ function esc(s) {
    var res = await fetch(API_BASE + path, {
      method: opts.method || 'GET',
      headers: headers,
-     body: body,
+     body: body, cache: 'no-store',
    });
    var data = null;
    try { data = await res.json(); } catch (e) { data = null; }
+   if (token && getToken() !== token) { var stale = new Error('Your session changed. Sign in again.'); stale.status = 401; stale.sessionChanged = true; throw stale; }
+   if (res.status === 401 && token) window.RentSketchDashboardSession?.unauthorized(token);
    if (!res.ok) {
      var err = new Error((data && data.error) || ('Request failed (' + res.status + ')'));
      err.status = res.status;
@@ -73,6 +75,8 @@ function esc(s) {
  }
 
  function appEl() { return document.getElementById('app'); }
+ function mainEl() { return document.getElementById('dashMain') || document.createElement('div'); }
+ function forgetPrivateState() { renderGeneration++; state.user=null; state.tenants=[]; state.tenant=null; appEl().replaceChildren(); }
 
  function shellHtml(route, inner) {
    var tenants = state.tenants || [];
@@ -149,7 +153,7 @@ function esc(s) {
      '<div class="login-card">' +
      '<div class="login-brand">RentSketch</div>' +
      '<h1>Business Dashboard</h1>' +
-     '<p class="login-sub">Log in with the staff account for your rental company.</p>' +
+     '<p class="login-sub">Log in with the staff account for your rental company. Sessions end after 30 minutes of inactivity.</p>' +
      '<form id="loginForm">' +
      '<label>Email<input type="email" id="loginEmail" required autocomplete="username"></label>' +
      '<label>Password<input type="password" id="loginPassword" required autocomplete="current-password"></label>' +
@@ -199,7 +203,7 @@ function esc(s) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading workspace...'));
    bindShellEvents();
    if (!state.tenant) {
-     document.getElementById('dashMain').innerHTML = '<div class="dash-empty"><div class="dash-empty-icon">RS</div><h3>No business assigned yet</h3><p>Ask a RentSketch administrator to add this account to a business workspace.</p></div>';
+     mainEl().innerHTML = '<div class="dash-empty"><div class="dash-empty-icon">RS</div><h3>No business assigned yet</h3><p>Ask a RentSketch administrator to add this account to a business workspace.</p></div>';
      return;
    }
    try {
@@ -281,13 +285,13 @@ function esc(s) {
            '<a class="tw-list-row" href="#/install"><strong>Website install</strong><span>→</span></a>'+
          '</div></div></section>'+
        '</aside></div>';
-     document.getElementById('dashMain').innerHTML=html;
-   } catch(err){document.getElementById('dashMain').innerHTML=errorHtml(err);}
+     mainEl().innerHTML=html;
+   } catch(err){mainEl().innerHTML=errorHtml(err);}
  }
 
  async function viewAnalytics(route,gen){
    appEl().innerHTML=shellHtml(route,loadingHtml('Loading analytics...'));bindShellEvents();
-   if(!state.tenant){document.getElementById('dashMain').innerHTML='<div class="dash-empty">No tenant access.</div>';return;}
+   if(!state.tenant){mainEl().innerHTML='<div class="dash-empty">No tenant access.</div>';return;}
    try{
      var data=await Promise.all([
        api('/api/tenants/'+state.tenant+'/quote-requests'),
@@ -306,7 +310,7 @@ function esc(s) {
      var statuses={};reqs.forEach(function(r){statuses[r.status]=(statuses[r.status]||0)+1;});
      var maxStatus=Math.max(1,...Object.values(statuses));
      if(gen!==renderGeneration)return;
-     document.getElementById('dashMain').innerHTML=
+     mainEl().innerHTML=
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Workspace analytics</div><h1 class="dash-title">Customer planning activity</h1><p class="dash-subtitle">A practical view of demand coming through your RentSketch designer.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Open RentSketch</a></div></div>'+
        '<section class="tw-metrics">'+
          '<article class="tw-metric"><div class="tw-metric-label">Requests · 30 days</div><div class="tw-metric-value">'+recentReq.length+'</div><div class="tw-metric-detail">'+reqs.length+' all-time requests</div></article>'+
@@ -319,7 +323,7 @@ function esc(s) {
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Event types</h2><p>What customers are planning.</p></div></div><div class="tw-panel-body">'+Object.entries(types).sort(function(a,b){return b[1]-a[1];}).slice(0,8).map(function(x){return '<div class="tw-list-row"><span>'+esc(x[0])+'</span><strong>'+x[1]+'</strong></div>';}).join('')+(Object.keys(types).length?'':emptyAnalytics('No event-type data yet'))+'</div></section>'+
          '<section class="tw-panel"><div class="tw-panel-head"><div><h2>Catalog readiness</h2><p>How much of your equipment is customer-ready.</p></div></div><div class="tw-panel-body"><div class="tw-list-row"><span>Total products</span><strong>'+products.length+'</strong></div><div class="tw-list-row"><span>Active</span><strong>'+products.filter(function(p){return p.active;}).length+'</strong></div><div class="tw-list-row"><span>Priced</span><strong>'+products.filter(function(p){return Number(p.price_per_day)>0;}).length+'</strong></div><div class="tw-list-row"><span>Visual model assigned</span><strong>'+products.filter(function(p){return p.visual_model_id;}).length+'</strong></div></div></section>'+
        '</div>';
-   }catch(err){document.getElementById('dashMain').innerHTML=errorHtml(err);}
+   }catch(err){mainEl().innerHTML=errorHtml(err);}
  }
  function emptyAnalytics(text){return '<div class="dash-empty"><p>'+esc(text)+'</p></div>';}
 
@@ -349,13 +353,13 @@ function esc(s) {
  async function viewRequests(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading requests...'));
    bindShellEvents();
-   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
+   if (!state.tenant) { mainEl().innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    try {
      var requests = await api('/api/tenants/' + state.tenant + '/quote-requests');
      var reqs = requests.quoteRequests || [];
      if (gen !== renderGeneration) return;
      var pipeline=reqs.filter(function(r){return r.status!=='declined';}).reduce(function(s,r){return s+Number(r.estimate_total||0);},0);
-     document.getElementById('dashMain').innerHTML =
+     mainEl().innerHTML =
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Customer pipeline</div><h1 class="dash-title">Quote requests</h1><p class="dash-subtitle">Search, review and move customer requests through your sales process.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant='+encodeURIComponent(state.tenant)+'" target="_blank" rel="noopener">Preview customer designer</a></div></div>'+
        '<section class="tw-metrics">'+
          '<article class="tw-metric"><div class="tw-metric-label">All requests</div><div class="tw-metric-value">'+reqs.length+'</div><div class="tw-metric-detail">Total request records</div></article>'+
@@ -378,13 +382,13 @@ function esc(s) {
        });
      }
      document.getElementById('requestSearch').oninput=paint;document.getElementById('requestStatus').onchange=paint;paint();
-   } catch (err) { document.getElementById('dashMain').innerHTML = errorHtml(err); }
+   } catch (err) { mainEl().innerHTML = errorHtml(err); }
  }
 
  async function viewProducts(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading products...'));
    bindShellEvents();
-   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
+   if (!state.tenant) { mainEl().innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    try {
      var data = await api('/api/tenants/' + state.tenant + '/products');
      var products = data.products || [];
@@ -414,7 +418,7 @@ function esc(s) {
                            '</tr>';
      }).join('');
      var table = products.length ? ('<table class="dash-table"><thead><tr><th>Category</th><th>Name</th><th>SKU</th><th>Price/Day</th><th>Capacity</th><th>Visual</th><th>In Designer</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>') : '<div class="dash-empty">No products yet. Add your first one below.</div>';
-     document.getElementById('dashMain').innerHTML = '' +
+     mainEl().innerHTML = '' +
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Customer catalog</div><h1 class="dash-title">Products</h1><p class="dash-subtitle">Control the rentals customers can place in layouts, including pricing, dimensions and visual mapping.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant=' + encodeURIComponent(state.tenant) + '" target="_blank" rel="noopener">Preview catalog</a></div></div>' +
        '<section class="tw-metrics"><article class="tw-metric"><div class="tw-metric-label">Products</div><div class="tw-metric-value">' + products.length + '</div><div class="tw-metric-detail">Catalog records</div></article><article class="tw-metric"><div class="tw-metric-label">Active</div><div class="tw-metric-value">' + products.filter(function(p){return p.active;}).length + '</div><div class="tw-metric-detail">Available in workspace</div></article><article class="tw-metric"><div class="tw-metric-label">Priced</div><div class="tw-metric-value">' + products.filter(function(p){return Number(p.price_per_day)>0;}).length + '</div><div class="tw-metric-detail">Have customer pricing</div></article><article class="tw-metric"><div class="tw-metric-label">Visual mapped</div><div class="tw-metric-value">' + products.filter(function(p){return p.visual_model_id;}).length + '</div><div class="tw-metric-detail">Assigned a supported visual</div></article></section>' +
        '<div class="tw-panel"><div class="tw-panel-head"><div><h2>Rental catalog</h2><p>Assign a visual, product photo and measured dimensions. Unmapped physical rentals use labeled approximate footprints; configurable services are listed for review.</p></div></div><div class="tw-table-scroll">' + table + '</div></div>' +
@@ -488,18 +492,18 @@ function esc(s) {
        });
      });
    } catch (err) {
-     document.getElementById('dashMain').innerHTML = errorHtml(err);
+     mainEl().innerHTML = errorHtml(err);
    }
  }
 
  async function viewBranding(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading branding...'));
    bindShellEvents();
-   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
+   if (!state.tenant) { mainEl().innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    try {
      var t = await api('/api/tenants/' + state.tenant + '/admin');
      if (gen !== renderGeneration) return;
-     document.getElementById('dashMain').innerHTML = '' +
+     mainEl().innerHTML = '' +
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Customer experience</div><h1 class="dash-title">Branding &amp; payouts</h1><p class="dash-subtitle">Control how your designer looks, how customers contact you, and where deposit payouts are sent.</p></div><div class="tw-actions"><a class="tw-btn primary" href="/designer/?tenant=' + encodeURIComponent(state.tenant) + '" target="_blank" rel="noopener">Preview live designer</a></div></div>' +
        '<form id="brandingForm" class="dash-form">' +
        '<label>Company Name<input type="text" id="bName" value="' + esc(t.name || '') + '"></label>' +
@@ -577,14 +581,14 @@ function esc(s) {
      })();
 
    } catch (err) {
-     document.getElementById('dashMain').innerHTML = errorHtml(err);
+     mainEl().innerHTML = errorHtml(err);
    }
  }
 
  async function viewInstall(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading install info...'));
    bindShellEvents();
-   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
+   if (!state.tenant) { mainEl().innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    try {
      var t = await api('/api/tenants/' + state.tenant + '/admin');
      if (gen !== renderGeneration) return;
@@ -593,7 +597,7 @@ function esc(s) {
      var loaderCode = '<div id="rentsketch-embed"></div>\n<script src="https://rentsketch.com/embed/v1.js" data-tenant="' + esc(state.tenant) + '" data-embed-key="' + esc(t.embedKey || '') + '" defer></script>';
      var origins = (t.allowedOrigins || []).join('\n');
      var installed=(t.allowedOrigins||[]).length>0;
-     document.getElementById('dashMain').innerHTML =
+     mainEl().innerHTML =
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Publish & share</div><h1 class="dash-title">Install RentSketch</h1><p class="dash-subtitle">Launch your hosted designer, embed it on your website, and control which domains are allowed to display it.</p></div><div class="tw-actions"><a class="tw-btn primary" href="' + designerUrl + '" target="_blank" rel="noopener">✦ Open hosted designer</a></div></div>' +
        '<section class="tw-metrics">'+
          '<article class="tw-metric"><div class="tw-metric-label">Install status</div><div class="tw-metric-value">'+(installed?'Ready':'Setup')+'</div><div class="tw-metric-detail">'+(installed?(t.allowedOrigins||[]).length+' allowed domain(s)':'Add your website domain')+'</div></article>'+
@@ -617,7 +621,7 @@ function esc(s) {
        catch(err){errEl.textContent=err.message;errEl.hidden=false;}
      });
    } catch (err) {
-     document.getElementById('dashMain').innerHTML = errorHtml(err);
+     mainEl().innerHTML = errorHtml(err);
    }
  }
  // Platform-admin only cross-tenant panel. Only ever shown/reachable when
@@ -629,9 +633,9 @@ function esc(s) {
  async function viewBilling(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading billing...'));
    bindShellEvents();
-   if (!state.tenant) { document.getElementById('dashMain').innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
+   if (!state.tenant) { mainEl().innerHTML = '<div class="dash-empty">No tenant access.</div>'; return; }
    if (state.user && state.user.isPlatformAdmin) {
-     document.getElementById('dashMain').innerHTML =
+     mainEl().innerHTML =
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Account billing</div><h1 class="dash-title">Billing</h1><p class="dash-subtitle">You are viewing this tenant as the RentSketch platform administrator.</p></div><div class="tw-actions"><a class="tw-btn" href="/dashboard/platform.html#subscriptions">Platform subscriptions</a><a class="tw-btn primary" href="/dashboard/platform.html#payments">Payments</a></div></div>'+
        '<section class="tw-panel"><div class="tw-panel-body"><div class="dash-saved"><strong>Complimentary platform access is permanent.</strong> Your platform-admin account is never blocked by a tenant trial, cancellation, or past-due subscription.</div><p class="dash-subtitle" style="margin-top:14px">This tenant’s customer billing state remains unchanged. Use the Platform Console to inspect or manage the tenant subscription.</p></div></section>';
      return;
@@ -655,7 +659,7 @@ function esc(s) {
        window.location.search.indexOf('billing=cancelled')>-1?'<div class="dash-error">Checkout was cancelled. No new subscription was created.</div>':
        window.location.search.indexOf('billing=portal-return')>-1?'<div class="dash-saved">Returned from the Stripe billing portal.</div>':'';
      if(statusData.friendlyFree){
-       document.getElementById('dashMain').innerHTML=
+       mainEl().innerHTML=
          '<div class="tw-page-head"><div><div class="tw-eyebrow">Account billing</div><h1 class="dash-title">Billing</h1><p class="dash-subtitle">Subscription and payment settings for this workspace.</p></div></div>'+
          returnMsg+
          '<section class="tw-panel"><div class="tw-panel-body"><div class="dash-saved"><strong>Complimentary workspace access.</strong> This business does not need a RentSketch subscription.</div></div></section>';
@@ -664,7 +668,7 @@ function esc(s) {
      var planCards=plansList.filter(function(p){return p.id!=='enterprise';}).map(function(p){
        return '<button type="button" class="tw-plan-card" data-plan="'+esc(p.id)+'"><h3>'+esc(p.name)+'</h3><div class="price"><span data-month="'+Number((p.monthlyCents||0)/100).toFixed(0)+'" data-year="'+Number((p.annualCents||0)/100).toFixed(0)+'">$'+Number((p.monthlyCents||0)/100).toFixed(0)+'</span><small data-plan-period>/month</small></div><p>'+esc(p.description||'RentSketch business subscription')+'</p></button>';
      }).join('');
-     document.getElementById('dashMain').innerHTML=
+     mainEl().innerHTML=
        '<div class="tw-page-head"><div><div class="tw-eyebrow">Account billing</div><h1 class="dash-title">Billing & subscription</h1><p class="dash-subtitle">Choose your RentSketch business plan, billing interval, payment method and cancellation options.</p></div><div class="tw-actions"><button type="button" class="tw-btn" id="portalBtnTop">Open Stripe billing portal</button></div></div>'+
        returnMsg+trialText+
        '<div class="tw-billing-grid">'+
@@ -706,14 +710,14 @@ function esc(s) {
        catch(err){errEl.textContent=err.message;errEl.hidden=false;btn.disabled=false;btn.textContent='Continue to secure checkout';}
      };
    } catch (err) {
-     document.getElementById('dashMain').innerHTML = errorHtml(err);
+     mainEl().innerHTML = errorHtml(err);
    }
  }
  async function viewSuperAdmin(route, gen) {
    appEl().innerHTML = shellHtml(route, loadingHtml('Loading platform overview...'));
    bindShellEvents();
    if (!state.user || !state.user.isPlatformAdmin) {
-     document.getElementById('dashMain').innerHTML = '<div class="dash-empty">Platform admin access required.</div>';
+     mainEl().innerHTML = '<div class="dash-empty">Platform admin access required.</div>';
      return;
    }
    try {
@@ -760,14 +764,15 @@ function esc(s) {
        '<th>Business</th><th>Plan</th><th>Status</th><th>Trial Ends</th><th>Connect</th>' +
        '<th>Products</th><th>Quote Reqs</th><th>Members</th><th>Created</th>' +
        '</tr></thead><tbody>' + tableBody + '</tbody></table>';
-     document.getElementById('dashMain').innerHTML = html;
+     mainEl().innerHTML = html;
    } catch (err) {
-     document.getElementById('dashMain').innerHTML = errorHtml(err);
+     mainEl().innerHTML = errorHtml(err);
    }
  }
 
  function render() {
    var route = currentRoute();
+   if (route === 'login') { if(getToken()) setToken(null); forgetPrivateState(); viewLogin(); return; }
    var authed = !!getToken() && !!state.user;
    if (!authed) {
      if (route !== 'login') { window.location.hash = '#/login'; return; }
@@ -792,18 +797,28 @@ function esc(s) {
  }
 
  async function boot() {
+   if (currentRoute() === 'login' || !location.hash) { if(getToken()) setToken(null); forgetPrivateState(); viewLogin(); return; }
    var token = getToken();
    if (token) {
      try {
        await loadMe();
        if (state.user && state.user.isPlatformAdmin && !platformTenantView() && !/\/dashboard\/platform\.html$/i.test(location.pathname)) { window.location.replace('/dashboard/platform.html#overview'); return; }
      } catch (e) {
+       if(e.sessionChanged) return;
        setToken(null); setActiveTenant(null); state.user = null;
      }
    }
    render();
  }
 
+ window.addEventListener('rentsketch:dashboardSessionChanged', function(event) {
+   if(event.detail?.reason === 'signed-in') return;
+   forgetPrivateState();
+   if(event.detail?.reason === 'changed' && getToken()) { if(currentRoute() === 'login' || !location.hash) { viewLogin(); return; } boot(); return; }
+   window.location.hash='#/login'; viewLogin();
+ });
+ window.addEventListener('pageshow', function(event) { if(event.persisted) { forgetPrivateState(); boot(); } });
+ window.addEventListener('pagehide', forgetPrivateState);
  window.addEventListener('hashchange', render);
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', boot);

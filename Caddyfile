@@ -44,19 +44,26 @@
 	@privatePage path /designer /designer/* /dashboard /dashboard/* /my-event /my-event/* /business/signup* /tests/*
 	header @privatePage X-Robots-Tag "noindex, nofollow"
 	@dashboardAssets path /dashboard /dashboard/*
-	header @dashboardAssets Cache-Control "no-cache"
+	header @dashboardAssets {
+		Cache-Control "no-store"
+		X-Frame-Options "DENY"
+		Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://rentsketch-api-production.up.railway.app; frame-ancestors 'none'; base-uri 'none'; form-action 'self'; object-src 'none'"
+	}
 	@marketing path / /index.html /business/* /demo/* /help/* /privacy/* /tent-layout-software/* /tent-diagram-software/* /party-rental-software/* /party-rental-inventory-software/* /party-rental-management-software/* /event-rental-software/* /tent-rental-software/* /event-layout-software/* /wedding-layout-planner/* /marketing* /sitemap.xml /sitemap-software.xml /sitemap-event-planning.xml /robots.txt
 	header @marketing Cache-Control "no-cache"
 	# Public media assets are content-addressed by deploy and safe to cache between visits.
 	@mediaAssets path /assets/*
 	header @mediaAssets Cache-Control "public, max-age=2592000"
 	header {
-		X-XSS-Protection "1; mode=block"
+		X-XSS-Protection "0"
+		Strict-Transport-Security "max-age=31536000"
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "strict-origin-when-cross-origin"
-		Content-Security-Policy "default-src 'self'; img-src 'self' data: https: *; style-src 'self' 'unsafe-inline' https: *; script-src 'self' 'unsafe-inline' https: *; font-src 'self' data: https: *; connect-src 'self' https: *; media-src 'self' https: *; object-src 'none'; frame-src 'self' https: *;"
 		-Server
 	}
+
+	@publicPages not path /dashboard /dashboard/*
+	header @publicPages Content-Security-Policy "default-src 'self'; img-src 'self' data: https: *; style-src 'self' 'unsafe-inline' https: *; script-src 'self' 'unsafe-inline' https: *; font-src 'self' data: https: *; connect-src 'self' https: *; media-src 'self' https: *; object-src 'none'; frame-src 'self' https: *;"
 
 	# Keep cached copies, but check for updates before starting a new visit.
 	# Otherwise Friendly's iframe can retain an older entry page after a deploy.

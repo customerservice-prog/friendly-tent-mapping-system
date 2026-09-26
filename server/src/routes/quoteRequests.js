@@ -1,10 +1,11 @@
+const { clientIp } = require('../clientIp');
 const crypto=require('crypto');
 const express=require('express');
 const db=require('../db');
 const {getMailer}=require('../mailer');
 const {requireTenantRole}=require('../middleware/requireAuth');
 const {syncOrderEntitlement}=require('../orderProviders/quoteRequestOrderProvider');
-const {validateWebhookUrl}=require('../outboundWebhook');
+const {validateWebhookUrl,postWebhook}=require('../outboundWebhook');
 const {isPassEnabled}=require('../eventPass');
 const {activePass}=require('../eventPassAccess');
 const router=express.Router();
@@ -13,10 +14,9 @@ const buckets=new Map();
 const VALID_STATUSES=new Set(['new','contacted','quoted','booked','declined']);
 function text(v,max){return typeof v==='string'?v.trim().slice(0,max):'';}
 function limited(key){const now=Date.now(),windowMs=60*60*1000,max=10;let b=buckets.get(key);if(!b||now-b.start>windowMs)b={start:now,count:0};b.count++;buckets.set(key,b);return b.count>max;}
-function clientIp(req){return(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').toString().split(',')[0].trim();}
 function finite(v,min,max){if(v==null||v==='')return null;const n=Number(v);return Number.isFinite(n)?Math.max(min,Math.min(max,n)):null;}
 function sanitizeLineItems(value){if(!Array.isArray(value))return[];return value.slice(0,200).map(item=>{item=item&&typeof item==='object'?item:{};const label=text(item.label,240);if(!label)return null;return{label,qty:finite(item.qty,0,10000)||0,unitPrice:finite(item.unitPrice,0,1000000),amount:finite(item.amount,0,100000000),productId:text(item.productId,160)||null,category:text(item.category,40)||null};}).filter(Boolean);}
-async function sendWebhook(tenant,eventType,data){if(!tenant.webhook_url)return{attempted:false,sent:false};const checked=validateWebhookUrl(tenant.webhook_url);if(!checked.ok){console.error('[webhook] blocked unsafe destination for tenant',tenant.slug,checked.error);return{attempted:true,sent:false};}try{const payload={id:crypto.randomUUID(),type:eventType,createdAt:new Date().toISOString(),data};const body=JSON.stringify(payload);const signature=tenant.webhook_secret?crypto.createHmac('sha256',tenant.webhook_secret).update(body).digest('hex'):'';const response=await fetch(checked.url,{method:'POST',headers:{'Content-Type':'application/json','X-RentSketch-Signature':signature},body,redirect:'error'});if(!response.ok){const detail=(await response.text().catch(()=>'' )).slice(0,300);throw new Error(`HTTP ${response.status}${detail?': '+detail:''}`);}return{attempted:true,sent:true};}catch(err){console.error('[webhook] delivery failed for tenant',tenant.slug,err.message);return{attempted:true,sent:false};}}
+async function sendWebhook(tenant,eventType,data){if(!tenant.webhook_url)return{attempted:false,sent:false};const checked=validateWebhookUrl(tenant.webhook_url);if(!checked.ok){console.error('[webhook] blocked unsafe destination for tenant',tenant.slug,checked.error);return{attempted:true,sent:false};}try{const payload={id:crypto.randomUUID(),type:eventType,createdAt:new Date().toISOString(),data};const body=JSON.stringify(payload);const signature=tenant.webhook_secret?crypto.createHmac('sha256',tenant.webhook_secret).update(body).digest('hex'):'';const response=await postWebhook(checked.url,{headers:{'Content-Type':'application/json','X-RentSketch-Signature':signature},body});if(!response.ok){const detail=(await response.text().catch(()=>'' )).slice(0,300);throw new Error(`HTTP ${response.status}${detail?': '+detail:''}`);}return{attempted:true,sent:true};}catch(err){console.error('[webhook] delivery failed for tenant',tenant.slug,err.message);return{attempted:true,sent:false};}}
 async function sendTenantEmail(tenant,subject,body){const mailer=getMailer();if(!mailer||!tenant.contact_email)return{attempted:false,sent:false};try{const result=await mailer.send(tenant.contact_email,subject,body);if(result&&result.error)throw new Error(result.error.message||String(result.error));return{attempted:true,sent:true};}catch(err){console.error('[quote-mail] failed:',err.message);return{attempted:true,sent:false};}}
 router.post('/:slug/quote-requests',wrap(async(req,res)=>{
  const tenant=(await db.query('SELECT * FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];if(!tenant)return res.status(404).json({error:'Tenant not found'});

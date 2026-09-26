@@ -12,6 +12,7 @@
   var adminDesign = params.get('adminDesign');
   var purchaseRequested = params.get('purchase') === '1';
   var productPreview = ['tent', 'inflatable'].includes(params.get('focus')) && params.get('autoplace') === '1';
+  var adminSessionExpired = params.get('admin') === '1' && !dashboardToken();
   var offer, verified, savedPaidEvent, modal, offerPromise, previewLimit, ready = false, busy = false;
   var guidedAutoAttempted = false;
   function maybeStartGuidedPreview() {
@@ -38,6 +39,7 @@
 
   function read(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } }
   function write(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} }
+  function dashboardToken() { try { return window.RentSketchDashboardSession ? window.RentSketchDashboardSession.getToken() : localStorage.getItem('rentsketch_dashboard_token'); } catch (_) { return ''; } }
   function bridge() { return window.FriendlyBridge; }
   function money(cents) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100); }
   function active() { return !!(verified && verified.active && (!verified.expiresAt || Date.parse(verified.expiresAt) > Date.now())); }
@@ -46,7 +48,7 @@
     var controller = new AbortController(), timer = setTimeout(function () { controller.abort(); }, 12000);
     var headers = body ? { 'Content-Type': 'application/json' } : {};
     try {
-      var adminToken = localStorage.getItem('rentsketch_dashboard_token');
+      var adminToken = dashboardToken();
       if (adminToken) headers.Authorization = 'Bearer ' + adminToken;
     } catch (_) {}
     return fetch((window.RENTSKETCH_API_URL || '') + '/api/consumer' + path, {
@@ -54,6 +56,8 @@
       body: body ? JSON.stringify(body) : undefined, signal: controller.signal, cache: 'no-store',
     }).then(async function (response) {
       var data = await response.json();
+      if(adminToken && dashboardToken() !== adminToken) throw new Error('Your admin session changed. Sign in again to continue.');
+      if(response.status === 401 && adminToken) window.RentSketchDashboardSession?.unauthorized(adminToken);
       if (!response.ok) throw new Error(data.error || 'Please try again in a moment.');
       return data;
     }).catch(function (err) {
@@ -64,7 +68,7 @@
   }
   function getOffer(refresh) {
     if (!offerPromise || refresh) offerPromise = api('/event-pass/offer?tenant=' + encodeURIComponent(slug)).then(function (data) {
-      offer = data; document.body.classList.toggle('rs-platform-admin', !!data.adminAccess); render(); return data;
+      offer = data; if(data.adminAccess) adminSessionExpired = false; document.body.classList.toggle('rs-platform-admin', !!data.adminAccess); render(); return data;
     }).catch(function (err) { offerPromise = null; throw err; });
     return offerPromise;
   }
@@ -164,6 +168,11 @@
     }
     if (!offer || !offer.required) { bar.hidden = true; return; }
     bar.hidden = false;
+    if(adminSessionExpired && !active()) {
+      bar.innerHTML = '<span><strong>Admin session ended</strong><small>Sign in again to continue editing. Your layout is kept on this device.</small></span><a class="btn-primary" href="/dashboard/#/login" target="_blank" rel="noopener">Sign in</a><button type="button" class="btn-secondary" data-admin-retry>Check sign-in</button>';
+      bar.querySelector('[data-admin-retry]').onclick=function(){getOffer(true).catch(function(){});};
+      return;
+    }
     if (active()) {
       bar.innerHTML = '<span><strong>Event Pass active</strong><small></small></span><button type="button" class="btn-secondary">Keep my access link</button>';
       if (verified.includedWithOrder) bar.querySelector('strong').textContent = 'Included with Friendly order' + (verified.orderNumber ? ' #' + verified.orderNumber : '');
@@ -328,11 +337,13 @@
       return false;
     } finally { busy = false; }
   }
+  function showAdminSignIn(){return openModal('Sign in to continue editing','<p>Your admin session has ended. Your layout is kept on this device.</p><a class="btn-primary" href="/dashboard/#/login" target="_blank" rel="noopener">Sign in to RentSketch</a><button type="button" class="pass-back" data-admin-retry>Check sign-in</button>');}
   async function requestAccess(continuation) {
     window.RentSketchGuidedPreview?.close();
     try {
       await getOffer();
       if (!offer.required || active()) { if (continuation) continuation(); return true; }
+      if(adminSessionExpired){var login=showAdminSignIn();login.querySelector('[data-admin-retry]').onclick=function(){getOffer(true).then(function(){if(canEdit()){closeModal();if(continuation)continuation();}}).catch(function(){});};return false;}
       if (returning && !ready) throw new Error('Your saved event is still being restored. Please try again in a moment.');
       await showPurchase();
       return false;
@@ -370,7 +381,20 @@
       event.preventDefault(); event.stopImmediatePropagation(); requestAccess();
     }
   }, true);
-  window.addEventListener('rentsketch:accessRequired', function () { if (verified) verified.active = false; render(); requestAccess(); });
+  window.addEventListener('rentsketch:dashboardSessionChanged', function () {
+    if(offer?.adminAccess || verified?.adminAccess){
+      adminSessionExpired = true;
+      if(verified?.adminAccess) verified = null;
+      offer = Object.assign({},offer,{required:true,adminAccess:false});
+      document.body.classList.remove('rs-platform-admin');
+      render();
+    }
+    if(ready) getOffer(true).then(function(){if(canEdit())closeModal();}).catch(function(){});
+  });
+  window.addEventListener('rentsketch:accessRequired', function () {
+    if(offer?.adminAccess){adminSessionExpired=true;window.RentSketchDashboardSession?.clear('expired');offer=Object.assign({},offer,{required:true,adminAccess:false});}
+    if (verified) verified.active = false; render(); requestAccess();
+  });
   setInterval(function () { if (verified && verified.active && !active()) { verified.active = false; render(); } }, 15000);
   window.addEventListener('rentsketch:designStarted', render);
   window.addEventListener('rentsketch:intakeReady', render);

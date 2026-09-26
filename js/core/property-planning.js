@@ -1,5 +1,6 @@
 import { evaluateTentFit, evaluateRentalFit } from './site-fit.js';
 import { objectLocalDimensions } from './world-space.js';
+import { rentalPhotoPlacement } from './photo-geometry.js';
 
 function finite(value, fallback = 0) {
   const n = Number(value);
@@ -47,13 +48,7 @@ function rentalPlacement(item,snapshot) {
   if (p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y))) {
     return {...item,x:Number(p.x),y:Number(p.y),rotationDeg:finite(p.rotationDeg,item.rotationDeg||0)};
   }
-  const tent=snapshot?.tent,tp=tentPlacement(snapshot);
-  return {
-    ...item,
-    x: tent?.isSite ? finite(item?.x) : tp.x + finite(item?.x),
-    y: tent?.isSite ? finite(item?.y) : tp.y + finite(item?.y),
-    rotationDeg: finite(item?.rotationDeg) + (tent?.isSite ? 0 : tp.rotationDeg),
-  };
+  return rentalPhotoPlacement(item,snapshot.tent,snapshot.photoSite,tentPlacement(snapshot));
 }
 
 export function propertyPlanningInput(snapshot) {
@@ -81,16 +76,19 @@ export function evaluatePropertyScene(snapshot) {
   // semantic collision map. Do not claim the tent "fits" merely because the
   // arbitrary planning rectangle contains it. Until at least one property
   // boundary/obstacle has been traced, keep the fit badge neutral.
-  if(snapshot.venueScan?.status==='ready'&&!(snapshot.photoGeometry||[]).length&&!(snapshot.scanGeometry||[]).length){
+  if(!(snapshot.photoGeometry||[]).length&&!(snapshot.scanGeometry||[]).length){
     return {
       active:false,
-      source:'metric-scan-needs-boundaries',
+      source:snapshot.venueScan?.status==='ready'?'metric-scan-needs-boundaries':'photo-needs-boundaries',
       tent:null,
       rentals:[],
       counts:{fits:0,close:0,blocked:0},
       overall:'unknown',
       color:'neutral',
     };
+  }
+  if(snapshot.photoCalibration?.autoEstimated!==false){
+    return {active:false,source:'photo-needs-calibration',tent:null,rentals:[],counts:{fits:0,close:0,blocked:0},overall:'unknown',color:'neutral'};
   }
   const {site,usablePolygon,obstacles,manualObstacles,scanObstacles}=propertyPlanningInput(snapshot);
   let tent=null;
@@ -138,6 +136,8 @@ export function evaluatePropertyScene(snapshot) {
 }
 
 export function summarizePropertyFit(plan) {
+  if(plan?.source==='photo-needs-calibration')return {label:'Adjust photo ground first',detail:'The photo ground is still an automatic estimate. Adjust its four corners before checking the model. Photo scale remains unverified.',kind:'neutral'};
+  if(plan?.source==='photo-needs-boundaries')return {label:'Outline your usable space',detail:'A photo alone cannot establish boundaries or confirm fit. Adjust the ground and trace obstacles in Photo View; verify actual site dimensions with staff.',kind:'neutral'};
   if(!plan?.active){if(plan?.source==='metric-scan-needs-boundaries')return {label:'Trace boundaries to check fit',detail:'The Space Scan has estimated depth, but automatic obstacle boundaries are not yet reliable. Trace the house, fence or no-place areas in Photo View before using the fit result.',kind:'neutral'};return {label:'Site fit unavailable',detail:'Upload and calibrate a venue photo to check the estimated property model.',kind:'neutral'};}
   const tent=plan.tent;
   if(tent?.status==='blocked'){
