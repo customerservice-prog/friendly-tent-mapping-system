@@ -26,4 +26,36 @@ async function sharedRestore(){
  assert.equal(w.location.hash,'','share credential is removed after restoration');assert.equal(w.RentSketchAutosave,undefined,'read-only share never starts draft autosave');
  dom.window.close();
 }
-(async()=>{await localResume();await sharedRestore();console.log('PASS draft resume: automatic 180-day local continuation and signed shared-layout read-only restore without autosave.');})().catch(e=>{console.error(e);process.exitCode=1});
+async function authenticatedSaves(){
+ for(const slug of ['friendly','generic']){
+  const dom=new JSDOM('<!doctype html><body></body>',{url:'https://rentsketch.com/designer/?tenant='+slug,runScripts:'outside-only'}),w=dom.window;
+  let scene={tentId:'frame-20x20',objects:[]},missingDraft=false;
+  const calls=[];
+  w.RENTSKETCH_API_URL='https://api.test';w.RENTSKETCH_TENANT_SLUG=slug;w.RENTSKETCH_CATALOG_READY=true;
+  w.FriendlyBridge={getScene:()=>scene,state:{}};
+  w.RentSketchEventPass={canEdit:()=>true};
+  w.localStorage.setItem('rentsketch-anon-session','owner-session');
+  w.localStorage.setItem('rentsketch_dashboard_token','first-token');
+  w.fetch=async(url,options)=>{
+   calls.push({url,method:options.method,headers:options.headers,body:JSON.parse(options.body)});
+   if(missingDraft&&options.method==='PATCH'){missingDraft=false;return{ok:false,status:404,json:async()=>({error:'Draft not found for this session'})};}
+   return{ok:true,status:200,json:async()=>({id:'saved-design'})};
+  };
+  w.eval(source);w.RentSketchStartAutosave();
+  await w.RentSketchAutosave.flush();
+  assert.equal(calls[0].method,'POST');assert.equal(calls[0].headers.Authorization,'Bearer first-token');
+  w.localStorage.setItem('rentsketch_dashboard_token','renewed-token');
+  scene={...scene,surfaceType:'concrete'};missingDraft=true;
+  await w.RentSketchAutosave.flush();
+  assert.deepEqual(calls.slice(1).map(c=>c.method),['PATCH','POST'],'missing draft recreation follows the update');
+  for(const call of calls.slice(1))assert.equal(call.headers.Authorization,'Bearer renewed-token','update and recreate use current login');
+  w.localStorage.removeItem('rentsketch_dashboard_token');
+  scene={...scene,surfaceType:'grass'};
+  await w.RentSketchAutosave.flush();
+  assert.equal(calls.at(-1).headers.Authorization,undefined,'logout never reuses an old bearer');
+  for(const call of calls){assert.equal(call.body.anonymousSessionId,'owner-session');assert.equal(call.headers['Content-Type'],'application/json');}
+  assert.match(calls[0].url,slug==='generic'?/\/api\/consumer\/designs$/:/\/api\/tenants\/friendly\/designs$/);
+  dom.window.close();
+ }
+}
+(async()=>{await localResume();await sharedRestore();await authenticatedSaves();console.log('PASS draft resume: automatic 180-day local continuation and signed shared-layout read-only restore, and authenticated create/update/recreate saves.');})().catch(e=>{console.error(e);process.exitCode=1});

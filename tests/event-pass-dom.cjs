@@ -48,6 +48,9 @@ async function setup(query, options = {}) {
       data={id:'photo-fixture',path:(generic?'/api/consumer/background-photo/photo-fixture?t=capability':'/api/tenants/friendly/background-photo/photo-fixture?t=capability'),mimeType:'image/jpeg',byteSize:Number(rawBody&&rawBody.size)||0};
     }
     else if (/\/designs(?:\/[^/]+)?$/.test(url)) {
+      if(options.requireSaveBearer && request.headers?.Authorization !== 'Bearer '+options.requireSaveBearer) {
+        return {ok:false,status:402,json:async()=>({error:'Choose an Event Pass to arrange and save your event. The rental preview is free.'})};
+      }
       const id=(url.match(/\/designs\/([^/?#]+)$/)||[])[1]||'draft-owned';
       draft = { id, scene: body.scene, tenant: new URL(w.location.href).searchParams.get('tenant')||'generic', anonymousSessionId: body.anonymousSessionId, active: false };
       data = { id: draft.id };
@@ -70,6 +73,26 @@ async function setup(query, options = {}) {
   if (query.includes('autoplace=1')) evalScript('js/ui/tent-preview-entry.js'); else await (await load(path.join(root, 'js/ui/intake.js'))).evaluate();
   await wait(150); evalScript('js/ui/customer-entry.js'); evalScript('js/ui/review-actions.js');
   return { dom, w, calls, analyticsEvents, get draft() { return draft; }, get checkouts() { return checkouts; } };
+}
+async function applyAdminPhoto(t,saveUrl,saveMethod,session) {
+  const w=t.w,d=w.document;
+  d.querySelector('[data-drawer="site"]').click();
+  const input=d.querySelector('[data-role="venue-photo-file"]');
+  const photo=new w.File([new Uint8Array([0xff,0xd8,0xff,0xe0,0xff,0xd9])],'admin-backyard.jpg',{type:'image/jpeg'});
+  Object.defineProperty(input,'files',{configurable:true,value:[photo]});
+  input.dispatchEvent(new w.Event('change',{bubbles:true}));
+  await wait(100);
+  const save=t.calls.find(c=>c.url.endsWith(saveUrl)&&c.method===saveMethod);
+  assert.ok(save,'admin photo flow saves the current design before uploading');
+  assert.equal(save.headers.Authorization,'Bearer platform-token','strict pre-upload save retains admin authentication');
+  assert.equal(save.body.anonymousSessionId,session,'pre-upload save retains the design owner session');
+  const upload=t.calls.find(c=>c.url.includes('/background-photo')&&c.method==='POST');
+  assert.ok(upload,'authenticated admin reaches photo upload');
+  assert.equal(upload.headers.Authorization,'Bearer platform-token');
+  assert.equal(upload.headers['X-RentSketch-Session'],session);
+  assert.equal(w.FriendlyBridge.getScene().backgroundPhoto.id,'photo-fixture');
+  assert.match(d.querySelector('[data-role="venue-photo-status"]').textContent,/Applied/);
+  assert.equal(d.querySelector('.paywall-overlay'),null,'authorized photo save does not open the Event Pass paywall');
 }
 (async () => {
   let t = await setup('?tenant=friendly&embed=1&focus=tent&autoplace=1&view=2d&productId=fpr-pole', { embedded: true });
@@ -94,7 +117,7 @@ async function setup(query, options = {}) {
 
   const adminScene={tentId:'frame-20x20',objects:[{id:'admin-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:3,y:3,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Admin layout',email:'',date:''}};
   const adminOwned={id:'admin-owned',tenant:'friendly',scene:adminScene,anonymousSessionId:'admin-session',active:true,adminAccess:true};
-  t=await setup('?tenant=friendly&adminDesign=admin-owned&admin=1',{adminToken:'platform-token',offer:{required:false,adminAccess:true},adminDesign:adminOwned});
+  t=await setup('?tenant=friendly&adminDesign=admin-owned&admin=1',{adminToken:'platform-token',offer:{required:false,adminAccess:true},adminDesign:adminOwned,requireSaveBearer:'platform-token'});
   w=t.w;d=w.document;b=w.FriendlyBridge;
   assert.equal(w.RentSketchEventPass.canEdit(),true,'platform admin can edit without Event Pass');
   assert.equal(d.querySelector('.paywall-overlay'),null,'platform admin never sees purchase modal');
@@ -102,6 +125,16 @@ async function setup(query, options = {}) {
   const adminOfferCall=t.calls.find(c=>c.url.includes('/event-pass/offer?'));assert.equal(adminOfferCall.headers.Authorization,'Bearer platform-token');
   const adminDesignCall=t.calls.find(c=>c.url.includes('/admin/designs/admin-owned'));assert.equal(adminDesignCall.headers.Authorization,'Bearer platform-token');
   assert.equal(w.location.search.includes('adminDesign'),false,'one-time admin design handoff is cleaned from the address after restore');
+  // Exercise the strict save BEFORE upload, with a changed scene so autosave
+  // cannot short-circuit against the restored snapshot.
+  b.loadScene({...b.getScene(),surfaceType:'concrete'});
+  await applyAdminPhoto(t,'/api/tenants/friendly/designs/admin-owned','PATCH','admin-session');
+  t.dom.window.close();
+
+  t=await setup('?tenant=generic&admin=1',{adminToken:'platform-token',offer:{required:false,adminAccess:true},requireSaveBearer:'platform-token'});
+  assert.equal(t.w.RentSketchEventPass.canEdit(),true);
+  t.w.FriendlyBridge.loadScene(adminScene);
+  await applyAdminPhoto(t,'/api/consumer/designs','POST','existing-browser-owner');
   t.dom.window.close();
 
   const emptyFrame = { id: 'draft-owned', tenant: 'friendly', scene: { tentId: 'frame-20x20', objects: [], surfaceType: 'concrete', lightingId: 'lighting-none', customer: { name: '', email: '', date: '' } }, anonymousSessionId: 'restored-owner', active: true, renewable: true, expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), customerEmail: 'paid@example.invalid', accessUrl: 'https://rentsketch.com/designer/?tenant=friendly#recoveryToken=fixture.private.token', emailDelivery: 'sent' };

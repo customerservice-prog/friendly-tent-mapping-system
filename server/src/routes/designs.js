@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../db');
-const { requireTenantAccess } = require('../middleware/requireAuth');
+const { requireTenantAccess, isConfiguredPlatformAdmin } = require('../middleware/requireAuth');
 const { savePermission } = require('../eventPassAccess');
 const { signToken, verifyToken } = require('../auth');
 
@@ -54,6 +54,24 @@ function normalizedBody(body) {
 async function tenantForSlug(slug) {
   return (await db.query('SELECT id,slug FROM tenants WHERE slug = $1', [slug])).rows[0] || null;
 }
+// Match photo-upload authorization. A staff exemption changes the payment
+// requirement only; PATCH still requires this draft's owning browser session.
+async function staffAllowed(req, tenant) {
+  const header = String(req.headers.authorization || '');
+  if (!header.startsWith('Bearer ')) return false;
+  try {
+    const payload = verifyToken(header.slice(7));
+    if (await isConfiguredPlatformAdmin(payload)) return true;
+    if (!payload.userId) return false;
+    const row = (await db.query(
+      'SELECT role FROM tenant_memberships WHERE tenant_id=$1 AND user_id=$2',
+      [tenant.id, payload.userId]
+    )).rows[0];
+    return !!row && ['owner', 'admin', 'staff'].includes(String(row.role || '').toLowerCase());
+  } catch (_) {
+    return false;
+  }
+}
 function rateLimitSave(req, tenant) {
   return limited(`${tenant.id}:${clientIp(req)}`);
 }
@@ -71,7 +89,7 @@ router.post('/:slug/designs', wrap(async (req, res) => {
   const sceneError = validateScene(body.scene);
   if (sceneError) return res.status(400).json({ error: sceneError });
 
-  const denied = await savePermission(tenant, null, body.scene);
+  const denied = await staffAllowed(req, tenant) ? null : await savePermission(tenant, null, body.scene);
   if (denied) return res.status(402).json(denied);
 
   const result = await db.query(
@@ -98,7 +116,7 @@ router.patch('/:slug/designs/:id', wrap(async (req, res) => {
 
   const design = (await db.query('SELECT * FROM designs WHERE id=$1 AND tenant_id=$2 AND anonymous_session_id=$3', [req.params.id, tenant.id, body.anonymousSessionId])).rows[0];
   if (!design) return res.status(404).json({ error: 'Draft not found for this session' });
-  const denied = await savePermission(tenant, design, body.scene);
+  const denied = await staffAllowed(req, tenant) ? null : await savePermission(tenant, design, body.scene);
   if (denied) return res.status(402).json(denied);
 
   const result = await db.query(
