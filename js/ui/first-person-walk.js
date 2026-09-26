@@ -47,7 +47,7 @@ export function createFirstPersonWalk({
       photoGeometry:getObstacles?.()||[],
       items:getItems?.()||[],
       bodyRadiusFt:.85,
-      blockRentalKinds:['inflatable','accessory']
+      blockRentalKinds:['inflatable','accessory','equipment']
     };
   }
   function blocksWorldPosition(worldX,worldZ){

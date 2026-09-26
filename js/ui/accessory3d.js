@@ -188,6 +188,14 @@ function createGeneric(item){
 }
 
 export function createAccessory3d(item){
+  // The planner stores an oriented footprint. Models need their original local
+  // dimensions before the renderer applies the saved rotation. Older accessory
+  // saves predate modelWidthFt/modelDepthFt, so undo their 90-degree size swap.
+  const quarterTurn=((Math.round((Number(item.rotationDeg)||0)/90)%2)+2)%2===1;
+  item={...item,
+    widthFt:item.modelWidthFt||(quarterTurn?item.depthFt:item.widthFt),
+    depthFt:item.modelDepthFt||(quarterTurn?item.widthFt:item.depthFt),
+  };
   let g;
   switch(item.accessoryType){
     case 'foam-machine':g=createFoam(item);break;

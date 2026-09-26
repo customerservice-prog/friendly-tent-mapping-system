@@ -8,6 +8,7 @@ function number(v, fallback) { v = Number(v); return Number.isFinite(v) ? v : fa
 export function rectFromObject(obj) {
   const w = number(obj.widthFt, number(obj.footprintFt, 0));
   const d = number(obj.depthFt, number(obj.lengthFt, number(obj.footprintFt, 0)));
+  if(obj.footprintOriented===true||obj.kind==='accessory')return {x:number(obj.x,0),y:number(obj.y,0),width:w,depth:d};
   const angle = number(obj.rotationDeg, number(obj.rotation, 0)) * Math.PI / 180;
   const c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
   const width = w * c + d * s;

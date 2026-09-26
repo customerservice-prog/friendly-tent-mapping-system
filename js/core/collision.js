@@ -113,11 +113,13 @@ export function checkChairClearance(objects) {
 export function checkTentEdgeConflicts(objects, tent) {
   var results = [];
   if (!tent) return results;
-  var tentRect = { x: 0, y: 0, width: tent.widthFt, depth: tent.lengthFt };
+  var area=tent.planningArea||tent;
+  var tentRect = { x: 0, y: 0, width: area.widthFt, depth: area.lengthFt };
   objects.forEach(function (obj) {
     var rect = rectFromObject(obj);
+    if(obj.kind==='inflatable'&&!tent.isSite&&rectsOverlap(rect,{x:-tent.installationClearanceFt||0,y:-tent.installationClearanceFt||0,width:tent.widthFt+2*(tent.installationClearanceFt||0),depth:tent.lengthFt+2*(tent.installationClearanceFt||0)}))results.push(conflict(CONFLICT_TYPES.HARD_CONFLICT,SEVERITY.ERROR,[obj.id],'Keep inflatables outside the tent and its installation clearance. Confirm manufacturer operating clearance with staff.'));
     if (!rectContains(tentRect, rect)) {
-      results.push(conflict(CONFLICT_TYPES.TENT_EDGE_CONFLICT, SEVERITY.ERROR, [obj.id], tent.isSite?'This item extends beyond your outdoor planning area.':'This item extends beyond the tent boundary.'));
+      results.push(conflict(CONFLICT_TYPES.TENT_EDGE_CONFLICT, SEVERITY.ERROR, [obj.id], (tent.isSite||tent.planningArea)?'This item extends beyond your outdoor planning area.':'This item extends beyond the tent boundary.'));
     }
   });
   return results;

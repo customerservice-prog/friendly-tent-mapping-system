@@ -101,6 +101,9 @@ export function accessoryItem(product,id,x,y){
   return {
     id,
     kind:'accessory',
+    footprintOriented:true,
+    modelWidthFt:product.widthFt,
+    modelDepthFt:product.depthFt,
     accessoryId:product.id,
     productId:product.productId||null,
     name:product.name,

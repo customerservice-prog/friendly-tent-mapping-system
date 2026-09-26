@@ -68,9 +68,25 @@ export function rotateGroundPoint(point, angleDeg, origin = { x: 0, y: 0 }) {
   };
 }
 
+// New equipment/accessory saves retain model dimensions separately from their
+// oriented layout box. Older accessories stored only a box swapped at each 90°
+// turn. Recover that local size without changing unflagged legacy object kinds.
+// Resolve this before overriding rotation with an independent photo placement.
+export function objectLocalDimensions(object) {
+  const width = Math.max(0.01, finite(object?.widthFt));
+  const depth = Math.max(0.01, finite(object?.depthFt ?? object?.lengthFt));
+  const oriented = object?.footprintOriented === true || object?.kind === 'accessory';
+  const quarterTurn = Math.abs(Math.abs(finite(object?.rotationDeg) % 180) - 90) < 1e-7;
+  return {
+    widthFt: finite(object?.modelWidthFt) > 0 ? Number(object.modelWidthFt) : oriented && quarterTurn ? depth : width,
+    depthFt: finite(object?.modelDepthFt) > 0 ? Number(object.modelDepthFt) : oriented && quarterTurn ? width : depth,
+  };
+}
+
 export function objectGroundFootprint(object, clearanceFt = 0) {
-  const width = Math.max(0.01, finite(object?.widthFt)) + Math.max(0, finite(clearanceFt)) * 2;
-  const depth = Math.max(0.01, finite(object?.depthFt ?? object?.lengthFt)) + Math.max(0, finite(clearanceFt)) * 2;
+  const local = objectLocalDimensions(object);
+  const width = local.widthFt + Math.max(0, finite(clearanceFt)) * 2;
+  const depth = local.depthFt + Math.max(0, finite(clearanceFt)) * 2;
   const center = objectCenterLayout(object);
   const halfW = width / 2, halfD = depth / 2;
   const corners = [

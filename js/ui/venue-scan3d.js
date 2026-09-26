@@ -1,3 +1,4 @@
+import { assessCaptureFrames } from '../core/capture-quality.js';
 import * as THREE from 'three';
 import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
 
@@ -44,7 +45,8 @@ function normalizedSamples(scan){
 }
 export function hasMetricSpaceScan(scan){
   const f=normalizedFrames(scan),samples=normalizedSamples(scan);
-  return !!((samples.length>=5||(f.left&&f.center&&f.right))&&Number(scan?.baselineFt)>0);
+  const urls=samples.length>=5?samples.map(s=>s.url):[f.left?.url,f.center?.url,f.right?.url].filter(Boolean);
+  return !!((samples.length>=5||(f.left&&f.center&&f.right))&&new Set(urls).size===urls.length&&Number(scan?.baselineFt)>0);
 }
 export async function createVenueScanWorld({
   scan,
@@ -53,8 +55,8 @@ export async function createVenueScanWorld({
   mobile=false,
   signal,
 }={}){
-  const group=new THREE.Group();group.name='Metric Space Scan';
-  group.userData={mode:'metric-stereo-scan',ready:false,setNight(){}};
+  const group=new THREE.Group();group.name='Estimated depth preview';
+  group.userData={mode:'estimated-stereo-preview',ready:false,setNight(){}};
   if(!hasMetricSpaceScan(scan)||!site)return group;
   const frames=normalizedFrames(scan),samples=normalizedSamples(scan);
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
@@ -69,6 +71,7 @@ export async function createVenueScanWorld({
     const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
     const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
     const working=images.map(image=>imageData(image,width,height));
+    const quality=assessCaptureFrames(working);if(!quality.usable){group.userData={ready:false,error:'capture-quality',quality,setNight(){}};return group;}
     centerData=working[centerIndex];const center=centerData,views=[];
     for(let i=0;i<working.length;i++){
       if(i===centerIndex)continue;
@@ -112,6 +115,7 @@ export async function createVenueScanWorld({
     const aspect=(centerImage.naturalHeight||centerImage.height)/Math.max(1,centerImage.naturalWidth||centerImage.width);
     const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
     const left=imageData(leftImage,width,height),center=imageData(centerImage,width,height),right=imageData(rightImage,width,height);centerData=center;
+    const quality=assessCaptureFrames([left,center,right]);if(!quality.usable){group.userData={ready:false,error:'capture-quality',quality,setNight(){}};return group;}
     result=reconstructStereoGrid({
       left,center,right,baselineFt,
       fovDeg:Number(scan.fovDeg)||62,
@@ -127,7 +131,7 @@ export async function createVenueScanWorld({
   }
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   if(result.metrics.validCount<45||result.metrics.triangleCount<30){
-    group.userData={mode:'metric-stereo-scan',ready:false,error:'not-enough-overlap',metrics:stereoReconstructionSummary(result),setNight(){}};
+    group.userData={mode:'estimated-stereo-preview',ready:false,error:'not-enough-overlap',metrics:stereoReconstructionSummary(result),setNight(){}};
     return group;
   }
 
@@ -233,9 +237,11 @@ export async function createVenueScanWorld({
     minConfidence:fusion?.surfelCount ? .12 : .16
   });
   group.userData={
-    mode:'metric-stereo-scan',
+    mode:'estimated-stereo-preview',
     ready:true,
-    metric:true,
+    metric:false,
+    accuracy:'unverified',
+    provenance:{geometry:'estimated stereo depth',scale:'user-entered baseline',cameraPoses:'assumed',unseenAreas:'not reconstructed'},
     baselineFt,
     requestedBaselineFt,
     baselineFactor,

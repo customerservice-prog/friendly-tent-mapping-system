@@ -41,7 +41,8 @@ export function normalizeVenueScan(value,apiBase){
   const roles=new Set(frames.map(f=>f.role));
   return {
     version:samples.length>=5?2:1,
-    status:roles.size===3?'ready':frames.length?'capturing':'empty',
+    accuracy:'unverified',
+    status:roles.size===3&&new Set(frames.map(f=>f.url)).size===3?'ready':frames.length?'capturing':'empty',
     baselineFt:clamp(value.baselineFt,2,20,6),
     eyeHeightFt:clamp(value.eyeHeightFt,4,7,5.6),
     fovDeg:clamp(value.fovDeg,40,90,62),
@@ -57,8 +58,8 @@ export function venueScanPanel(value){
   const roles=[['left','1','Left position'],['center','2','Center position'],['right','3','Right position']];
   return '<section class="venue-scan-card'+(ready?' is-ready':'')+'">'+
     '<div class="venue-photo-kicker">SPACE SCAN'+(ready?' · READY':'')+'</div>'+
-    '<h4>Build the actual yard in 3D</h4>'+
-    '<p>Move sideways across the setup area while keeping the same yard features centered. RentSketch uses the parallax between viewpoints to estimate real depth instead of treating one photo like a wall.</p>'+
+    '<h4>Preview depth from several viewpoints</h4>'+
+    '<p>Move sideways across the setup area while keeping the same yard features centered. RentSketch uses the parallax between viewpoints to estimate depth instead of treating one photo like a wall.</p>'+
     '<label class="venue-scan-video-btn"><input class="venue-photo-input" type="file" accept="video/*" capture="environment" data-role="venue-scan-video"><strong>Record / choose a Space Scan video</strong><span>Best: 6–12 seconds · walk sideways about '+scan.baselineFt+' ft · do not pan in place</span></label>'+
     '<div class="venue-scan-or">or capture three photos manually</div>'+
     '<div class="venue-scan-guide"><span>LEFT</span><span>MOVE SIDEWAYS</span><span>RIGHT</span></div>'+
@@ -67,8 +68,8 @@ export function venueScanPanel(value){
       '<strong>'+label+'</strong><span>'+(frame?'Captured':'Choose photo')+'</span>'+
       '<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-role="venue-scan-file" data-scan-role="'+role+'">'+
     '</label>';}).join('')+'</div>'+
-    '<label class="venue-scan-baseline"><span>Distance from left photo to right photo</span><div><input type="number" min="2" max="20" step=".5" value="'+scan.baselineFt+'" data-role="venue-scan-baseline"><strong>ft</strong></div><small>For best results, move about 6 ft total. This known distance gives the reconstruction a real-world scale.</small></label>'+
-    (ready?'<div class="venue-scan-ready"><strong>'+((scan.samples?.length||0)>=5?(scan.samples.length+'-view'):'3-view')+' depth scan ready</strong><span>Open 3D View to use the reconstructed metric venue.</span></div>':'<p class="equipment-note">Capture all three positions to unlock the metric 3D reconstruction.</p>')+
+    '<label class="venue-scan-baseline"><span>Distance from left photo to right photo</span><div><input type="number" min="2" max="20" step=".5" value="'+scan.baselineFt+'" data-role="venue-scan-baseline"><strong>ft</strong></div><small>For best results, move about 6 ft total. Enter a measured distance. Camera settings and movement are still estimated; this does not certify scale or fit.</small></label>'+
+    (ready?'<div class="venue-scan-ready"><strong>'+((scan.samples?.length||0)>=5?(scan.samples.length+'-view'):'3-view')+' views captured</strong><span>Open 3D View to check an estimated depth preview. Missing surfaces stay unknown; verify dimensions on site.</span></div>':'<p class="equipment-note">Capture three distinct positions for a depth preview. One photo supports camera matching, not a measured 360° property.</p>')+
     (scan.frames.length?'<button type="button" class="btn-tertiary venue-scan-clear" data-role="venue-scan-clear">Clear Space Scan</button>':'')+
   '</section>';
 }
@@ -95,7 +96,7 @@ export function venuePhotoPanel(photo,status){
   return '<section class="venue-photo-card is-active">'+
     '<div class="venue-photo-kicker">PHOTO MATCH · ACTIVE</div>'+
     '<div class="venue-photo-preview-wrap"><img class="venue-photo-preview" src="'+esc(photo.url)+'" alt="Uploaded venue background" style="object-position:'+pos+';transform:'+transform+'"></div>'+
-    '<div class="venue-photo-copy"><h4>Your real venue is matched to this camera view</h4><p>Fine-tune the crop for Photo Match, or capture Left + Center + Right below to reconstruct metric 3D depth.</p></div>'+
+    '<div class="venue-photo-copy"><h4>Your real venue is matched to this camera view</h4><p>Fine-tune the crop for Photo Match, or capture Left + Center + Right below to estimate depth from overlapping views.</p></div>'+
     '<div class="venue-photo-actions"><label class="btn-secondary venue-photo-replace">Replace photo'+input+'</label><button type="button" class="btn-secondary" data-role="venue-photo-remove">Remove</button></div>'+
     '<div class="venue-photo-tuning">'+
       '<label><span>Move left / right</span><input type="range" min="0" max="100" step="1" value="'+photo.focusX+'" data-role="venue-photo-focus-x"></label>'+
