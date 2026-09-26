@@ -160,7 +160,7 @@ const web=http.createServer((req,res)=>{
     assert.equal(scanRuntime.metric,false,'estimated scan does not claim validated metric accuracy');
     assert.equal(scanRuntime.accuracy,'unverified');
     assert.equal(scanRuntime.mode,'estimated-stereo-preview');
-    assert.equal(scanRuntime.provenance.cameraPoses,'assumed');
+    assert.equal(scanRuntime.provenance.cameraPoses,'vertical-registered; horizontal pose assumed');
     assert.ok(scanRuntime.metrics.triangles>0,'Space Scan produces connected 3D surface triangles');
     assert.ok(scanRuntime.metrics.coveragePct>0,'Space Scan reports real depth coverage');
     if(!(await page.locator('#drawer').isHidden()))await page.locator('#drawerClose').click();
