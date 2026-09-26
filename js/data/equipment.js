@@ -8,25 +8,31 @@ export const EQUIPMENT = [];
 const profile=(type,name,category,widthFt,depthFt,heightFt,animated=false)=>({type,name,category,widthFt,depthFt,heightFt,animated});
 export const EQUIPMENT_PROFILES = [
   profile('foam-machine','Foam machine','effects',3,3,4,true),
+  profile('bubble-machine','Bubble machine','effects',2.5,2.5,2.5,true),
+  profile('fog-machine','Fog machine','effects',2.5,2.5,2,true),
+  profile('confetti-machine','Confetti machine','effects',2.5,2.5,2,true),
   profile('fan','Event fan','climate',2.2,2.2,4,true),
-  profile('fill-chill','Fill & chill table','service',4,2,2.5),
-  profile('cooler','Beverage cooler','service',3.5,1.8,2),
-  profile('generator','Generator','power',3,2.3,2.5),
-  profile('power-distribution','Power distribution box','power',1.5,1,1.5),
-  profile('speaker','Speaker','audio',2,2,5),
-  profile('podium','Podium & microphone','audio',2,2,4),
-  profile('stanchion','Stanchion','accessories',1.2,1.2,3.2),
+  profile('heater','Patio heater','climate',2.2,2.2,7,true),
+  profile('fill-chill','Fill & chill table','service',4,2,2.5,true),
+  profile('cooler','Beverage cooler','service',3.5,1.8,2,true),
+  profile('generator','Generator','power',3,2.3,2.5,true),
+  profile('power-distribution','Power distribution box','power',1.5,1,1.5,true),
+  profile('speaker','Speaker','audio',2,2,5,true),
+  profile('podium','Podium & microphone','audio',2,2,4,true),
+  profile('karaoke','Karaoke system','audio',4,3,5,true),
+  profile('screen','Projection screen','photo',8,2,7,true),
+  profile('stanchion','Stanchion','accessories',1.2,1.2,3.2,true),
   profile('red-carpet','Red carpet','accessories',3,10,.05),
-  profile('trash-can','Trash can','service',1.8,1.8,3),
-  profile('popcorn','Popcorn machine','concessions',2,2,3),
-  profile('cotton-candy','Cotton candy machine','concessions',2.4,2.4,3),
-  profile('snow-cone','Snow cone machine','concessions',2,2,2.5),
+  profile('trash-can','Trash can','service',1.8,1.8,3,true),
+  profile('popcorn','Popcorn machine','concessions',2,2,3,true),
+  profile('cotton-candy','Cotton candy machine','concessions',2.4,2.4,3,true),
+  profile('snow-cone','Snow cone machine','concessions',2,2,2.5,true),
   profile('chocolate-fountain','Chocolate fountain','concessions',1.8,1.8,3,true),
-  profile('cornhole','Cornhole game','games',2,4,.8),
-  profile('connect-four','Giant Connect Four','games',4,1.5,4),
-  profile('tumbling-timbers','Tumbling Timbers','games',1.5,1.5,5),
-  profile('photobooth','Photo booth','photo',3,3,6),
-  profile('stage','Stage section','flooring',4,8,1.5),
+  profile('cornhole','Cornhole game','games',2,4,.8,true),
+  profile('connect-four','Giant Connect Four','games',4,1.5,4,true),
+  profile('tumbling-timbers','Tumbling Timbers','games',1.5,1.5,5,true),
+  profile('photobooth','Photo booth','photo',3,3,6,true),
+  profile('stage','Stage section','flooring',4,8,1.5,true),
   profile('generic','Rental equipment','accessories',2,2,2),
 ];
 const byType=type=>EQUIPMENT_PROFILES.find(p=>p.type===type);
@@ -39,12 +45,18 @@ export function equipmentType(product){
   const explicit=m.equipmentType||m.equipment_type;
   if(explicit&&byType(explicit))return explicit;
   if(/foam/.test(n)&&/machine|cannon|party/.test(n))return 'foam-machine';
-  if(/\bfan\b/.test(n))return 'fan';
+  if(/bubble/.test(n)&&/machine|blower/.test(n))return 'bubble-machine';
+  if(/fog|smoke|haze/.test(n)&&/machine|unit/.test(n))return 'fog-machine';
+  if(/confetti|streamer/.test(n)&&/machine|launcher|cannon/.test(n))return 'confetti-machine';
+  if(/\bfan\b|mister|misting/.test(n))return 'fan';
+  if(/heater/.test(n))return 'heater';
   if(/power.*distribut|distribut.*box/.test(n))return 'power-distribution';
   if(/generator/.test(n))return 'generator';
   if(/fill.*chill/.test(n))return 'fill-chill';
   if(/cooler|ice\s*chest/.test(n))return 'cooler';
   if(/podium|lectern/.test(n))return 'podium';
+  if(/karaoke/.test(n))return 'karaoke';
+  if(/projector|projection\s*screen|movie\s*screen|tv\s*screen/.test(n))return 'screen';
   if(/speaker|pa\s*system/.test(n))return 'speaker';
   if(/stanchion/.test(n))return 'stanchion';
   if(/red\s*carpet|aisle\s*runner/.test(n))return 'red-carpet';
