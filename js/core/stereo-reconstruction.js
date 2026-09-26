@@ -447,6 +447,51 @@ export function fuseMultiReferenceSurfels({
   };
 }
 
+
+
+export function refineReconstructionSurface(result,{
+  passes=2,
+  strength=.22,
+  relativeDepthThreshold=.07,
+  absoluteDepthThresholdFt=1.2,
+}={}){
+  if(!result?.positions||!result?.depths||!result?.valid||!result?.cols||!result?.rows)return result;
+  const cols=result.cols,rows=result.rows;
+  if(cols<3||rows<3)return result;
+  passes=Math.max(0,Math.min(4,Math.round(Number(passes)||0)));
+  strength=clamp(finite(strength,.22),0,.55);
+  if(!passes||!strength)return result;
+  const focal=Math.max(.001,finite(result.focalPx,1)),width=Math.max(1,finite(result.width,1)),height=Math.max(1,finite(result.height,1));
+  const horizonPx=clamp(finite(result.horizonY,.34),0,1)*height,eyeHeight=finite(result.eyeHeightFt,5.6);
+  const xs=result.xSamples||[],ys=result.ySamples||[];
+  for(let pass=0;pass<passes;pass++){
+    const source=Float32Array.from(result.depths),next=Float32Array.from(result.depths);
+    for(let gy=1;gy<rows-1;gy++)for(let gx=1;gx<cols-1;gx++){
+      const i=gy*cols+gx;if(!result.valid[i])continue;
+      const d=source[i];if(!(d>0))continue;
+      const threshold=Math.max(absoluteDepthThresholdFt,d*relativeDepthThreshold);
+      const values=[d];
+      for(const j of [i-1,i+1,i-cols,i+cols]){
+        if(!result.valid[j])continue;
+        const nd=source[j];if(nd>0&&Math.abs(nd-d)<=threshold)values.push(nd);
+      }
+      if(values.length<3)continue;
+      values.sort((a,b)=>a-b);const median=values[Math.floor(values.length/2)];
+      next[i]=d+(median-d)*strength;
+    }
+    result.depths.set(next);
+    for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+      const i=gy*cols+gx;if(!result.valid[i])continue;
+      const d=result.depths[i],px=xs[gx]??(gx/(Math.max(1,cols-1))*width),py=ys[gy]??(gy/(Math.max(1,rows-1))*height);
+      result.positions[i*3]=(px-width/2)/focal*d;
+      result.positions[i*3+1]=eyeHeight-(py-horizonPx)/focal*d;
+      result.positions[i*3+2]=d;
+    }
+  }
+  result.metrics={...(result.metrics||{}),surfaceRefined:true,refinementPasses:passes};
+  return result;
+}
+
 export function stereoReconstructionSummary(result){
   const m=result?.metrics||{};
   return {
