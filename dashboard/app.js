@@ -2,13 +2,12 @@
   'use strict';
 
  var API_BASE = window.RENTSKETCH_API_URL || 'https://rentsketch-api-production.up.railway.app';
-  var TOKEN_KEY = 'rentsketch_dashboard_token';
+  var session = window.RentSketchDashboardSession;
   var TENANT_KEY = 'rentsketch_dashboard_tenant';
   var ROUTES = ['login', 'overview', 'requests', 'products', 'branding', 'analytics', 'billing', 'install', 'superadmin'];
 
  function platformTenantView() { try { return new URLSearchParams(window.location.search).get('tenantView') === '1'; } catch (_) { return false; } }
- function getToken() { return window.RentSketchDashboardSession ? window.RentSketchDashboardSession.getToken() : localStorage.getItem(TOKEN_KEY); }
-  function setToken(t) { if (window.RentSketchDashboardSession) { if(t) window.RentSketchDashboardSession.accept(t); else window.RentSketchDashboardSession.clear('signed-out'); } else if(t) localStorage.setItem(TOKEN_KEY,t); else localStorage.removeItem(TOKEN_KEY); }
+ function identity() { return session.identity(); }
   function getActiveTenant() { return localStorage.getItem(TENANT_KEY); }
   function setActiveTenant(slug) { if (slug) { localStorage.setItem(TENANT_KEY, slug); } else { localStorage.removeItem(TENANT_KEY); } }
 
@@ -39,32 +38,7 @@ function esc(s) {
    return html;
  }
 
- async function api(path, opts) {
-   opts = opts || {};
-   var headers = Object.assign({ Accept: 'application/json' }, opts.headers || {});
-   var token = getToken();
-   if (token) headers['Authorization'] = 'Bearer ' + token;
-   var body = opts.body;
-   if (body && typeof body === 'object') {
-     headers['Content-Type'] = 'application/json';
-     body = JSON.stringify(body);
-   }
-   var res = await fetch(API_BASE + path, {
-     method: opts.method || 'GET',
-     headers: headers,
-     body: body, cache: 'no-store',
-   });
-   var data = null;
-   try { data = await res.json(); } catch (e) { data = null; }
-   if (token && getToken() !== token) { var stale = new Error('Your session changed. Sign in again.'); stale.status = 401; stale.sessionChanged = true; throw stale; }
-   if (res.status === 401 && token) window.RentSketchDashboardSession?.unauthorized(token);
-   if (!res.ok) {
-     var err = new Error((data && data.error) || ('Request failed (' + res.status + ')'));
-     err.status = res.status;
-     throw err;
-   }
-   return data;
- }
+ async function api(path, opts) { return session.json(path, opts); }
 
  var state = { user: null, tenants: [], tenant: null };
   var renderGeneration = 0; // bumped on every render() call so stale async tenant fetches can detect they are outdated and refuse to paint the DOM (prevents one tenant's data flashing into another tenant's view when switching tenants in the dashboard)
@@ -126,12 +100,12 @@ function esc(s) {
 
  function bindShellEvents() {
    var logout = document.getElementById('btnLogout');
-   if (logout) logout.addEventListener('click', function () {
-     setToken(null);
+   if (logout) logout.addEventListener('click', async function () {
+     var signingOut=session.clear('signed-out');
      setActiveTenant(null);
      state.user = null; state.tenants = []; state.tenant = null;
-     window.location.hash = '#/login';
-     render();
+     history.replaceState(null,'',location.pathname+location.search+'#/login');
+     await signingOut.catch(function(){}); openLogin(false);
    });
    var sw = document.getElementById('tenantSwitch');
    if (sw) sw.addEventListener('change', function () {
@@ -173,11 +147,8 @@ function esc(s) {
      btn.disabled = true; btn.textContent = 'Logging in...';
      try {
        var result = await api('/api/auth/login', { method: 'POST', body: { email: email, password: password } });
-       setToken(result.token);
-       await loadMe();
-       if (state.user && state.user.isPlatformAdmin && !platformTenantView()) { window.location.href = '/dashboard/platform.html#overview'; return; }
-       window.location.hash = '#/overview';
-       render();
+       if(result.mfaRequired) { viewMfa(result); return; }
+       await finishLogin(result);
      } catch (err) {
        errEl.textContent = err.message || 'Login failed';
        errEl.hidden = false;
@@ -185,6 +156,34 @@ function esc(s) {
        btn.disabled = false; btn.textContent = 'Log in';
      }
    });
+ }
+
+ var loginOpening = null;
+ async function openLogin(revokeExisting) {
+   if(loginOpening) return loginOpening;
+   forgetPrivateState();
+   appEl().innerHTML = loadingHtml('Preparing secure sign-in…');
+   loginOpening = (async function() {
+     try { await session.ready(); if(revokeExisting !== false) await session.clear('signed-out'); viewLogin(); }
+     catch(error) { appEl().innerHTML='<div class="login-wrap"><div class="login-card"><h1>Sign-in is temporarily unavailable</h1><p>We could not confirm the previous session has ended. Reload to try again.</p><button id="retryLogin" class="btn-primary">Reload sign-in</button></div></div>';document.getElementById('retryLogin').onclick=function(){location.reload();}; }
+   })();
+   try { await loginOpening; } finally { loginOpening=null; }
+ }
+ async function finishLogin(result) {
+   session.accept(result.session); await loadMe();
+   if(state.user && state.user.isPlatformAdmin && !platformTenantView()) { window.location.href='/dashboard/platform.html#overview'; return; }
+   window.location.hash='#/overview'; render();
+ }
+ function viewMfa(challenge) {
+   appEl().innerHTML='<div class="login-wrap"><div class="login-card"><div class="login-brand">RentSketch</div><h1>Verify your sign-in</h1><p class="login-sub">Enter the code from your authenticator app, or use one of your recovery codes.</p><form id="mfaForm"><label>Authenticator or recovery code<input id="mfaCode" autocomplete="one-time-code" autocapitalize="none" spellcheck="false" required maxlength="128"></label><div id="mfaError" class="dash-error" hidden></div><button class="btn-primary" id="mfaSubmit">Verify sign-in</button></form><button class="btn-link" id="mfaBack" type="button">Back to sign-in</button></div></div>';
+   document.getElementById('mfaBack').onclick=viewLogin;
+   document.getElementById('mfaForm').onsubmit=async function(event) {
+     event.preventDefault(); var button=document.getElementById('mfaSubmit'),error=document.getElementById('mfaError');
+     if(button.disabled)return;button.disabled=true;error.hidden=true;
+     try { var result=await api('/api/auth/login/mfa',{method:'POST',body:{challengeToken:challenge.challengeToken,code:document.getElementById('mfaCode').value.trim()}});await finishLogin(result); }
+     catch(err) { error.textContent=err.message||'Could not verify this code.';error.hidden=false; }
+     finally { button.disabled=false; }
+   };
  }
 
  async function loadMe() {
@@ -772,10 +771,10 @@ function esc(s) {
 
  function render() {
    var route = currentRoute();
-   if (route === 'login') { if(getToken()) setToken(null); forgetPrivateState(); viewLogin(); return; }
-   var authed = !!getToken() && !!state.user;
+   if (route === 'login') { openLogin(); return; }
+   var authed = !!identity() && !!state.user;
    if (!authed) {
-     if (route !== 'login') { window.location.hash = '#/login'; return; }
+     if (route !== 'login') { history.replaceState(null,'',location.pathname+location.search+'#/login'); openLogin(false); return; }
      viewLogin();
      return;
    }
@@ -797,15 +796,16 @@ function esc(s) {
  }
 
  async function boot() {
-   if (currentRoute() === 'login' || !location.hash) { if(getToken()) setToken(null); forgetPrivateState(); viewLogin(); return; }
-   var token = getToken();
-   if (token) {
+   if (currentRoute() === 'login' || !location.hash) { await openLogin(); return; }
+   try { await session.ready(); } catch(error) { if(error.sessionChanged)return; await openLogin(); return; }
+   var sessionId = identity();
+   if (sessionId) {
      try {
        await loadMe();
        if (state.user && state.user.isPlatformAdmin && !platformTenantView() && !/\/dashboard\/platform\.html$/i.test(location.pathname)) { window.location.replace('/dashboard/platform.html#overview'); return; }
      } catch (e) {
        if(e.sessionChanged) return;
-       setToken(null); setActiveTenant(null); state.user = null;
+       session.clear('signed-out'); setActiveTenant(null); state.user = null;
      }
    }
    render();
@@ -814,8 +814,9 @@ function esc(s) {
  window.addEventListener('rentsketch:dashboardSessionChanged', function(event) {
    if(event.detail?.reason === 'signed-in') return;
    forgetPrivateState();
-   if(event.detail?.reason === 'changed' && getToken()) { if(currentRoute() === 'login' || !location.hash) { viewLogin(); return; } boot(); return; }
-   window.location.hash='#/login'; viewLogin();
+   if(event.detail?.reason === 'refreshing') return;
+   if(event.detail?.reason === 'changed' && identity()) { if(currentRoute() === 'login' || !location.hash) { viewLogin(); return; } boot(); return; }
+   history.replaceState(null,'',location.pathname+location.search+'#/login'); openLogin(false);
  });
  window.addEventListener('pageshow', function(event) { if(event.persisted) { forgetPrivateState(); boot(); } });
  window.addEventListener('pagehide', forgetPrivateState);

@@ -3,7 +3,8 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'qa-tenant-workspace');fs.mkdirSync(out,{recursive:true});
 const tenant='friendly';
-const fixture='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/tenant-v2.css"></head><body><div id="app"></div><script src="/dashboard/app.js"></script></body></html>';
+const session={id:'tenant-browser-session',csrfToken:'tenant-browser-csrf',expiresAt:new Date(Date.now()+3600000).toISOString(),idleTimeoutSeconds:1800};
+const fixture='<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/dashboard/tenant-v2.css"></head><body><div id="app"></div><script src="/js/ui/dashboard-session.js"></script><script src="/dashboard/app.js"></script></body></html>';
 const requests=[
  {id:'q1',customer_name:'Jamie Wedding',customer_email:'jamie@example.invalid',customer_phone:'3155550101',event_date:'2026-10-20',guest_count:120,event_type:'Wedding',estimate_total:1750,status:'new',payment_status:'unpaid',created_at:'2026-09-23T20:00:00Z'},
  {id:'q2',customer_name:'Alex Party',customer_email:'alex@example.invalid',customer_phone:'3155550102',event_date:'2026-10-05',guest_count:60,event_type:'Birthday',estimate_total:620,status:'booked',payment_status:'paid',amount_paid_cents:12400,created_at:'2026-09-22T18:00:00Z'}
@@ -19,10 +20,11 @@ const products=[
 const admin={slug:tenant,name:'Friendly Party Rental',contactEmail:'office@example.invalid',logoUrl:'https://example.invalid/logo.png',primaryColor:'#2f6fed',secondaryColor:'#0b1b3a',subscriptionPlan:'pro',subscriptionStatus:'active',allowedOrigins:['https://www.example.com'],embedKey:'embed_fixture',showPrices:true,poweredByEnabled:true};
 const server=http.createServer((req,res)=>{
  const u=new URL(req.url,'http://localhost');
+ if(u.pathname.startsWith('/staff-api/')){u.pathname=u.pathname.slice('/staff-api'.length);assert.equal(req.headers.authorization,undefined);assert.equal(req.headers['x-rentsketch-client'],'dashboard');assert.match(req.headers.cookie||'',/rs_fixture_session=opaque-fixture/);}
  if(u.pathname==='/fixture'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(fixture);}
  if(u.pathname.startsWith('/api/')){
   res.setHeader('Content-Type','application/json');
-  if(u.pathname==='/api/auth/me')return res.end(JSON.stringify({user:{id:'u1',email:'owner@example.invalid',displayName:'Owner',isPlatformAdmin:false},tenants:[{slug:tenant,name:'Friendly Party Rental',role:'owner'}]}));
+  if(u.pathname==='/api/auth/me')return res.end(JSON.stringify({session,user:{id:'u1',email:'owner@example.invalid',displayName:'Owner',isPlatformAdmin:false},tenants:[{slug:tenant,name:'Friendly Party Rental',role:'owner'}]}));
   if(u.pathname===`/api/tenants/${tenant}/admin`)return res.end(JSON.stringify(admin));
   if(u.pathname===`/api/tenants/${tenant}/designs`)return res.end(JSON.stringify({designs}));
   if(u.pathname===`/api/tenants/${tenant}/quote-requests`)return res.end(JSON.stringify({quoteRequests:requests}));
@@ -40,11 +42,12 @@ const server=http.createServer((req,res)=>{
 });
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
- const browser=await chromium.launch();
+ const browser=await chromium.launch({executablePath:process.env.RENTSKETCH_CHROMIUM||undefined});
  try{
   for(const v of [{width:1440,height:900,name:'desktop'},{width:390,height:844,name:'mobile'}]){
    const ctx=await browser.newContext({viewport:{width:v.width,height:v.height}});
-   await ctx.addInitScript(url=>{localStorage.setItem('rentsketch_dashboard_token','fixture-token');localStorage.setItem('rentsketch_dashboard_tenant','friendly');window.RENTSKETCH_API_URL=url;},base);
+   await ctx.addCookies([{name:'rs_fixture_session',value:'opaque-fixture',url:base,httpOnly:true,sameSite:'Strict'}]);
+   await ctx.addInitScript(url=>{localStorage.setItem('rentsketch_dashboard_tenant','friendly');window.RENTSKETCH_API_URL=url;},base);
    const page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
    await page.goto(base+'/fixture#/overview');
    await page.getByRole('heading',{name:'Friendly Party Rental'}).waitFor();

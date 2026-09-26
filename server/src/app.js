@@ -29,6 +29,7 @@ app.use('/api/stripe/webhook',express.raw({type:'application/json',limit:'256kb'
 app.use(express.json({limit:'256kb'}));
 app.get('/health',(req,res)=>res.json({ok:true}));
 app.use('/api/auth',authRoutes);
+app.use('/api/auth',require('./routes/accountSecurity'));
 app.use('/api/embed',embedRoutes);
 app.use('/api/tenants',tenantsRoutes);
 app.use('/api/tenants',productsRoutes);
@@ -46,5 +47,5 @@ app.use('/api/consumer',designBackgroundsRoutes);
 app.use('/api/consumer',consumerEventPassRoutes);
 app.use('/api/analytics/web-vitals',webVitalsRoutes);
 app.use('/api/admin',adminRoutes);
-app.use((err,req,res,next)=>{if(err&&err.message==='CORS origin denied')return res.status(403).json({error:'Origin not allowed'});console.error(err);if(err&&err.type==='entity.too.large')return res.status(413).json({error:'Request too large'});res.status(500).json({error:'Internal server error'});});
+app.use((err,req,res,next)=>{if(err&&err.message==='CORS origin denied')return res.status(403).json({error:'Origin not allowed'});if(err&&[400,401,403,404,409,429].includes(err.status))return res.status(err.status).json({error:err.message});console.error(err);if(err&&err.type==='entity.too.large')return res.status(413).json({error:'Request too large'});res.status(500).json({error:'Internal server error'});});
 module.exports=app;

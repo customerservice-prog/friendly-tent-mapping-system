@@ -26,6 +26,9 @@ route against a real database.
 
 ## Requirements
 
+For the current optional authenticator implementation and key configuration,
+see [Dashboard MFA operations](docs/dashboard-mfa.md).
+
 - Node.js 18+
 - A Postgres database (any host works: Render, Railway, Supabase, Neon, or
   your own server). This was intentionally kept to plain `pg` (no ORM) so

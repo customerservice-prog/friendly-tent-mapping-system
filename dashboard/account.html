@@ -1,1 +1,38 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>RentSketch Account Security</title><style>*{box-sizing:border-box}body{margin:0;font-family:Segoe UI,system-ui,sans-serif;background:#f4f6f9;color:#1b2431}.wrap{max-width:520px;margin:70px auto;padding:24px}.card{background:#fff;border:1px solid #e3e8ee;border-radius:12px;padding:28px;box-shadow:0 10px 30px rgba(0,0,0,.06)}h1{margin:0 0 8px}.sub{color:#5b6b84;margin-bottom:24px}label{display:block;font-size:13px;margin:14px 0 6px}input{width:100%;padding:11px;border:1px solid #d3dae4;border-radius:7px;font-size:15px}button{margin-top:18px;background:#2f6fed;color:#fff;border:0;padding:11px 18px;border-radius:7px;font-weight:600;cursor:pointer}.msg{margin-top:16px;padding:10px 12px;border-radius:7px;display:none}.ok{display:block;background:#e9f7ee;color:#1f7a3d}.err{display:block;background:#fdecea;color:#9c2b1f}.back{display:inline-block;margin-top:18px;color:#2f6fed;text-decoration:none}</style></head><body><div class="wrap"><div class="card"><h1>Account Security</h1><div class="sub">Change your RentSketch dashboard password.</div><form id="f"><label>Current password</label><input id="current" type="password" autocomplete="current-password" required><label>New password</label><input id="next" type="password" autocomplete="new-password" minlength="12" required><label>Confirm new password</label><input id="confirm" type="password" autocomplete="new-password" minlength="12" required><button id="save">Change password</button><div id="msg" class="msg"></div></form><a class="back" href="/dashboard/#/login">Sign in</a></div></div><script src="/js/ui/dashboard-session.js?v=20260926-security-1"></script><script src="/dashboard/account.js?v=20260926-security-1"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Account Security · RentSketch</title><meta name="robots" content="noindex,nofollow">
+<link rel="stylesheet" href="/dashboard/account.css?v=20260926-cookie-mfa-1">
+</head>
+<body>
+<main class="security-wrap">
+<nav class="security-nav"><a href="/dashboard/#/overview" class="brand">RentSketch</a><a href="/dashboard/#/overview">Back to dashboard <span aria-hidden="true">↗</span></a></nav>
+<header class="security-heading"><p class="eyebrow">YOUR ACCOUNT</p><h1>Keep your workspace yours.</h1><p>Manage how you sign in and where your account is open.</p></header>
+<div id="security-session-message" class="notice" role="status" hidden></div>
+<div class="security-grid">
+<section class="card" aria-labelledby="mfa-title">
+<div class="card-heading"><div><p class="eyebrow">EXTRA PROTECTION</p><h2 id="mfa-title">Two-step verification</h2></div><span id="mfa-badge" class="badge">Checking…</span></div>
+<p class="sub">Use an authenticator app to add a second check after your password. Recovery codes let you sign in if you lose your phone.</p>
+<div id="mfa-status" class="status-line" role="status"></div>
+<div id="mfa-actions" class="actions" hidden><button id="mfa-enable" type="button">Set up authenticator</button><button id="mfa-replace-codes" class="secondary" type="button" hidden>Replace recovery codes</button><button id="mfa-disable" class="quiet danger" type="button" hidden>Turn off</button></div>
+<form id="mfa-form" hidden>
+<h3 id="mfa-form-title">Confirm it’s you</h3>
+<p id="mfa-form-help" class="micro">Enter your current password to start setup.</p>
+<label for="mfa-password">Current password</label><input id="mfa-password" type="password" autocomplete="current-password" required>
+<div id="mfa-setup" class="setup-box" hidden><h3>Add RentSketch to your authenticator</h3><p>Choose <strong>Enter a setup key</strong> in your app. Use your RentSketch email as the account name and choose <strong>Time based</strong>.</p><label for="mfa-secret">Setup key</label><div class="key-row"><input id="mfa-secret" readonly autocomplete="off" spellcheck="false"><button id="mfa-copy-secret" class="secondary" type="button">Copy</button></div><a id="mfa-open-app" class="text-link" hidden>Open an authenticator on this device ↗</a><p class="micro">Keep this key private. Setup expires after 10 minutes.</p></div>
+<div id="mfa-code-wrap" hidden><label for="mfa-code">Authenticator or recovery code</label><input id="mfa-code" autocomplete="one-time-code" spellcheck="false" maxlength="80" inputmode="text"><p id="mfa-code-help" class="micro"></p></div>
+<div class="actions"><button id="mfa-submit" type="submit">Continue</button><button id="mfa-cancel" class="secondary" type="button">Cancel</button></div>
+<p id="mfa-message" class="msg" role="alert"></p>
+</form>
+<div id="mfa-recovery" class="recovery-box" hidden tabindex="-1"><h3>Save your recovery codes now.</h3><p>Each code works once. This is the only time these codes will be shown. Keep them somewhere private, separate from this device.</p><pre id="mfa-recovery-codes" aria-label="One-time recovery codes"></pre><div class="actions"><button id="mfa-download-codes" type="button">Download codes</button><button id="mfa-copy-codes" class="secondary" type="button">Copy codes</button></div><p class="micro">All previous dashboard sessions have ended. Your next sign-in will use your updated security settings.</p><a class="button-link secondary" id="mfa-finish" href="/dashboard/#/login">I’ve saved my codes — sign in</a></div>
+</section>
+<section class="card" aria-labelledby="password-title"><p class="eyebrow">SIGN-IN PASSWORD</p><h2 id="password-title">Change your password</h2><p class="sub">Use a unique password with at least 12 characters. Changing it signs out every dashboard session.</p><form id="f"><label for="current">Current password</label><input id="current" type="password" autocomplete="current-password" required disabled><label for="next">New password</label><input id="next" type="password" autocomplete="new-password" minlength="12" required disabled><label for="confirm">Confirm new password</label><input id="confirm" type="password" autocomplete="new-password" minlength="12" required disabled><button id="save" disabled>Change password</button><div id="msg" class="msg" role="status"></div></form></section>
+<section class="card sessions-card" aria-labelledby="sessions-title"><div class="card-heading"><div><p class="eyebrow">WHERE YOU’RE SIGNED IN</p><h2 id="sessions-title">Active sessions</h2></div><button id="sessions-refresh" type="button" class="secondary">Refresh</button></div><p class="sub">Sessions end after 30 minutes without activity, or eight hours after sign-in. Sign out a session you no longer need.</p><div id="sessions-list" class="sessions-list" aria-live="polite"><p class="micro">Checking active sessions…</p></div><button id="sessions-signout-others" class="secondary" type="button" hidden>Sign out other sessions</button><p id="sessions-message" class="msg" role="status"></p></section>
+</div>
+<p class="security-footer">Need access again? <a href="/dashboard/#/login">Sign in</a></p>
+</main>
+<script src="/js/ui/dashboard-session.js?v=20260926-cookie-mfa-1"></script>
+<script src="/dashboard/account.js?v=20260926-cookie-mfa-1"></script>
+<script src="/dashboard/security.js?v=20260926-cookie-mfa-1"></script>
+</body></html>

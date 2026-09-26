@@ -7,11 +7,39 @@ const require = createRequire(import.meta.url);
 const source = fs.readFileSync(new URL('../server/src/clientIp.js', import.meta.url), 'utf8');
 function helper(env = {}) {
   const module = { exports: {} };
-  vm.runInNewContext(source, { module, require, URL, process: { env } });
+  vm.runInNewContext(source, { module, require, URL, Buffer, process: { env } });
   return module.exports;
 }
 const railway = { RAILWAY_ENVIRONMENT_ID: 'isolated-environment', RAILWAY_SERVICE_ID: 'isolated-service' };
 const request = (headers = {}, remoteAddress = '198.51.100.10') => ({ headers, socket: { remoteAddress } });
+
+test('authenticated dashboard proxy preserves distinct client IPs behind one Railway egress', () => {
+  const key = 'a5'.repeat(32); // Public isolated fixture; never a deployment credential.
+  const { clientIp } = helper({ ...railway, DASHBOARD_PROXY_KEY: key });
+  for (const ip of ['203.0.113.7', '203.0.113.8', '2001:db8::1']) {
+    assert.equal(clientIp(request({ 'x-rentsketch-proxy-key': key, 'x-rentsketch-client-ip': ip, 'x-real-ip': '198.51.100.20' })), ip);
+  }
+});
+
+test('missing, malformed, or wrong proxy keys cannot forge the rate-limit IP', () => {
+  const key = 'a5'.repeat(32);
+  for (const configured of [undefined, '', 'weak', key]) {
+    const { clientIp } = helper({ ...railway, DASHBOARD_PROXY_KEY: configured });
+    for (const supplied of [undefined, '', 'weak', 'b6'.repeat(32), key + ', ' + key, [key]]) {
+      assert.equal(clientIp(request({ 'x-rentsketch-proxy-key': supplied, 'x-rentsketch-client-ip': '203.0.113.9', 'x-real-ip': '198.51.100.20' })), '198.51.100.20');
+    }
+  }
+  assert.equal(helper().clientIp(request({ 'x-rentsketch-proxy-key': key, 'x-rentsketch-client-ip': '203.0.113.9' })), '198.51.100.10');
+});
+
+test('valid proxy key still requires a single valid client IP and normalizes equivalent forms', () => {
+  const key = 'a5'.repeat(32);
+  const { clientIp } = helper({ ...railway, DASHBOARD_PROXY_KEY: key });
+  for (const ip of [undefined, '', '1.2.3.4, 8.8.8.8', 'bogus', ['1.2.3.4'], 'fe80::1%eth0']) {
+    assert.equal(clientIp(request({ 'x-rentsketch-proxy-key': key, 'x-rentsketch-client-ip': ip, 'x-real-ip': '198.51.100.20' })), '198.51.100.20');
+  }
+  assert.equal(clientIp(request({ 'x-rentsketch-proxy-key': key, 'x-rentsketch-client-ip': '::ffff:203.0.113.9' })), '203.0.113.9');
+});
 
 test('direct requests ignore arbitrary XFF and X-Real-IP headers', () => {
   const { clientIp } = helper();
@@ -39,11 +67,17 @@ test('equivalent IPv6 and mapped IPv4 addresses share rate-limit buckets', () =>
 
 function loginRoute() {
   const routes = new Map();
-  const router = { post: (path, handler) => routes.set(path, handler), get() {}, use() {} };
+  const router = { post: (path, handler) => routes.set(path, handler), get() {}, use() {}, delete() {} };
+  const httpModule = { exports: {} };
+  vm.runInNewContext(fs.readFileSync(new URL('../server/src/dashboardHttpSession.js', import.meta.url), 'utf8'), {
+    module: httpModule, require: name => name === './auth' ? {} : require(name),
+    process: { env: {} }, URL, Buffer,
+  });
   const dependencies = {
     express: { Router: () => router }, crypto: require('node:crypto'),
     '../clientIp': helper(), '../db': { query: async () => ({ rows: [] }) },
-    '../auth': {}, '../dashboardSessions': {},
+    '../auth': {}, '../dashboardSessions': {}, '../dashboardMfa': {},
+    '../dashboardHttpSession': httpModule.exports,
   };
   vm.runInNewContext(fs.readFileSync(new URL('../server/src/routes/auth.js', import.meta.url), 'utf8'), {
     module: { exports: {} }, require: name => { assert.ok(name in dependencies, name); return dependencies[name]; },
@@ -51,7 +85,7 @@ function loginRoute() {
   });
   return async (email, remoteAddress, spoof) => {
     let status = 200;
-    const req = { ...request({ 'x-forwarded-for': spoof }, remoteAddress), body: { email, password: 'fixture-guess' } };
+    const req = { ...request({ 'x-forwarded-for': spoof, origin: 'https://rentsketch.com', 'x-rentsketch-client': 'dashboard' }, remoteAddress), body: { email, password: 'fixture-guess' } };
     await routes.get('/login')(req, { status(value) { status = value; return this; }, json() {} });
     return status;
   };

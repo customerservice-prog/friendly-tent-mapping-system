@@ -14,14 +14,43 @@
 
 :{$PORT:8080} {
 	log {
-		format json
+		format filter {
+			wrap json
+			request>headers>X-Rentsketch-Proxy-Key delete
+			request>headers>X-Rentsketch-Csrf delete
+		}
 	}
 	respond /health 200
+	# Reject dot segments before the static file server normalizes filesystem
+	# paths, including percent-decoded segments in a reserved API prefix.
+	@dotSegments path_regexp dotSegments (^|/)\.{1,2}(/|$)
+	respond @dotSegments "Not found" 404
 	# Public GA4 config. The measurement ID is not a secret; an unset value leaves analytics disabled.
 	@analyticsConfig path /analytics-config.js
 	header @analyticsConfig Content-Type "application/javascript; charset=utf-8"
 	header @analyticsConfig Cache-Control "no-store"
 	respond @analyticsConfig "window.RENTSKETCH_GA4_MEASUREMENT_ID='{$GA4_MEASUREMENT_ID}';" 200
+	# Staff requests stay on the website origin so the browser can use a
+	# host-only HttpOnly session cookie. The public customer API is unchanged.
+	handle /staff-api/api/* {
+		uri strip_prefix /staff-api
+		header Cache-Control "no-store"
+		reverse_proxy https://rentsketch-api-production.up.railway.app {
+			header_up Host rentsketch-api-production.up.railway.app
+			# Only this authenticated hop can supply a rate-limit client address.
+			header_up X-RentSketch-Proxy-Key "{$DASHBOARD_PROXY_KEY}"
+			header_up X-RentSketch-Client-IP {http.request.header.X-Real-IP}
+			transport http {
+				tls_server_name rentsketch-api-production.up.railway.app
+				dial_timeout 10s
+				response_header_timeout 30s
+			}
+		}
+	}
+	@staffReserved path /staff-api /staff-api/*
+	handle @staffReserved {
+		respond "Not found" 404
+	}
 	# One public host and one URL per page. Redirects run before file rewrites.
 	@www host www.rentsketch.com
 	redir @www https://rentsketch.com{uri} permanent
@@ -71,11 +100,13 @@
 	header @designer Cache-Control "no-cache"
 
 	root * /app
-	file_server {
-		hide .git .env*
+	handle {
+		try_files {path} {path}.html {path}/index.html
+		file_server {
+			hide .git .env* {http.vars.root}/server {http.vars.root}/docs {http.vars.root}/scripts {http.vars.root}/tests
+		}
 	}
 	encode gzip zstd
-	try_files {path} {path}.html {path}/index.html
 	handle_errors {
 		rewrite * /{err.status_code}.html
 		file_server

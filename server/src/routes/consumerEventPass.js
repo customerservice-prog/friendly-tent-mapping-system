@@ -1,3 +1,4 @@
+const { getDashboardToken } = require('../dashboardHttpSession');
 const { clientIp } = require('../clientIp');
 // POST/GET routes for the RentSketch Direct Consumer "Event Pass".
 // This is a SEPARATE payment type from the Friendly rental deposit
@@ -24,13 +25,13 @@ const router = express.Router();
 const PREVIEW_SECONDS = 5 * 60;
 
 async function platformAdminRequest(req) {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-    if (!token) return null;
     try {
+        const token = getDashboardToken(req);
+        if (!token) return null;
         const payload = await verifyDashboardToken(token);
         return await isConfiguredPlatformAdmin(payload) ? payload : null;
-    } catch (_) {
+    } catch (error) {
+        if (error.status === 403) throw error;
         return null;
     }
 }
@@ -470,7 +471,7 @@ router.get('/designs/:designId/entitlement', async (req, res) => {
 // The frontend renders exactly what this returns and never decides access
 // itself. Works for a generic consumer design (tenant_id NULL) and for a
 // tenant-scoped design (created via /api/tenants/:slug/designs) alike.
-router.get('/designs/:designId/access', async (req, res) => {
+router.get('/designs/:designId/access', wrap(async (req, res) => {
     const admin = await platformAdminRequest(req);
     const designResult = await query('SELECT * FROM designs WHERE id = $1', [req.params.designId]);
     const design = designResult.rows[0];
@@ -485,10 +486,10 @@ router.get('/designs/:designId/access', async (req, res) => {
     if (admin) return res.json({ context: 'staff', access: 'included', reason: 'platform_admin', expiresAt: null, capabilities: ['view','edit','save','3d','export','share'], paymentRequired: false, price: null, currency: 'usd', tenant: tenant?.slug || null });
 
     let isStaff = false;
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-    if (token && tenant) {
+    if (tenant) {
         try {
+            const token = getDashboardToken(req);
+            if (!token) throw new Error('No staff session');
             const payload = await verifyDashboardToken(token);
             const membership = await query(
                 'SELECT role FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
@@ -502,7 +503,7 @@ router.get('/designs/:designId/access', async (req, res) => {
 
     const access = await resolveAccess({ design, tenant, isStaff });
     res.json(access);
-});
+}));
 
 // Paid editing applies to every save, including designs that have never paid.
 // A bare rental preview can be checkpointed so Checkout restores that rental.

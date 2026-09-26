@@ -1,3 +1,4 @@
+const { getDashboardToken } = require('../dashboardHttpSession');
 const express = require('express');
 const { verifyDashboardToken } = require('../dashboardSessions');
 const db = require('../db');
@@ -27,9 +28,8 @@ function safeOrigin(req) {
 async function requireBillingAccess(req, res, next) {
   res.setHeader('Cache-Control', 'no-store');
   try {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-    if (!token) return res.status(401).json({ error: 'Missing bearer token' });
+    const token = getDashboardToken(req);
+    if (!token) return res.status(401).json({ error: 'Sign in to your dashboard to continue.' });
     const payload = await verifyDashboardToken(token);
     const tenantResult = await db.query('SELECT * FROM tenants WHERE slug=$1', [req.params.slug]);
     const tenant = tenantResult.rows[0];
@@ -48,7 +48,7 @@ async function requireBillingAccess(req, res, next) {
     req.user = payload;
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return res.status(err.status === 403 ? 403 : 401).json({ error: err.status === 403 ? err.message : 'Invalid or expired session' });
   }
 }
 

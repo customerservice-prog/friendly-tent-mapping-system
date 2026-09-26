@@ -11,13 +11,13 @@ const products = [
 const offer = { required: true, available: true, priceCents: 999, durationDays: 30, renewalPriceCents: 499, renewalDurationDays: 30, recurring: false };
 async function setup(query, options = {}) {
   const dom = new JSDOM(html, { url: 'https://rentsketch.com/designer/' + query, runScripts: 'outside-only', pretendToBeVisual: true }), w = dom.window, calls = [];
-  w.AbortController = AbortController; w.ResizeObserver = class { observe() {} disconnect() {} }; w.confirm = () => { throw Error('No surprise restore dialog'); }; w.alert = () => {};
+  w.AbortController = AbortController; w.Headers = Headers; w.ResizeObserver = class { observe() {} disconnect() {} }; w.confirm = () => { throw Error('No surprise restore dialog'); }; w.alert = () => {};
   const analyticsEvents = [];
   if (options.analytics) { w.RENTSKETCH_GA4_ENABLED = true; w.gtag = (...args) => analyticsEvents.push(args); }
   if (options.navigations) w.RentSketchCheckoutNavigate = url => options.navigations.push(url);
   if (options.embedded) Object.defineProperty(w, 'parent', { value: { postMessage() {} } });
   w.localStorage.setItem('rentsketch-anon-session', 'existing-browser-owner');
-  if (options.adminToken) w.localStorage.setItem('rentsketch_dashboard_token', options.adminToken);
+  let activeStaffSession = options.staffSession ? { id: options.staffSession, csrfToken: 'csrf-fixture', expiresAt: '2099-01-01T00:00:00.000Z' } : null;
   if (options.previewDeadline) w.localStorage.setItem('rentsketch-preview-deadline:v1', String(options.previewDeadline));
   if (options.saved) {
     const savedSlug=new URL(w.location.href).searchParams.get('tenant')||'generic';
@@ -25,20 +25,23 @@ async function setup(query, options = {}) {
   }
   let draft, checkouts = 0;
   w.fetch = async (url, request = {}) => {
+    request = { ...request, headers: request.headers instanceof Headers ? Object.fromEntries(request.headers.entries()) : request.headers || {} };
     const rawBody=request.body;
     let body=rawBody;
     if(typeof rawBody==='string'){
       try{body=JSON.parse(rawBody);}catch(_){body=rawBody;}
     }
-    calls.push({ url, body, rawBody, method: request.method || 'GET', headers: request.headers || {} });
+    calls.push({ url, body, rawBody, method: request.method || 'GET', headers: request.headers || {}, credentials: request.credentials });
     let data;
+    if (url === '/staff-api/api/auth/me') return {ok:!!activeStaffSession,status:activeStaffSession?200:401,json:async()=>activeStaffSession?{session:activeStaffSession,user:{id:'admin-user'}}:{error:'Sign in required'}};
+    if (url === '/staff-api/api/auth/logout') {activeStaffSession=null;return {ok:true,status:200,json:async()=>({ok:true})};}
     if (url.endsWith('/api/tenants/friendly')) data = { slug: 'friendly', name: 'Friendly Party Rental', showPrices: true };
     else if (url.endsWith('/products')) data = { products };
-    else if (url.includes('/event-pass/offer?')) data = { ...offer, ...options.offer };
+    else if (url.includes('/event-pass/offer?')) data = { ...offer, ...(options.offer?.adminAccess && !url.startsWith('/staff-api/') ? {} : options.offer) };
     else if (url.endsWith('/event-pass/preview')) { if(options.failPreview)throw Error('Preview service unavailable');data={limited:true,remainingSeconds:options.previewSeconds ?? 300}; }
     else if (url.endsWith('/designs/recovery-link')) data = { ok: true };
     else if (url.endsWith('/event-pass/restore')) data = options.restored;
-    else if (url.includes('/admin/designs/')) data = options.adminDesign;
+    else if (url.includes('/admin/designs/')) { if(options.adminDesignBody)return {ok:true,status:200,json:()=>options.adminDesignBody}; data = options.adminDesign; }
     else if (url.endsWith('/event-pass/resume')) { if (options.failResume) throw Error('Connection unavailable'); data = options.resumed || draft; }
     else if (url.includes('/review-pricing')) data = { available: true, zip: new URL(url).searchParams.get('zip'), deliveryFee: new URL(url).searchParams.has('zip') ? 49.99 : null, taxRate: 8, taxDelivery: true };
     else if (url.endsWith('/quote-requests')) data = { id: 'isolated-quote', notificationSent: true };
@@ -48,7 +51,7 @@ async function setup(query, options = {}) {
       data={id:'photo-fixture',path:(generic?'/api/consumer/background-photo/photo-fixture?t=capability':'/api/tenants/friendly/background-photo/photo-fixture?t=capability'),mimeType:'image/jpeg',byteSize:Number(rawBody&&rawBody.size)||0};
     }
     else if (/\/designs(?:\/[^/]+)?$/.test(url)) {
-      if(options.requireSaveBearer && request.headers?.Authorization !== 'Bearer '+options.requireSaveBearer) {
+      if(options.requireStaffSave && !(url.startsWith('/staff-api/') && request.credentials === 'same-origin' && request.headers['x-rentsketch-client']==='dashboard' && request.headers['x-rentsketch-csrf']==='csrf-fixture')) {
         return {ok:false,status:402,json:async()=>({error:'Choose an Event Pass to arrange and save your event. The rental preview is free.'})};
       }
       const id=(url.match(/\/designs\/([^/?#]+)$/)||[])[1]||'draft-owned';
@@ -69,10 +72,10 @@ async function setup(query, options = {}) {
   await (await load(path.join(root, 'designer/index.html'), bootstrap)).evaluate();
   await (await load(path.join(root, 'script.js'))).evaluate();
   await (await load(path.join(root, 'js/ui/booking-handoff.js'))).evaluate();
-  evalScript('js/ui/preview-limit.js'); evalScript('js/ui/paywall.js'); evalScript('js/ui/autosave.js');
+  evalScript('js/ui/dashboard-session.js'); evalScript('js/ui/preview-limit.js'); evalScript('js/ui/paywall.js'); evalScript('js/ui/autosave.js');
   if (query.includes('autoplace=1')) evalScript('js/ui/tent-preview-entry.js'); else await (await load(path.join(root, 'js/ui/intake.js'))).evaluate();
   await wait(150); evalScript('js/ui/customer-entry.js'); evalScript('js/ui/review-actions.js');
-  return { dom, w, calls, analyticsEvents, get draft() { return draft; }, get checkouts() { return checkouts; } };
+  return { dom, w, calls, analyticsEvents, get draft() { return draft; }, get checkouts() { return checkouts; }, setStaffSession(value) { activeStaffSession=value; } };
 }
 async function applyAdminPhoto(t,saveUrl,saveMethod,session) {
   const w=t.w,d=w.document;
@@ -84,12 +87,12 @@ async function applyAdminPhoto(t,saveUrl,saveMethod,session) {
   await wait(100);
   const save=t.calls.find(c=>c.url.endsWith(saveUrl)&&c.method===saveMethod);
   assert.ok(save,'admin photo flow saves the current design before uploading');
-  assert.equal(save.headers.Authorization,'Bearer platform-token','strict pre-upload save retains admin authentication');
+  assert.equal(save.credentials,'same-origin');assert.equal(save.headers['x-rentsketch-csrf'],'csrf-fixture','strict pre-upload save uses cookie transport plus CSRF');assert.equal(save.headers.authorization,undefined);
   assert.equal(save.body.anonymousSessionId,session,'pre-upload save retains the design owner session');
   const upload=t.calls.find(c=>c.url.includes('/background-photo')&&c.method==='POST');
   assert.ok(upload,'authenticated admin reaches photo upload');
-  assert.equal(upload.headers.Authorization,'Bearer platform-token');
-  assert.equal(upload.headers['X-RentSketch-Session'],session);
+  assert.ok(upload.url.startsWith('/staff-api/'));assert.equal(upload.credentials,'same-origin');assert.equal(upload.headers['x-rentsketch-csrf'],'csrf-fixture');assert.equal(upload.headers.authorization,undefined);
+  assert.equal(upload.headers['x-rentsketch-session'],session);
   assert.equal(w.FriendlyBridge.getScene().backgroundPhoto.id,'photo-fixture');
   assert.match(d.querySelector('[data-role="venue-photo-status"]').textContent,/Applied/);
   assert.equal(d.querySelector('.paywall-overlay'),null,'authorized photo save does not open the Event Pass paywall');
@@ -117,24 +120,42 @@ async function applyAdminPhoto(t,saveUrl,saveMethod,session) {
 
   const adminScene={tentId:'frame-20x20',objects:[{id:'admin-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:3,y:3,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Admin layout',email:'',date:''}};
   const adminOwned={id:'admin-owned',tenant:'friendly',scene:adminScene,anonymousSessionId:'admin-session',active:true,adminAccess:true};
-  t=await setup('?tenant=friendly&adminDesign=admin-owned&admin=1',{adminToken:'platform-token',offer:{required:false,adminAccess:true},adminDesign:adminOwned,requireSaveBearer:'platform-token'});
+  t=await setup('?tenant=friendly&adminDesign=admin-owned&admin=1',{staffSession:'platform-session',offer:{required:false,adminAccess:true},adminDesign:adminOwned,requireStaffSave:true});
   w=t.w;d=w.document;b=w.FriendlyBridge;
   assert.equal(w.RentSketchEventPass.canEdit(),true,'platform admin can edit without Event Pass');
   assert.equal(d.querySelector('.paywall-overlay'),null,'platform admin never sees purchase modal');
   assert.equal(b.getScene().objects[0].id,'admin-table','adminDesign opens the selected saved layout');
-  const adminOfferCall=t.calls.find(c=>c.url.includes('/event-pass/offer?'));assert.equal(adminOfferCall.headers.Authorization,'Bearer platform-token');
-  const adminDesignCall=t.calls.find(c=>c.url.includes('/admin/designs/admin-owned'));assert.equal(adminDesignCall.headers.Authorization,'Bearer platform-token');
+  const adminOfferCall=t.calls.find(c=>c.url.includes('/event-pass/offer?'));assert.ok(adminOfferCall.url.startsWith('/staff-api/'));assert.equal(adminOfferCall.credentials,'same-origin');assert.equal(adminOfferCall.headers.authorization,undefined);
+  const adminDesignCall=t.calls.find(c=>c.url.includes('/admin/designs/admin-owned'));assert.ok(adminDesignCall.url.startsWith('/staff-api/'));assert.equal(adminDesignCall.headers['x-rentsketch-client'],'dashboard');assert.equal(adminDesignCall.headers.authorization,undefined);
   assert.equal(w.location.search.includes('adminDesign'),false,'one-time admin design handoff is cleaned from the address after restore');
   // Exercise the strict save BEFORE upload, with a changed scene so autosave
   // cannot short-circuit against the restored snapshot.
   b.loadScene({...b.getScene(),surfaceType:'concrete'});
   await applyAdminPhoto(t,'/api/tenants/friendly/designs/admin-owned','PATCH','admin-session');
+  t.setStaffSession(null);w.dispatchEvent(new w.StorageEvent('storage',{key:'rentsketch_dashboard_event',newValue:JSON.stringify({kind:'signed-out',id:'platform-session',at:Date.now()})}));
+  assert.equal(w.RentSketchEventPass.canEdit(),false,'cross-tab logout immediately locks privileged editor');
+  await w.RentSketchEventPass.requestAccess();
+  assert.match(d.querySelector('.paywall-modal').textContent,/Sign in to continue editing/,'lost admin session requests sign-in, not purchase');
+  assert.doesNotMatch(d.querySelector('.paywall-modal').textContent,/Buy|Start Designing|\$9.99/);
+
   t.dom.window.close();
 
-  t=await setup('?tenant=generic&admin=1',{adminToken:'platform-token',offer:{required:false,adminAccess:true},requireSaveBearer:'platform-token'});
+  t=await setup('?tenant=generic',{staffSession:'platform-session',offer:{required:false,adminAccess:true},requireStaffSave:true});
   assert.equal(t.w.RentSketchEventPass.canEdit(),true);
   t.w.FriendlyBridge.loadScene(adminScene);
   await applyAdminPhoto(t,'/api/consumer/designs','POST','existing-browser-owner');
+  t.dom.window.close();
+
+  let releaseAdminDesign;
+  const delayedAdminDesign=new Promise(resolve=>{releaseAdminDesign=resolve;});
+  t=await setup('?tenant=friendly&adminDesign=stale-admin-layout&admin=1',{staffSession:'platform-session',offer:{required:false,adminAccess:true},adminDesignBody:delayedAdminDesign});
+  w=t.w;b=w.FriendlyBridge;
+  assert.equal(w.RentSketchEventPass.canEdit(),true);
+  await w.RentSketchDashboardSession.clear('signed-out',false);t.setStaffSession(null);
+  assert.equal(w.RentSketchEventPass.canEdit(),false);
+  releaseAdminDesign({...adminOwned,id:'stale-admin-layout'});await wait(30);
+  assert.ok(!b.getScene().objects.some(o=>o.id==='admin-table'),'a privileged restore body finishing after sign-out never repaints the layout');
+  assert.equal(w.RentSketchEventPass.canEdit(),false,'late response never unlocks editing');
   t.dom.window.close();
 
   const emptyFrame = { id: 'draft-owned', tenant: 'friendly', scene: { tentId: 'frame-20x20', objects: [], surfaceType: 'concrete', lightingId: 'lighting-none', customer: { name: '', email: '', date: '' } }, anonymousSessionId: 'restored-owner', active: true, renewable: true, expiresAt: new Date(Date.now() + 30 * 86400000).toISOString(), customerEmail: 'paid@example.invalid', accessUrl: 'https://rentsketch.com/designer/?tenant=friendly#recoveryToken=fixture.private.token', emailDelivery: 'sent' };

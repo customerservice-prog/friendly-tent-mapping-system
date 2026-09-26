@@ -12,7 +12,7 @@ function load(file,deps){
 }
 const routes=load('server/src/routes/designBackgrounds.js',{
  express,crypto:require('node:crypto'),'../db':db,
- '../dashboardSessions':{verifyDashboardToken:async()=>({userId:'nobody'})},
+ '../dashboardHttpSession':{getDashboardToken:req=>String(req.headers.authorization||'').startsWith('Bearer ')?req.headers.authorization.slice(7):null},'../dashboardSessions':{verifyDashboardToken:async()=>({userId:'nobody'})},
  '../middleware/requireAuth':{isConfiguredPlatformAdmin:async()=>false},
  '../eventPassAccess':{savePermission:async()=>null}
 });

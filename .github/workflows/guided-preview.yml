@@ -16,6 +16,13 @@ jobs:
           node-version: 22
       - run: npm --prefix tests ci
       - run: npm --prefix tests run test:event-pass
+      - name: Verify production Caddy routing and security boundaries
+        run: |
+          mkdir -p /tmp/caddy-qa
+          curl -fsSL --retry 3 https://github.com/caddyserver/caddy/releases/download/v2.10.2/caddy_2.10.2_linux_amd64.tar.gz -o /tmp/caddy-qa/caddy.tar.gz
+          echo "747df7ee74de188485157a383633a1a963fd9233b71fbb4a69ddcbcc589ce4e2cc82dacf5dbbe136cb51d17e14c59daeb5d9bc92487610b0f3b93680b2646546  /tmp/caddy-qa/caddy.tar.gz" | sha512sum -c -
+          tar --no-same-owner -xzf /tmp/caddy-qa/caddy.tar.gz -C /tmp/caddy-qa caddy
+          RENTSKETCH_CADDY=/tmp/caddy-qa/caddy python3 tests/staff-proxy-caddy.py
       - run: node tests/marketing-launch.cjs
       - run: node --experimental-vm-modules tests/marketing-tour.cjs
       - run: npm install --prefix /tmp/guided-qa --no-save playwright@1.56.1

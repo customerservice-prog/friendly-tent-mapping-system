@@ -248,8 +248,12 @@ export async function prepareVenuePhoto(file){
     return {blob,width,height,name:(file.name||'Venue photo').slice(0,120),mimeType:'image/jpeg'};
   }finally{decoded.close?.();}
 }
-function adminToken(){
-  try{return localStorage.getItem('rentsketch_dashboard_token')||'';}catch(_){return '';}
+function staffIdentity(){return window.RentSketchDashboardSession?.identity?.()||'';}
+async function photoRequest(url,options,identity,api){
+  if(identity!==staffIdentity())throw new Error('Your admin session changed. Sign in again before changing venue photos.');
+  const response=identity?await window.RentSketchDashboardSession.request(url.slice(api.length),options):await fetch(url,{...options,credentials:'omit'});
+  if(identity!==staffIdentity())throw new Error('Your admin session changed. Sign in again before changing venue photos.');
+  return response;
 }
 export function venuePhotoRoutes(context){
   const api=String(context?.api||'').replace(/\/$/,'');
@@ -266,17 +270,18 @@ export function venuePhotoRoutes(context){
   return {upload:tenantBase,remove:function(photoId){return tenantBase+'/'+encodeURIComponent(String(photoId||''));}};
 }
 export async function uploadVenuePhoto(file,context){
-  const prepared=await prepareVenuePhoto(file);
+  await window.RentSketchDashboardSession?.ready?.();
+  const identity=staffIdentity(),prepared=await prepareVenuePhoto(file);
   const api=String(context.api||'').replace(/\/$/,'');
   if(!api||!context.slug||!context.designId)throw new Error('Save the layout before adding a venue photo.');
   const routes=venuePhotoRoutes(context);if(!routes)throw new Error('Photo upload route is unavailable.');
   const headers={'Content-Type':prepared.mimeType||'image/jpeg'};
   if(context.sessionId)headers['X-RentSketch-Session']=context.sessionId;
-  const token=adminToken();if(token)headers.Authorization='Bearer '+token;
   const controller=new AbortController(),timer=setTimeout(function(){controller.abort();},30000);
   try{
-    const r=await fetch(routes.upload,{method:'POST',headers,body:prepared.blob,signal:controller.signal});
+    const r=await photoRequest(routes.upload,{method:'POST',headers,body:prepared.blob,signal:controller.signal},identity,api);
     let data={};try{data=await r.json();}catch(_){}
+    if(identity!==staffIdentity())throw new Error('Your admin session changed. Sign in again before changing venue photos.');
     if(!r.ok)throw new Error(data.error||('Venue photo upload failed ('+r.status+')'));
     return normalizeVenuePhoto({
       id:data.id,url:api+data.path,name:prepared.name,widthPx:prepared.width,heightPx:prepared.height,
@@ -288,9 +293,12 @@ export async function uploadVenuePhoto(file,context){
   }finally{clearTimeout(timer);}
 }
 export async function deleteVenuePhoto(photo,context){
-  photo=normalizeVenuePhoto(photo,context.api);if(!photo?.id||!context.designId)return;
-  const headers={};if(context.sessionId)headers['X-RentSketch-Session']=context.sessionId;
-  const token=adminToken();if(token)headers.Authorization='Bearer '+token;
-  const routes=venuePhotoRoutes(context);if(!routes)return;
-  try{await fetch(routes.remove(photo.id),{method:'DELETE',headers});}catch(_){}
+  try{
+    await window.RentSketchDashboardSession?.ready?.();
+    const identity=staffIdentity();
+    photo=normalizeVenuePhoto(photo,context.api);if(!photo?.id||!context.designId)return;
+    const headers={};if(context.sessionId)headers['X-RentSketch-Session']=context.sessionId;
+    const routes=venuePhotoRoutes(context);if(!routes)return;
+    await photoRequest(routes.remove(photo.id),{method:'DELETE',headers},identity,String(context.api||'').replace(/\/$/,''));
+  }catch(_){}
 }

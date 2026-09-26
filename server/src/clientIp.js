@@ -1,4 +1,5 @@
 const net = require('net');
+const crypto = require('crypto');
 
 function normalizedIp(value) {
   if (typeof value !== 'string') return null;
@@ -19,6 +20,17 @@ function normalizedIp(value) {
 }
 
 function clientIp(req) {
+  // Only the same-origin dashboard proxy knows this dedicated random key.
+  // The key authenticates forwarding metadata, never a user or admin session.
+  // A public caller's custom IP header alone must not affect rate-limit keys.
+  const configuredKey = process.env.DASHBOARD_PROXY_KEY;
+  const suppliedKey = req.headers?.['x-rentsketch-proxy-key'];
+  if (typeof configuredKey === 'string' && /^[a-fA-F0-9]{64}$/.test(configuredKey)
+      && typeof suppliedKey === 'string' && /^[a-fA-F0-9]{64}$/.test(suppliedKey)
+      && crypto.timingSafeEqual(Buffer.from(configuredKey, 'hex'), Buffer.from(suppliedKey, 'hex'))) {
+    const forwardedIp = normalizedIp(req.headers?.['x-rentsketch-client-ip']);
+    if (forwardedIp) return forwardedIp;
+  }
   // Railway documents X-Real-IP as the original client's address. Trust this
   // header only in its deployed runtime, never an arbitrary forwarded chain.
   // https://docs.railway.com/networking/public-networking/specs-and-limits

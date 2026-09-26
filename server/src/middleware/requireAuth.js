@@ -1,3 +1,4 @@
+const { getDashboardToken } = require('../dashboardHttpSession');
 const { verifyDashboardToken } = require('../dashboardSessions');
 const db = require('../db');
 
@@ -17,9 +18,8 @@ async function isConfiguredPlatformAdmin(payload) {
 }
 
 async function resolveTenantAuth(req) {
-  const header = req.headers.authorization || '';
-  const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-  if (!token) return { status: 401, error: 'Missing bearer token' };
+  const token = getDashboardToken(req);
+  if (!token) return { status: 401, error: 'Sign in to your dashboard to continue.' };
   const payload = await verifyDashboardToken(token);
   const platformAdmin = await isConfiguredPlatformAdmin(payload);
   const tenantResult = await db.query('SELECT * FROM tenants WHERE slug = $1', [req.params.slug]);
@@ -53,7 +53,7 @@ async function requireTenantAccess(req, res, next) {
     req.user = { ...auth.payload, isPlatformAdmin: auth.platformAdmin, tenantRole: auth.role };
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return res.status(err.status === 403 ? 403 : 401).json({ error: err.status === 403 ? err.message : 'Invalid or expired session' });
   }
 }
 
@@ -72,7 +72,7 @@ function requireTenantRole(minimumRole) {
       req.user = { ...auth.payload, isPlatformAdmin: auth.platformAdmin, tenantRole: auth.role };
       next();
     } catch (err) {
-      return res.status(401).json({ error: 'Invalid or expired token' });
+      return res.status(err.status === 403 ? 403 : 401).json({ error: err.status === 403 ? err.message : 'Invalid or expired session' });
     }
   };
 }
@@ -80,16 +80,15 @@ function requireTenantRole(minimumRole) {
 async function requirePlatformAdmin(req, res, next) {
   res.setHeader('Cache-Control', 'no-store');
   try {
-    const header = req.headers.authorization || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : null;
-    if (!token) return res.status(401).json({ error: 'Missing bearer token' });
+    const token = getDashboardToken(req);
+    if (!token) return res.status(401).json({ error: 'Sign in to your dashboard to continue.' });
     const payload = await verifyDashboardToken(token);
     const platformAdmin = await isConfiguredPlatformAdmin(payload);
     if (!platformAdmin) return res.status(403).json({ error: 'Platform admin access required' });
     req.user = { ...payload, isPlatformAdmin: true, tenantRole: 'platform_admin' };
     next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return res.status(err.status === 403 ? 403 : 401).json({ error: err.status === 403 ? err.message : 'Invalid or expired session' });
   }
 }
 

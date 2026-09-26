@@ -1,3 +1,4 @@
+const { getDashboardToken } = require('../dashboardHttpSession');
 const express = require('express');
 const { verifyDashboardToken } = require('../dashboardSessions');
 const crypto = require('crypto');
@@ -16,10 +17,7 @@ function clean(value, max) {
 function tokenHash(value) {
   return crypto.createHash('sha256').update(String(value || '')).digest('hex');
 }
-function bearer(req) {
-  const header = String(req.headers.authorization || '');
-  return header.startsWith('Bearer ') ? header.slice(7) : '';
-}
+
 function photoType(buf) {
   if (!Buffer.isBuffer(buf) || !buf.length) return null;
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
@@ -40,9 +38,9 @@ async function genericDesignFor(designId) {
   )).rows[0] || null;
 }
 async function staffAllowed(req, tenant) {
-  const token = bearer(req);
-  if (!token) return false;
   try {
+    const token = getDashboardToken(req);
+    if (!token) return false;
     const payload = await verifyDashboardToken(token);
     if (await isConfiguredPlatformAdmin(payload)) return true;
     if (!tenant || !payload.userId) return false;
@@ -51,7 +49,8 @@ async function staffAllowed(req, tenant) {
       [tenant.id, payload.userId]
     )).rows[0];
     return !!row && ['owner','admin','staff'].includes(String(row.role || '').toLowerCase());
-  } catch (_) {
+  } catch (error) {
+        if (error.status === 403) throw error;
     return false;
   }
 }

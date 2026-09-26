@@ -13,14 +13,14 @@
     var controller = new AbortController();
     var timeout = setTimeout(function () { controller.abort(); }, 30000);
     try {
-      var response = await fetch('https://rentsketch-api-production.up.railway.app/api/business/signup', {
+      var response = await window.RentSketchDashboardSession.request('/api/business/signup', {
         method:'POST',headers:{'Content-Type':'application/json'},signal:controller.signal,
         body:JSON.stringify({businessName:form.elements.businessName.value.trim(),contactEmail:form.elements.contactEmail.value.trim(),password:form.elements.password.value,plan:form.elements.plan.value})
       });
       var data = await response.json();
       if (!response.ok) throw Error(data.error || 'Your workspace could not be created. Please try again.');
       try {
-        window.RentSketchDashboardSession.accept(data.token);
+        window.RentSketchDashboardSession.accept(data.session);
         localStorage.setItem('rentsketch_dashboard_tenant',data.tenant.slug);
       } catch (_) {
         // Account creation succeeded even if browser storage is unavailable.
