@@ -96,3 +96,18 @@ test('rotated accessories use swapped footprint dimensions exactly once', () => 
   assert.equal(item.modelWidthFt, 4);
   assert.equal(item.modelDepthFt, 3);
 });
+
+test('legacy accessory and new equipment for the same product stay one review line', () => {
+  const catalog = catalogs();
+  const foamAccessory = catalog.accessories.find(p => p.productId === 'foam');
+  const legacy = accessoryItem(foamAccessory, 'legacy-foam', 3, 5);
+  const modernProduct = catalog.equipment.find(p => p.productId === 'foam');
+  const modern = {
+    id:'modern-foam',kind:'equipment',equipmentId:modernProduct.id,productId:'foam',
+    name:modernProduct.name,widthFt:modernProduct.widthFt,depthFt:modernProduct.depthFt,x:8,y:5
+  };
+  const summary = summarizeEvent({objects:[legacy,modern]}, catalog);
+  assert.equal(summary.lines.length,1);
+  assert.equal(summary.lines[0].productId,'foam');
+  assert.equal(summary.lines[0].qty,2);
+});
