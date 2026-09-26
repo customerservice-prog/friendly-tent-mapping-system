@@ -222,8 +222,10 @@ export async function createVenueScanWorld({
     const pm=new THREE.PointsMaterial({size,sizeAttenuation:true,vertexColors:true,transparent:true,opacity,depthWrite:true});
     const points=new THREE.Points(pg,pm);points.name=name;points.position.copy(mesh.position);points.renderOrder=order;group.add(points);return points;
   }
-  addSurfelCloud('Metric venue reconstruction surfels',pts,cols,mobile?.28:.20,.48,-1);
-  addSurfelCloud('Metric venue reconstruction strong surfels',strongPts,strongCols,mobile?.36:.27,.80,-.5);
+  const surfelSize=quality.tier==='ultra'?.14:quality.tier==='high'?.16:quality.tier==='balanced'?.22:.30;
+  const strongSurfelSize=quality.tier==='ultra'?.20:quality.tier==='high'?.22:quality.tier==='balanced'?.29:.38;
+  addSurfelCloud('Metric venue reconstruction surfels',pts,cols,surfelSize,.46,-1);
+  addSurfelCloud('Metric venue reconstruction strong surfels',strongPts,strongCols,strongSurfelSize,.82,-.5);
 
   geometry.computeBoundingBox();
   const worldBounds=geometry.boundingBox?{
