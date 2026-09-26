@@ -1,4 +1,124 @@
 .inventory-browser{color:#17332e}.inventory-heading>span{font-size:10px;font-weight:800;letter-spacing:.16em;color:#667c73}.inventory-heading h3{font-size:24px;line-height:1.2;margin:8px 0}.inventory-heading p,.inventory-footnote{font-size:12px;color:#64776e;line-height:1.6}.inventory-search input{box-sizing:border-box;width:100%;margin:14px 0 12px;padding:14px;border:1px solid #cddbd3;border-radius:12px;font-size:14px;background:#f7faf8}.inventory-categories{display:flex;gap:7px;flex-wrap:wrap}.inventory-categories button{border:1px solid #dbe3dd;background:#fff;color:#456057;border-radius:20px;padding:8px 11px;font-size:11px;cursor:pointer}.inventory-categories button[aria-pressed=true]{background:#173f34;color:#fff;border-color:#173f34}.inventory-results{font-size:12px;color:#657b70;margin:18px 0 10px}.inventory-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.inventory-card{padding:0;overflow:hidden;position:relative;text-align:left;border:1px solid #dfe7e1;border-radius:14px;background:#fff;cursor:pointer;color:inherit;transition:box-shadow .15s,border-color .15s}.inventory-card:hover,.inventory-card:focus-visible{border-color:#3e7a63;box-shadow:0 5px 18px #193a2912;outline:2px solid #79b29a;outline-offset:2px}.inventory-photo,.inventory-placeholder{width:100%;height:126px;object-fit:contain;background:#f3f5f1;display:flex;align-items:center;justify-content:center;flex-direction:column}.inventory-placeholder[hidden],.inventory-photo[hidden]{display:none}.inventory-placeholder svg{width:54px;height:46px;color:#9daea3}.inventory-placeholder small{font-size:10px;color:#72877b}.inventory-card-copy{display:flex;flex-direction:column;gap:6px;padding:12px}.inventory-card-copy>small{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:#789080}.inventory-card-copy strong{font-size:13px;line-height:1.4}.inventory-card-copy>span{font-size:11px;color:#65776d}.inventory-card-copy .inventory-price{color:#255440;font-weight:650}.inventory-count{background:#e8f3eb;border-radius:5px;padding:4px}.inventory-preview{font-size:10px!important;line-height:1.4}.inventory-unmapped{margin-top:18px;font-size:12px;line-height:1.6;padding:12px;background:#faf5e9;border-radius:9px}.inventory-empty{padding:32px 12px;text-align:center;color:#68786e}.plan-equipment{background:#e4efe8!important;border:2px solid #52755f;border-radius:5px;display:flex;align-items:center;justify-content:center}.plan-equipment .plan2d-table-label{font-size:9px;color:#183e2b;white-space:normal;text-align:center;line-height:1.1;position:static;transform:none}.drawer:has(.inventory-browser){width:min(470px,calc(100vw - 84px));max-width:470px}.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0)}@media(max-width:650px){.drawer:has(.inventory-browser){width:100%;max-width:100%;max-height:78dvh}.inventory-photo,.inventory-placeholder{height:108px}.inventory-categories{flex-wrap:nowrap;overflow-x:auto;padding-bottom:8px}.inventory-categories button{flex:0 0 auto;min-height:40px}.inventory-heading h3{font-size:21px}.inventory-card{min-height:210px}.inventory-search input{font-size:16px}}
 .plan-tent-footprint{position:absolute;left:0;top:0;box-sizing:border-box;border:2px solid #849789;background:#fff9;pointer-events:none;color:#496957;font-size:10px;padding:5px;z-index:0}
-.designer-toolbar #btnQuickPrint,.designer-toolbar #btnQuickShare,.designer-toolbar [data-open-help]{padding:8px 12px;min-width:56px;font-size:13px;line-height:1.2}.canvas-view-controls button.active{color:#fff}.inventory-heading{max-width:350px}@media(max-width:650px){.designer-toolbar #btnQuickPrint,.designer-toolbar #btnQuickShare,.designer-toolbar [data-open-help]{display:none!important}.tool-rail{grid-template-columns:repeat(4,minmax(0,1fr))}.tool-rail .rail-btn:not([data-drawer=inventory]):not([data-drawer=site]):not([data-drawer=setup]):not([data-drawer=tent]){display:none}.rail-btn[data-drawer=inventory]>span:last-child{font-size:11px}.inventory-browser{padding-bottom:12px}}
+.designer-toolbar #btnQuickPrint,.designer-toolbar #btnQuickShare,.designer-toolbar [data-open-help]{padding:8px 12px;min-width:56px;font-size:13px;line-height:1.2}.canvas-view-controls button.active{background:#244f3d;border-color:#244f3d;color:#fff}.inventory-heading{max-width:350px}@media(max-width:650px){.designer-toolbar #btnQuickPrint,.designer-toolbar #btnQuickShare,.designer-toolbar [data-open-help]{display:none!important}.tool-rail{grid-template-columns:repeat(4,minmax(0,1fr))}.tool-rail .rail-btn:not([data-drawer=inventory]):not([data-drawer=site]):not([data-drawer=setup]):not([data-drawer=tent]){display:none}.rail-btn[data-drawer=inventory]>span:last-child{font-size:11px}.inventory-browser{padding-bottom:12px}}
 .canvas-view-controls #view3dFit{background:#fff;color:#244b3c}.designer-toolbar #btnDesignerHelp{padding:8px 12px;font-size:13px}@media(max-width:650px){.designer-toolbar #btnDesignerHelp{grid-row:2;grid-column:1;justify-self:end;min-width:38px;width:38px;padding:6px 3px;font-size:11px}.drawer:has(.inventory-browser) .drawer-body{padding-bottom:100px}}
+
+
+/* Keep Photo Match controls legible without covering the customer's property. */
+.canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .canvas-view-controls {
+  gap:6px;
+  align-items:center;
+}
+.canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .canvas-view-controls > button,
+.canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .scene-controls summary {
+  min-height:44px;
+  padding:9px 12px;
+  border-radius:10px;
+  font-size:12px;
+  line-height:1.35;
+  box-shadow:0 2px 8px #17352a14;
+}
+.canvas-viewport:has(#view3dMatchPhoto:not([hidden])) #sceneSettingLabel {
+  display:none;
+}
+.canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .canvas-hint {
+  flex:0 1 auto;
+  max-width:520px;
+  margin:0;
+  padding:7px 10px;
+  border-radius:8px;
+  color:#354c40;
+  font-size:11px;
+  line-height:1.45;
+  white-space:normal;
+}
+.canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .empty-state-overlay {
+  left:12px;
+  bottom:12px;
+  top:auto;
+  transform:none;
+  max-width:calc(100% - 24px);
+  padding:5px;
+  gap:5px;
+  border-radius:12px;
+  background:#fffffff5;
+  box-shadow:0 3px 16px #1633251c;
+}
+.canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .empty-state-overlay button {
+  min-height:44px;
+  padding:9px 12px;
+  font-size:12px;
+  line-height:1.35;
+  border-radius:8px;
+}
+.canvas-view-controls > button:hover:not(.active):not(:disabled) {
+  background:#f0f5f1;
+  color:#244b3c;
+  border-color:#8ba697;
+}
+.canvas-view-controls > button.active:hover {
+  background:#1c402f;
+  color:#fff;
+}
+@media(max-width:880px) {
+  .canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .canvas-view-controls {
+    gap:5px;
+  }
+  .canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .canvas-view-controls > button,
+  .canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .scene-controls summary {
+    padding:9px 10px;
+    min-height:44px;
+    font-size:12px;
+  }
+  .canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .empty-state-overlay {
+    left:8px;
+    bottom:8px;
+    width:auto;
+    max-width:calc(100% - 16px);
+    box-sizing:border-box;
+    display:flex;
+    flex-wrap:wrap;
+  }
+  .canvas-viewport:has(#view3dMatchPhoto:not([hidden])) .empty-state-overlay button {
+    flex:1 1 calc(50% - 3px);
+    min-width:0;
+    white-space:normal;
+  }
+}
+
+/* Photo View adds a third tab: give Help its own cell instead of covering it. */
+@media(max-width:650px) {
+  .designer-toolbar {
+    grid-template-columns:minmax(0,1fr) 38px 44px 44px;
+  }
+  .designer-toolbar .toolbar-center {
+    grid-column:1 / 3;
+    min-width:0;
+  }
+  .designer-toolbar .view-toggle {
+    display:flex;
+    width:100%;
+    min-width:0;
+  }
+  .designer-toolbar .view-toggle-btn {
+    flex:1 1 0;
+    min-width:0;
+    padding:8px 6px;
+    min-height:44px!important;
+    font-size:12px;
+  }
+  .designer-toolbar #btnDesignerHelp {
+    grid-row:1;
+    grid-column:2;
+    justify-self:stretch;
+    width:38px;
+    min-height:44px;
+  }
+  .designer-toolbar #btnToReview { grid-column:3 / 5; }
+  .designer-toolbar #btnUndo { grid-column:3; }
+  .designer-toolbar #btnRedo { grid-column:4; }
+}
+
+@media(max-width:360px) {
+  .designer-toolbar .view-toggle-btn { font-size:11px; }
+}

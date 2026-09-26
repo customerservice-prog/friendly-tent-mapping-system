@@ -21,7 +21,7 @@ const api=http.createServer((req,res)=>{
   if(req.method==='OPTIONS'){res.writeHead(204);return res.end();}
   const json=(status,data)=>{res.statusCode=status;res.setHeader('Content-Type','application/json');res.end(JSON.stringify(data));};
   if(u.pathname==='/api/consumer/event-pass/offer')return json(200,{required:true,available:true,priceCents:999,durationDays:30,renewalPriceCents:499,renewalDurationDays:30,previewDurationSeconds:300,recurring:false});
-  if(u.pathname==='/api/consumer/event-pass/resume')return json(200,{id:'generic-photo-design',tenant:'generic',scene:{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},anonymousSessionId:'generic-photo-owner',active:true,renewable:true,expiresAt:'2099-01-01T00:00:00.000Z',customerEmail:'photo@example.invalid',accessUrl:'https://example.invalid/private'});
+  if(u.pathname==='/api/consumer/event-pass/resume')return json(200,{id:'generic-photo-design',tenant:'generic',scene:savedPatches.at(-1)?.scene||{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},anonymousSessionId:'generic-photo-owner',active:true,renewable:true,expiresAt:'2099-01-01T00:00:00.000Z',customerEmail:'photo@example.invalid',accessUrl:'https://example.invalid/private'});
   if(u.pathname==='/api/consumer/designs/generic-photo-design'&&req.method==='PATCH'){
     const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{try{savedPatches.push(JSON.parse(Buffer.concat(chunks).toString('utf8')));}catch(_){}json(200,{ok:true,id:'generic-photo-design'});});return;
   }
@@ -35,7 +35,7 @@ const api=http.createServer((req,res)=>{
   if(/^\/api\/consumer\/background-photo\/photo-browser-fixture-\d+$/.test(u.pathname)&&req.method==='GET'){
     const n=Number(u.pathname.match(/(\d+)$/)?.[1]||0);res.statusCode=200;
     if(n>=4&&n<=6){res.setHeader('Content-Type','image/svg+xml');res.end(scanSvg(n));}
-    else{res.setHeader('Content-Type','image/jpeg');res.end(tinyJpeg);}
+    else{res.setHeader('Content-Type','image/svg+xml');res.end(scanSvg(5));}
     return;
   }
   if(u.pathname==='/api/consumer/event-pass/preview'){req.resume();return json(200,{limited:false});}
@@ -139,7 +139,43 @@ const web=http.createServer((req,res)=>{
     assert.equal(await page.locator('#view3dOrbit360').isHidden(),true,'3D Scan controls stay locked until a multi-view scan exists');
     assert.equal(await page.locator('#view3dWalk').isHidden(),true,'Walk is not offered for one flat photo');
     assert.match(await page.locator('#canvasHint').innerText(),/Space Scan/);
+    assert.equal(await page.locator('#view3dInside').isHidden(),true,'a flat photo never offers the interior camera');
+    assert.equal(await page.locator('#propertyFitBadge').getAttribute('data-kind'),'neutral','untraced automatic photo never claims fit');
+    await page.evaluate(()=>document.getElementById('layoutNotice')?.remove());
+    await page.locator('#canvas').screenshot({path:path.join(out,'single-photo-registered-preview.png')});
+    const roofPoint=await page.evaluate(async()=>{
+      const g=await import('/js/core/photo-geometry.js?projection-test'),s=window.FriendlyBridge.getScene(),r=document.querySelector('#canvas canvas').getBoundingClientRect();
+      const site={widthFt:50,lengthFt:60},p=g.photoProjection(site,s.photoCalibration,r.width,r.height,192,128,s.backgroundPhoto),m=p.matrix;
+      const v=[0,11,0,1],dot=row=>row.reduce((n,a,i)=>n+a*v[i],0),w=dot(m.slice(12,16));
+      return {x:r.left+(dot(m.slice(0,4))/w+1)*r.width/2,y:r.top+(1-dot(m.slice(4,8))/w)*r.height/2};
+    });
+    await page.mouse.move(roofPoint.x,roofPoint.y);await page.mouse.down();await page.mouse.move(roofPoint.x+65,roofPoint.y+24,{steps:8});await page.mouse.up();
+    await page.waitForFunction(()=>!!window.FriendlyBridge.getScene().photoTentPlacement,{timeout:5000});
+    const dragged3dTent=await page.evaluate(()=>window.FriendlyBridge.getScene().photoTentPlacement);
+    assert.ok(Math.abs(dragged3dTent.x-15)>.2||Math.abs(dragged3dTent.y-20)>.2,'visible 3D tent drag changes saved yard placement');
+    await page.locator('#view3dAdjustPhoto').click();
+    assert.equal(await page.locator('#viewModePhoto').getAttribute('aria-selected'),'true','Adjust photo opens the placement workspace');
+    await page.locator('#viewMode3d').click();
 
+
+    await page.locator('.rail-btn[data-drawer="tables"]').click();
+    await page.locator('[data-role="table-card"][data-id="banquet-6ft"]').click();
+    const yardPoint=await page.evaluate(async()=>{
+      const g=await import('/js/core/photo-geometry.js?projection-test'),s=window.FriendlyBridge.getScene(),r=document.querySelector('#canvas canvas').getBoundingClientRect(),photo=g.worldToPhoto(43,45,{widthFt:50,lengthFt:60},s.photoCalibration),rect=g.photoImageRect(r.width,r.height,192,128,s.backgroundPhoto);
+      return {x:r.left+rect.x+photo.x*rect.width,y:r.top+rect.y+photo.y*rect.height};
+    });
+    await page.mouse.move(yardPoint.x,yardPoint.y);await page.mouse.down();await page.mouse.up();
+    const yardItem=await page.evaluate(()=>window.FriendlyBridge.getScene().objects.find(o=>o.tableId==='banquet-6ft'));
+    assert.ok(yardItem?.photoPlacement?.x>30&&yardItem.photoPlacement.y>30,'new rental is placed in yard beyond the 20 ft tent bounds');
+    await page.evaluate(()=>window.RentSketchAutosave.flush());
+    console.log('PASS Photo customer journey: main tent drag and yard rental placement');
+    await page.reload({waitUntil:'networkidle'});
+    await page.waitForFunction(()=>window.RentSketchEventPass?.canEdit()&&window.FriendlyBridge?.getScene().backgroundPhoto);
+    const restored=await page.evaluate(()=>window.FriendlyBridge.getScene());
+    assert.deepEqual(restored.objects.find(o=>o.id===yardItem.id)?.photoPlacement,yardItem.photoPlacement,'yard placement survives saved design reload');
+    assert.deepEqual(restored.photoTentPlacement,dragged3dTent,'dragged tent location survives saved design reload');
+
+    console.log('PASS Photo customer journey: yard and tent placement survive reload');
     // Build an estimated depth preview from left / center / right viewpoints.
     await page.locator('[data-drawer="site"]').click();
     await page.locator('[data-role="venue-scan-video"]').waitFor();
@@ -275,5 +311,5 @@ const web=http.createServer((req,res)=>{
     fs.writeFileSync(path.join(out,'result.json'),JSON.stringify({url:page.url(),uploads,firstBackgroundPhoto:scene.backgroundPhoto,largePhotoOriginalBytes:largeInfo.originalBytes,detachedPickerBytes:detachedInfo.bytes,tablePlacement,tentPlacement,photoGeometry:geometry,status:'Applied',pageErrors:errors},null,2));
     console.log('PASS Photo Spatial Chromium: one-photo matched safety plus explicitly unverified multi-view Space Scan, Measure and Walk work in the real browser flow.');
     await context.close();
-  }finally{await browser.close();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}
+  }finally{await browser.close();web.closeAllConnections();api.closeAllConnections();await new Promise(r=>web.close(r));await new Promise(r=>api.close(r));}
 })().catch(e=>{console.error(e);web.close();api.close();process.exitCode=1;});

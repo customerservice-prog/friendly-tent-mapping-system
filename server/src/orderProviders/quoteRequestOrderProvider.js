@@ -9,10 +9,10 @@ const db = require('../db');
 const QUALIFYING_STATUSES = ['booked'];
 const DEFAULT_GRACE_DAYS = 7;
 
-async function syncOrderEntitlement(quoteRequest, tenant) {
+async function syncOrderEntitlement(quoteRequest, tenant, execute = db.query) {
   if (!quoteRequest || !quoteRequest.design_id) return { granted: false };
 
-  await db.query(
+  await execute(
     `UPDATE entitlements SET status = 'revoked', revoked_at = now()
        WHERE design_id = $1 AND source = 'active_order' AND status = 'active'`,
     [quoteRequest.design_id]
@@ -29,7 +29,7 @@ async function syncOrderEntitlement(quoteRequest, tenant) {
   const eventDate = quoteRequest.event_date ? new Date(quoteRequest.event_date) : new Date();
   const expiresAt = new Date(eventDate.getTime() + graceDays * 24 * 60 * 60 * 1000);
 
-  await db.query(
+  await execute(
     `INSERT INTO entitlements
        (tenant_id, design_id, customer_email, source, status, expires_at, source_reference)
      VALUES ($1, $2, $3, 'active_order', 'active', $4, $5)`,

@@ -1,7 +1,7 @@
 import {
   normalizePhotoCalibration, defaultPhotoCalibration, worldToPhoto, photoToWorld,
   objectPhotoPolygon, objectPhotoCenter, normalizePhotoGeometry, geometryPhotoPolygon,
-  geometryTypeHeight
+  geometryTypeHeight, rentalPhotoPlacement, photoImageRect
 } from '../core/photo-geometry.js';
 
 let container=null,root=null,stage=null,img=null,svg=null,toolbar=null,currentData=null,callbacks={};
@@ -25,10 +25,7 @@ function tentPlacement(){
   };
 }
 function itemForPhoto(item){
-  const tent=currentData?.tent,tp=tentPlacement(),p=item?.photoPlacement&&typeof item.photoPlacement==='object'?item.photoPlacement:null;
-  if(p)return {...item,x:Number(p.x)||0,y:Number(p.y)||0,rotationDeg:Number(p.rotationDeg)||0};
-  if(tent&&!tent.isSite)return {...item,x:tp.x+Number(item.x||0),y:tp.y+Number(item.y||0),rotationDeg:Number(item.rotationDeg||0)+tp.rotationDeg};
-  return {...item,x:Number(item.x||0),y:Number(item.y||0),rotationDeg:Number(item.rotationDeg||0)};
+  return rentalPhotoPlacement(item,currentData.tent,photoSpace(),tentPlacement());
 }
 function pointFromEvent(e){
   if(!stage)return null;const r=stage.getBoundingClientRect();
@@ -47,12 +44,12 @@ function geomLabel(type){return ({house:'House / building',fence:'Fence / wall',
 function fitStage(){
   if(!root||!stage||!img)return;
   const viewport=root.querySelector('.photo-workspace-viewport');if(!viewport)return;
-  const w=Math.max(280,viewport.clientWidth||800),h=Math.max(260,viewport.clientHeight||600);
+  const w=Math.max(1,(viewport.clientWidth||800)-20),h=Math.max(1,(viewport.clientHeight||600)-20);
   const iw=img.naturalWidth||Number(currentData?.backgroundPhoto?.widthPx)||4;
   const ih=img.naturalHeight||Number(currentData?.backgroundPhoto?.heightPx)||3;
-  const ar=Math.max(.3,Math.min(4,iw/Math.max(1,ih)));
-  let sw=w,sh=sw/ar;if(sh>h){sh=h;sw=sh*ar;}
-  stage.style.width=Math.max(260,Math.floor(sw))+'px';stage.style.height=Math.max(220,Math.floor(sh))+'px';
+  const rect=photoImageRect(w,h,iw,ih,currentData.backgroundPhoto);
+  stage.style.position='absolute';stage.style.left=(rect.x+10)+'px';stage.style.top=(rect.y+10)+'px';
+  stage.style.width=rect.width+'px';stage.style.height=rect.height+'px';
 }
 function updateHint(){
   const out=root?.querySelector('[data-photo-hint]');if(!out)return;
@@ -65,11 +62,11 @@ function setTool(next){
 }
 function renderToolbar(){
   toolbar.innerHTML=
-    '<div class="photo-workspace-title"><strong>PHOTO VIEW</strong><span>Place rentals on the real venue</span></div>'+
+    '<div class="photo-workspace-title"><strong>PHOTO PLACEMENT</strong><span>Estimated scale · verify site dimensions</span></div>'+
     '<div class="photo-workspace-tools">'+
       '<button type="button" class="btn-chip active" data-photo-tool="move">Move rentals</button>'+
       '<button type="button" class="btn-chip" data-photo-tool="calibrate">Calibrate ground</button>'+
-      '<button type="button" class="btn-chip" data-photo-auto>Auto perspective</button>'+
+      '<button type="button" class="btn-chip" data-photo-auto>Reset perspective</button>'+
       '<select class="photo-geometry-type" data-photo-geometry-type aria-label="Geometry type">'+
         '<option value="house">House / building</option><option value="fence">Fence / wall</option><option value="tree">Tree / tall object</option><option value="obstacle">Obstacle</option><option value="no-place">No-place zone</option>'+
       '</select>'+
@@ -150,7 +147,7 @@ function renderObjects(){
       const rotate=e.target.closest?.('[data-photo-rotate]');e.preventDefault();e.stopPropagation();
       callbacks.onPhotoSelect?.(item.id);if(item.id!=='__photo_tent__')callbacks.onSelect?.(item.id);
       const p=pointFromEvent(e);if(!p)return;
-      drag={kind:rotate?'rotate':'item',id:item.id,start:p,item:{...item},pointerId:e.pointerId,live:{...item}};
+      drag={kind:rotate?'rotate':'item',id:item.id,start:p,startWorld:photoToWorld(p.x,p.y,photoSpace(),calibration(),{clampToGround:false}),item:{...item},pointerId:e.pointerId,live:{...item}};
       try{stage.setPointerCapture(e.pointerId);}catch(_){}
     });
     svg.appendChild(group);
@@ -174,7 +171,7 @@ function dragCalibration(name,p){
 function pointerDown(e){
   const handle=e.target.closest?.('[data-cal-handle]');
   if(handle&&tool==='calibrate'){
-    e.preventDefault();e.stopPropagation();drag={kind:'calibration',name:handle.dataset.calHandle,pointerId:e.pointerId};
+    e.preventDefault();e.stopPropagation();drag={kind:'calibration',name:handle.dataset.calHandle,pointerId:e.pointerId,original:calibration()};
     try{stage.setPointerCapture(e.pointerId);}catch(_){}return;
   }
   if(tool==='geometry'){
@@ -195,18 +192,24 @@ function pointerMove(e){
   if(drag.kind==='geometry'){draftGeom.end=p;renderOverlay();return;}
   const site=photoSpace();let item={...drag.live};
   if(drag.kind==='item'){
-    const world=photoToWorld(p.x,p.y,site,calibration(),{clampToGround:true});if(!world)return;
-    item.x=clamp(world.x-item.widthFt/2,0,Math.max(0,site.widthFt-item.widthFt));
-    item.y=clamp(world.y-item.depthFt/2,0,Math.max(0,site.lengthFt-item.depthFt));
+    const world=photoToWorld(p.x,p.y,site,calibration(),{clampToGround:false});if(!world||!drag.startWorld)return;
+    item.x=clamp(drag.item.x+world.x-drag.startWorld.x,0,Math.max(0,site.widthFt-item.widthFt));
+    item.y=clamp(drag.item.y+world.y-drag.startWorld.y,0,Math.max(0,site.lengthFt-item.depthFt));
   }else if(drag.kind==='rotate'){
-    const center=objectPhotoCenter(item,site,calibration()),dx=p.x-center.x,dy=p.y-center.y;
-    item.rotationDeg=Math.round((Math.atan2(dy,dx)*180/Math.PI+90)/5)*5;
+    const world=photoToWorld(p.x,p.y,site,calibration(),{clampToGround:false});if(!world||!drag.startWorld)return;
+    const cx=item.x+item.widthFt/2,cy=item.y+item.depthFt/2,angle=Math.atan2(world.y-cy,world.x-cx)-Math.atan2(drag.startWorld.y-cy,drag.startWorld.x-cx);
+    item.rotationDeg=Math.round((drag.item.rotationDeg+angle*180/Math.PI)/5)*5;
   }
   drag.live=item;applyLivePhotoPlacement(item);
 }
 function pointerUp(e){
   if(!drag)return;
   const finished=drag;drag=null;
+  if(e.type==='pointercancel'){
+    if(finished.item)applyLivePhotoPlacement(finished.item);
+    if(finished.kind==='calibration'){currentData={...currentData,photoCalibration:finished.original};callbacks.onCalibration?.(finished.original);}
+    draftGeom=null;renderOverlay();return;
+  }
   if(finished.kind==='item'||finished.kind==='rotate'){
     const live=finished.live;
     if(live)callbacks.onPhotoPlacement?.(finished.id,{x:live.x,y:live.y,rotationDeg:live.rotationDeg||0});

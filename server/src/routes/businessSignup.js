@@ -1,6 +1,7 @@
 const express = require('express');
 const db = require('../db');
-const { hashPassword, signToken } = require('../auth');
+const { hashPassword } = require('../auth');
+const { createDashboardSession } = require('../dashboardSessions');
 const { randomBytes } = require('crypto');
 
 const router = express.Router();
@@ -29,6 +30,7 @@ function slugify(name) {
 // dashboard already logged in - same token shape as POST /api/auth/login,
 // so the existing dashboard code needs no special-casing for new tenants.
 router.post('/signup', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const { businessName, contactEmail, password, plan } = req.body || {};
 
   if (typeof businessName !== 'string' || !businessName.trim() || businessName.trim().length > 120) {
@@ -84,11 +86,11 @@ router.post('/signup', async (req, res) => {
       [tenant.id, user.id, 'owner']
     );
 
-    const token = signToken({ userId: user.id, email: user.email, isPlatformAdmin: false });
+    const dashboardSession = await createDashboardSession({ ...user, password_hash: passwordHash }, client);
     await client.query('COMMIT');
 
     res.status(201).json({
-      token,
+      ...dashboardSession,
       user: { id: user.id, email: user.email, displayName: user.display_name },
       tenant: {
         slug: tenant.slug,

@@ -1,3 +1,4 @@
+const { clientIp } = require('../clientIp');
 // POST/GET routes for the RentSketch Direct Consumer "Event Pass".
 // This is a SEPARATE payment type from the Friendly rental deposit
 // (payments.js) and from business subscriptions - see docs/ROADMAP.md.
@@ -7,6 +8,7 @@
 // written here, after Stripe's webhook confirms payment (stripeWebhook.js).
 
 const express = require('express');
+const { verifyDashboardToken } = require('../dashboardSessions');
 const { query } = require('../db');
 const { createHash } = require('crypto');
 const { signToken, verifyToken } = require('../auth');
@@ -26,7 +28,7 @@ async function platformAdminRequest(req) {
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) return null;
     try {
-        const payload = verifyToken(token);
+        const payload = await verifyDashboardToken(token);
         return await isConfiguredPlatformAdmin(payload) ? payload : null;
     } catch (_) {
         return null;
@@ -149,7 +151,7 @@ router.post('/order-access/request', wrap(async (req, res) => {
     const orderNumber = typeof req.body?.orderNumber === 'string' ? req.body.orderNumber.trim().replace(/^#\s*/, '') : '';
     const validIdentity = firstName && firstName.length <= 100 && !/[\u0000-\u001f]/.test(firstName);
     if (!validIdentity || !/^[a-zA-Z0-9-]{1,80}$/.test(orderNumber)) return res.status(400).json({ error: 'Enter your first name and Friendly order number.' });
-    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const ip = clientIp(req);
     const now = Date.now();
     for (const [key, bucket] of orderBuckets) if (bucket.until < now) orderBuckets.delete(key);
     for (const key of ['ip:' + ip, 'order:' + orderNumber.toLowerCase()]) {
@@ -377,7 +379,7 @@ router.post('/designs/recovery-link', wrap(async (req, res) => {
     const tenant = req.body?.tenant == null ? null : String(req.body.tenant);
     if (email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Please enter the email address used at checkout.' });
     if (tenant && !['friendly', 'generic'].includes(tenant)) return res.status(400).json({ error: 'Invalid rental company' });
-    const ip = String(req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+    const ip = clientIp(req);
     const now = Date.now();
     for (const [key, entry] of recoveryBuckets) if (entry.until < now) recoveryBuckets.delete(key);
     const bucket = recoveryBuckets.get(ip) || { count: 0, until: now + 15 * 60000 };
@@ -487,18 +489,14 @@ router.get('/designs/:designId/access', async (req, res) => {
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (token && tenant) {
         try {
-            const payload = verifyToken(token);
-            if (payload.isPlatformAdmin) {
-                isStaff = true;
-            } else {
-                const membership = await query(
-                    'SELECT * FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
-                    [tenant.id, payload.userId]
-                );
-                isStaff = !!membership.rows[0];
-            }
-        } catch (err) {
-            isStaff = false; // invalid/expired token - fall through as a normal customer
+            const payload = await verifyDashboardToken(token);
+            const membership = await query(
+                'SELECT role FROM tenant_memberships WHERE tenant_id = $1 AND user_id = $2',
+                [tenant.id, payload.userId]
+            );
+            isStaff = ['owner', 'admin', 'staff'].includes(String(membership.rows[0]?.role || '').toLowerCase());
+        } catch (_) {
+            isStaff = false;
         }
     }
 

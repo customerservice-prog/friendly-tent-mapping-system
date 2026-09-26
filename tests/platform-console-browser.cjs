@@ -42,11 +42,16 @@ const server=http.createServer((req,res)=>{
 });
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base='http://127.0.0.1:'+server.address().port;
- const browser=await chromium.launch();
+ const browser=await chromium.launch({executablePath:process.env.RENTSKETCH_CHROMIUM||undefined});
  try{
   for(const viewport of [{width:1440,height:900,name:'desktop'},{width:390,height:844,name:'mobile'}]){
    const ctx=await browser.newContext({viewport:{width:viewport.width,height:viewport.height}});
-   await ctx.addInitScript(url=>{localStorage.setItem('rentsketch_dashboard_token','fixture-admin-token');window.RENTSKETCH_API_URL=url;},base);
+   await ctx.addInitScript(url=>{
+    const expiresAt=Date.now()+60*60*1000;
+    const token='fixture.'+btoa(JSON.stringify({kind:'dashboard_session',sub:'admin',jti:'platform-browser-fixture',exp:Math.floor(expiresAt/1000)}))+'.isolated-signature';
+    localStorage.setItem('rentsketch_dashboard_session',JSON.stringify({lastActivity:Date.now(),expiresAt}));
+    localStorage.setItem('rentsketch_dashboard_token',token);window.RENTSKETCH_API_URL=url;
+   },base);
    const page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
    await page.goto(base+'/dashboard/platform.html#overview');
    await page.getByRole('heading',{name:'Your RentSketch business'}).waitFor();

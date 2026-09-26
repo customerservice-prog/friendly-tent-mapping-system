@@ -69,7 +69,7 @@ export function venueScanPanel(value){
       '<input class="venue-photo-input" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" capture="environment" data-role="venue-scan-file" data-scan-role="'+role+'">'+
     '</label>';}).join('')+'</div>'+
     '<label class="venue-scan-baseline"><span>Distance from left photo to right photo</span><div><input type="number" min="2" max="20" step=".5" value="'+scan.baselineFt+'" data-role="venue-scan-baseline"><strong>ft</strong></div><small>For best results, move about 6 ft total. Enter a measured distance. Camera settings and movement are still estimated; this does not certify scale or fit.</small></label>'+
-    (ready?'<div class="venue-scan-ready"><strong>'+((scan.samples?.length||0)>=5?(scan.samples.length+'-view'):'3-view')+' views captured</strong><span>Open 3D View to check an estimated depth preview. Missing surfaces stay unknown; verify dimensions on site.</span></div>':'<p class="equipment-note">Capture three distinct positions for a depth preview. One photo supports camera matching, not a measured 360° property.</p>')+
+    (ready?'<div class="venue-scan-ready"><strong>'+((scan.samples?.length||0)>=5?(scan.samples.length+'-view'):'3-view')+' views captured</strong><span>Open 3D View to check an estimated depth preview. Missing surfaces stay unknown; verify dimensions on site.</span></div>':'<p class="equipment-note">Capture three distinct positions for a depth preview. One photo provides estimated placement from its original viewpoint; it does not measure the property.</p>')+
     (scan.frames.length?'<button type="button" class="btn-tertiary venue-scan-clear" data-role="venue-scan-clear">Clear Space Scan</button>':'')+
   '</section>';
 }
@@ -81,7 +81,7 @@ export function venuePhotoPanel(photo,status){
     return '<section class="venue-photo-card venue-photo-empty">'+
       '<div class="venue-photo-kicker">QUICK PHOTO MATCH</div>'+
       '<h4>Use the real backyard or venue</h4>'+
-      '<p>Use one real photo for a camera-matched placement preview. One photo stays in its known viewpoint; use Space Scan below when you want navigable 3D depth.</p>'+
+      '<p>Use one real photo to place rentals from its original viewpoint. Adjust the ground corners in Photo View; scale and height remain estimates. Use Space Scan below for a navigable depth preview.</p>'+
       '<label class="venue-photo-drop">'+input+
         '<span class="venue-photo-camera" aria-hidden="true">▣</span>'+
         '<strong>Choose a venue photo</strong>'+
@@ -96,7 +96,7 @@ export function venuePhotoPanel(photo,status){
   return '<section class="venue-photo-card is-active">'+
     '<div class="venue-photo-kicker">PHOTO MATCH · ACTIVE</div>'+
     '<div class="venue-photo-preview-wrap"><img class="venue-photo-preview" src="'+esc(photo.url)+'" alt="Uploaded venue background" style="object-position:'+pos+';transform:'+transform+'"></div>'+
-    '<div class="venue-photo-copy"><h4>Your real venue is matched to this camera view</h4><p>Fine-tune the crop for Photo Match, or capture Left + Center + Right below to estimate depth from overlapping views.</p></div>'+
+    '<div class="venue-photo-copy"><h4>Your photo is ready for placement</h4><p>Use Adjust photo to align the ground and move rentals. Check real dimensions before relying on the layout. Left + Center + Right captures can estimate depth from overlapping views.</p></div>'+
     '<div class="venue-photo-actions"><label class="btn-secondary venue-photo-replace">Replace photo'+input+'</label><button type="button" class="btn-secondary" data-role="venue-photo-remove">Remove</button></div>'+
     '<div class="venue-photo-tuning">'+
       '<label><span>Move left / right</span><input type="range" min="0" max="100" step="1" value="'+photo.focusX+'" data-role="venue-photo-focus-x"></label>'+

@@ -6,7 +6,7 @@ const db={query:(sql,args)=>pg.query(sql,args)};
 function load(file,deps){
   const mod={exports:{}};
   vm.runInNewContext(fs.readFileSync(path.join(root,file),'utf8'),{
-    module:mod,exports:mod.exports,require:id=>{if(!(id in deps))throw Error('Unexpected dependency '+id);return deps[id];},
+    module:mod,exports:mod.exports,require:id=>{if(id==='../clientIp')return require('../server/src/clientIp');if(!(id in deps))throw Error('Unexpected dependency '+id);return deps[id];},
     console,Date,Number,String,Object,Array,Math,JSON,URL,Buffer,Map,Promise,setTimeout,clearTimeout
   },{filename:file});
   return mod.exports;
@@ -17,7 +17,7 @@ const auth={
 };
 const routes=load('server/src/routes/designs.js',{
   express,'../db':db,'../middleware/requireAuth':{requireTenantAccess:(req,res,next)=>next()},
-  '../eventPassAccess':{savePermission:async()=>null},'../auth':auth
+  '../eventPassAccess':{savePermission:async()=>null},'../auth':auth,'../dashboardSessions':{verifyDashboardToken:async()=>{throw Error('No staff fixture')}}
 });
 const app=express();app.use(express.json());app.use('/api/tenants',routes);app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:err.message});});
 let server,base;

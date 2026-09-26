@@ -106,6 +106,52 @@ router.post('/', async (req, res) => {
     } finally { client?.release(); }
   }
 
+  // Previously created rental-deposit sessions can still settle, but only
+  // their exact server-recorded session/tenant/amount may book the quote. Keep
+  // the payment, entitlement and event marker in one transaction for retries.
+  const depositEvent = ['checkout.session.completed', 'checkout.session.async_payment_succeeded'].includes(event.type)
+    && object.metadata?.quoteRequestId;
+  if (depositEvent) {
+    const s = object, metadata = s.metadata || {};
+    if (s.mode !== 'payment' || s.status !== 'complete' || s.payment_status !== 'paid'
+        || s.currency !== 'usd' || !Number.isSafeInteger(s.amount_total) || s.amount_total <= 0
+        || typeof s.payment_intent !== 'string' || !s.payment_intent.startsWith('pi_')) {
+      return res.json({ received: true, ignored: true });
+    }
+    let client;
+    try {
+      client = await pool.connect();
+      await client.query('BEGIN');
+      const quote = (await client.query('SELECT * FROM quote_requests WHERE id=$1 FOR UPDATE', [metadata.quoteRequestId])).rows[0];
+      const tenant = quote && (await client.query('SELECT * FROM tenants WHERE id=$1', [quote.tenant_id])).rows[0];
+      const expectedAmount = Number(quote?.deposit_amount_cents);
+      if (!quote || !tenant || String(quote.tenant_id) !== String(metadata.tenantId || '')
+          || tenant.slug !== metadata.tenantSlug || quote.stripe_checkout_session_id !== s.id
+          || !Number.isSafeInteger(expectedAmount) || expectedAmount <= 0 || expectedAmount !== s.amount_total
+          || !['new', 'contacted', 'quoted', 'booked'].includes(quote.status)
+          || !['unpaid', 'paid'].includes(quote.payment_status)
+          || (quote.payment_status === 'paid' && (quote.stripe_payment_intent_id !== s.payment_intent || Number(quote.amount_paid_cents) !== s.amount_total))) {
+        await client.query('ROLLBACK');
+        return res.json({ received: true, ignored: true });
+      }
+      const marker = await client.query('INSERT INTO processed_stripe_events(id,event_type) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id', [event.id, event.type]);
+      const alreadyPaid = quote.payment_status === 'paid';
+      if (marker.rows.length && !alreadyPaid) {
+        const updated = (await client.query(
+          `UPDATE quote_requests SET payment_status='paid',status='booked',amount_paid_cents=$1,stripe_payment_intent_id=$2 WHERE id=$3 RETURNING *`,
+          [s.amount_total, s.payment_intent, quote.id]
+        )).rows[0];
+        await syncOrderEntitlement(updated, tenant, (sql, args) => client.query(sql, args));
+      }
+      await client.query('COMMIT');
+      return res.json({ received: true, ...(!marker.rows.length || alreadyPaid ? { duplicate: true } : {}) });
+    } catch (err) {
+      if (client) await client.query('ROLLBACK');
+      console.error('[stripe webhook] Rental deposit fulfillment failed', event.id, err.message);
+      return res.status(500).send('Rental deposit fulfillment failed');
+    } finally { client?.release(); }
+  }
+
   // Idempotency: attempt to record this event as processed. If it already
   // exists, return success immediately without reprocessing.
   const idem = await query('INSERT INTO processed_stripe_events(id,event_type) VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id', [
@@ -130,15 +176,6 @@ router.post('/', async (req, res) => {
         // to ensure we have complete data (status, current_period_end, etc.).
         const sub = await stripe.subscriptions.retrieve(s.subscription);
         await upsertBusinessSubscription(sub, m);
-      } else if (m.quoteRequestId) {
-        const u = await query(
-          `UPDATE quote_requests SET payment_status='paid',status='booked',amount_paid_cents=$1,stripe_payment_intent_id=$2 WHERE id=$3 RETURNING *`,
-          [s.amount_total, s.payment_intent, m.quoteRequestId]
-        );
-        if (u.rows[0]) {
-          const tr = await query('SELECT * FROM tenants WHERE id=$1', [u.rows[0].tenant_id]);
-          await syncOrderEntitlement(u.rows[0], tr.rows[0]);
-        }
       }
     }
     // Handle subscription.created / subscription.updated: Stripe notifies us of subscription changes.

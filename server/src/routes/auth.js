@@ -1,21 +1,24 @@
+const { clientIp } = require('../clientIp');
 const express = require('express');
 const crypto = require('crypto');
 const db = require('../db');
-const { hashPassword, verifyPassword, signToken, verifyToken } = require('../auth');
+const { hashPassword, verifyPassword } = require('../auth');
+const { createDashboardSession, verifyDashboardToken, revokeDashboardSession, revokeUserDashboardSessions } = require('../dashboardSessions');
 
 const router = express.Router();
+router.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
 const loginBuckets = new Map();
 const passwordBuckets = new Map();
 const resetBuckets = new Map();
-function clientIp(req){return(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').toString().split(',')[0].trim();}
 function limited(map,key,max,windowMs){const now=Date.now();let b=map.get(key);if(!b||now-b.start>windowMs)b={start:now,count:0};b.count++;map.set(key,b);return b.count>max;}
 function clearLogin(email,ip){loginBuckets.delete('account:'+email);loginBuckets.delete('pair:'+email+':'+ip);}
 
-function bearerPayload(req) {
+async function bearerPayload(req) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return null;
-  return verifyToken(token);
+  return verifyDashboardToken(token);
 }
 
 function configuredPlatformAdminEmail() {
@@ -27,7 +30,7 @@ function isConfiguredPlatformAdminEmail(email) {
   return Boolean(configured && String(email || '').trim().toLowerCase() === configured);
 }
 
-router.post('/login', async (req, res) => {
+router.post('/login', wrap(async (req, res) => {
   const { email, password } = req.body || {};
   if (typeof email!=='string'||typeof password!=='string'||!email.trim()||!password) return res.status(400).json({ error: 'email and password are required' });
   if(email.length>254||password.length>256)return res.status(400).json({error:'Invalid email or password'});
@@ -40,13 +43,19 @@ router.post('/login', async (req, res) => {
   if (!ok) return res.status(401).json({ error: 'Invalid email or password' });
   clearLogin(normalizedEmail,ip);
   const isPlatformAdmin = isConfiguredPlatformAdminEmail(user.email);
-  const token = signToken({ userId: user.id, email: user.email, isPlatformAdmin });
-  res.json({ token, user: { id: user.id, email: user.email, displayName: user.display_name, isPlatformAdmin } });
-});
+  const session = await createDashboardSession(user);
+  res.json({ ...session, user: { id: user.id, email: user.email, displayName: user.display_name, isPlatformAdmin } });
+}));
 
-router.get('/me', async (req, res) => {
+router.post('/logout', wrap(async (req, res) => {
+  const header = String(req.headers.authorization || '');
+  if (header.startsWith('Bearer ')) await revokeDashboardSession(header.slice(7));
+  res.json({ ok: true });
+}));
+
+router.get('/me', wrap(async (req, res) => {
   let payload;
-  try { payload = bearerPayload(req); } catch (err) { return res.status(401).json({ error: 'Invalid or expired token' }); }
+  try { payload = await bearerPayload(req); } catch (err) { return res.status(401).json({ error: 'Invalid or expired token' }); }
   if (!payload) return res.status(401).json({ error: 'Missing bearer token' });
 
   const userResult = await db.query('SELECT id, email, display_name FROM users WHERE id = $1', [payload.userId]);
@@ -73,10 +82,10 @@ router.get('/me', async (req, res) => {
     user: { id: currentUser.id, email: currentUser.email, displayName: currentUser.display_name, isPlatformAdmin },
     tenants: memberships.rows,
   });
-});
+}));
 
 
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', wrap(async (req, res) => {
   const token = typeof req.body?.token === 'string' ? req.body.token.trim() : '';
   const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
   const ip = clientIp(req);
@@ -90,8 +99,8 @@ router.post('/reset-password', async (req, res) => {
   if (newPassword.length < 12) {
     return res.status(400).json({ error: 'New password must be at least 12 characters' });
   }
-  if (newPassword.length > 256) {
-    return res.status(400).json({ error: 'Password is too long' });
+  if (Buffer.byteLength(newPassword, 'utf8') > 72) {
+    return res.status(400).json({ error: 'New password must be no more than 72 UTF-8 bytes' });
   }
 
   const tokenHash = crypto.createHash('sha256').update(token, 'utf8').digest('hex');
@@ -115,6 +124,7 @@ router.post('/reset-password', async (req, res) => {
 
     const passwordHash = await hashPassword(newPassword);
     await client.query('UPDATE users SET password_hash = $1 WHERE id = $2', [passwordHash, row.user_id]);
+    await revokeUserDashboardSessions(row.user_id, client);
     await client.query('UPDATE password_reset_tokens SET used_at = now() WHERE id = $1', [row.id]);
     await client.query(
       'UPDATE password_reset_tokens SET used_at = COALESCE(used_at, now()) WHERE user_id = $1 AND used_at IS NULL',
@@ -130,16 +140,16 @@ router.post('/reset-password', async (req, res) => {
   } finally {
     client.release();
   }
-});
+}));
 
-router.post('/change-password', async (req, res) => {
+router.post('/change-password', wrap(async (req, res) => {
   let payload;
-  try { payload = bearerPayload(req); } catch (err) { return res.status(401).json({ error: 'Invalid or expired token' }); }
+  try { payload = await bearerPayload(req); } catch (err) { return res.status(401).json({ error: 'Invalid or expired token' }); }
   if (!payload) return res.status(401).json({ error: 'Missing bearer token' });
   if(limited(passwordBuckets,String(payload.userId)+':'+clientIp(req),10,60*60*1000))return res.status(429).json({error:'Too many password-change attempts. Please wait and try again.'});
   const { currentPassword, newPassword } = req.body || {};
   if (typeof currentPassword!=='string'||typeof newPassword!=='string'||!currentPassword||!newPassword) return res.status(400).json({ error: 'Current and new password are required' });
-  if(currentPassword.length>256||newPassword.length>256)return res.status(400).json({error:'Password is too long'});
+  if(currentPassword.length>256||Buffer.byteLength(newPassword,'utf8')>72)return res.status(400).json({error:'New password must be no more than 72 UTF-8 bytes'});
   if (newPassword.length < 12) return res.status(400).json({ error: 'New password must be at least 12 characters' });
   if (currentPassword === newPassword) return res.status(400).json({ error: 'New password must be different' });
   const result = await db.query('SELECT id, password_hash FROM users WHERE id = $1', [payload.userId]);
@@ -148,9 +158,16 @@ router.post('/change-password', async (req, res) => {
   const ok = await verifyPassword(currentPassword, user.password_hash);
   if (!ok) return res.status(401).json({ error: 'Current password is incorrect' });
   const newHash = await hashPassword(newPassword);
-  await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [newHash, user.id]);
+  const client = await db.pool.connect();
+  try {
+    await client.query('BEGIN');
+    const updated = await client.query('UPDATE users SET password_hash = $1 WHERE id = $2 AND password_hash = $3 RETURNING id', [newHash, user.id, user.password_hash]);
+    if (!updated.rows[0]) { await client.query('ROLLBACK'); return res.status(401).json({ error: 'Your password changed. Please sign in again.' }); }
+    await revokeUserDashboardSessions(user.id, client);
+    await client.query('COMMIT');
+  } catch (err) { await client.query('ROLLBACK'); throw err; } finally { client.release(); }
   passwordBuckets.delete(String(payload.userId)+':'+clientIp(req));
-  res.json({ ok: true });
-});
+  res.json({ ok: true, signInRequired: true });
+}));
 
 module.exports = router;

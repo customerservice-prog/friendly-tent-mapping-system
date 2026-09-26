@@ -17,6 +17,7 @@ function loadRoute() {
     module: mod,
     exports: mod.exports,
     require: id => {
+      if (id === '../clientIp') return require('../server/src/clientIp');
       if (id === 'express') return express;
       if (id === '../db') return db;
       throw new Error('Unexpected dependency ' + id);

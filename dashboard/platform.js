@@ -24,17 +24,19 @@ function date(v){if(!v)return '—';try{return new Date(v).toLocaleDateString();
 function datetime(v){if(!v)return '—';try{return new Date(v).toLocaleString();}catch(_){return '—';}}
 function status(v){var s=String(v||'unknown');return '<span class="pc-status '+esc(s)+'">'+esc(s.replaceAll('_',' '))+'</span>';}
 function initials(name){return String(name||'RS').trim().split(/\s+/).slice(0,2).map(function(x){return x[0]||''}).join('').toUpperCase();}
-function token(){try{return localStorage.getItem(TOKEN_KEY)||''}catch(_){return''}}
-function setToken(v){try{if(v)localStorage.setItem(TOKEN_KEY,v);else localStorage.removeItem(TOKEN_KEY)}catch(_){}}
+function token(){if(window.RentSketchDashboardSession)return window.RentSketchDashboardSession.getToken();try{return localStorage.getItem(TOKEN_KEY)||''}catch(_){return''}}
+function setToken(v){if(window.RentSketchDashboardSession){if(v)window.RentSketchDashboardSession.accept(v);else window.RentSketchDashboardSession.clear('signed-out');return;}try{if(v)localStorage.setItem(TOKEN_KEY,v);else localStorage.removeItem(TOKEN_KEY)}catch(_){}}
 function setTenant(v){try{if(v)localStorage.setItem(TENANT_KEY,v);else localStorage.removeItem(TENANT_KEY)}catch(_){}}
 
 async function api(path,opts){
  opts=opts||{};var headers=Object.assign({Accept:'application/json'},opts.headers||{});
- if(token())headers.Authorization='Bearer '+token();
+ var requestToken=token();if(requestToken)headers.Authorization='Bearer '+requestToken;
  var body=opts.body;
  if(body&&typeof body==='object'){headers['Content-Type']='application/json';body=JSON.stringify(body);}
  var r=await fetch(API+path,{method:opts.method||'GET',headers:headers,body:body,cache:'no-store'});
  var d=await r.json().catch(function(){return{}});
+ if(requestToken && token()!==requestToken){var stale=new Error('Your session changed. Sign in again.');stale.status=401;stale.sessionChanged=true;throw stale;}
+ if(r.status===401&&requestToken)window.RentSketchDashboardSession?.unauthorized(requestToken);
  if(!r.ok){var e=new Error(d.error||('Request failed ('+r.status+')'));e.status=r.status;throw e;}
  return d;
 }
@@ -55,13 +57,14 @@ function head(eyebrow,title,description,actions){
 }
 function metric(label,value,detail,cls){return '<article class="pc-metric '+(cls||'')+'"><div class="pc-metric-label">'+esc(label)+'</div><div class="pc-metric-value">'+esc(value)+'</div><div class="pc-metric-detail">'+esc(detail)+'</div></article>'}
 function empty(msg){return '<div class="pc-empty">'+esc(msg)+'</div>'}
-function fail(err){document.getElementById('pcContent').innerHTML='<div class="pc-message error">'+esc(err.message||err)+'</div>'}
+function fail(err){var target=document.getElementById('pcContent');if(!target)return;target.innerHTML='<div class="pc-message error">'+esc(err.message||err)+'</div>'}
 function bindShell(){
  document.getElementById('pcLogout').onclick=function(){setToken(null);setTenant(null);location.href='/dashboard/#/login';};
  var menu=document.getElementById('pcMenu');if(menu)menu.onclick=function(){state.menu=!state.menu;document.getElementById('pcShell').classList.toggle('menu-open',state.menu);};
  document.querySelectorAll('.pc-nav a').forEach(function(a){a.onclick=function(){state.menu=false;};});
 }
 async function render(){
+ if(!state.user||!token()){app.replaceChildren();return;}
  state.route=route();app.innerHTML=shell();bindShell();
  try{
   if(state.route==='overview')await overview();
@@ -77,7 +80,7 @@ async function render(){
   else if(state.route==='alerts')await alerts();
   else if(state.route==='performance')await performance();
   else if(state.route==='system')await system();
- }catch(err){if(err.status===401||err.status===403){setToken(null);location.href='/dashboard/#/login';return;}fail(err);}
+ }catch(err){if(err.sessionChanged)return;if(err.status===401||err.status===403){setToken(null);location.href='/dashboard/#/login';return;}fail(err);}
 }
 
 async function overview(){
@@ -349,8 +352,12 @@ async function boot(){
   if(!me.user||!me.user.isPlatformAdmin){location.href='/dashboard/#/overview';return;}
   state.user=me.user;state.tenants=me.tenants||[];
   state.route=route();app.className='';await render();
- }catch(err){setToken(null);location.href='/dashboard/#/login';}
+ }catch(err){if(err.sessionChanged)return;setToken(null);location.href='/dashboard/#/login';}
 }
+function lockConsole(){state.user=null;state.tenants=[];app.replaceChildren();}
+window.addEventListener('rentsketch:dashboardSessionChanged',function(event){if(event.detail?.reason==='signed-in')return;lockConsole();if(event.detail?.reason==='changed'&&token()){boot();return;}location.replace('/dashboard/#/login');});
+window.addEventListener('pagehide',lockConsole);
+window.addEventListener('pageshow',function(event){if(event.persisted){lockConsole();boot();}});
 window.addEventListener('hashchange',render);
 boot();
 })();

@@ -1,7 +1,7 @@
 const express = require('express');
+const { verifyDashboardToken } = require('../dashboardSessions');
 const crypto = require('crypto');
 const db = require('../db');
-const { verifyToken } = require('../auth');
 const { isConfiguredPlatformAdmin } = require('../middleware/requireAuth');
 const { savePermission } = require('../eventPassAccess');
 
@@ -43,7 +43,7 @@ async function staffAllowed(req, tenant) {
   const token = bearer(req);
   if (!token) return false;
   try {
-    const payload = verifyToken(token);
+    const payload = await verifyDashboardToken(token);
     if (await isConfiguredPlatformAdmin(payload)) return true;
     if (!tenant || !payload.userId) return false;
     const row = (await db.query(

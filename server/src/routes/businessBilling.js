@@ -1,5 +1,5 @@
 const express = require('express');
-const { verifyToken } = require('../auth');
+const { verifyDashboardToken } = require('../dashboardSessions');
 const db = require('../db');
 const { BUSINESS_PLANS } = require('../pricing');
 const { isConfiguredPlatformAdmin } = require('../middleware/requireAuth');
@@ -25,11 +25,12 @@ function safeOrigin(req) {
 // authenticates tenant membership but deliberately does not enforce product
 // access/trial state.
 async function requireBillingAccess(req, res, next) {
+  res.setHeader('Cache-Control', 'no-store');
   try {
     const header = req.headers.authorization || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : null;
     if (!token) return res.status(401).json({ error: 'Missing bearer token' });
-    const payload = verifyToken(token);
+    const payload = await verifyDashboardToken(token);
     const tenantResult = await db.query('SELECT * FROM tenants WHERE slug=$1', [req.params.slug]);
     const tenant = tenantResult.rows[0];
     if (!tenant) return res.status(404).json({ error: 'Tenant not found' });

@@ -23,8 +23,9 @@ class Stripe{
 const auth={hashPassword:async()=>'$fixture-only$',signToken:p=>JSON.stringify(p),verifyToken:t=>JSON.parse(t)};
 function load(file,deps){const mod={exports:{}};vm.runInNewContext(fs.readFileSync(path.join(root,file),'utf8'),{module:mod,exports:mod.exports,require:id=>{if(!(id in deps))throw Error('Unexpected dependency '+id);return deps[id];},process:{env},console,Buffer,Date,URL,setTimeout},{filename:file});return mod.exports;}
 const ready=load('server/src/businessPaymentReadiness.js',{'./pricing':pricing});
-const signup=load('server/src/routes/businessSignup.js',{express,'../db':db,'../auth':auth,crypto:require('crypto')});
-const billing=load('server/src/routes/businessBilling.js',{express,'../db':db,'../auth':auth,'../pricing':pricing,'../middleware/requireAuth':{isConfiguredPlatformAdmin:async()=>false},'../businessPaymentReadiness':ready,stripe:Stripe});
+const dashboardSessions=load('server/src/dashboardSessions.js',{crypto:require('crypto'),'./db':db,'./auth':auth});
+const signup=load('server/src/routes/businessSignup.js',{express,'../db':db,'../auth':auth,'../dashboardSessions':dashboardSessions,crypto:require('crypto')});
+const billing=load('server/src/routes/businessBilling.js',{express,'../db':db,'../auth':auth,'../dashboardSessions':dashboardSessions,'../pricing':pricing,'../middleware/requireAuth':{isConfiguredPlatformAdmin:async()=>false},'../businessPaymentReadiness':ready,stripe:Stripe});
 const webhook=load('server/src/routes/stripeWebhook.js',{express,'../db':db,'../eventPass':{fulfillEventPass:()=>{},PASS_KINDS:['consumer_event_pass']},'../orderProviders/quoteRequestOrderProvider':{},stripe:Stripe});
 const app=express();app.use('/webhook',express.raw({type:'application/json'}),webhook);app.use(express.json());app.use('/business',signup,billing);
 let server,base;
@@ -36,6 +37,7 @@ CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text);
 CREATE TABLE subscriptions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,plan_id text,provider_customer_id text,provider_subscription_id text,status text,billing_interval text,current_period_start timestamptz,current_period_end timestamptz,cancel_at_period_end boolean,created_at timestamptz DEFAULT now());
 CREATE UNIQUE INDEX subscriptions_provider_subscription_idx ON subscriptions(provider_subscription_id) WHERE provider_subscription_id IS NOT NULL;
 CREATE TABLE processed_stripe_events(id text PRIMARY KEY,event_type text);`);
+await pg.exec(fs.readFileSync(path.join(root,'server/migrations/020_dashboard_sessions.sql'),'utf8'));
 server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 const input={businessName:'Launch Fixture',contactEmail:'launch@example.invalid',password:'fixture-password',plan:'starter'};
 assert.equal((await req('/business/signup',{...input,contactEmail:'not-email'})).status,400);
@@ -44,6 +46,7 @@ assert.equal((await req('/business/signup',{...input,plan:'enterprise'})).status
 failMembership=true;assert.equal((await req('/business/signup',input)).status,500);
 assert.equal((await pg.query('SELECT * FROM users')).rows.length,0,'failed signup rolls back user');
 assert.equal((await pg.query('SELECT * FROM tenants')).rows.length,0,'failed signup rolls back tenant');
+assert.equal((await pg.query('SELECT * FROM dashboard_sessions')).rows.length,0,'failed signup creates no session');
 const owner=await req('/business/signup',input);assert.equal(owner.status,201);assert.equal(owner.body.tenant.subscriptionStatus,'trialing');
 const tenant=(await pg.query('SELECT * FROM tenants')).rows[0];assert.equal(tenant.customer_access,'free');
 assert.equal((await req('/business/signup',input)).status,409);

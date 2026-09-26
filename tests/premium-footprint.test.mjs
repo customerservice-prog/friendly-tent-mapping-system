@@ -55,7 +55,7 @@ test('photo rotation preserves the original local dimensions of a legacy accesso
   // normalized world transform; only the independent angle is applied here.
   const expected={x:23.5,y:16.5,width:3,depth:10};
   closeRect(bounds(walkBlockingObstacles({items:[item]})[0].polygon),expected);
-  const result=evaluatePropertyScene({backgroundPhoto:'photo',photoSite:site,tent:{...site,isSite:true},objects:[item],photoGeometry:[]});
+  const result=evaluatePropertyScene({backgroundPhoto:'photo',photoSite:site,tent:{...site,isSite:true},objects:[item],photoCalibration:{autoEstimated:false},photoGeometry:[{id:'boundary',type:'fence',x:0,y:49,widthFt:50,depthFt:.1}]});
   closeRect(bounds(result.rentals[0].result.footprint),expected);
   const check=(x,y)=>walkPositionBlocked({worldX:x-25,worldZ:y-25,site,items:[item],bodyRadiusFt:0}).blocked;
   assert.equal(check(25,17),true);

@@ -1,15 +1,15 @@
+const { clientIp } = require('../clientIp');
 const crypto=require('crypto');
 const express=require('express');
 const db=require('../db');
 const {getMailer}=require('../mailer');
-const {validateWebhookUrl}=require('../outboundWebhook');
+const {validateWebhookUrl,postWebhook}=require('../outboundWebhook');
 const router=express.Router();
 const buckets=new Map();
 const VALID_TYPES=new Set(['general','problem','idea']);
 function limited(key){const now=Date.now(),windowMs=60*60*1000,max=8;let b=buckets.get(key);if(!b||now-b.start>windowMs)b={start:now,count:0};b.count++;buckets.set(key,b);return b.count>max;}
 function text(v,max){return typeof v==='string'?v.trim().slice(0,max):'';}
-function clientIp(req){return(req.headers['x-forwarded-for']||req.socket.remoteAddress||'').toString().split(',')[0].trim();}
-async function webhook(tenant,data){if(!tenant.webhook_url)return{attempted:false,sent:false};const checked=validateWebhookUrl(tenant.webhook_url);if(!checked.ok){console.error('[feedback-webhook] blocked unsafe destination for tenant',tenant.slug,checked.error);return{attempted:true,sent:false};}try{const payload={id:crypto.randomUUID(),type:'feedback.created',createdAt:new Date().toISOString(),data},body=JSON.stringify(payload),signature=tenant.webhook_secret?crypto.createHmac('sha256',tenant.webhook_secret).update(body).digest('hex'):'';const r=await fetch(checked.url,{method:'POST',headers:{'Content-Type':'application/json','X-RentSketch-Signature':signature},body,redirect:'error'});if(!r.ok)throw new Error(`HTTP ${r.status}: ${(await r.text().catch(()=>'' )).slice(0,300)}`);return{attempted:true,sent:true};}catch(err){console.error('[feedback-webhook] failed for tenant',tenant.slug,err.message);return{attempted:true,sent:false};}}
+async function webhook(tenant,data){if(!tenant.webhook_url)return{attempted:false,sent:false};const checked=validateWebhookUrl(tenant.webhook_url);if(!checked.ok){console.error('[feedback-webhook] blocked unsafe destination for tenant',tenant.slug,checked.error);return{attempted:true,sent:false};}try{const payload={id:crypto.randomUUID(),type:'feedback.created',createdAt:new Date().toISOString(),data},body=JSON.stringify(payload),signature=tenant.webhook_secret?crypto.createHmac('sha256',tenant.webhook_secret).update(body).digest('hex'):'';const r=await postWebhook(checked.url,{headers:{'Content-Type':'application/json','X-RentSketch-Signature':signature},body});if(!r.ok)throw new Error(`HTTP ${r.status}: ${(await r.text().catch(()=>'' )).slice(0,300)}`);return{attempted:true,sent:true};}catch(err){console.error('[feedback-webhook] failed for tenant',tenant.slug,err.message);return{attempted:true,sent:false};}}
 async function emailNotify(tenant,data){const mailer=getMailer(),notify=process.env.FEEDBACK_NOTIFY_EMAIL||process.env.PLATFORM_ADMIN_EMAIL||tenant.contact_email;if(!mailer||!notify)return{attempted:false,sent:false};try{const result=await mailer.send(notify,`RentSketch feedback — ${tenant.name}`,`Type: ${data.feedbackType}\nTenant: ${tenant.name} (${tenant.slug})\nEmail: ${data.customerEmail||'not provided'}\nEntry: ${data.entryMode||'unknown'}\nProduct: ${data.productId||'none'}\nView: ${data.viewMode||'unknown'}\nPage: ${data.pageUrl||'unknown'}\n\n${data.message}`);if(result&&result.error)throw new Error(result.error.message||String(result.error));return{attempted:true,sent:true};}catch(err){console.error('[feedback-mail] failed:',err.message);return{attempted:true,sent:false};}}
 router.post('/:slug/feedback',async(req,res)=>{
   const tenant=(await db.query('SELECT id,slug,name,contact_email,webhook_url,webhook_secret FROM tenants WHERE slug=$1',[req.params.slug])).rows[0];
