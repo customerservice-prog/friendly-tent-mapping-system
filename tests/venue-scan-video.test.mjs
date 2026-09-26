@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { venueScanFrameTimes, venueScanBurstTimes, normalizeVenueScan } from '../js/ui/venue-photo.js';
+import { spaceScanQualityProfile } from '../js/ui/venue-scan3d.js';
 
 test('Space Scan video samples three interior viewpoints instead of first/last frames',()=>{
   const times=venueScanFrameTimes(10);
@@ -49,4 +50,20 @@ test('normalized scans preserve seven support samples for multi-view fusion',()=
   assert.equal(scan.frames.length,3);
   assert.equal(scan.status,'ready');
   assert.equal(scan.samples[3].offsetFactor,0);
+});
+
+
+test('Space Scan detail adapts upward on stronger desktop hardware while protecting mobile',()=>{
+  const mobile=spaceScanQualityProfile({mobile:true,deviceMemory:8,hardwareConcurrency:8});
+  const balanced=spaceScanQualityProfile({mobile:false,deviceMemory:4,hardwareConcurrency:4});
+  const high=spaceScanQualityProfile({mobile:false,deviceMemory:8,hardwareConcurrency:8});
+  const ultra=spaceScanQualityProfile({mobile:false,deviceMemory:16,hardwareConcurrency:12});
+  assert.equal(mobile.tier,'mobile');
+  assert.equal(balanced.tier,'balanced');
+  assert.equal(high.tier,'high');
+  assert.equal(ultra.tier,'ultra');
+  assert.ok(high.width>balanced.width);
+  assert.ok(ultra.width>=high.width);
+  assert.ok(mobile.width<high.width);
+  assert.ok(ultra.voxelFt<balanced.voxelFt,'higher quality keeps denser fused spatial samples');
 });
