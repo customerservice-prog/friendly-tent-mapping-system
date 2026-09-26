@@ -4,6 +4,12 @@ const esc=v=>String(v==null?'':v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;'
 
 const ICONS={
   'foam-machine':'<path d="M5 13h8v6H5zM7 10h4v3H7zM13 14l6-3v8l-6-3z"/><circle cx="20" cy="7" r="2"/><circle cx="17" cy="5" r="1.2"/><circle cx="21" cy="3" r="1"/>',
+  'bubble-machine':'<rect x="4" y="12" width="10" height="7" rx="2"/><circle cx="17" cy="8" r="2"/><circle cx="20" cy="4" r="1.4"/><circle cx="14" cy="4" r="1"/>',
+  'fog-machine':'<rect x="4" y="12" width="10" height="7" rx="2"/><path d="M14 14c3-3 5 2 8-1M15 10c2-2 4 1 7-1M14 18c3-2 5 1 8 0"/>',
+  'confetti-machine':'<rect x="4" y="13" width="10" height="6" rx="2"/><path d="M14 14l7-4M17 8l1-3M20 9l3-1M15 8l-2-2M21 13l2 2"/>',
+  heater:'<path d="M12 21V9M7 21h10M6 8h12l-2-4H8z"/><path d="M10 11c-1 2 0 3 2 4 2-1 3-2 2-4"/>',
+  screen:'<rect x="3" y="4" width="18" height="12" rx="1"/><path d="M12 16v5M8 21h8"/>',
+  karaoke:'<rect x="5" y="4" width="14" height="11" rx="2"/><circle cx="12" cy="9" r="2"/><path d="M8 19h8M12 15v4"/>',
   'photo-booth':'<rect x="5" y="3" width="14" height="18" rx="2"/><circle cx="12" cy="9" r="3"/><path d="M8 17h8M12 14v5"/>',
   speaker:'<rect x="6" y="3" width="12" height="18" rx="2"/><circle cx="12" cy="9" r="3"/><circle cx="12" cy="16" r="2"/>',
   generator:'<rect x="4" y="7" width="16" height="11" rx="2"/><circle cx="7" cy="19" r="2"/><circle cx="17" cy="19" r="2"/><path d="M8 7V4h8v3M9 11h6"/>',
