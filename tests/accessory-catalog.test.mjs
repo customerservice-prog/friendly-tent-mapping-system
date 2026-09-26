@@ -5,6 +5,12 @@ import { summarizeEvent } from '../js/core/eventSummary.js';
 
 const products=[
   {id:'foam1',category:'other',name:'Foam Machine',price_per_day:'175.00',photo_url:'https://example.test/foam.jpg',active:true},
+  {id:'bubble1',category:'other',name:'Bubble Machine',price_per_day:'95.00',active:true},
+  {id:'fog1',category:'other',name:'Fog Machine',price_per_day:'85.00',active:true},
+  {id:'cornhole1',category:'games',name:'Cornhole',price_per_day:'45.00',active:true},
+  {id:'cooler1',category:'other',name:'120 qt Cooler',price_per_day:'30.00',active:true},
+  {id:'heater1',category:'other',name:'Patio Heater',price_per_day:'80.00',active:true},
+  {id:'screen1',category:'other',name:'Projection Screen',price_per_day:'120.00',active:true},
   {id:'speaker1',category:'other',name:'550W Bluetooth Speaker',price_per_day:'75.00',active:true},
   {id:'stage1',category:'dance_floor',name:'Stage Section',price_per_day:'125.00',active:true},
   {id:'bounce1',category:'other',name:'Crayon Bounce House',price_per_day:'199.00',active:true},
@@ -53,4 +59,23 @@ test('placed accessory rentals appear in event summary and pricing',()=>{
   assert.equal(speakerLine.qty,1);
   assert.equal(speakerLine.amount,75);
   assert.equal(summary.total,425);
+});
+
+
+test('interactive accessory families map to animated 3D types',()=>{
+  const items=accessoryCatalog(products,true);
+  const expected=new Map([
+    ['Bubble Machine','bubble-machine'],
+    ['Fog Machine','fog-machine'],
+    ['Cornhole','cornhole'],
+    ['120 qt Cooler','cooler'],
+    ['Patio Heater','heater'],
+    ['Projection Screen','screen'],
+  ]);
+  for(const [name,type] of expected){
+    const item=items.find(x=>x.name===name);
+    assert.ok(item,name+' should be placeable');
+    assert.equal(item.accessoryType,type);
+    assert.equal(item.animated,true,name+' should advertise animated 3D');
+  }
 });
