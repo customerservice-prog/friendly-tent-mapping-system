@@ -456,7 +456,7 @@ export function fuseMultiReferenceSurfels({
         fovDeg,horizonY,eyeHeightFt,step,maxDisparity,patchRadius,verticalSearch,minConfidence,maxDepthFt,minDepthFt
       });
     }
-    const rm=result.metrics||{},coverage=clamp(finite(rm.validRatio,0),0,1),confidenceScore=clamp(finite(rm.averageConfidence,0),0,1),agreement=rm.multiViewAgreement==null?.45:clamp(finite(rm.multiViewAgreement,0),0,1);
+    const rm=result.metrics||{},coverage=clamp(finite(rm.validRatio,0),0,1),confidenceScore=clamp(finite(rm.averageConfidence,0),0,1),agreement=rm.multiViewAgreement==null ? .45 : clamp(finite(rm.multiViewAgreement,0),0,1);
     const geometryScore=clamp((coverage/.36)*.38+(confidenceScore/.22)*.34+(agreement/.50)*.28,0,1);
     const extremeRollPenalty=Math.abs(ref.rollRad)>8*Math.PI/180?.72:1;
     const referenceScore=clamp(geometryScore*extremeRollPenalty,0,1);
