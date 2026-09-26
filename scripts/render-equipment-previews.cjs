@@ -20,7 +20,9 @@ global.document=dom.window.document;
  const sections=Array.from({length:4},(_,i)=>({id:'d'+i,x:(i%2)*3,y:Math.floor(i/2)*3,widthFt:3,depthFt:3}));
  objects.push(['dance-floor',equipment.namespace.makeDanceFloor(sections,{widthFt:6,lengthFt:6})]);
  for(const id of ['lighting-bistro','lighting-chandelier','lighting-uplight-single'])objects.push([id,view.namespace.makeLighting({type:'frame',widthFt:8,lengthFt:8},id)]);
+ const selected=process.env.RENTSKETCH_PREVIEW_IDS?.split(',').filter(Boolean);
  for(const [id,object] of objects){
+  if(selected&&!selected.includes(id))continue;
   object.updateMatrixWorld(true);
   const bounds=new THREE.Box3().setFromObject(object),center=bounds.getCenter(new THREE.Vector3()),size=bounds.getSize(new THREE.Vector3()),radius=size.length();
   const camera=new THREE.OrthographicCamera(-1,1,1,-1,.01,Math.max(100,radius*10));camera.position.copy(center).add(new THREE.Vector3(1.1,.8,1.4).multiplyScalar(radius));camera.lookAt(center);camera.updateMatrixWorld(true);

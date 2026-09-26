@@ -25,6 +25,7 @@ jobs:
       - run: NODE_PATH=/tmp/mobile-qa/node_modules RENTSKETCH_QA_OUT=qa-photo-composition node tests/photo-composition-browser.cjs
       - run: NODE_PATH=/tmp/mobile-qa/node_modules RENTSKETCH_QA_OUT=qa-photo-controls node tests/photo-controls-browser.cjs
       - run: NODE_PATH=/tmp/mobile-qa/node_modules RENTSKETCH_QA_OUT=qa-inventory-media node tests/inventory-media-browser.cjs
+      - run: NODE_PATH=/tmp/mobile-qa/node_modules RENTSKETCH_QA_OUT=qa-furniture-catalog node tests/furniture-catalog-browser.cjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -37,3 +38,4 @@ jobs:
             qa-photo-composition/
             qa-photo-controls/
             qa-inventory-media/
+            qa-furniture-catalog/

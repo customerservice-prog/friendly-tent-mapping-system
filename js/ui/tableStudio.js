@@ -2,7 +2,7 @@
 // until the customer chooses to place them in the event.
 import { escapeHtml as esc, tableVisual, tableControls, renderEquipmentContent, chairVisual } from './equipment-controls.js';
 import { TABLETOP, TABLETOP_GROUPS, tabletopQuantity } from '../data/tabletop.js';
-import { LINEN_COLORS, linenColorHex } from '../data/linens.js';
+import { LINEN_COLORS, linenColorHex, linenFitsTable } from '../data/linens.js';
 import { summarizeEvent } from '../core/eventSummary.js';
 let dialog=null,activeId=null,storeRef=null,options=null,unsubscribe=null,previousOverflow='',view=null,mode='3d',loadToken=0,loadTimer=null,category='Place settings',search='';
 const money=n=>'$'+Number(n).toFixed(2),item=()=>storeRef?.getState().objects.find(o=>o.id===activeId&&o.kind==='table'),find=(list,id)=>(list||[]).find(o=>o.id===id);
@@ -39,7 +39,7 @@ function render(){
  const current=item(),table=current&&find(options.tables,current.tableId);if(!current||!table){close();return;}
  dialog.querySelector('.ts-message').textContent='';
  const chair=find(options.chairs,current.chairId),linen=find(options.linens,current.linenId),matching=storeRef.getState().objects.filter(o=>o.kind==='table'&&o.tableId===current.tableId).length;
- const linens=options.linens.filter(l=>l.fitsTableIds?.includes(current.tableId)&&!['linen-napkins','linen-runner-9ft'].includes(l.id));
+ const linens=options.linens.filter(l=>linenFitsTable(l,current)&&!['linen-napkins','linen-runner-9ft'].includes(l.id));
  const summary=summarizeEvent({objects:[current]},options,{includeTent:false});
  dialog.querySelector('#tableStudioTitle').textContent=table.name;
  dialog.querySelector('.ts-model-note').textContent=TABLETOP.some(p=>p.isIllustrative)?'Sample styles for planning. Open RentSketch from your rental company’s website for its products, photos and pricing.':'Style preview. Product photos show your rental items; confirm dimensions and colors with your rental company.';

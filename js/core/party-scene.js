@@ -1,3 +1,4 @@
+import { linenFitsTable } from '../data/linens.js';
 import { chairPositions } from './seating.js';
 import { tablePositions, dancePositions } from './suggested-layout.js';
 
@@ -9,8 +10,8 @@ export function partyLayout(tent,{tables=[],chairs=[],linens=[],danceAvailable=f
   if(!dining||!chair)return [];
   let next=0;const objects=[];
   if(danceAvailable)objects.push(...dancePositions(tent,6).map(p=>({id:'party-'+(++next),kind:'dance',widthFt:3,depthFt:3,...p})));
-  const linenFor=t=>linens.find(l=>l.active!==false&&l.fitsTableIds?.includes(t.id)&&!['linen-napkins','linen-runner-9ft'].includes(l.id));
-  const add=(t,p,seats)=>objects.push({id:'party-'+(++next),kind:'table',tableId:t.id,shape:t.shape,widthFt:t.diameterFt||t.widthFt,depthFt:t.diameterFt||t.depthFt,...p,seatCount:seats,chairId:chair.id,linenId:linenFor(t)?.id||null,linenColor:'White'});
+  const linenFor=t=>linens.find(l=>l.active!==false&&linenFitsTable(l,t)&&!['linen-napkins','linen-runner-9ft'].includes(l.id));
+  const add=(t,p,seats)=>objects.push({id:'party-'+(++next),kind:'table',tableId:t.id,shape:t.shape,widthFt:t.diameterFt||t.widthFt,depthFt:t.diameterFt||t.depthFt,...(t.shape==='half-round'?{modelWidthFt:t.widthFt,modelDepthFt:t.depthFt,footprintOriented:true,rotationDeg:0,seatingLayout:t.seatingLayout||'sweetheart'}:{}),...p,seatCount:seats,chairId:chair.id,linenId:linenFor(t)?.id||null,linenColor:'White'});
   let positions=tablePositions(tent,dining,chair,objects);
   // Small canopies need seating before a dance floor; never return an empty
   // party starter just because the optional floor consumed the usable space.

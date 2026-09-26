@@ -12,7 +12,7 @@ export function defaultPhotoCalibration(tent,photo={}){
   // extend beyond the photo; squeezing its entire width into the image creates
   // an implausible high camera and makes a real-size tent look miniature.
   const w=Math.max(1,Number(tent?.widthFt)||50),l=Math.max(1,Number(tent?.lengthFt)||60);
-  const imageAspect=clamp(Number(photo.widthPx)/Number(photo.heightPx),.3,4,4/3);
+  const imageAspect=clamp(Number(photo?.widthPx)/Number(photo?.heightPx),.3,4,4/3);
   const fovDeg=60,horizonY=.46,cameraHeightFt=5.5,frontDistance=Math.max(6,Math.min(12,w*.16));
   const fy=1/(2*Math.tan(fovDeg*Math.PI/360)),fx=fy/imageAspect,pitch=Math.atan((.5-horizonY)/fy),cp=Math.cos(pitch),sp=Math.sin(pitch);
   const lengthFt=Math.min(20,l*.7),referenceY=(l-lengthFt)/2,visibleWidth=.8*(cp*(referenceY+frontDistance)+sp*cameraHeightFt)/fx;
@@ -26,7 +26,7 @@ export function defaultPhotoCalibration(tent,photo={}){
 }
 export function normalizePhotoCalibration(value,tent,photo={}){
   value=value&&typeof value==='object'&&!Array.isArray(value)?value:{};
-  const aspect=Number(photo.widthPx)/Number(photo.heightPx);
+  const aspect=Number(photo?.widthPx)/Number(photo?.heightPx);
   const d=defaultPhotoCalibration(tent,{widthPx:Number.isFinite(aspect)&&aspect>0?aspect:value.imageAspect||4/3,heightPx:1});
   // Only migrate untouched automatic legacy guesses. Preserve customer marks.
   if((Number(value.version)||1)<2&&value.autoEstimated!==false)return d;
