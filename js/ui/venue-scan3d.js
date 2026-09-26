@@ -1,4 +1,5 @@
 import { assessCaptureFrames } from '../core/capture-quality.js';
+import { estimateTrackedCameraPath } from '../core/scan-motion.js';
 import * as THREE from 'three';
 import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
 
@@ -61,7 +62,7 @@ export async function createVenueScanWorld({
   const frames=normalizedFrames(scan),samples=normalizedSamples(scan);
   if(signal?.aborted)throw new DOMException('Aborted','AbortError');
   const requestedBaselineFt=Math.max(1,Math.min(30,Number(scan.baselineFt)||6)),baselineFactor=Math.max(.4,Math.min(1.05,Number(scan.baselineFactor)||1)),baselineFt=requestedBaselineFt*baselineFactor;
-  let centerImage,centerData,result,fusion=null,multiImages=null,multiSamples=null,multiCenterIndex=-1,reconstructionMode='stereo-3',sourceFrameIds=[],captureQuality=null;
+  let centerImage,centerData,result,fusion=null,multiImages=null,multiSamples=null,multiCenterIndex=-1,reconstructionMode='stereo-3',sourceFrameIds=[],captureQuality=null,trackedPath=null;
   if(samples.length>=5){
     const images=await Promise.all(samples.map(sample=>loadImage(sample.url)));multiImages=images;multiSamples=samples;
     if(signal?.aborted)throw new DOMException('Aborted','AbortError');
@@ -72,10 +73,14 @@ export async function createVenueScanWorld({
     const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
     const working=images.map(image=>imageData(image,width,height));
     captureQuality=assessCaptureFrames(working);if(!captureQuality.usable){group.userData={ready:false,error:'capture-quality',quality:captureQuality,setNight(){}};return group;}
+    trackedPath=estimateTrackedCameraPath(working,{centerIndex});
+    if(trackedPath.usable&&trackedPath.offsetFactors.length===samples.length){
+      multiSamples=samples.map((sample,i)=>({...sample,offsetFactor:trackedPath.offsetFactors[i],timedOffsetFactor:sample.offsetFactor}));
+    }else multiSamples=samples;
     centerData=working[centerIndex];const center=centerData,views=[];
     for(let i=0;i<working.length;i++){
       if(i===centerIndex)continue;
-      views.push({image:working[i],offsetFt:samples[i].offsetFactor*baselineFt});
+      views.push({image:working[i],offsetFt:multiSamples[i].offsetFactor*baselineFt});
     }
     result=reconstructMultiViewGrid({
       center,views,
@@ -89,7 +94,7 @@ export async function createVenueScanWorld({
       maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
     });
     fusion=fuseMultiReferenceSurfels({
-      captures:working.map((image,i)=>({image,offsetFt:samples[i].offsetFactor*baselineFt})),
+      captures:working.map((image,i)=>({image,offsetFt:multiSamples[i].offsetFactor*baselineFt})),
       primaryIndex:centerIndex,
       primaryResult:result,
       referenceIndices:[centerIndex-2,centerIndex,centerIndex+2],
@@ -104,7 +109,7 @@ export async function createVenueScanWorld({
       maxDepthFt:Math.max(70,Math.min(180,(Number(site.lengthFt)||60)*1.8)),
       voxelFt:mobile?.56:.42
     });
-    reconstructionMode='multireference-'+samples.length;
+    reconstructionMode=(trackedPath?.usable?'feature-tracked-':'timed-')+'multireference-'+samples.length;
     sourceFrameIds=samples.map(s=>s.id).filter(Boolean);
   }else{
     const [leftImage,centerLoaded,rightImage]=await Promise.all([
@@ -241,7 +246,7 @@ export async function createVenueScanWorld({
     ready:true,
     metric:false,
     accuracy:'unverified',
-    provenance:{geometry:'estimated stereo depth',scale:'user-entered baseline',cameraPoses:'assumed',unseenAreas:'not reconstructed'},
+    provenance:{geometry:'estimated stereo depth',scale:'user-entered baseline',cameraPoses:trackedPath?.usable?'feature-tracked relative path':'assumed',unseenAreas:'not reconstructed'},
     baselineFt,
     requestedBaselineFt,
     baselineFactor,
@@ -250,7 +255,7 @@ export async function createVenueScanWorld({
     knownBounds:worldBounds,
     obstacles,
     quality:captureQuality,
-    metrics:{...summary,captureQualityScore:captureQuality?.score??null,captureQualityRating:captureQuality?.rating||null,autoObstacleCount:obstacles.length,referenceCount:fusion?.metrics?.referenceCount||1,fusedSurfels:fusion?.surfelCount||0,multiReferenceAgreementPct:fusion?Math.round((fusion.metrics.multiReferenceAgreement||0)*100):null,fusedConfidencePct:fusion?Math.round((fusion.metrics.averageConfidence||0)*100):null},
+    metrics:{...summary,captureQualityScore:captureQuality?.score??null,captureQualityRating:captureQuality?.rating||null,trackedCameraPath:!!trackedPath?.usable,trackedMotionQuality:trackedPath?.meanQuality??null,trackedMotionConsistency:trackedPath?.consistency??null,trackedFeatureCount:trackedPath?.totalTracks??0,autoObstacleCount:obstacles.length,referenceCount:fusion?.metrics?.referenceCount||1,fusedSurfels:fusion?.surfelCount||0,multiReferenceAgreementPct:fusion?Math.round((fusion.metrics.multiReferenceAgreement||0)*100):null,fusedConfidencePct:fusion?Math.round((fusion.metrics.averageConfidence||0)*100):null},
     sourceFrames:sourceFrameIds,
     reconstructionMode,
     referenceViewCount:referenceMeshes.length,
