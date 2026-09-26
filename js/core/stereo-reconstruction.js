@@ -69,13 +69,40 @@ function patchScore(a,b,w,h,ax,ay,bx,by,r){
   }
   return err/Math.max(1,energy);
 }
-function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,verticalSearch}){
+function estimateFarFieldRegistration(center,target,w,h,{maxShiftX=12,maxShiftY=5,patchRadius=2}={}){
+  // Handheld scans rarely keep identical yaw/pitch. Estimate a coarse far-field
+  // image registration first so camera drift is not interpreted as parallax.
+  // Samples come from the upper/middle image where distant structures usually
+  // live; a small zero-shift regularizer avoids subtracting genuine parallax.
+  const points=[];
+  const y0=Math.max(patchRadius+2,Math.round(h*.12)),y1=Math.min(h-patchRadius-2,Math.round(h*.64));
+  const x0=Math.max(patchRadius+maxShiftX+2,Math.round(w*.12)),x1=Math.min(w-patchRadius-maxShiftX-2,Math.round(w*.88));
+  const step=Math.max(8,Math.round(Math.min(w,h)/11));
+  for(let y=y0;y<=y1;y+=step)for(let x=x0;x<=x1;x+=step){
+    if(localContrast(center,w,h,x,y,patchRadius+1)>=8)points.push([x,y]);
+  }
+  if(points.length<6)return {x:0,y:0,score:Infinity,samples:points.length};
+  let best={x:0,y:0,score:Infinity,samples:points.length};
+  for(let dy=-maxShiftY;dy<=maxShiftY;dy++)for(let dx=-maxShiftX;dx<=maxShiftX;dx++){
+    const scores=[];
+    for(const [x,y] of points){
+      const score=patchScore(center,target,w,h,x,y,x+dx,y+dy,patchRadius);
+      if(Number.isFinite(score))scores.push(score);
+    }
+    if(scores.length<Math.max(5,points.length*.55))continue;
+    const raw=percentile(scores,.5);
+    const regularized=raw+Math.abs(dx)*.0025+Math.abs(dy)*.008;
+    if(regularized<best.score)best={x:dx,y:dy,score:regularized,rawScore:raw,samples:scores.length};
+  }
+  return best;
+}
+function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,verticalSearch,registrationX=0,registrationY=0}){
   let best={score:Infinity,d:0,dy:0},second=Infinity;
   for(let d=1;d<=maxDisparity;d++){
-    const tx=x+direction*d;
+    const tx=x+registrationX+direction*d;
     if(tx-patchRadius<0||tx+patchRadius>=w)continue;
     for(let dy=-verticalSearch;dy<=verticalSearch;dy++){
-      const ty=y+dy;
+      const ty=y+registrationY+dy;
       if(ty-patchRadius<0||ty+patchRadius>=h)continue;
       const score=patchScore(center,target,w,h,x,y,tx,ty,patchRadius);
       if(score<best.score){second=best.score;best={score,d,dy};}
@@ -132,6 +159,9 @@ export function reconstructStereoGrid({
   step=Math.max(2,Math.min(10,Math.round(finite(step,4))));
   maxDisparity=Math.max(4,Math.min(Math.floor(w*.24),Math.round(finite(maxDisparity,28))));
   const centerGray=gray(center),leftGray=gray(left),rightGray=gray(right);
+  const registrationLimit=Math.max(4,Math.min(14,Math.round(w*.08)));
+  const leftRegistration=estimateFarFieldRegistration(centerGray,leftGray,w,h,{maxShiftX:registrationLimit,maxShiftY:Math.max(2,verticalSearch+2),patchRadius});
+  const rightRegistration=estimateFarFieldRegistration(centerGray,rightGray,w,h,{maxShiftX:registrationLimit,maxShiftY:Math.max(2,verticalSearch+2),patchRadius});
   const focalPx=w/(2*Math.tan(fovDeg*Math.PI/360));
   const halfBaseline=baselineFt/2;
   const margin=maxDisparity+patchRadius+2;
@@ -153,8 +183,8 @@ export function reconstructStereoGrid({
       if(contrast<minContrast)continue;
       // Same-facing lateral capture: content shifts right in the left image and
       // left in the right image relative to the center frame.
-      const lm=bestMatch(centerGray,leftGray,w,h,x,y,{direction:1,maxDisparity,patchRadius,verticalSearch});
-      const rm=bestMatch(centerGray,rightGray,w,h,x,y,{direction:-1,maxDisparity,patchRadius,verticalSearch});
+      const lm=bestMatch(centerGray,leftGray,w,h,x,y,{direction:1,maxDisparity,patchRadius,verticalSearch,registrationX:leftRegistration.x,registrationY:leftRegistration.y});
+      const rm=bestMatch(centerGray,rightGray,w,h,x,y,{direction:-1,maxDisparity,patchRadius,verticalSearch,registrationX:rightRegistration.x,registrationY:rightRegistration.y});
       const match=chooseDisparity(lm,rm);
       if(!match||match.confidence<minConfidence)continue;
       const depth=clamp(focalPx*halfBaseline/Math.max(.5,match.d),minDepthFt,maxDepthFt);
@@ -207,7 +237,7 @@ export function reconstructStereoGrid({
     width:w,height:h,cols,rows,xSamples:xs,ySamples:ys,
     positions,uvs,colors,depths,confidence,valid,indices:new Uint32Array(indices),
     focalPx,baselineFt,fovDeg,horizonY,eyeHeightFt,
-    metrics:{validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,triangleCount:indices.length/3,quality}
+    metrics:{validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,triangleCount:indices.length/3,quality,cameraRegistration:{left:leftRegistration,right:rightRegistration}}
   };
 }
 
@@ -243,7 +273,12 @@ export function reconstructMultiViewGrid({
   horizonY=clamp(finite(horizonY,.34),.08,.85);
   step=Math.max(2,Math.min(10,Math.round(finite(step,4))));
   maxDisparity=Math.max(4,Math.min(Math.floor(w*.28),Math.round(finite(maxDisparity,30))));
-  const centerGray=gray(center),targets=usable.map(v=>({...v,gray:gray(v.image)}));
+  const centerGray=gray(center),registrationLimit=Math.max(4,Math.min(14,Math.round(w*.08)));
+  const targets=usable.map(v=>{
+    const targetGray=gray(v.image);
+    const registration=estimateFarFieldRegistration(centerGray,targetGray,w,h,{maxShiftX:registrationLimit,maxShiftY:Math.max(3,verticalSearch+2),patchRadius});
+    return {...v,gray:targetGray,registration};
+  });
   const focalPx=w/(2*Math.tan(fovDeg*Math.PI/360)),maxOffset=Math.max(...targets.map(v=>Math.abs(v.offsetFt)),.2);
   const margin=maxDisparity+patchRadius+2,xs=[],ys=[];
   for(let x=margin;x<w-margin;x+=step)xs.push(x);
@@ -284,7 +319,7 @@ export function reconstructMultiViewGrid({
       for(const target of targets){
         const absOffset=Math.abs(target.offsetFt),direction=target.offsetFt<0?1:-1;
         const scaledMax=Math.max(4,Math.min(maxDisparity,Math.round(maxDisparity*(.40+.60*absOffset/maxOffset))));
-        const match=bestMatch(centerGray,target.gray,w,h,x,y,{direction,maxDisparity:scaledMax,patchRadius,verticalSearch});
+        const match=bestMatch(centerGray,target.gray,w,h,x,y,{direction,maxDisparity:scaledMax,patchRadius,verticalSearch,registrationX:target.registration.x,registrationY:target.registration.y});
         if(!match||match.d<=0||match.confidence<minConfidence)continue;
         const depth=clamp(focalPx*absOffset/Math.max(.5,match.d),minDepthFt,maxDepthFt);
         const baselineWeight=.55+.45*Math.sqrt(absOffset/maxOffset);
@@ -344,7 +379,8 @@ export function reconstructMultiViewGrid({
     metrics:{
       validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,
       triangleCount:indices.length/3,quality,viewCount:targets.length+1,
-      averageViewsPerPoint:avgViews,multiViewAgreement:strongMultiView
+      averageViewsPerPoint:avgViews,multiViewAgreement:strongMultiView,
+      cameraRegistrations:targets.map(t=>({offsetFt:t.offsetFt,x:t.registration.x,y:t.registration.y,score:Number.isFinite(t.registration.rawScore)?t.registration.rawScore:null}))
     }
   };
 }
