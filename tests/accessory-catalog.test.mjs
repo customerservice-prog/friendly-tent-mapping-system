@@ -33,6 +33,7 @@ test('live accessory catalog includes missing rental families and excludes dupli
   assert.equal(foam.animated,true);
   assert.equal(foam.pricePerDay,175);
   assert.ok(foam.widthFt>0&&foam.depthFt>0&&foam.heightFt>0);
+  assert.equal(foam.dimensionsConfirmed,false,'fallback accessory footprint is explicitly illustrative');
 });
 
 test('placed accessory rentals appear in event summary and pricing',()=>{
