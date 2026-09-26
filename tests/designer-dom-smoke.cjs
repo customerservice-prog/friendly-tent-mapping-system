@@ -107,7 +107,7 @@ async function moduleAt(file){const m=moduleFor(file);if(m.status==='unlinked')a
   // The complete Rentals rail accepts placeable live-catalog accessories too.
   b.ACCESSORIES.push({id:'accessory-foam-test',productId:'foam-test',name:'Foam Machine',accessoryType:'foam-machine',visualCategory:'Effects',widthFt:2.5,depthFt:2.5,heightFt:2.5,animated:true,photoUrl:null,pricePerDay:175});
   b.refreshAll();
-  const rentalsButton=window.document.querySelector('[data-drawer="rentals"]');
+  const rentalsButton=window.document.querySelector('[data-drawer="inventory"]');
   assert.equal(rentalsButton.hidden,false);
   rentalsButton.click();
   const foamCard=window.document.querySelector('[data-role="accessory-card"][data-id="accessory-foam-test"]');

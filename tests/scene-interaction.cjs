@@ -80,6 +80,21 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  assert.equal(photoTable.x,1,'source floor-plan x remains unchanged by 360 Photo Match drag');
  assert.equal(photoTable.y,1,'source floor-plan y remains unchanged by 360 Photo Match drag');
 
+ const equipmentData=await load(path.join(root,'js/data/equipment.js'));await equipmentData.evaluate();
+ const equipmentModels=await load(path.join(root,'js/ui/equipment-motion3d.js'));await equipmentModels.evaluate();
+ equipmentData.namespace.EQUIPMENT.push(...equipmentData.namespace.genericEquipment());
+ for(const p of equipmentData.namespace.EQUIPMENT){
+   const item=equipmentData.namespace.equipmentItem(p,'equipment-'+p.type,2,2);
+   const model=equipmentModels.namespace.createEquipment(item,{mobile:true});
+   assert.ok(!new THREE.Box3().setFromObject(model).isEmpty(),p.type+' has visible geometry');
+   model.traverse(q=>{if(q.isMesh)assert.equal(q.userData.itemId,item.id,p.type+' is selectable');});
+   model.userData.update?.(1);model.userData.update?.(10);
+   const bounds=new THREE.Box3().setFromObject(model);assert.ok(Number.isFinite(bounds.max.y),p.type+' animation remains finite');
+   assert.equal(item.x,2,'animation does not mutate placement');
+ }
+ const foam=equipmentData.namespace.equipmentItem(equipmentData.namespace.EQUIPMENT.find(p=>p.type==='foam-machine'),'foam',3,4);
+ view.rebuild({...data,objects:[foam]});assert.equal(scene.getObjectByName('Foam machine').userData.itemId,'foam');
+ view.rebuild(data);
  const catalog=await load(path.join(root,'js/data/tents.js'));await catalog.evaluate();
  const partyModule=await load(path.join(root,'js/core/party-scene.js'));await partyModule.evaluate();
  const tableModule=await load(path.join(root,'js/data/tables.js'));await tableModule.evaluate();

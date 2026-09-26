@@ -1,4 +1,5 @@
 import { evaluateTentFit, evaluateRentalFit } from './site-fit.js';
+import { objectLocalDimensions } from './world-space.js';
 
 function finite(value, fallback = 0) {
   const n = Number(value);
@@ -38,6 +39,10 @@ function tentPlacement(snapshot) {
 }
 
 function rentalPlacement(item,snapshot) {
+  // Lock the model dimensions before either photo placement or tent orientation
+  // overrides the original layout angle of an older oriented accessory save.
+  const local=objectLocalDimensions(item);
+  item={...item,modelWidthFt:local.widthFt,modelDepthFt:local.depthFt};
   const p=item?.photoPlacement;
   if (p && Number.isFinite(Number(p.x)) && Number.isFinite(Number(p.y))) {
     return {...item,x:Number(p.x),y:Number(p.y),rotationDeg:finite(p.rotationDeg,item.rotationDeg||0)};
@@ -100,7 +105,7 @@ export function evaluatePropertyScene(snapshot) {
   }
   const rentals=(snapshot.objects||[]).filter(item=>item && item.kind!=='dance').map(item=>{
     const placed=rentalPlacement(item,snapshot);
-    const clearance=item.kind==='chair'?0.5:item.kind==='table'?1:item.kind==='inflatable'?2:item.kind==='accessory'?(Number(item.heightFt||0)>4?1.5:1):0.5;
+    const clearance=item.kind==='chair'?0.5:item.kind==='table'?1:item.kind==='inflatable'?2:['accessory','equipment'].includes(item.kind)?(Number(item.heightFt||0)>4?1.5:1):0.5;
     return {
       id:item.id,
       kind:item.kind,
@@ -133,7 +138,7 @@ export function evaluatePropertyScene(snapshot) {
 }
 
 export function summarizePropertyFit(plan) {
-  if(!plan?.active){if(plan?.source==='metric-scan-needs-boundaries')return {label:'Trace boundaries to check fit',detail:'The Space Scan has real depth, but automatic obstacle boundaries are not yet reliable. Trace the house, fence or no-place areas in Photo View before using the fit result.',kind:'neutral'};return {label:'Site fit unavailable',detail:'Upload and calibrate a venue photo to check the reconstructed property.',kind:'neutral'};}
+  if(!plan?.active){if(plan?.source==='metric-scan-needs-boundaries')return {label:'Trace boundaries to check fit',detail:'The Space Scan has estimated depth, but automatic obstacle boundaries are not yet reliable. Trace the house, fence or no-place areas in Photo View before using the fit result.',kind:'neutral'};return {label:'Site fit unavailable',detail:'Upload and calibrate a venue photo to check the estimated property model.',kind:'neutral'};}
   const tent=plan.tent;
   if(tent?.status==='blocked'){
     const reason=tent.reasons?.[0]?.message||'The tent placement conflicts with the reconstructed property.';
@@ -151,5 +156,5 @@ export function summarizePropertyFit(plan) {
   }
   const clearance=tent?.clearanceFt||0;
   const metric=plan?.source==='metric-scan-property';
-  return {label:metric?'Depth-based fit looks clear':'Property fit looks good',detail:metric?(tent?('Tent footprint and '+clearance+' ft installation clearance avoid the current depth-derived obstacles. Confirm critical clearances on site.'):'Placed rentals avoid the current depth-derived obstacles. Confirm critical clearances on site.'):(tent?('Tent footprint and '+clearance+' ft installation clearance fit the reconstructed venue area.'):'Placed rentals fit the reconstructed venue area.'),kind:'fits'};
+  return {label:metric?'Estimated clearance check':'Model clearance check',detail:metric?(tent?('Tent footprint and '+clearance+' ft installation clearance avoid the current depth-derived obstacles. Confirm critical clearances on site.'):'Placed rentals avoid the current depth-derived obstacles. Confirm critical clearances on site.'):(tent?('Tent footprint and '+clearance+' ft installation clearance fit this model. Verify actual measurements and site conditions.'):'Placed rentals fit this model. Verify actual measurements and site conditions.'),kind:'fits'};
 }

@@ -1,4 +1,4 @@
-import { worldPointToLayout, objectGroundFootprint } from './world-space.js';
+import { worldPointToLayout, objectGroundFootprint, objectLocalDimensions } from './world-space.js';
 import { pointInPolygon } from './site-fit.js';
 
 function finite(value, fallback=0){
@@ -18,6 +18,7 @@ function polygonFor(entity,paddingFt=0){
     return entity.polygon.map(p=>({x:finite(p.x),y:finite(p.y)}));
   }
   return objectGroundFootprint({
+    ...entity,
     x:finite(entity?.x),
     y:finite(entity?.y),
     widthFt:Math.max(.1,finite(entity?.widthFt,1)),
@@ -26,7 +27,18 @@ function polygonFor(entity,paddingFt=0){
   },Math.max(0,finite(paddingFt)));
 }
 
-export function walkBlockingObstacles({photoGeometry=[],items=[],blockRentalKinds=['inflatable','accessory']}={}){
+function placedForWalk(item){
+  const p=item?.photoPlacement;
+  if(!p||!Number.isFinite(Number(p.x))||!Number.isFinite(Number(p.y)))return item;
+  // A photo placement may have a different angle from the saved layout box.
+  // Retain local dimensions before replacing that angle, especially for saves
+  // made before modelWidthFt/modelDepthFt existed.
+  const local=objectLocalDimensions(item);
+  return {...item,modelWidthFt:local.widthFt,modelDepthFt:local.depthFt,
+    x:Number(p.x),y:Number(p.y),rotationDeg:finite(p.rotationDeg,item.rotationDeg||0)};
+}
+
+export function walkBlockingObstacles({photoGeometry=[],items=[],blockRentalKinds=['inflatable','accessory','equipment']}={}){
   const blockers=[];
   for(const g of photoGeometry||[]){
     if(!g)continue;
@@ -40,10 +52,8 @@ export function walkBlockingObstacles({photoGeometry=[],items=[],blockRentalKind
   const allowed=new Set(blockRentalKinds||[]);
   for(const item of items||[]){
     if(!item||!allowed.has(item.kind))continue;
-    if(item.kind==='accessory'&&Number(item.heightFt||0)<1.2)continue;
-    const p=item.photoPlacement&&Number.isFinite(Number(item.photoPlacement.x))&&Number.isFinite(Number(item.photoPlacement.y))
-      ? {...item,x:Number(item.photoPlacement.x),y:Number(item.photoPlacement.y),rotationDeg:finite(item.photoPlacement.rotationDeg,item.rotationDeg||0)}
-      : item;
+    if(['accessory','equipment'].includes(item.kind)&&Number(item.heightFt||0)<1.2)continue;
+    const p=placedForWalk(item);
     blockers.push({
       id:item.id||null,
       type:item.kind||'rental',
@@ -61,7 +71,7 @@ export function walkPositionBlocked({
   photoGeometry=[],
   items=[],
   bodyRadiusFt=.85,
-  blockRentalKinds=['inflatable','accessory'],
+  blockRentalKinds=['inflatable','accessory','equipment'],
 }={}){
   const s=siteSize(site);
   const layout=worldPointToLayout({x:finite(worldX),y:0,z:finite(worldZ)},s);
@@ -79,9 +89,7 @@ export function walkPositionBlocked({
     let poly=blocker.polygon;
     const source=(photoGeometry||[]).find(g=>g?.id&&g.id===blocker.id)||(items||[]).find(i=>i?.id&&i.id===blocker.id);
     if(source&&!Array.isArray(source?.polygon)){
-      const p=source?.photoPlacement&&Number.isFinite(Number(source.photoPlacement.x))&&Number.isFinite(Number(source.photoPlacement.y))
-        ? {...source,x:Number(source.photoPlacement.x),y:Number(source.photoPlacement.y),rotationDeg:finite(source.photoPlacement.rotationDeg,source.rotationDeg||0)}
-        : source;
+      const p=placedForWalk(source);
       poly=polygonFor(p,pad);
     }
     if(pointInPolygon({x:layout.x,y:layout.y},poly)){
@@ -98,7 +106,7 @@ export function resolveWalkStep({
   photoGeometry=[],
   items=[],
   bodyRadiusFt=.85,
-  blockRentalKinds=['inflatable','accessory'],
+  blockRentalKinds=['inflatable','accessory','equipment'],
 }={}){
   const start={x:finite(from?.x),z:finite(from?.z)};
   const target={x:finite(to?.x,start.x),z:finite(to?.z,start.z)};
@@ -121,7 +129,7 @@ export function findSafeWalkStart({
   photoGeometry=[],
   items=[],
   bodyRadiusFt=.85,
-  blockRentalKinds=['inflatable','accessory'],
+  blockRentalKinds=['inflatable','accessory','equipment'],
 }={}){
   const s=siteSize(site);
   const candidates=[

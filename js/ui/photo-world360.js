@@ -240,22 +240,22 @@ function addDepthMarkers(group,photoGeometry,site,style,materials){
 
 export function createPhotoWorld360({image,site,calibration,photoGeometry=[],surfaceType='grass',mobile=false}={}){
   const group=new THREE.Group();group.name='Local Smart 360 synthesis';
-  if(!image||!site){group.userData={mode:'spatial-reconstruction',noExternalApi:true,ready:false,setNight(){}};return group;}
+  if(!image||!site){group.userData={mode:'illustrative-photo-context',noExternalApi:true,ready:false,setNight(){}};return group;}
   const style=analyzePhotoWorld(image,calibration),w=Math.max(30,Number(site.widthFt)||50),l=Math.max(30,Number(site.lengthFt)||60);
   const radius=Math.max(62,Math.max(w,l)*1.20),height=Math.max(36,Math.min(76,radius*.60)),materials=[];
   addGround(group,style,surfaceType,radius*2.15,materials);
   addHorizon(group,style,radius,height,mobile,materials);
   const transitions=addEdgeTransitions(group,image,site,height,materials,mobile);
-  const context=addBoundaryContext(group,style,site,materials);
-  const fallbackStructure=addFallbackRearStructure(group,style,site,materials,photoGeometry);
+  const context=[]; // Unseen physical boundaries cannot be recovered from one image.
+  const fallbackStructure=null;
   const traced=addDepthMarkers(group,photoGeometry,site,style,materials);
   group.userData={
-    mode:'spatial-reconstruction',
+    mode:'illustrative-photo-context',
     noExternalApi:true,
     ready:true,
     source:'single-uploaded-photo',
     antiSmear:true,
-    continuation:'solid-procedural-unseen-directions',
+    accuracy:'unverified',continuation:'neutral-illustrative-surroundings',
     layers:{ground:true,horizon:true,panorama:false,transitions:transitions.length,solidContext:context.length+(fallbackStructure?1:0),tracedGeometry:traced.length},
     style,surfaceType,
     setNight(value){

@@ -1,3 +1,4 @@
+import { equipmentById } from '../data/equipment.js';
 import { tabletopSvg } from './tabletop-symbols.js';
 // Friendly Event Designer - 2D top-down plan view
 // Lightweight DOM-based renderer that mirrors the mount/update API of
@@ -269,7 +270,8 @@ function renderLighting(data, tent) {
 function render(data) {
   currentData = data;
   const tent = data.tent;
-  const size = computeStageSize(tent);
+  const area=tent.planningArea||tent;
+  const size = computeStageSize(area);
   clear(stageEl);
   stageEl.style.width = size.w + 'px';
   stageEl.style.height = size.h + 'px';
@@ -277,11 +279,12 @@ function render(data) {
   stageEl.classList.toggle('show-grid',gridVisible);
   if(sheetEl){sheetEl.style.width=(size.w+64)+'px';sheetEl.style.height=(size.h+64)+'px';}
   if(toolbarEl){toolbarEl.querySelector('output').textContent=Math.round(zoom*100)+'%';toolbarEl.querySelector('[data-plan=out]').disabled=zoom<=1;toolbarEl.querySelector('[data-plan=in]').disabled=zoom>=3;}
-  stageEl.classList.toggle('is-outdoor',!!tent.isSite);
+  stageEl.classList.toggle('is-outdoor',!!tent.isSite||!!tent.planningArea);
+  if(tent.planningArea){const outline=document.createElement('div');outline.className='plan-tent-footprint';const sz=toDispWD(tent.widthFt,tent.lengthFt);outline.style.width=sz.w*pxPerFt+'px';outline.style.height=sz.d*pxPerFt+'px';outline.textContent=tent.name;stageEl.appendChild(outline);}
   stageEl.dataset.dimensions = tent.widthFt+' × '+tent.lengthFt+' ft';
   stageEl.dataset.surface=data.surfaceType==='concrete'||data.surfaceType==='asphalt'?'paved':'grass';
-  const dimension=document.createElement('span');dimension.className='plan-dimension plan-dimension-width';dimension.textContent=(rotate90?tent.lengthFt:tent.widthFt)+' ft';stageEl.appendChild(dimension);
-  const length=document.createElement('span');length.className='plan-dimension plan-dimension-length';length.textContent=(rotate90?tent.widthFt:tent.lengthFt)+' ft';stageEl.appendChild(length);
+  const dimension=document.createElement('span');dimension.className='plan-dimension plan-dimension-width';dimension.textContent=(rotate90?area.lengthFt:area.widthFt)+' ft';stageEl.appendChild(dimension);
+  const length=document.createElement('span');length.className='plan-dimension plan-dimension-length';length.textContent=(rotate90?area.widthFt:area.lengthFt)+' ft';stageEl.appendChild(length);
   stageEl.setAttribute('role','group');
   stageEl.setAttribute('aria-label',tent.name+' floor plan');
 
@@ -349,9 +352,10 @@ renderLighting(data, tent);
   displayObjects.forEach(function (item) {
   const wrap = document.createElement('div');
   const isDance = item.kind === 'dance';
+  const equipment=item.kind==='equipment'?(equipmentById(item.equipmentId)||{name:item.name||'Equipment'}):null;
   const standaloneChair=item.kind==='chair'?chairById(item.chairId):null;
   const inflatable = item.kind==='inflatable'?inflatableById(item.inflatableId):null;
-  const accessory = item.kind==='accessory'?accessoryById(item.accessoryId):null;
+  const accessory = item.kind==='accessory'?(accessoryById(item.accessoryId)||{id:item.accessoryId,name:item.name||'Rental item',accessoryType:item.accessoryType||'generic'}):null;
   const tableDef = (!isDance && item.kind === 'table') ? tableById(item.tableId) : null;
   const silhouette = tableDef ? tableDef.silhouette : null;
   const shapeClass = isDance ? 'rect dance' : (item.shape === 'round' ? 'round' : 'rect');
@@ -371,7 +375,7 @@ renderLighting(data, tent);
   wrap.tabIndex = item.preview?-1:0;
   if(item.preview)wrap.dataset.preview='true';
   wrap.setAttribute('role','button');
-  wrap.setAttribute('aria-label',standaloneChair?standaloneChair.name+' · move or edit':inflatable?inflatable.name+' · move or edit':accessory?accessory.name+' · move or edit':(isDance?'Dance floor section':(tableDef?.name||'Table'))+' · '+(item.seatCount||0)+' seats');
+  wrap.setAttribute('aria-label',equipment?equipment.name+' · move or edit':standaloneChair?standaloneChair.name+' · move or edit':inflatable?inflatable.name+' · move or edit':accessory?accessory.name+' · move or edit':(isDance?'Dance floor section':(tableDef?.name||'Table'))+' · '+(item.seatCount||0)+' seats');
   wrap.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();callbacks.onSelect?.(item.id);}});
 
                              const top = document.createElement('div');
@@ -389,8 +393,9 @@ renderLighting(data, tent);
   if (isDance) {
     label.textContent = '';
   } else {
-    label.textContent = item.seatCount > 0 ? (item.seatCount + ' seats') : '';
+    label.textContent = equipment ? equipment.name : item.seatCount > 0 ? (item.seatCount + ' seats') : '';
   }
+  if(equipment){top.classList.add('plan-equipment');top.innerHTML='';}
   top.appendChild(label);
   wrap.appendChild(top);
   stageEl.appendChild(wrap);
@@ -469,7 +474,7 @@ function onPointerMove(e) {
   const dxPx = e.clientX - dragStartPx.x;
   const dyPx = e.clientY - dragStartPx.y;
   if (Math.abs(dxPx) > 3 || Math.abs(dyPx) > 3) dragMoved = true;
-  const tent = currentData.tent;
+  const tent = currentData.tent.planningArea||currentData.tent;
   // Mouse deltas are measured in display space; convert back through the
 // current presentation rotation (toDispXY is a pure axis swap, so it is
 // its own inverse) so dragging still feels natural regardless of whether
