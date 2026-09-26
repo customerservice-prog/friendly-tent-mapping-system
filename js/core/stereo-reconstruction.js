@@ -156,7 +156,7 @@ export function smoothDepthField({depths,confidence,valid,cols,rows,strength=.30
       for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){
         if(!ox&&!oy)continue;const j=(gy+oy)*cols+(gx+ox);if(!valid[j])continue;
         const d=current[j];if(!(d>0)||Math.abs(d-base)>tolerance)continue;
-        const spatial=(ox&&oy)?.72:1,conf=Math.max(.12,Number(confidence?.[j])||.35);
+        const spatial=(ox&&oy) ? .72 : 1,conf=Math.max(.12,Number(confidence?.[j])||.35);
         neighbors.push({d,w:spatial*conf});
       }
       if(neighbors.length<3)continue;
