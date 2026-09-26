@@ -1,0 +1,46 @@
+{
+  "source": "https://rentsketch-api-production.up.railway.app/api/tenants/friendly/products",
+  "retrievedAt": "2026-09-26",
+  "note": "Public catalog fixture. Missing dimensions remain null; names and source photos identify the rental types, not certified measurements.",
+  "products": [
+    {
+      "id": "6416c1b8-efbf-4427-80c4-50d30207272c",
+      "category": "other",
+      "external_id": "fpr:cross-back-farmhouse-chair",
+      "visual_model_id": null,
+      "name": "Cross-Back Farmhouse Chair",
+      "price_per_day": "14.00",
+      "width_ft": null,
+      "length_ft": null,
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/cross-back-farmhouse-chair?v=1787094416619",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "4fb360d1-b024-4595-9269-21887c70a55f",
+      "category": "other",
+      "external_id": "fpr:sweetheart-table-60in-half-round",
+      "visual_model_id": null,
+      "name": "Sweetheart Table (60in Half-Round)",
+      "price_per_day": "35.00",
+      "width_ft": null,
+      "length_ft": null,
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/sweetheart-table-60in-half-round?v=1789322134472",
+      "metadata": {},
+      "active": true
+    },
+    {
+      "id": "8223e7ab-ca2b-40d5-9604-ce5f94c0aaca",
+      "category": "other",
+      "external_id": "fpr:6ft-plastic-folding-table",
+      "visual_model_id": null,
+      "name": "6ft Plastic Folding Table",
+      "price_per_day": "13.00",
+      "width_ft": null,
+      "length_ft": null,
+      "photo_url": "https://www.friendlypartyrental.com/api/item-image/6ft-plastic-folding-table?v=1787311346517",
+      "metadata": {},
+      "active": true
+    }
+  ]
+}

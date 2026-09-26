@@ -24,7 +24,13 @@ export const LINENS = [
   buildLinen('linen-chair-cover','Spandex Chair Cover (each)',[]),
 ];
 
-export function optionsForTable(tableId){return LINENS.filter(l=>l.fitsTableIds.indexOf(tableId)!==-1);}
+// Separate rental SKUs can share one physical table model. Linen fit follows
+// that model while placement, pricing and ordering keep the selected SKU.
+export function linenFitsTable(linen,table){
+  const id=typeof table==='string'?table:table?.visualModelId||table?.tableId||table?.id;
+  return !!id && !!linen?.fitsTableIds?.includes(String(id).split('--')[0]);
+}
+export function optionsForTable(tableId){return LINENS.filter(l=>linenFitsTable(l,tableId));}
 export function byId(id){return LINENS.find(l=>l.id===id);}
 
 export const LINEN_VISUALS = {

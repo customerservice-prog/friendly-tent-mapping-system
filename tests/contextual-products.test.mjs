@@ -28,3 +28,13 @@ test('one physical 20ft wall remains one SKU quantity across two rendered10ft se
  const removed=summarizeEvent(scene,{...catalog,contextual:[]});assert.equal(removed.lines.find(l=>l.category==='lighting').amount,null);assert.equal(removed.lines.find(l=>l.category==='lighting').productId,'lighting-b','removedSKU cannot silently become variantA');
  assert.throws(()=>buildBookingHandoff({tenant:'friendly',lines:removed.lines.filter(l=>l.category==='lighting'),products}),/staff confirmation/);
 });
+
+
+test('linen fit follows the physical model without changing a variant SKU',()=>{
+ const product={kind:'linen',productId:'linen-six',sourceId:'linen-spandex-6ft',fitsTableIds:['banquet-6ft'],colors:['White']};
+ const variant={...table,tableId:'banquet-6ft--plastic-sku',shape:'rect',widthFt:6,depthFt:2.5};
+ assert.deepEqual(applyTableProduct(variant,product),{linenId:'linen-spandex-6ft',linenProductId:'linen-six',linenColor:'White'});
+ assert.equal(variant.tableId,'banquet-6ft--plastic-sku');
+ assert.equal(applyTableProduct({...variant,tableId:'sweetheart-half-round-60'},product),null,'do not promise banquet linen fits the new half-round table');
+ assert.equal(applyTableProduct({...variant,tableId:'banquet-8ft--other-sku'},product),null);
+});

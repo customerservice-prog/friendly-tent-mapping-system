@@ -23,6 +23,7 @@ export const CHAIR_SILHOUETTES = {
   FOLDING: 'folding',
   RESIN: 'resin',
   CHIAVARI: 'chiavari',
+  CROSSBACK: 'crossback',
   THRONE: 'throne',
 };
 
@@ -45,6 +46,7 @@ function buildChair(id, name, category, pricePerDay, opts) {
     seatDepthFt: seatDepthFt,
     backHeightFt: opts.backHeightFt || 2.6,
     catalogImage: opts.catalogImage || null,
+    ...(typeof opts.dimensionsConfirmed==='boolean'?{dimensionsConfirmed:opts.dimensionsConfirmed,dimensionsNote:opts.dimensionsNote||'',dimensionProvenance:opts.dimensionProvenance||'illustrative-profile'}:{}),
   };
 }
 
@@ -78,6 +80,9 @@ export const CHAIRS = [
     frameColor: '#5a3320', accentColor: '#f3e6d8',
     seatWidthFt: 1.3, seatDepthFt: 1.4, backHeightFt: 3.0,
     catalogImage: 'mahogany-chiavari-chair',
+  }),
+  buildChair('crossback-natural','Cross-Back Farmhouse Chair',CHAIR_CATEGORIES.SPECIALTY,null,{
+    silhouette:CHAIR_SILHOUETTES.CROSSBACK,frameColor:'#ac7846',accentColor:'#b68a56',footprintFt:1.7,seatWidthFt:1.55,seatDepthFt:1.6,backHeightFt:2.9,catalogImage:'cross-back-farmhouse-chair',dimensionsConfirmed:false,dimensionsNote:'The wood cross-back profile follows the catalog photograph. Seat, footprint and back-height dimensions are illustrative; confirm measurements with your rental team.',dimensionProvenance:'photo-referenced-illustrative-profile'
   }),
   buildChair('throne-king', 'King Throne Chair', CHAIR_CATEGORIES.SPECIALTY, 120.00, {
     footprintFt: 2.5, isThrone: true,

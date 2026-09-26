@@ -1,3 +1,4 @@
+import { linenFitsTable } from '../data/linens.js';
 // Catalog identities for rentals that attach to a table or a tent.
 const text=value=>String(value||'');
 const amount=value=>value==null||value===''||!Number.isFinite(Number(value))?null:Number(value);
@@ -20,7 +21,7 @@ export function contextualProducts(catalog={}){
  return rows.filter((row,index)=>rows.findIndex(other=>other.kind===row.kind&&other.id===row.id)===index);
 }
 export function compatibleContextTables(product,objects=[]){
- return objects.filter(item=>item.kind==='table'&&(product.kind==='linen'?product.fitsTableIds?.includes(item.tableId):product.kind==='tabletop'&&(!product.perSeat||Number(item.seatCount)>0)));
+ return objects.filter(item=>item.kind==='table'&&(product.kind==='linen'?linenFitsTable(product,item):product.kind==='tabletop'&&(!product.perSeat||Number(item.seatCount)>0)));
 }
 export function applyTableProduct(item,product){
  if(!compatibleContextTables(product,[item]).length)return null;

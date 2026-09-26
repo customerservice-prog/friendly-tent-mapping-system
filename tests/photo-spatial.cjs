@@ -6,6 +6,8 @@ const root=path.resolve(__dirname,'..');
   const mod=new vm.SourceTextModule(source,{context,identifier:'photo-geometry.js'});
   await mod.link(()=>{throw new Error('photo-geometry.js must stay dependency-free');});await mod.evaluate();
   const g=mod.namespace,site={widthFt:70,lengthFt:90},cal=g.defaultPhotoCalibration(site);
+  assert.deepEqual(g.defaultPhotoCalibration(site,null),cal,'ordinary3D scenes explicitly store backgroundPhoto:null');
+  assert.deepEqual(g.normalizePhotoCalibration(null,site,null),g.normalizePhotoCalibration(null,site),'empty-photo3D and photo removal preserve the estimated camera without throwing');
   for(const [x,y] of [[0,0],[70,0],[70,90],[0,90],[35,45],[10,72],[62,15]]){
     const p=g.worldToPhoto(x,y,site,cal),w=g.photoToWorld(p.x,p.y,site,cal,{clampToGround:false});
     assert.ok(w, 'inverse exists');

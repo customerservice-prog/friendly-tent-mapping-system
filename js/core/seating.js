@@ -4,7 +4,19 @@ export function chairPositions(item, chair = {}) {
   const width = Number(item.widthFt) || 5, depth = Number(item.depthFt) || 5;
   const gap = (Number(chair.seatDepthFt) || 1.5) / 2 + .35;
   const positions = [];
-  if (item.shape === 'round') {
+  if (item.shape === 'half-round') {
+    // Sweetheart guests sit together along the straight diameter. Stored width
+    // and depth may be the rotated footprint; preserve the table's local size.
+    const rotation=(Number(item.rotationDeg)||0)*Math.PI/180;
+    const quarterTurn=Math.abs(Math.abs((Number(item.rotationDeg)||0)%180)-90)<1e-7;
+    const localWidth=Number(item.modelWidthFt)||(quarterTurn?depth:width);
+    const localDepth=Number(item.modelDepthFt)||(quarterTurn?width:depth);
+    const seats=Math.min(2,count),spacing=Math.min(localWidth/2,Math.max(1.5,(Number(chair.seatWidthFt)||1.5)+.35));
+    for(let i=0;i<seats;i++){
+      const x=(i-(seats-1)/2)*spacing,y=-localDepth/2-gap;
+      positions.push({x:x*Math.cos(rotation)-y*Math.sin(rotation),y:x*Math.sin(rotation)+y*Math.cos(rotation),angle:-Math.PI/2+rotation});
+    }
+  } else if (item.shape === 'round') {
     for (let i = 0; i < count; i++) {
       const angle = i / count * Math.PI * 2 + (Number(item.rotationDeg) || 0) * Math.PI / 180;
       positions.push({x:(width / 2 + gap) * Math.cos(angle), y:(depth / 2 + gap) * Math.sin(angle), angle});

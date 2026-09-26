@@ -145,7 +145,7 @@ function buildChairDots(host, item, radiusFt, cxFt, cyFt) {
 }
 
 function planModelDimensions(item){
-  if(!currentData?.photoSitePlan)return {widthFt:item.widthFt,depthFt:item.depthFt};
+  if(!currentData?.photoSitePlan&&item.shape!=='half-round')return {widthFt:item.widthFt,depthFt:item.depthFt};
   return objectLocalDimensions(item);
 }
 function positionObjectElement(element,item,x,y){
@@ -383,7 +383,7 @@ renderLighting(data,tent,structureHost);
   const accessory = item.kind==='accessory'?(accessoryById(item.accessoryId)||{id:item.accessoryId,name:item.name||'Rental item',accessoryType:item.accessoryType||'generic'}):null;
   const tableDef = (!isDance && item.kind === 'table') ? tableById(item.tableId) : null;
   const silhouette = tableDef ? tableDef.silhouette : null;
-  const shapeClass = isDance ? 'rect dance' : (item.shape === 'round' ? 'round' : 'rect');
+  const shapeClass = isDance ? 'rect dance' : (item.shape === 'round' ? 'round' : item.shape==='half-round'?'half-round':'rect');
   const silhouetteClass = silhouette ? ' plan2d-table--' + silhouette : '';
   var linenClass = linenVisual(item.linenId) ? ' plan2d-linen--' + linenVisual(item.linenId) : '';
   wrap.className = 'plan2d-object ' + shapeClass + silhouetteClass + linenClass + ' ' + severityClass(data, item.id) + ((selectedDanceGroup ? item.kind === 'dance' : data.selectedId === item.id) ? ' selected' : '');
@@ -393,26 +393,29 @@ renderLighting(data,tent,structureHost);
   positionObjectElement(wrap,item,item.x,item.y);
   wrap.style.width = (dispSize.w * pxPerFt) + 'px';
   wrap.style.height = (dispSize.d * pxPerFt) + 'px';
-  if(data.photoSitePlan){wrap.style.transformOrigin='50% 50%';wrap.style.transform='rotate('+((rotate90?-1:1)*(Number(item.rotationDeg)||0))+'deg)';}
+  if(data.photoSitePlan||item.shape==='half-round'){wrap.style.transformOrigin='50% 50%';wrap.style.transform='rotate('+((rotate90?-1:1)*(Number(item.rotationDeg)||0))+'deg)';}
   wrap.dataset.worldX=item.x;wrap.dataset.worldY=item.y;wrap.dataset.rotation=item.rotationDeg||0;
   wrap.dataset.itemId = item.id;
   if(tableDef)wrap.dataset.tableId=tableDef.id;
+  if(item.shape==='half-round')wrap.classList.toggle('plan2d-half-round--axis-swapped',rotate90);
+  if((tableDef||standaloneChair)?.dimensionsConfirmed===false){wrap.dataset.dimensionsEstimated='true';wrap.title='Approximate model dimensions — confirm the actual rental size and clearance.';}
   wrap.tabIndex = item.preview?-1:0;
   if(item.preview)wrap.dataset.preview='true';
   wrap.setAttribute('role','button');
   wrap.setAttribute('aria-label',equipment?equipment.name+' · move or edit':standaloneChair?standaloneChair.name+' · move or edit':inflatable?inflatable.name+' · move or edit':accessory?accessory.name+' · move or edit':(isDance?'Dance floor section':(tableDef?.name||'Table'))+' · '+(item.seatCount||0)+' seats');
+  if(wrap.dataset.dimensionsEstimated==='true')wrap.setAttribute('aria-label',wrap.getAttribute('aria-label')+' · approximate dimensions');
   wrap.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();callbacks.onSelect?.(item.id);}});
 
                              const top = document.createElement('div');
   top.className = 'plan2d-table-top';
-  top.innerHTML = standaloneChair ? `<div class="plan-accent-chair" style="--chair-frame:${standaloneChair.frameColor};--chair-accent:${standaloneChair.accentColor};transform:rotate(${180+(rotate90?90-(data.photoSitePlan?0:item.rotationDeg||0):(data.photoSitePlan?0:item.rotationDeg||0))}deg)">${chairPlanSvg(standaloneChair.silhouette)}</div>` : inflatable ? inflatablePlanSvg(inflatable,rotate90?90-(data.photoSitePlan?0:item.rotationDeg||0):(data.photoSitePlan?0:item.rotationDeg||0)) : accessory ? '<div class="plan-accessory-symbol">'+accessoryIcon(accessory.accessoryType)+'<span>'+String(accessory.name||'Rental').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span></div>' : isDance ? '<span class="parquet-quadrants"><i></i><i></i><i></i><i></i></span>' : item.linenId ? '' : tableTopDetailHtml(silhouette);
+  top.innerHTML = standaloneChair ? `<div class="plan-accent-chair" style="--chair-frame:${standaloneChair.frameColor};--chair-accent:${standaloneChair.accentColor};transform:rotate(${180+(rotate90?90-(data.photoSitePlan?0:item.rotationDeg||0):(data.photoSitePlan?0:item.rotationDeg||0))}deg)">${chairPlanSvg(standaloneChair.silhouette)}</div>` : inflatable ? inflatablePlanSvg(inflatable,rotate90?90-(data.photoSitePlan?0:item.rotationDeg||0):(data.photoSitePlan?0:item.rotationDeg||0)) : accessory ? '<div class="plan-accessory-symbol">'+accessoryIcon(accessory.accessoryType)+'<span>'+String(accessory.name||'Rental').replace(/&/g,'&amp;').replace(/</g,'&lt;')+'</span></div>' : isDance ? '<span class="parquet-quadrants"><i></i><i></i><i></i><i></i></span>' : item.linenId ? '' : tableTopDetailHtml(silhouette,tableDef);
   if(['linen-runner-9ft','linen-napkins'].includes(item.linenId)){
     const accent=document.createElement('span');accent.className=item.linenId==='linen-napkins'?'plan2d-napkin':'plan2d-runner';
     accent.style.background=linenColorHex(item.linenColor);
     if(item.linenId==='linen-runner-9ft'){accent.style.width=(Math.max(dispSize.w,dispSize.d)*pxPerFt)+'px';accent.style.height=(1.1*pxPerFt)+'px';if(dispSize.d>dispSize.w)accent.style.transform='translate(-50%,-50%) rotate(90deg)';}
     top.appendChild(accent);
   }else if(item.linenId){top.classList.add('has-linen');top.style.background=linenColorHex(item.linenColor);}
-  if(tableDef&&item.tabletop?.length){const rentals=document.createElement('div');rentals.className='plan-tabletop';rentals.innerHTML=tabletopSvg(item,undefined,rotate90);top.appendChild(rentals);}
+  if(tableDef&&item.tabletop?.length){const rentals=document.createElement('div');rentals.className='plan-tabletop';rentals.innerHTML=tabletopSvg(item.shape==='half-round'?{...item,...local,rotationDeg:0}:item,undefined,rotate90);top.appendChild(rentals);}
   const label = document.createElement('span');
   label.className = 'plan2d-table-label';
   if (isDance) {
@@ -463,8 +466,9 @@ renderLighting(data,tent,structureHost);
 // Small top-down visual detail per real Friendly Party Rental table type so tables
 // are recognizable on the plan without reading the label (e.g. a fold seam on
 // banquet tables, a pedestal mark on cocktail tables, a basin on Fill & Chill).
-function tableTopDetailHtml(silhouette) {
-  if (silhouette === 'banquet-rect') {
+function tableTopDetailHtml(silhouette,definition) {
+  if (silhouette === 'sweetheart-half-round')return '<span class="plan2d-sweetheart-flat-edge" aria-hidden="true"></span>';
+  if (silhouette === 'banquet-rect'&&(definition?.visualModelId||String(definition?.id||'').split('--')[0])!=='banquet-6ft') {
     return '<span class="plan2d-table-seam"></span>';
   }
   if (silhouette === 'cocktail-pedestal') {

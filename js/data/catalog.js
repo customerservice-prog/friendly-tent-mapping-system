@@ -1,11 +1,11 @@
-import { inferVisualModel } from './visualResolver.js';
+import { inferVisualModel, catalogProductCategory } from './visualResolver.js';
 
 // Imported products replace old seed rows. Distinct tent products may share a
 // physical model, but must keep their own name, price and quote identity.
 export function liveCatalog(category, renderer, products, showPrices, requestedProductId) {
   const models=new Map(renderer.map(item=>[item.id,item])), groups=new Map();
   for(const product of products) {
-    if(!product || product.active===false || product.category!==category)continue;
+    if(!product || product.active===false || catalogProductCategory(product)!==category)continue;
     // Conservative inference uses supported physical types only. Existing explicit
     // mappings remain authoritative, including an unsupported one.
     const key=product.visual_model_id || inferVisualModel(product);

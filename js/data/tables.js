@@ -35,14 +35,17 @@ function buildTable(opts) {
           // Friendly Party Rental table type gets its own recognizable representation
           // instead of a generic round/rect shape.
           silhouette: opts.silhouette || 'dining-round',
+          ...(opts.seatingLayout?{seatingLayout:opts.seatingLayout}:{}),
+          ...(typeof opts.dimensionsConfirmed==='boolean'?{dimensionsConfirmed:opts.dimensionsConfirmed,dimensionsNote:opts.dimensionsNote||'',dimensionProvenance:opts.dimensionProvenance||'illustrative-profile'}:{}),
           active: true,
     };
 }
 
 export const TABLES = [
     buildTable({ id: 'round-5ft', name: "5' Round Table", shape: 'round', diameterFt: 5, seatsOptions: [6, 8, 10], seatsDefault: 8, pricePerDay: 15.00, category: TABLE_CATEGORIES.ROUND, silhouette: 'dining-round' }),
-    buildTable({ id: 'banquet-6ft', name: "6' Banquet Table", shape: 'rect', widthFt: 6, depthFt: 2.5, seatsOptions: [6, 8], seatsDefault: 6, pricePerDay: 13.00, category: TABLE_CATEGORIES.BANQUET, silhouette: 'banquet-rect' }),
+    buildTable({ id: 'banquet-6ft', name: "6' Banquet Table", shape: 'rect', widthFt: 6, depthFt: 2.5, seatsOptions: [6, 8], seatsDefault: 6, pricePerDay: 13.00, category: TABLE_CATEGORIES.BANQUET, silhouette: 'banquet-rect', dimensionsConfirmed:false, dimensionsNote:'The product name reports a 6-foot length. Depth, height and setup clearance are planning estimates; confirm measurements with your rental team.', dimensionProvenance:'named-length-and-illustrative-profile' }),
     buildTable({ id: 'banquet-8ft', name: "8' Banquet Table", shape: 'rect', widthFt: 8, depthFt: 2.5, seatsOptions: [8, 10], seatsDefault: 8, pricePerDay: 14.00, category: TABLE_CATEGORIES.BANQUET, silhouette: 'banquet-rect' }),
+    buildTable({ id:'sweetheart-half-round-60', name:'Sweetheart Table (60in Half-Round)', shape:'half-round', widthFt:5, depthFt:2.5, seatsOptions:[0,2], seatsDefault:2, pricePerDay:null, category:TABLE_CATEGORIES.BANQUET, silhouette:'sweetheart-half-round', seatingLayout:'sweetheart', dimensionsConfirmed:false, dimensionsNote:'The product name reports a 60-inch span. The 30-inch depth is inferred from the half-round shape; height and setup clearance are planning estimates. Confirm measurements with your rental team.', dimensionProvenance:'named-span-and-derived-half-round' }),
     buildTable({ id: 'cocktail', name: 'Cocktail Table', shape: 'round', diameterFt: 2.5, seatsOptions: [0], seatsDefault: 0, pricePerDay: 12.00, category: TABLE_CATEGORIES.COCKTAIL, clearancePadFt: 2.5, description: 'Standing/mingling height table.', silhouette: 'cocktail-pedestal' }),
     buildTable({ id: 'fill-chill-4ft', name: "4' Fill & Chill Table", shape: 'rect', widthFt: 4, depthFt: 2, seatsOptions: [0], seatsDefault: 0, pricePerDay: 40.00, category: TABLE_CATEGORIES.SERVICE, clearancePadFt: 2, description: 'Beverage/cooler service table with a built-in fillable ice basin for drink stations.', silhouette: 'fillchill-tub' }),
   ];

@@ -32,6 +32,7 @@ The images in `qa-customer-refinement/` are actual Chromium captures of producti
 
 ## Remaining product work
 
+- Follow-up: the three furniture gaps below are resolved in [Furniture catalog completion](FURNITURE_CATALOG_2026-09-26.md). This list records the earlier release state.
 - Three observed source catalog rows still need proper family mappings and/or dedicated furniture renderers: 6ft Plastic Folding Table, Cross-Back Farmhouse Chair and Sweetheart Table. Their missing source dimensions are not replaced with invented measurements. Catalog configuration and physical asset verification remain separate work.
 - Single-photo mode stays camera-matched. Multi-view preview remains an estimate with confidence and independent measurement checks; it is not surveyed geometry or a general-purpose photogrammetry service.
 - Premium item accuracy still depends on confirmed manufacturer dimensions, operating clearances, product photography and authored models. Distinct picker illustrations do not imply those measurements are verified.
