@@ -143,6 +143,34 @@ function sampleColor(image,x,y){
   const i=(y*width+x)*4;
   return [data[i]/255,data[i+1]/255,data[i+2]/255];
 }
+export function smoothDepthField({depths,confidence,valid,cols,rows,strength=.30,edgeFraction=.085,edgeFt=1.6,iterations=1}={}){
+  if(!depths||!valid||!cols||!rows)return {depths,averageDelta:0,maxDelta:0};
+  let current=Float32Array.from(depths),averageDelta=0,maxDelta=0,changed=0;
+  strength=clamp(finite(strength,.30),0,.65);iterations=clamp(Math.round(finite(iterations,1)),1,3);
+  for(let pass=0;pass<iterations;pass++){
+    const next=Float32Array.from(current);
+    for(let gy=1;gy<rows-1;gy++)for(let gx=1;gx<cols-1;gx++){
+      const i=gy*cols+gx;if(!valid[i])continue;
+      const base=current[i];if(!(base>0))continue;
+      const tolerance=Math.max(edgeFt,base*edgeFraction),neighbors=[];
+      for(let oy=-1;oy<=1;oy++)for(let ox=-1;ox<=1;ox++){
+        if(!ox&&!oy)continue;const j=(gy+oy)*cols+(gx+ox);if(!valid[j])continue;
+        const d=current[j];if(!(d>0)||Math.abs(d-base)>tolerance)continue;
+        const spatial=ox&&oy?.72:1,conf=Math.max(.12,Number(confidence?.[j])||.35);
+        neighbors.push({d,w:spatial*conf});
+      }
+      if(neighbors.length<3)continue;
+      const total=neighbors.reduce((n,v)=>n+v.w,0),avg=neighbors.reduce((n,v)=>n+v.d*v.w,0)/Math.max(.001,total);
+      const localStrength=strength*Math.max(.35,Math.min(1,(Number(confidence?.[i])||.35)*2.2));
+      next[i]=base+(avg-base)*localStrength;
+    }
+    current=next;
+  }
+  for(let i=0;i<current.length;i++)if(valid[i]&&depths[i]>0){
+    const d=Math.abs(current[i]-depths[i]);if(d>.0001){averageDelta+=d;maxDelta=Math.max(maxDelta,d);changed++;}
+  }
+  return {depths:current,averageDelta:changed?averageDelta/changed:0,maxDelta,changed};
+}
 
 export function reconstructStereoGrid({
   left,
@@ -227,6 +255,12 @@ export function reconstructStereoGrid({
     }
   }
 
+  const smoothed=smoothDepthField({depths,confidence,valid,cols,rows,strength:.24,edgeFraction:.075,edgeFt:1.35,iterations:1});
+  for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+    const i=gy*cols+gx;if(!valid[i])continue;const depth=smoothed.depths[i],x=xs[gx],y=ys[gy];
+    depths[i]=depth;positions[i*3]=(x-w/2)/focalPx*depth;positions[i*3+1]=eyeHeightFt-(y-horizonPx)/focalPx*depth;positions[i*3+2]=depth;
+  }
+
   const indices=[];
   function triangle(a,b,c){
     if(!valid[a]||!valid[b]||!valid[c])return;
@@ -248,7 +282,7 @@ export function reconstructStereoGrid({
     width:w,height:h,cols,rows,xSamples:xs,ySamples:ys,
     positions,uvs,colors,depths,confidence,valid,indices:new Uint32Array(indices),
     focalPx,baselineFt,fovDeg,horizonY,eyeHeightFt,
-    metrics:{validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,triangleCount:indices.length/3,quality,cameraRegistration:{left:leftRegistration,right:rightRegistration}}
+    metrics:{validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,triangleCount:indices.length/3,quality,surfaceSmoothingAvgFt:smoothed.averageDelta,surfaceSmoothingMaxFt:smoothed.maxDelta,cameraRegistration:{left:leftRegistration,right:rightRegistration}}
   };
 }
 
@@ -365,6 +399,12 @@ export function reconstructMultiViewGrid({
     }
   }
 
+  const smoothedMulti=smoothDepthField({depths,confidence,valid,cols,rows,strength:.34,edgeFraction:.075,edgeFt:1.25,iterations:1});
+  for(let gy=0;gy<rows;gy++)for(let gx=0;gx<cols;gx++){
+    const i=gy*cols+gx;if(!valid[i])continue;const depth=smoothedMulti.depths[i],x=xs[gx],y=ys[gy];
+    depths[i]=depth;positions[i*3]=(x-w/2)/focalPx*depth;positions[i*3+1]=eyeHeightFt-(y-horizonPx)/focalPx*depth;positions[i*3+2]=depth;
+  }
+
   const indices=[];
   function triangle(a,b,c){
     if(!valid[a]||!valid[b]||!valid[c])return;
@@ -391,6 +431,7 @@ export function reconstructMultiViewGrid({
       validCount,totalSamples:total,validRatio,medianDepthFt,averageConfidence:avgConfidence,
       triangleCount:indices.length/3,quality,viewCount:targets.length+1,
       averageViewsPerPoint:avgViews,multiViewAgreement:strongMultiView,
+      surfaceSmoothingAvgFt:smoothedMulti.averageDelta,surfaceSmoothingMaxFt:smoothedMulti.maxDelta,
       cameraRegistrations:targets.map(t=>({offsetFt:t.offsetFt,x:t.registration.x,y:t.registration.y,score:Number.isFinite(t.registration.rawScore)?t.registration.rawScore:null}))
     }
   };
