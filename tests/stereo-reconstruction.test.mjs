@@ -165,3 +165,27 @@ test('camera vertical drift is registered before stereo disparity is solved',()=
   assert.ok(Math.abs(result.metrics.cameraRegistration.left.y)>=2);
   assert.ok(Math.abs(result.metrics.cameraRegistration.right.y)>=1);
 });
+
+test('pose-aware fusion rotates reference geometry before voxel agreement',()=>{
+  const scene=shiftedMultiView();
+  const captures=[
+    {image:scene.views[0].image,offsetFt:-3,rollRad:-.035},
+    {image:scene.views[1].image,offsetFt:-2,rollRad:-.02},
+    {image:scene.views[2].image,offsetFt:-1,rollRad:-.01},
+    {image:scene.center,offsetFt:0,rollRad:0},
+    {image:scene.views[3].image,offsetFt:1,rollRad:.01},
+    {image:scene.views[4].image,offsetFt:2,rollRad:.02},
+    {image:scene.views[5].image,offsetFt:3,rollRad:.035}
+  ];
+  const primary=reconstructMultiViewGrid({
+    center:scene.center,views:captures.filter(c=>c.offsetFt!==0),
+    fovDeg:60,horizonY:.35,step:4,maxDisparity:12,minConfidence:.05
+  });
+  const fused=fuseMultiReferenceSurfels({
+    captures,primaryIndex:3,primaryResult:primary,referenceIndices:[1,3,5],
+    fovDeg:60,horizonY:.35,step:5,maxDisparity:12,minConfidence:.05,voxelFt:.35
+  });
+  assert.equal(fused.metrics.poseCorrectedReferences,2);
+  assert.ok(fused.metrics.maxReferenceRollDeg>=1);
+  assert.ok(fused.referenceResults.some(r=>Math.abs(r.rollRad)>.01));
+});

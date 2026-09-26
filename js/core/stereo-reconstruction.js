@@ -416,9 +416,9 @@ export function fuseMultiReferenceSurfels({
   voxelFt=.42,
 }={}){
   const ordered=(Array.isArray(captures)?captures:[]).map((capture,index)=>{
-    const image=capture?.image,offsetFt=finite(capture?.offsetFt,0);
+    const image=capture?.image,offsetFt=finite(capture?.offsetFt,0),rollRad=clamp(finite(capture?.rollRad,0),-.20,.20);
     if(!image||!image.width||!image.height||!Number.isFinite(offsetFt))return null;
-    return {image,offsetFt,index};
+    return {image,offsetFt,rollRad,index};
   }).filter(Boolean).sort((a,b)=>a.offsetFt-b.offsetFt);
   if(ordered.length<3)throw new Error('Multi-reference fusion needs at least three captures.');
   const w=ordered[0].image.width,h=ordered[0].image.height;
@@ -456,11 +456,13 @@ export function fuseMultiReferenceSurfels({
         fovDeg,horizonY,eyeHeightFt,step,maxDisparity,patchRadius,verticalSearch,minConfidence,maxDepthFt,minDepthFt
       });
     }
-    referenceMetrics.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,...result.metrics});
-    referenceResults.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,result});
+    referenceMetrics.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,rollRad:ref.rollRad,...result.metrics});
+    referenceResults.push({referenceIndex:refIndex,offsetFt:ref.offsetFt,rollRad:ref.rollRad,result});
+    const cr=Math.cos(ref.rollRad),sr=Math.sin(ref.rollRad);
     for(let i=0;i<result.valid.length;i++){
       if(!result.valid[i]||result.confidence[i]<minConfidence*.72)continue;
-      const x=result.positions[i*3]+ref.offsetFt,y=result.positions[i*3+1],z=result.positions[i*3+2];
+      const localX=result.positions[i*3],localY=result.positions[i*3+1]-eyeHeightFt,z=result.positions[i*3+2];
+      const x=localX*cr-localY*sr+ref.offsetFt,y=localX*sr+localY*cr+eyeHeightFt;
       addPoint(
         x,y,z,
         result.colors[i*3],result.colors[i*3+1],result.colors[i*3+2],
@@ -489,6 +491,8 @@ export function fuseMultiReferenceSurfels({
       surfelCount,
       multiReferenceAgreement:agreement,
       averageConfidence:avgConfidence,
+      poseCorrectedReferences:refs.filter(i=>Math.abs(ordered[i]?.rollRad||0)>.0005).length,
+      maxReferenceRollDeg:Math.round(Math.max(0,...refs.map(i=>Math.abs(ordered[i]?.rollRad||0)))*180/Math.PI*10)/10,
       quality:surfelCount>650&&agreement>.24&&avgConfidence>.16?'good':surfelCount>220&&avgConfidence>.10?'usable':'weak'
     }
   };

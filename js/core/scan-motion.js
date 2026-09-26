@@ -46,6 +46,27 @@ function features(frame,maxFeatures=90){
   }
   return selected;
 }
+function similarityPose(tracks,w,h){
+  if(!tracks?.length)return {rollDeg:0,scale:1,txPx:0,tyPx:0,fitError:Infinity};
+  let sx=0,sy=0,dx=0,dy=0;
+  for(const t of tracks){sx+=t.x;sy+=t.y;dx+=t.x+t.dx;dy+=t.y+t.dy;}
+  const n=tracks.length,cx=sx/n,cy=sy/n,ux=dx/n,uy=dy/n;
+  let dot=0,cross=0,den=0;
+  for(const t of tracks){
+    const ax=t.x-cx,ay=t.y-cy,bx=t.x+t.dx-ux,by=t.y+t.dy-uy;
+    dot+=ax*bx+ay*by;cross+=ax*by-ay*bx;den+=ax*ax+ay*ay;
+  }
+  if(den<1)return {rollDeg:0,scale:1,txPx:ux-cx,tyPx:uy-cy,fitError:Infinity};
+  const a=dot/den,b=cross/den,scale=Math.sqrt(a*a+b*b),angle=Math.atan2(b,a);
+  const cos=Math.cos(angle)*scale,sin=Math.sin(angle)*scale;
+  const tx=ux-(cos*cx-sin*cy),ty=uy-(sin*cx+cos*cy);
+  let err=0;
+  for(const t of tracks){
+    const px=cos*t.x-sin*t.y+tx,py=sin*t.x+cos*t.y+ty;
+    err+=Math.hypot(px-(t.x+t.dx),py-(t.y+t.dy));
+  }
+  return {rollDeg:angle*180/Math.PI,scale,txPx:tx,tyPx:ty,fitError:err/n};
+}
 function trackPair(aFrame,bFrame,{maxDx=28,maxDy=7,patchRadius=2}={}){
   const a=gray(aFrame),b=gray(bFrame);if(!a||!b||a.width!==b.width||a.height!==b.height)return {tracks:[],motion:null};
   const w=a.width,h=a.height,pts=features(aFrame),tracks=[];
@@ -71,8 +92,10 @@ function trackPair(aFrame,bFrame,{maxDx=28,maxDy=7,patchRadius=2}={}){
   if(inliers.length<6)return {tracks,motion:null};
   const signedDx=median(inliers.map(t=>t.dx)),absDx=Math.abs(signedDx);
   const spread=Math.max(0,percentile(inliers.map(t=>Math.abs(t.dx)),.80)-percentile(inliers.map(t=>Math.abs(t.dx)),.20));
-  const quality=clamp((inliers.length/Math.max(1,pts.length))*.6+clamp(absDx/5,0,1)*.25+clamp(spread/4,0,1)*.15,0,1);
-  return {tracks,motion:{dx:signedDx,dy:median(inliers.map(t=>t.dy)),magnitudePx:Math.max(.25,percentile(inliers.map(t=>Math.abs(t.dx)),.5)),trackCount:inliers.length,totalFeatures:pts.length,quality,spreadPx:spread}};
+  const similarity=similarityPose(inliers,w,h);
+  const rollReliable=inliers.length>=8&&similarity.fitError<2.4&&Math.abs(similarity.rollDeg)<=8;
+  const quality=clamp((inliers.length/Math.max(1,pts.length))*.55+clamp(absDx/5,0,1)*.22+clamp(spread/4,0,1)*.13+(rollReliable?.10:0),0,1);
+  return {tracks,motion:{dx:signedDx,dy:median(inliers.map(t=>t.dy)),magnitudePx:Math.max(.25,percentile(inliers.map(t=>Math.abs(t.dx)),.5)),trackCount:inliers.length,totalFeatures:pts.length,quality,spreadPx:spread,rollDeg:rollReliable?similarity.rollDeg:0,rollReliable,similarityScale:similarity.scale,poseFitError:similarity.fitError}};
 }
 export function estimateTrackedCameraPath(frames,{centerIndex}={}){
   if(!Array.isArray(frames)||frames.length<3)return {usable:false,reason:'not-enough-frames',offsetFactors:[],pairs:[]};
@@ -90,15 +113,21 @@ export function estimateTrackedCameraPath(frames,{centerIndex}={}){
   let run=0;for(let i=centerIndex-1;i>=0;i--){run+=steps[i];offsets[i]=-.5*(run/leftTotal);}
   run=0;for(let i=centerIndex+1;i<frames.length;i++){run+=steps[i-1];offsets[i]=.5*(run/rightTotal);}
   const meanQuality=pairs.reduce((s,p)=>s+p.motion.quality,0)/pairs.length;
+  const rolls=new Array(frames.length).fill(0);
+  let roll=0;for(let i=centerIndex-1;i>=0;i--){roll-=pairs[i].motion.rollReliable?pairs[i].motion.rollDeg:0;roll=clamp(roll,-10,10);rolls[i]=roll;}
+  roll=0;for(let i=centerIndex+1;i<frames.length;i++){roll+=pairs[i-1].motion.rollReliable?pairs[i-1].motion.rollDeg:0;roll=clamp(roll,-10,10);rolls[i]=roll;}
+  const framePoses=offsets.map((xFactor,i)=>({frameIndex:i,xFactor:Number(xFactor.toFixed(4)),rollDeg:Number(rolls[i].toFixed(3)),rollReliable:i===centerIndex||pairs[Math.max(0,i-1)]?.motion?.rollReliable===true}));
   return {
     usable:meanQuality>=.22,
     reason:meanQuality>=.22?null:'weak-motion-confidence',
     offsetFactors:offsets.map(v=>Number(v.toFixed(4))),
+    framePoses,
     centerIndex,
     pairs:pairs.map((p,i)=>({from:i,to:i+1,...p.motion})),
     meanQuality:Number(meanQuality.toFixed(3)),
     consistency:Number(consistent.toFixed(3)),
     totalTracks:pairs.reduce((s,p)=>s+(p.motion?.trackCount||0),0),
+    poseAxes:{translationX:'tracked-relative',roll:'tracked-similarity',translationY:'unresolved',translationZ:'unresolved',yaw:'unresolved',pitch:'unresolved'},
     method:'multi-frame-feature-tracking'
   };
 }

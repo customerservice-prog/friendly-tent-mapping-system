@@ -44,3 +44,28 @@ test('feature tracking rejects a non-monotonic camera path',()=>{
   assert.equal(path.usable,false);
   assert.equal(path.reason,'camera-path-not-monotonic');
 });
+
+function transformed(source,{dx=0,dy=0,rollDeg=0}={}){
+  const {width,height}=source,data=new Uint8ClampedArray(width*height*4),cx=(width-1)/2,cy=(height-1)/2,r=rollDeg*Math.PI/180,c=Math.cos(r),s=Math.sin(r);
+  for(let i=3;i<data.length;i+=4)data[i]=255;
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+    const ux=x-dx-cx,uy=y-dy-cy;
+    const sx=Math.round(c*ux+s*uy+cx),sy=Math.round(-s*ux+c*uy+cy);
+    if(sx<0||sy<0||sx>=width||sy>=height)continue;
+    const src=(sy*width+sx)*4,dst=(y*width+x)*4;
+    for(let ch=0;ch<3;ch++)data[dst+ch]=source.data[src+ch];
+  }
+  return {width,height,data};
+}
+
+test('feature tracking estimates camera roll across the scan path',()=>{
+  const base=textured(144,96),positions=[0,2,5,7,10,14,18],rolls=[-2.4,-1.6,-.8,0,.7,1.4,2.1];
+  const frames=positions.map((x,i)=>transformed(base,{dx:x,rollDeg:rolls[i]}));
+  const path=estimateTrackedCameraPath(frames,{centerIndex:3});
+  assert.equal(path.usable,true);
+  assert.equal(path.framePoses.length,7);
+  assert.equal(path.framePoses[3].rollDeg,0);
+  assert.ok(path.framePoses.some((p,i)=>i!==3&&Math.abs(p.rollDeg)>.35),'non-center frames retain tracked roll');
+  assert.equal(path.poseAxes.roll,'tracked-similarity');
+  assert.equal(path.poseAxes.yaw,'unresolved');
+});
