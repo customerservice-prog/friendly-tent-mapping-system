@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { venueScanFrameTimes, venueScanBurstTimes, normalizeVenueScan } from '../js/ui/venue-photo.js';
-import { spaceScanQualityProfile } from '../js/ui/venue-scan3d.js';
+import { spaceScanQualityProfile } from '../js/core/stereo-reconstruction.js';
 
 test('Space Scan video samples three interior viewpoints instead of first/last frames',()=>{
   const times=venueScanFrameTimes(10);
