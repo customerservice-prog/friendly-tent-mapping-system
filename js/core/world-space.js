@@ -68,14 +68,14 @@ export function rotateGroundPoint(point, angleDeg, origin = { x: 0, y: 0 }) {
   };
 }
 
-// New equipment/accessory saves retain model dimensions separately from their
-// oriented layout box. Older accessories stored only a box swapped at each 90°
+// New equipment/accessory/inflatable saves retain model dimensions separately
+// from their oriented layout box. Older accessories and inflatables stored a box swapped at each 90°
 // turn. Recover that local size without changing unflagged legacy object kinds.
 // Resolve this before overriding rotation with an independent photo placement.
 export function objectLocalDimensions(object) {
   const width = Math.max(0.01, finite(object?.widthFt));
   const depth = Math.max(0.01, finite(object?.depthFt ?? object?.lengthFt));
-  const oriented = object?.footprintOriented === true || object?.kind === 'accessory';
+  const oriented = object?.footprintOriented === true || ['accessory','inflatable'].includes(object?.kind);
   const quarterTurn = Math.abs(Math.abs(finite(object?.rotationDeg) % 180) - 90) < 1e-7;
   return {
     widthFt: finite(object?.modelWidthFt) > 0 ? Number(object.modelWidthFt) : oriented && quarterTurn ? depth : width,

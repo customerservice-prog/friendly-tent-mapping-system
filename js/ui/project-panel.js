@@ -2,12 +2,23 @@
 // are fetched on demand and never copied into the scene or public share URL.
 (function () {
   'use strict';
-  var panel, lastFocus, busy = false, data = {}, message = '', generation = 0;
+  var panel, lastFocus, busy = false, loading = false, data = {}, message = '', generation = 0;
   function esc(value) { return String(value ?? '').replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function bridge() { return window.FriendlyBridge || {}; }
   function auto() { return window.RentSketchAutosave || window.RentSketchStartAutosave?.(); }
   function staff() { return !!window.RentSketchDashboardSession?.identity?.(); }
-  function allowed() { return !window.RENTSKETCH_SHARED_READONLY && auto()?.getState?.().readOnly !== true; }
+  function allowed() { return !window.RENTSKETCH_SHARED_READONLY && auto()?.getState?.().readOnly === false; }
+  function accessView() {
+    if (window.RENTSKETCH_SHARED_READONLY) return { kind: 'shared', title: window.RENTSKETCH_SHARED_PROJECT?.projectName || 'Shared layout', status: 'View-only link · editing is unavailable', description: 'This link opens a view-only layout. Use your own event access to edit or manage a project.', notes: window.RENTSKETCH_SHARED_PROJECT?.siteNotes || '' };
+    if (window.RENTSKETCH_PASS_RESTORING || !auto()) return { kind: 'loading', title: 'Opening your event', status: 'Checking event access…', description: 'Your project controls will be available when your saved event finishes opening.' };
+    if (state().staffSessionEnded) return { kind: 'staff', title: 'Staff sign-in required', status: 'Your staff session has ended', description: 'Sign in again to continue working with this project.', action: 'Check staff access' };
+    if (window.RentSketchEventPass?.hasPaidEvent?.()) return { kind: 'expired', title: 'Continue your saved event', status: 'Event editing access has ended', description: 'Your saved layout is still available to view. Review your event access to continue editing, saving versions or managing links.', action: 'Review event access' };
+    return { kind: 'preview', title: 'Start your event project', status: 'Rental preview · editing and saving are locked', description: 'An Event Pass unlocks arranging rentals, venue photos, named versions and sharing. Already have access? Open your saved event.', action: 'See Event Pass options' };
+  }
+  function lockedContent(view) {
+    var recovery = window.RentSketchEventPass?.showRecovery ? button('recover-access', 'Open my saved event') : '';
+    return '<section class="rs-project-access" data-access-state="' + view.kind + '"><h3>' + esc(view.title) + '</h3>' + (view.notes ? '<p class="rs-crew-notes">' + esc(view.notes) + '</p>' : '') + '<p>' + esc(view.description) + '</p>' + (view.kind === 'loading' ? '' : '<div class="rs-project-actions">' + (view.action && window.RentSketchEventPass?.requestAccess ? button('request-access', view.action) : '') + recovery + '</div>') + '</section>';
+  }
   function date(value) { return value ? new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''; }
   function button(action, label, extra) { return '<button type="button" data-action="' + action + '" ' + (extra || '') + (busy ? ' disabled' : '') + '>' + label + '</button>'; }
   function state() { return auto()?.getState?.() || {}; }
@@ -15,21 +26,22 @@
   function updateStatus() {
     if (!panel) return;
     var current = state(), badge = panel.querySelector('[data-save-status]');
-    if (badge) { badge.textContent = current.message || 'Ready to save'; badge.dataset.state = current.status || 'local'; }
+    if (badge) { var locked = !allowed() && accessView(); badge.textContent = locked ? locked.status : loading ? 'Opening project details…' : current.message || 'Ready to save'; badge.dataset.state = locked ? locked.kind : loading ? 'loading' : current.status || 'idle'; }
     var conflict = panel.querySelector('[data-conflict]');
     if (conflict) conflict.hidden = !current.conflict;
   }
   function render() {
     if (!panel) return;
+    var active = document.activeElement, restoreFocus = panel.contains(active), scrollTop = panel.querySelector('.rs-project-dialog')?.scrollTop || 0;
     var current = state(), project = data.project || current.project || {}, readonly = !allowed();
     var revisions = data.revisions || [], alternatives = data.alternatives || [], shares = data.shares || [];
     panel.innerHTML = '<div class="rs-project-dialog" role="dialog" aria-modal="true" aria-labelledby="rsProjectTitle" tabindex="-1">' +
       '<header><div><p class="rs-project-eyebrow">YOUR EVENT WORKSPACE</p><h2 id="rsProjectTitle">Projects &amp; sharing</h2></div>' + button('close', '×', 'class="rs-project-close" aria-label="Close projects"') + '</header>' +
       '<div class="rs-project-status" role="status" aria-live="polite" data-save-status></div>' +
       '<p class="rs-project-message" role="alert">' + esc(message) + '</p>' +
-      (readonly ? '<section><h3>' + esc(window.RENTSKETCH_SHARED_PROJECT?.projectName || 'Shared preview') + '</h3><p class="rs-crew-notes">' + esc(window.RENTSKETCH_SHARED_PROJECT?.siteNotes || '') + '</p><p>This layout is read-only. Return to your private event access to save versions, change notes or manage links.</p></section>' :
+      (readonly ? lockedContent(accessView()) : loading ? '<section aria-busy="true"><h3>Opening your project</h3><p>Loading saved versions, alternatives and sharing settings…</p></section>' :
       '<div class="rs-project-content">' +
-      '<section class="rs-project-conflict" data-conflict hidden><h3>Keep both layouts safe</h3><p>Another session saved this project. Your changes are still on this device. Save them as an alternative, or reopen the latest cloud layout.</p>' + button('conflict-copy', 'Keep my work as an alternative') + button('reload', 'Open latest saved layout') + '</section>' +
+      '<section class="rs-project-conflict" data-conflict hidden><h3>Keep both layouts safe</h3><p>Another session saved this project. Your edits are still open in this tab. Save them as an alternative, or reopen the latest cloud layout.</p>' + button('conflict-copy', 'Keep my work as an alternative') + button('reload', 'Open latest saved layout') + '</section>' +
       '<section><form data-form="details"><h3>Current project</h3><label>Project name<input name="projectName" maxlength="120" value="' + esc(project.projectName) + '" placeholder="Backyard graduation" required></label><label>Site notes <span>Visible to people you share this plan with</span><textarea name="siteNotes" rows="3" maxlength="4000" placeholder="Gate access, setup area, or details to confirm">' + esc(project.siteNotes) + '</textarea></label><div class="rs-project-actions"><button type="submit"' + (busy ? ' disabled' : '') + '>Save project details</button>' + button('sync', 'Save layout now') + '</div></form></section>' +
       '<section><h3>Named versions</h3><p>Keep a checkpoint before trying a different arrangement.</p><form data-form="version" class="rs-project-inline"><label class="rs-project-sr" for="rsVersionName">Version name</label><input id="rsVersionName" name="name" maxlength="120" required placeholder="Approved layout"><button' + (busy ? ' disabled' : '') + '>Save version</button></form><ul class="rs-project-list">' + (revisions.length ? revisions.map(function (v) { return '<li><div><strong>' + esc(v.name) + '</strong><small>Revision ' + esc(v.sourceRevision) + ' · ' + esc(date(v.createdAt)) + '</small></div>' + button('restore', 'Restore', 'data-id="' + esc(v.id) + '"') + '</li>'; }).join('') : '<li class="rs-project-empty">No named versions yet.</li>') + '</ul></section>' +
       '<section><h3>Alternative layouts</h3><p>Compare a ceremony, reception or rain plan without replacing this layout.</p><form data-form="alternative" class="rs-project-inline"><label class="rs-project-sr" for="rsAlternativeName">Alternative name</label><input id="rsAlternativeName" name="name" maxlength="120" required placeholder="Rain plan"><button' + (busy ? ' disabled' : '') + '>Create alternative</button></form><ul class="rs-project-list">' + (alternatives.length ? alternatives.map(function (v) { return '<li><div><strong>' + esc(v.projectName || v.name || 'Untitled layout') + '</strong><small>' + esc(date(v.updatedAt || v.createdAt)) + '</small></div>' + button('open-alternative', v.id === current.id ? 'Current layout' : 'Open', 'data-id="' + esc(v.id) + '"' + (v.id === current.id ? ' disabled' : '')) + '</li>'; }).join('') : '<li class="rs-project-empty">Your alternatives will appear here.</li>') + '</ul></section>' +
@@ -41,15 +53,21 @@
       (staff() ? '<form data-form="crew"><label>Private crew notes <span>Staff only; excluded from viewing links</span><textarea name="crewNotes" rows="4" maxlength="8000" placeholder="Crew instructions, loading order, or items to verify">' + esc(project.crewNotes) + '</textarea></label><button' + (busy ? ' disabled' : '') + '>Save crew notes</button></form>' : '') +
       '<label class="rs-project-check"><input type="checkbox" data-include-photo> Include the venue photo in the printed sheet</label>' + button('print', 'Print installation sheet') + '</section></div>') + '</div>';
     updateStatus();
+    var dialog = panel.querySelector('.rs-project-dialog'); dialog.scrollTop = scrollTop;
+    if (restoreFocus) {
+      var replacement = Array.from(panel.querySelectorAll('button,input,textarea,select')).find(function (el) { return !el.disabled && ((active.dataset.action && el.dataset.action === active.dataset.action && el.dataset.id === active.dataset.id) || (active.name && el.name === active.name && el.closest('form')?.dataset.form === active.closest('form')?.dataset.form)); });
+      (replacement || dialog).focus({ preventScroll: true });
+    }
   }
   async function refresh() {
     var a = auto(), epoch = generation;
-    if (!allowed()) { render(); return; }
+    if (!allowed()) { loading = false; render(); return; }
     if (!a.getDesignId()) await a.flush();
     if (!a.getDesignId()) throw new Error('Start a layout before saving a project.');
     var results = await Promise.all([a.fetchLatest(), a.request(a.projectPath('/revisions')), a.request(a.projectPath('/alternatives')), a.request(a.projectPath('/shares'))]);
     if (!panel || epoch !== generation) return;
     data = Object.assign({}, data, { project: results[0], revisions: results[1].revisions || [], alternatives: results[2].alternatives || [], shares: results[3].shares || [], legacySharesEnabled: results[3].legacySharesEnabled });
+    loading = false;
     render();
   }
   async function run(work) {
@@ -68,13 +86,14 @@
   function adopt(saved) { if (saved.scene && !bridge().loadScene(saved.scene)) throw new Error('This saved layout could not be displayed.'); auto().adopt(saved); }
   async function open() {
     if (panel) { panel.querySelector('.rs-project-dialog').focus(); return; }
-    lastFocus = document.activeElement; generation++; data = {}; message = ''; bridge().closeDrawer?.();
+    lastFocus = document.activeElement; generation++; data = {}; message = ''; loading = allowed(); bridge().closeDrawer?.();
     panel = document.createElement('div'); panel.className = 'rs-project-panel'; document.body.appendChild(panel); render();
     panel.addEventListener('click', function (event) {
       if (event.target === panel) { close(); return; }
       var target = event.target.closest('[data-action]'); if (!target) return;
       var action = target.dataset.action, id = target.dataset.id;
       if (action === 'close') return close();
+      if (action === 'request-access' || action === 'recover-access') { close(); if (action === 'request-access') window.RentSketchEventPass?.requestAccess?.(); else window.RentSketchEventPass?.showRecovery?.(); return; }
       if (!allowed()) return;
       if (action === 'copy-share') { var input = panel.querySelector('[data-share-url]'); input?.select(); navigator.clipboard?.writeText(input.value).catch(function () {}); return; }
       if (action === 'print') return printCrewSheet({ includePhoto: panel.querySelector('[data-include-photo]').checked });
@@ -104,15 +123,16 @@
       if (event.key !== 'Tab') return;
       var focusable = Array.from(panel.querySelectorAll('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)')).filter(function (el) { return !el.closest('[hidden]'); });
       var first = focusable[0], last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (event.shiftKey && (document.activeElement === first || document.activeElement === panel.querySelector('.rs-project-dialog') || !panel.contains(document.activeElement))) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     });
     panel.querySelector('.rs-project-dialog').focus();
-    try { await refresh(); } catch (error) { message = error.message; render(); }
+    try { await refresh(); } catch (error) { loading = false; message = error.message; render(); }
+    if (panel && !panel.contains(document.activeElement)) panel.querySelector('.rs-project-dialog').focus();
   }
   function dimensionRow(item, catalogs) {
     var product = catalogs.find(function (p) { return [item.tableId, item.chairId, item.inflatableId, item.equipmentId, item.accessoryId, item.productId].includes(p.id) || item.productId && p.productId === item.productId; }) || {};
-    return { label: product.name || item.name || item.kind || 'Rental', width: item.modelWidthFt || item.widthFt || product.widthFt, depth: item.modelDepthFt || item.depthFt || product.depthFt || product.lengthFt, height: item.heightFt || product.heightFt, confirmed: product.dimensionsConfirmed === true || item.dimensionsConfirmed === true, x: item.photoPlacement?.x ?? item.x, y: item.photoPlacement?.y ?? item.y };
+    return { label: product.name || item.name || item.kind || 'Rental', width: item.modelWidthFt || item.widthFt || product.widthFt, depth: item.modelDepthFt || item.depthFt || product.depthFt || product.lengthFt, height: item.heightFt || product.heightFt, confirmed: typeof item.dimensionsConfirmed === 'boolean' ? item.dimensionsConfirmed : product.dimensionsConfirmed === true, x: item.photoPlacement?.x ?? item.x, y: item.photoPlacement?.y ?? item.y };
   }
   function venuePhotoUrl(photo) {
     var value = photo?.url || photo?.path;

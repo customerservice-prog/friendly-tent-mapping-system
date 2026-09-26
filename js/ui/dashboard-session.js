@@ -77,9 +77,14 @@
     try { return await task; } finally { if (discovery === task) discovery = null; }
   }
   async function request(path, options) {
+    var pinnedIdentity = options && Object.prototype.hasOwnProperty.call(options, 'expectedIdentity'), expectedIdentity = options && options.expectedIdentity;
+    if (pinnedIdentity) { options = Object.assign({}, options); delete options.expectedIdentity; }
     var bootstrap = /^\/api\/auth\/(?:login(?:\/mfa)?|reset-password|forgot-password)$/.test(path) || path === '/api/business/signup';
     if (!bootstrap) await ready(); else await pendingRevoke;
     var session = getSession(), expectedGeneration = generation;
+    // A delayed cleanup/upload must not inherit a newly signed-in account.
+    // Ordinary requests keep their existing discover-the-current-session flow.
+    if (pinnedIdentity && expectedIdentity !== (session && session.id || '')) throw stale();
     var response = await raw(path, options, session);
     if (expectedGeneration !== generation) throw stale();
     if (response.status === 401 && session) unauthorized(session.id);

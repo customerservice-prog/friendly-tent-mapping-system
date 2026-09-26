@@ -71,7 +71,7 @@ const web=http.createServer((req,res)=>{
  await waitServer(api);apiOrigin='http://127.0.0.1:'+api.address().port;await waitServer(web);webOrigin='http://127.0.0.1:'+web.address().port;
  const browser=await chromium.launch({executablePath:process.env.RENTSKETCH_CHROMIUM||undefined,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
  try{
-  const context=await browser.newContext({viewport:{width:1440,height:900}});await context.addInitScript(()=>{localStorage.setItem('rentsketch-anon-session','generic-photo-owner');localStorage.setItem('rentsketch-autosave:generic',JSON.stringify({id:'generic-photo-design',tenant:'generic',anonymousSessionId:'generic-photo-owner',savedAt:new Date().toISOString(),scene:{tentId:'pole-20x20',surfaceType:'grass',objects:[]}}));});
+  const context=await browser.newContext({viewport:{width:1440,height:900}});await context.addInitScript(()=>{localStorage.setItem('rentsketch-anon-session','generic-photo-owner');if(!localStorage.getItem('rentsketch-autosave:generic'))localStorage.setItem('rentsketch-autosave:generic',JSON.stringify({id:'generic-photo-design',pending:false,tenant:'generic',anonymousSessionId:'generic-photo-owner',savedAt:new Date().toISOString(),scene:{tentId:'pole-20x20',surfaceType:'grass',objects:[]}}));});
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('console',m=>{if(/INVALID_VALUE|texSubImage2D|texStorage2D|VALIDATE_STATUS|Shader Error/.test(m.text()))errors.push(m.text());});
   await page.goto(webOrigin+'/designer/?tenant=generic',{waitUntil:'networkidle'});await page.waitForFunction(()=>window.RentSketchEventPass?.canEdit());
   await page.locator('[data-drawer="site"]').click();

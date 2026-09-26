@@ -26,8 +26,9 @@ export function equipmentOperationProfile(type){
 export function equipmentAssetDescriptor(product={},type){
   type=canonicalEquipmentType(type||product.type||product.accessoryType);
   const source=references[type],externalId=product.externalId||product.external_id||null;
-  const matching=!!source&&externalId===source[0],width=Number(product.width_ft),depth=Number(product.length_ft);
-  const supplied=product.dimensionsConfirmed===true||(width>0&&depth>0);
+  const dimension=value=>{const n=Number(value);return Number.isFinite(n)&&n>0&&n<=500?n:null;};
+  const matching=!!source&&externalId===source[0],metadata=product.metadata||{},width=dimension(product.width_ft||metadata.widthFt),depth=dimension(product.length_ft||metadata.depthFt||metadata.lengthFt);
+  const supplied=typeof product.dimensionsConfirmed==='boolean'?product.dimensionsConfirmed:!!(width&&depth);
   return {
     schemaVersion:ASSET_SCHEMA_VERSION,assetId:'procedural/'+type,version:EQUIPMENT_ASSET_VERSION,units:'feet',origin:'ground-center',forwardAxis:'+Z',
     fidelity:type==='generic'?'footprint':matching?'photo-referenced-procedural':HERO_EQUIPMENT_TYPES.includes(type)?'detailed-procedural':'illustrative-procedural',

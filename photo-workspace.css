@@ -250,3 +250,14 @@
  .scan-check-coordinates input { font-size:16px; }
  .scene-panel { max-height:calc(100dvh - 210px); overflow:auto; }
 }
+
+/* Control geometry is inverse-scaled to CSS pixels; source photo coordinates stay unchanged. */
+.photo-control-target { fill:transparent; stroke:none; cursor:grab; touch-action:none; }
+.photo-control-target:focus { outline:none; }
+.photo-control-target:focus-visible + .photo-calibration-handle { fill:#fcd676; stroke:#fff; stroke-width:3; }
+.photo-corner-label-background { fill:#173d2a; fill-opacity:.94; }
+.photo-corner-label { fill:#fff; font:600 10px system-ui,sans-serif; }
+.photo-calibration-control .photo-calibration-handle { fill:#fff; stroke:#214d38; stroke-width:2; }
+
+.photo-edit-mode .photo-workspace-stage.photo-point-editing { overflow:visible; }
+.photo-edit-mode .photo-mark-tools summary { box-sizing:border-box; }

@@ -11,6 +11,7 @@ let container=null,root=null,stage=null,img=null,svg=null,toolbar=null,currentDa
 let maskEditor=null;
 let resizeObserver=null,tool='move',drag=null,draftGeom=null,selectedGeomId=null,referenceInputsDirty=false;
 const NS='http://www.w3.org/2000/svg';
+const CALIBRATION_CORNERS={frontLeft:'Near left',frontRight:'Near right',backRight:'Far right',backLeft:'Far left'};
 
 function el(tag,cls){const n=document.createElement(tag);if(cls)n.className=cls;return n;}
 function svgEl(tag,attrs={}){const n=document.createElementNS(NS,tag);for(const [k,v] of Object.entries(attrs))n.setAttribute(k,String(v));return n;}
@@ -48,23 +49,25 @@ function geomLabel(type){return ({house:'House / building',fence:'Fence / wall',
 function fitStage(){
   if(!root||!stage||!img)return;
   const viewport=root.querySelector('.photo-workspace-viewport');if(!viewport)return;
-  const w=Math.max(1,(viewport.clientWidth||800)-20),h=Math.max(1,(viewport.clientHeight||600)-20);
+  const pointEditing=tool==='calibrate'||tool==='mask',padding=pointEditing?24:10;
+  stage.classList.toggle('photo-point-editing',pointEditing);
+  const w=Math.max(1,(viewport.clientWidth||800)-padding*2),h=Math.max(1,(viewport.clientHeight||600)-padding*2);
   const iw=img.naturalWidth||Number(currentData?.backgroundPhoto?.widthPx)||4;
   const ih=img.naturalHeight||Number(currentData?.backgroundPhoto?.heightPx)||3;
   const rect=photoImageRect(w,h,iw,ih,currentData.backgroundPhoto);
-  stage.style.position='absolute';stage.style.left=(rect.x+10)+'px';stage.style.top=(rect.y+10)+'px';
+  stage.style.position='absolute';stage.style.left=(rect.x+padding)+'px';stage.style.top=(rect.y+padding)+'px';
   stage.style.width=rect.width+'px';stage.style.height=rect.height+'px';
 }
 function updateHint(){
   const out=root?.querySelector('[data-photo-hint]');if(!out)return;
-  if(tool==='calibrate')out.textContent='Mark the four corners of a real rectangle on level ground, then enter its measured width and depth. A photo cannot determine scale by itself.';
+  if(tool==='calibrate')out.textContent='Mark the four corners of a real rectangle on level ground, then enter its measured width and depth. Drag a labeled corner; arrow keys refine it. A photo cannot determine scale by itself.';
   else if(tool==='mask')out.textContent='Foreground outlines preserve real photo details in front of rentals. They apply only to this fixed Photo View.';
   else if(tool==='geometry')out.textContent='Drag across the photo to mark a house, fence, tree, obstacle, or no-place zone.';
   else out.textContent='Drag the tent or any rental anywhere on the real venue photo. Select one to rotate it.';
 }
 export function setTool(next){
   tool=next||'move';maskEditor?.setActive(tool==='mask');
-  const panel=root?.querySelector('[data-photo-calibration-panel]');if(panel)panel.hidden=tool!=='calibrate';root?.querySelectorAll('[data-photo-tool]').forEach(b=>b.classList.toggle('active',b.dataset.photoTool===tool));updateHint();renderOverlay();
+  const panel=root?.querySelector('[data-photo-calibration-panel]');if(panel)panel.hidden=tool!=='calibrate';root?.querySelectorAll('[data-photo-tool]').forEach(b=>b.classList.toggle('active',b.dataset.photoTool===tool));updateHint();fitStage();renderOverlay();
 }
 function renderToolbar(){
   toolbar.innerHTML=
@@ -126,14 +129,39 @@ function syncCalibrationControls(){
   }
   const validity=photoCalibrationValidity(cal),status=root.querySelector('[data-photo-scale-status]');if(status)status.textContent=!validity.valid?validity.reason:cal.scaleConfirmed?'Measurements entered · vertical perspective estimated':'Scale not set · starting estimate';
 }
+function screenSize(){
+  const rect=stage?.getBoundingClientRect();return {width:Math.max(1,rect?.width||800),height:Math.max(1,rect?.height||600)};
+}
+function nearestCalibrationCorner(p){
+  if(!p)return null;const size=screenSize(),cal=calibration();let closest=null,distance=22;
+  for(const name of Object.keys(CALIBRATION_CORNERS)){
+    const next=Math.hypot((p.x-cal[name].x)*size.width,(p.y-cal[name].y)*size.height);
+    if(next<=distance){closest=name;distance=next;}
+  }
+  return closest;
+}
+function calibrationKeydown(e){
+  const handle=e.target.closest?.('[data-cal-handle]');
+  if(tool!=='calibrate'||!handle||!['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key))return;
+  e.preventDefault();e.stopPropagation();const name=handle.dataset.calHandle,p=calibration()[name],size=screenSize(),step=e.shiftKey?10:1;
+  dragCalibration(name,{x:clamp(p.x+(e.key==='ArrowRight'?step:e.key==='ArrowLeft'?-step:0)/size.width,0,1),y:clamp(p.y+(e.key==='ArrowDown'?step:e.key==='ArrowUp'?-step:0)/size.height,0,1)});
+}
 function renderGround(){
   const cal=calibration(),pts=[cal.frontLeft,cal.frontRight,cal.backRight,cal.backLeft];
   const g=svgEl('g',{'class':'photo-ground-calibration'});
   g.appendChild(svgEl('polygon',{points:pointsAttr(pts),'class':'photo-ground-polygon'}));
   if(tool==='calibrate'){
-    const names=['frontLeft','frontRight','backRight','backLeft'];
-    pts.forEach((p,i)=>{const q=pct(p);g.appendChild(svgEl('circle',{cx:q.x,cy:q.y,r:13,'class':'photo-calibration-handle','data-cal-handle':names[i]}));});
+    const names=Object.keys(CALIBRATION_CORNERS),size=screenSize();
     const hY=(photoGroundHorizon(photoSpace(),cal)??cal.horizonY)*1000;g.appendChild(svgEl('line',{x1:0,y1:hY,x2:1000,y2:hY,'class':'photo-horizon-line'}));
+    pts.forEach((p,i)=>{
+      const q=pct(p),name=names[i],control=svgEl('g',{transform:`translate(${q.x} ${q.y}) scale(${1000/size.width} ${1000/size.height})`,'class':'photo-calibration-control'});
+      control.append(svgEl('circle',{cx:0,cy:0,r:22,'class':'photo-control-target','data-cal-handle':name,tabindex:0,role:'button','aria-label':`${CALIBRATION_CORNERS[name]} corner. Drag or use arrow keys to adjust; Shift moves ten pixels.`}));
+      control.append(svgEl('circle',{cx:0,cy:0,r:6,'class':'photo-calibration-handle','pointer-events':'none'}));
+      const labelX=clamp(name.endsWith('Left')?-10:10,35-p.x*size.width,size.width-35-p.x*size.width);
+      const labelY=name.startsWith('back')&&p.y*size.height>33||p.y*size.height>size.height-33?-30:12;
+      control.append(svgEl('rect',{x:labelX-33,y:labelY,width:66,height:19,rx:5,'class':'photo-corner-label-background','pointer-events':'none'}));
+      const label=svgEl('text',{x:labelX,y:labelY+13,'class':'photo-corner-label','text-anchor':'middle','pointer-events':'none'});label.textContent=CALIBRATION_CORNERS[name];control.append(label);g.append(control);
+    });
   }
   svg.appendChild(g);
 }
@@ -184,7 +212,11 @@ function renderDraftGeometry(){
 }
 function renderOverlay(){
   if(!svg||!currentData)return;
+  // SVG controls are rebuilt during live edits; keep the keyboard user on the same point.
+  const focused=svg.contains(document.activeElement)?document.activeElement:null;
+  const focusAttr=['data-cal-handle','data-mask-vertex','data-mask-edge'].find(attr=>focused?.hasAttribute(attr)),focusValue=focusAttr&&focused.getAttribute(focusAttr);
   svg.replaceChildren();if(tool==='mask')maskEditor?.render();else{renderGround();renderGeometry();renderObjects();renderDraftGeometry();}
+  if(focusAttr){const next=Array.from(svg.querySelectorAll('['+focusAttr+']')).find(node=>node.getAttribute(focusAttr)===focusValue);next?.focus({preventScroll:true});}
   const remove=root?.querySelector('[data-photo-remove-geometry]');if(remove)remove.disabled=!selectedGeomId;
 }
 function dragCalibration(name,p){
@@ -196,9 +228,10 @@ function dragCalibration(name,p){
 }
 function pointerDown(e){
   if(tool==='mask'){maskEditor?.pointerDown(e,pointFromEvent(e));return;}
-  const handle=e.target.closest?.('[data-cal-handle]');
-  if(handle&&tool==='calibrate'){
-    e.preventDefault();e.stopPropagation();drag={kind:'calibration',name:handle.dataset.calHandle,pointerId:e.pointerId,original:calibration()};
+  const p=pointFromEvent(e),corner=tool==='calibrate'?nearestCalibrationCorner(p):null;
+  if(corner){
+    e.preventDefault();e.stopPropagation();const original=calibration();drag={kind:'calibration',name:corner,pointerId:e.pointerId,original,offset:{x:original[corner].x-p.x,y:original[corner].y-p.y}};
+    svg.querySelector('[data-cal-handle="'+corner+'"]')?.focus({preventScroll:true});
     try{stage.setPointerCapture(e.pointerId);}catch(_){}return;
   }
   if(tool==='geometry'){
@@ -216,7 +249,7 @@ function pointerMove(e){
   if(tool==='mask'){maskEditor?.pointerMove(e,pointFromEvent(e));return;}
   if(!drag)return;
   const p=pointFromEvent(e);if(!p)return;
-  if(drag.kind==='calibration'){dragCalibration(drag.name,p);return;}
+  if(drag.kind==='calibration'){dragCalibration(drag.name,{x:clamp(p.x+drag.offset.x,0,1),y:clamp(p.y+drag.offset.y,0,1)});return;}
   if(drag.kind==='geometry'){draftGeom.end=p;renderOverlay();return;}
   const site=photoSpace();let item={...drag.live};
   if(drag.kind==='item'){
@@ -270,7 +303,7 @@ export function mount(containerEl,data,cbs){
   stage.append(img,svg);viewport.appendChild(stage);root.append(toolbar,viewport);container.replaceChildren(root);
   renderToolbar();renderImage();
   img.addEventListener('load',()=>{fitStage();if(!data.photoCalibration){const cal=defaultPhotoCalibration(photoSpace(),currentData.backgroundPhoto);currentData={...currentData,photoCalibration:cal};callbacks.onCalibration?.(cal);}renderOverlay();});
-  stage.addEventListener('pointerdown',pointerDown);stage.addEventListener('pointermove',pointerMove);stage.addEventListener('pointerup',pointerUp);stage.addEventListener('pointercancel',pointerUp);
+  stage.addEventListener('keydown',calibrationKeydown);stage.addEventListener('pointerdown',pointerDown);stage.addEventListener('pointermove',pointerMove);stage.addEventListener('pointerup',pointerUp);stage.addEventListener('pointercancel',pointerUp);
   window.addEventListener('pointerup',pointerUp,true);window.addEventListener('pointercancel',pointerUp,true);
   if(window.ResizeObserver){resizeObserver=new ResizeObserver(()=>{fitStage();renderOverlay();});resizeObserver.observe(viewport);}
   fitStage();renderOverlay();

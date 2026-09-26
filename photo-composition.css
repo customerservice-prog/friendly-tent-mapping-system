@@ -44,3 +44,23 @@
 .photo-mask-properties[open] > summary::after { content:'⌃'; }
 @media(max-width:650px) { .photo-mask-select-field select { font-size:16px; } }
 .photo-preview-mode .scene-panel:has(.photo-lighting-controls) { width:310px; max-width:calc(100vw - 24px); box-sizing:border-box; max-height:min(660px,calc(100dvh - 330px)); overflow-y:auto; overscroll-behavior:contain; }
+
+.photo-mask-target { fill:transparent; stroke:none; cursor:grab; touch-action:none; }
+.photo-mask-target:focus { outline:none; }
+.photo-mask-target:focus-visible + circle { fill:#fcd676; stroke:#fff; stroke-width:3; }
+.photo-mask-draft .photo-mask-target { fill:transparent; stroke:none; }
+.photo-mask-point-controls { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:end; gap:5px 8px; margin-top:7px; }
+.photo-mask-point-controls[hidden] { display:none; }
+.photo-mask-point-controls label { display:grid; gap:4px; font-size:11px; min-width:0; }
+.photo-mask-point-controls select { width:100%; min-width:0; min-height:44px; box-sizing:border-box; border:1px solid #ccdacd; border-radius:7px; padding:7px; background:#fff; color:#294d38; font-size:13px; }
+.photo-mask-point-controls .btn-chip { min-height:44px; border:1px solid #ccdacd; border-radius:8px; padding:8px; background:#fff; color:#29503a; font-size:12px; }
+.photo-mask-point-controls span { grid-column:1/-1; color:#617164; font-size:10px; line-height:1.4; }
+@media(max-width:650px) { .photo-mask-point-controls select { font-size:16px; } }
+
+/* Status changes must not recenter the photo during a touch drag. */
+.photo-mask-panel .photo-mask-status { min-height:2.9em; max-height:2.9em; overflow:auto; }
+@media(min-width:901px) {
+  .photo-mask-panel { display:grid; grid-template-columns:minmax(240px,1fr) minmax(240px,1fr); gap:5px 16px; align-items:start; }
+  .photo-mask-panel > p:first-child,.photo-mask-panel > .photo-mask-status { grid-column:1/-1; }
+  .photo-mask-point-controls { margin-top:0; }
+}

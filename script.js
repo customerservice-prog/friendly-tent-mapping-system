@@ -18,7 +18,7 @@ import { TABLETOP } from './js/data/tabletop.js';
 // persistent status bar. Pricing reflects Friendly Party Rental's published
 // per-day pricing (see FRIENDLY-EVENT-DESIGNER.md, section 7).
 
-import { INFLATABLES, inflatableItem, byId as inflatableById } from './js/data/inflatables.js';
+import { INFLATABLES, inflatableItem, byId as inflatableById, resolvedInflatableDefinition } from './js/data/inflatables.js';
 import { inflatableCards, inflatableInspector, inflatablePhoto } from './js/ui/inflatable-controls.js';
 import { ACCESSORIES, accessoryById, accessoryItem } from './js/data/accessories.js';
 import { accessoryInspector, accessoryIcon } from './js/ui/accessory-controls.js';
@@ -123,6 +123,7 @@ function loadScene(scene,options){
     }
   }
   if(!scene||typeof scene!=='object'||!Array.isArray(scene.objects)||(!scene.objects.length&&!Object.prototype.hasOwnProperty.call(scene,'tentId')))return false;
+  invalidateVenuePhotoOperations();
   var previousScanInputs=scanRuntimeInputs();
   if(pendingPlacement)cancelPlacement();
   ['eventName','siteLayout','siteWidthFt','siteLengthFt','primaryInflatableId','eventType','guestCount','spaceType','surfaceType','needDance','danceFloorSizeId','customDanceFloorFt','matchedPackageId','tentId','chairId','lightingId','lightingProductId','sidewalls','backgroundPhoto','venueScan','photoCalibration','photoComposition','photoGeometry','photoTentPlacement','lastTableConfig'].forEach(function(k){if(scene[k]!==undefined&&scene[k]!==null)state[k]=scene[k];});
@@ -158,6 +159,39 @@ function setVenuePhotoStatus(text,kind){
   var el=$('drawerBody')?.querySelector('[data-role="venue-photo-status"]');
   if(el){el.textContent=state.venuePhotoStatus.text;el.dataset.kind=state.venuePhotoStatus.kind;}
 }
+// An upload belongs to the source/project that started it. Manual viewpoints may
+// finish in any order; replacement, removal and restore invalidate older work.
+var venuePhotoGeneration=0,venuePhotoOperations=new Map();
+function venuePhotoPrincipal(){return JSON.stringify([window.RENTSKETCH_TENANT_SLUG||'generic',window.RentSketchDashboardSession?.identity?.()||'',window.RentSketchAutosave?.getSessionId?.()||null]);}
+function invalidateVenuePhotoOperations(){venuePhotoGeneration++;venuePhotoOperations.clear();}
+function beginVenuePhotoOperation(kind,role){
+  if(!window.RentSketchAutosave&&window.RentSketchStartAutosave)window.RentSketchStartAutosave();
+  if(kind!=='manual'||Array.from(venuePhotoOperations.values()).some(op=>op.kind!=='manual'))invalidateVenuePhotoOperations();
+  const key=kind==='manual'?role:kind,op={key,kind,generation:venuePhotoGeneration,principal:venuePhotoPrincipal(),designId:window.RentSketchAutosave?.getDesignId?.()||null,uploads:[],applied:false};
+  venuePhotoOperations.set(key,op);return op;
+}
+function currentVenuePhotoOperation(op){
+  return op.generation===venuePhotoGeneration&&venuePhotoOperations.get(op.key)===op&&canEditEvent()&&op.principal===venuePhotoPrincipal()&&(!op.designId||op.designId===window.RentSketchAutosave?.getDesignId?.());
+}
+async function prepareVenuePhotoOperation(op){
+  const designId=await ensureVenuePhotoDesign();
+  if(!currentVenuePhotoOperation(op))return null;
+  if(!designId)throw new Error('This layout could not be saved before the photo upload.');
+  op.designId=designId;op.context=venuePhotoContext(designId);return op.context;
+}
+function removeUnusedVenuePhotos(photos,op){
+  // Never send cleanup with a different user's newly signed-in credentials.
+  if(!op.context||op.principal!==venuePhotoPrincipal())return;
+  const referenced=new Set([state.backgroundPhoto?.id,...venueScanPhotos().map(photo=>photo.id)].filter(Boolean));
+  photos.filter(photo=>photo?.id&&!referenced.has(photo.id)).forEach(photo=>deleteVenuePhoto(photo,op.context));
+}
+function finishVenuePhotoOperation(op){
+  if(!op.applied)removeUnusedVenuePhotos(op.uploads,op);
+  if(venuePhotoOperations.get(op.key)===op)venuePhotoOperations.delete(op.key);
+}
+window.addEventListener('rentsketch:dashboardSessionChanged',invalidateVenuePhotoOperations);
+window.addEventListener('rentsketch:accessRequired',invalidateVenuePhotoOperations);
+window.addEventListener('rentsketch:accessChanged',function(){if(!canEditEvent())invalidateVenuePhotoOperations();});
 async function chooseVenuePhoto(file,input){
   if(!file)return false;
   if(!requireEventEditing()){
@@ -165,16 +199,18 @@ async function chooseVenuePhoto(file,input){
     return false;
   }
   if(input)input.disabled=true;
-  var previous=state.backgroundPhoto,previousScan=currentVenueScan();
+  const operation=beginVenuePhotoOperation('photo');
   var label=(file.name||'photo').slice(0,120);
   try{
     setVenuePhotoStatus('Selected '+label+' · preparing your venue photo…','working');
     showLayoutNotice('Applying '+label+' to your venue…',5000);
-    var designId=await ensureVenuePhotoDesign();
-    if(!designId)throw new Error('This layout could not be saved before the photo upload.');
+    const context=await prepareVenuePhotoOperation(operation);if(!context)return false;
     setVenuePhotoStatus('Uploading '+label+'…','working');
-    var photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
+    var photo=await uploadVenuePhoto(file,context);operation.uploads.push(photo);
+    if(!currentVenuePhotoOperation(operation))return false;
+    var previous=state.backgroundPhoto,previousScan=currentVenueScan();
     state.backgroundPhoto=photo;state.photoComposition=normalizePhotoComposition(null);state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;
+    operation.applied=true;
     var snapAfterPhoto=buildSnapshot(getConflicts());
     state.photoCalibration=defaultPhotoCalibration(snapAfterPhoto.photoSite,state.backgroundPhoto);state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;
     state.venuePhotoStatus={text:'Applied · Set a ground measurement and align the corners, then preview your rentals.',kind:'success'};
@@ -182,17 +218,18 @@ async function chooseVenuePhoto(file,input){
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     var photoSaved=false;
     try{await window.RentSketchAutosave?.flush?.();photoSaved=true;}catch(saveErr){console.warn('[RentSketch] venue photo uploaded; design save will retry',saveErr);}
-    if(photoSaved&&previous?.id&&previous.id!==photo.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
-    if(photoSaved)venueScanPhotos(previousScan).filter(f=>f.id!==photo.id&&f.id!==previous?.id).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
+    if(!currentVenuePhotoOperation(operation))return false;
+    if(photoSaved)removeUnusedVenuePhotos([previous,...venueScanPhotos(previousScan)],operation);
     showLayoutNotice('Photo ready. Adjust the ground corners and drag rentals into place. Photo scale is estimated; verify dimensions on site.',6500);
     return true;
   }catch(err){
+    if(!currentVenuePhotoOperation(operation))return false;
     console.error('[RentSketch] venue photo failed',err);
     var message=err?.message||'That venue photo could not be added.';
     setVenuePhotoStatus('Could not apply photo: '+message,'error');
     showLayoutNotice('Could not apply photo: '+message,8000);
     return false;
-  }finally{if(input&&input.isConnected)input.disabled=false;}
+  }finally{finishVenuePhotoOperation(operation);if(input&&input.isConnected)input.disabled=false;}
 }
 function currentVenueScan(){
   return normalizeVenueScan(state.venueScan,window.RENTSKETCH_API_URL);
@@ -208,14 +245,16 @@ async function chooseVenueScanPhoto(role,file,input){
   if(!file||!['left','center','right'].includes(role))return false;
   if(!requireEventEditing())return false;
   if(input)input.disabled=true;
-  const before=currentVenueScan(),previous=before.frames.find(f=>f.role===role)||null;
+  const operation=beginVenuePhotoOperation('manual',role);
   try{
     showLayoutNotice('Uploading '+role+' Space Scan photo…',4200);
-    const designId=await ensureVenuePhotoDesign();
-    if(!designId)throw new Error('This layout could not be saved before the scan photo upload.');
-    const photo=await uploadVenuePhoto(file,venuePhotoContext(designId));
+    const context=await prepareVenuePhotoOperation(operation);if(!context)return false;
+    const photo=await uploadVenuePhoto(file,context);operation.uploads.push(photo);
+    if(!currentVenuePhotoOperation(operation))return false;
+    const before=currentVenueScan(),previous=before.frames.find(f=>f.role===role)||null,previousBackground=state.backgroundPhoto;
     const frames=before.frames.filter(f=>f.role!==role).concat([{...photo,role}]);
     state.venueScan=normalizeVenueScan({...before,frames,validationCheck:null,samples:[],captureMethod:'manual',baselineFactor:1},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:state.venueScan.status==='ready'};
+    operation.applied=true;
     if(role==='center'){
       state.backgroundPhoto={...photo};state.photoComposition=normalizePhotoComposition(null);
       // A new center viewpoint changes the Photo Match camera itself. Recreate
@@ -230,10 +269,9 @@ async function chooseVenueScanPhoto(role,file,input){
     if(state.venueScan.status==='ready')setViewMode('3d');
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(err){console.warn('[RentSketch] Space Scan save will retry',err);}
+    if(!currentVenuePhotoOperation(operation))return false;
     if(saved){
-      if(previous?.id&&previous.id!==photo.id&&previous.id!==state.backgroundPhoto?.id)deleteVenuePhoto(previous,venuePhotoContext(designId));
-      const keep=new Set(state.venueScan.frames.map(f=>f.id).filter(Boolean));
-      before.samples.filter(f=>f.id&&!keep.has(f.id)&&f.id!==state.backgroundPhoto?.id).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
+      removeUnusedVenuePhotos([previous,...before.samples,...(role==='center'?[previousBackground]:[])],operation);
     }
     if(state.venueScan.status==='ready'){
       showLayoutNotice('Photos captured. Checking overlap and estimating depth…',6500);
@@ -243,10 +281,11 @@ async function chooseVenueScanPhoto(role,file,input){
     }
     return true;
   }catch(err){
+    if(!currentVenuePhotoOperation(operation))return false;
     console.error('[RentSketch] Space Scan photo failed',err);
     showLayoutNotice('Could not add Space Scan photo: '+(err?.message||'Upload failed.'),7000);
     return false;
-  }finally{if(input&&input.isConnected)input.disabled=false;}
+  }finally{finishVenuePhotoOperation(operation);if(input&&input.isConnected)input.disabled=false;}
 }
 function updateVenueScanBaseline(value){
   if(!requireEventEditing())return false;
@@ -259,22 +298,26 @@ async function chooseVenueScanVideo(file,input){
   if(!file)return false;
   if(!requireEventEditing())return false;
   if(input)input.disabled=true;
-  const before=currentVenueScan(),designId=await ensureVenuePhotoDesign().catch(()=>null);
-  if(!designId){if(input&&input.isConnected)input.disabled=false;showLayoutNotice('This layout could not be saved before the scan video.',6000);return false;}
+  const operation=beginVenuePhotoOperation('video');
   try{
+    const context=await prepareVenuePhotoOperation(operation);if(!context)return false;
     showLayoutNotice('Reading Space Scan video and extracting viewpoints…',5000);
     const extracted=await extractVenueScanVideo(file);
+    if(!currentVenuePhotoOperation(operation))return false;
     const uploadedSamples=[];
     for(let i=0;i<extracted.samples.length;i++){
       const sample=extracted.samples[i];
       showLayoutNotice('Uploading Space Scan viewpoint '+(i+1)+' of '+extracted.samples.length+'…',3500);
-      const photo=await uploadVenuePhoto(sample.file,venuePhotoContext(designId));
+      const photo=await uploadVenuePhoto(sample.file,context);operation.uploads.push(photo);
+      if(!currentVenuePhotoOperation(operation))return false;
       uploadedSamples.push({...photo,role:sample.role||undefined,sampleIndex:sample.sampleIndex,offsetFactor:sample.offsetFactor});
     }
     const center=uploadedSamples.find(f=>f.role==='center')||uploadedSamples[Math.floor(uploadedSamples.length/2)];
     if(!center)throw new Error('The center scan frame could not be created.');
     const primaryFrames=uploadedSamples.filter(f=>['left','center','right'].includes(f.role));
+    const before=currentVenueScan(),previousBackground=state.backgroundPhoto;
     state.venueScan=normalizeVenueScan({...before,frames:primaryFrames,validationCheck:null,samples:uploadedSamples,captureMethod:'video',baselineFactor:extracted.baselineFactor},window.RENTSKETCH_API_URL);window.RENTSKETCH_SCAN_RECONSTRUCTION={ready:false,loading:true};
+    operation.applied=true;
     state.backgroundPhoto={...center};state.photoComposition=normalizePhotoComposition(null);
     if(photoMounted){photoViewMod.unmount();photoMounted=false;}
     const snap=buildSnapshot(getConflicts());
@@ -283,41 +326,52 @@ async function chooseVenueScanVideo(file,input){
     renderDrawerBody('site');renderViews(getConflicts());setViewMode('3d');
     window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
     let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(err){console.warn('[RentSketch] Space Scan video save will retry',err);}
+    if(!currentVenuePhotoOperation(operation))return false;
     if(saved){
-      const keep=new Set(uploadedSamples.map(f=>f.id));
-      venueScanPhotos(before).filter(f=>f.id&&!keep.has(f.id)).forEach(f=>deleteVenuePhoto(f,venuePhotoContext(designId)));
+      removeUnusedVenuePhotos([previousBackground,...venueScanPhotos(before)],operation);
     }
     showLayoutNotice('Video captured. Checking image quality and estimating depth…',6500);
     return true;
   }catch(err){
+    if(!currentVenuePhotoOperation(operation))return false;
     console.error('[RentSketch] Space Scan video failed',err);
     showLayoutNotice('Could not build Space Scan from that video: '+(err?.message||'Try again while moving sideways more slowly.'),8000);
     return false;
-  }finally{if(input&&input.isConnected)input.disabled=false;}
+  }finally{finishVenuePhotoOperation(operation);if(input&&input.isConnected)input.disabled=false;}
 }
 async function clearVenueScan(){
   if(!requireEventEditing())return false;
+  const operation=beginVenuePhotoOperation('clear');
   const scan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
+  if(designId)operation.context=venuePhotoContext(designId);
   const deletable=venueScanPhotos(scan).filter(f=>f.id&&f.id!==state.backgroundPhoto?.id);
   state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;renderDrawerBody('site');renderViews(getConflicts());
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
-  let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(_){}
-  if(saved&&designId)deletable.forEach(photo=>deleteVenuePhoto(photo,venuePhotoContext(designId)));
-  showLayoutNotice(state.backgroundPhoto?'Space Scan cleared. Your center photo is still available as Photo Match.':'Space Scan cleared.',4200);
-  return true;
+  try{
+    let saved=false;try{await window.RentSketchAutosave?.flush?.();saved=true;}catch(_){}
+    if(!currentVenuePhotoOperation(operation))return false;
+    if(saved&&designId)removeUnusedVenuePhotos(deletable,operation);
+    showLayoutNotice(state.backgroundPhoto?'Space Scan cleared. Your center photo is still available as Photo Match.':'Space Scan cleared.',4200);
+    return true;
+  }finally{finishVenuePhotoOperation(operation);}
 }
 async function removeVenuePhoto(){
   if(!requireEventEditing()||!state.backgroundPhoto)return false;
+  const operation=beginVenuePhotoOperation('remove');
   var old=state.backgroundPhoto,oldScan=currentVenueScan(),designId=window.RentSketchAutosave?.getDesignId?.();
+  if(designId)operation.context=venuePhotoContext(designId);
   state.backgroundPhoto=null;state.photoComposition=normalizePhotoComposition(null);state.venueScan=null;window.RENTSKETCH_SCAN_RECONSTRUCTION=null;state.photoCalibration=null;state.photoGeometry=[];state.photoTentPlacement=null;state.selectedPhotoId=null;if(state.viewMode==='photo')state.viewMode='plan';renderDrawerBody('site');renderViews(getConflicts());setViewMode(state.viewMode);
   window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));
-  var removalSaved=false;try{await window.RentSketchAutosave?.flush?.();removalSaved=true;}catch(_){}
-  if(removalSaved&&designId){
-    const unique=new Map([[old.id,old],...venueScanPhotos(oldScan).map(f=>[f.id,f])]);
-    unique.forEach(photo=>deleteVenuePhoto(photo,venuePhotoContext(designId)));
-  }
-  showLayoutNotice('Venue photo and Space Scan removed. RentSketch is showing the generated setting again.',4200);
-  return true;
+  try{
+    var removalSaved=false;try{await window.RentSketchAutosave?.flush?.();removalSaved=true;}catch(_){}
+    if(!currentVenuePhotoOperation(operation))return false;
+    if(removalSaved&&designId){
+      const unique=new Map([[old.id,old],...venueScanPhotos(oldScan).map(f=>[f.id,f])]);
+      removeUnusedVenuePhotos(Array.from(unique.values()),operation);
+    }
+    showLayoutNotice('Venue photo and Space Scan removed. RentSketch is showing the generated setting again.',4200);
+    return true;
+  }finally{finishVenuePhotoOperation(operation);}
 }
 function resetVenuePhotoFraming(){
   if(!state.backgroundPhoto)return;
@@ -644,7 +698,7 @@ function renderInspector(conflicts){
   if(item.kind==='table'){
     var t=byId(TABLES,item.tableId),matching=objects.filter(function(o){return o.kind==='table'&&o.tableId===item.tableId;}).length;
     renderEquipmentContent(p,tableInspector(item,t,CHAIRS,optionsForTable(item.tableId).filter(function(l){return l.id!=='linen-napkins'&&l.id!=='linen-runner-9ft';}),matching));
-  }else if(item.kind==='accessory'){renderEquipmentContent(p,accessoryInspector(item,accessoryById(item.accessoryId)||{...item,pricePerDay:null}));}else if(item.kind==='equipment'){renderEquipmentContent(p,equipmentInspector(item,equipmentById(item.equipmentId)));}else if(item.kind==='chair'){var chair=byId(CHAIRS,item.chairId);renderEquipmentContent(p,'<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button><h3>'+escapeHtml(chair?.name||'Accent chair')+'</h3>'+chairVisual(chair||{})+'<p>One accent chair · '+moneyOrAsk(chair?.pricePerDay)+'/day</p><p>Drag to move this chair.</p><div class="inspector-actions">'+['rotate','duplicate','delete'].map(action=>'<button type="button" class="btn-secondary" data-role="insp-'+action+'" data-id="'+escapeHtml(item.id)+'">'+action[0].toUpperCase()+action.slice(1)+'</button>').join('')+'</div>');}else if(item.kind==='inflatable'){var product=inflatableById(item.inflatableId);if(product)renderEquipmentContent(p,inflatableInspector(item,product));
+  }else if(item.kind==='accessory'){renderEquipmentContent(p,accessoryInspector(item,accessoryById(item.accessoryId)||{...item,pricePerDay:null}));}else if(item.kind==='equipment'){renderEquipmentContent(p,equipmentInspector(item,equipmentById(item.equipmentId)));}else if(item.kind==='chair'){var chair=byId(CHAIRS,item.chairId);renderEquipmentContent(p,'<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button><h3>'+escapeHtml(chair?.name||'Accent chair')+'</h3>'+chairVisual(chair||{})+'<p>One accent chair · '+moneyOrAsk(chair?.pricePerDay)+'/day</p><p>Drag to move this chair.</p><div class="inspector-actions">'+['rotate','duplicate','delete'].map(action=>'<button type="button" class="btn-secondary" data-role="insp-'+action+'" data-id="'+escapeHtml(item.id)+'">'+action[0].toUpperCase()+action.slice(1)+'</button>').join('')+'</div>');}else if(item.kind==='inflatable'){var product=resolvedInflatableDefinition(item);if(product)renderEquipmentContent(p,inflatableInspector(item,product));
   }else{
     renderEquipmentContent(p,'<button class="btn-tertiary inspector-close" data-role="inspector-close">Close</button><h3>Dance Floor</h3><p>'+objects.filter(function(o){return o.kind==='dance';}).length+' sections</p><button class="btn-danger" data-role="insp-delete-dance">Remove Dance Floor</button>');
   }

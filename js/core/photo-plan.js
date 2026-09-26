@@ -2,8 +2,6 @@ import { rentalPhotoPlacement, photoTentTransform } from './photo-geometry.js';
 import { objectLocalDimensions, objectGroundFootprint } from './world-space.js';
 import { pointInPolygon } from './site-fit.js';
 import { CONFLICT_TYPES, SEVERITY, checkSurfaceAnchoringConflicts } from './collision.js';
-import { byId as inflatableById } from '../data/inflatables.js';
-import { equipmentById } from '../data/equipment.js';
 
 // Read-only adapter: all views share photo-site placement while older saved
 // tent-local coordinates remain available for compatibility and photo removal.
@@ -30,10 +28,7 @@ export function photoPlanSnapshot(data) {
 export function runPhotoPlanChecks(snapshot,guestCount=0,surfaceType=snapshot?.surfaceType){
   const plan=photoPlanSnapshot(snapshot),tent=plan.tent,site=plan.photoSite||tent,objects=plan.objects||[],results=[];
   const add=(type,severity,ids,message)=>results.push({type,severity,objectIds:ids,message});
-  const shape=(item,padding=0)=>{
-    const product=item.kind==='inflatable'?inflatableById(item.inflatableId):item.kind==='equipment'?equipmentById(item.equipmentId):null;
-    return objectGroundFootprint(product?{...item,modelWidthFt:product.widthFt,modelDepthFt:product.depthFt}:item,padding);
-  };
+  const shape=(item,padding=0)=>objectGroundFootprint(item,padding);
   const footprints=new Map(objects.map(o=>[o.id,shape(o)])),floors=objects.filter(o=>o.kind==='dance'||o.kind==='danceFloor'),rentals=objects.filter(o=>!floors.includes(o));
   const placement=plan.planTentPlacement||photoTentTransform(tent,site,plan.photoTentPlacement),a=placement.rotationDeg*Math.PI/180,c=Math.cos(a),s=Math.sin(a);
   const poles=tent.isSite?[]:(tent.centerPoles||[]).map(p=>{const x=(Number(p.x)||0)-tent.widthFt/2,y=(Number(p.y)||0)-tent.lengthFt/2;return {x:placement.x+tent.widthFt/2+x*c-y*s,y:placement.y+tent.lengthFt/2+x*s+y*c};});
