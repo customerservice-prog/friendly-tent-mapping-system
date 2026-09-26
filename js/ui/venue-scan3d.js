@@ -1,4 +1,4 @@
-import { assessCaptureFrames } from '../core/capture-quality.js';
+import { assessCaptureFrames, estimateFrameTranslation } from '../core/capture-quality.js';
 import * as THREE from 'three';
 import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../core/stereo-reconstruction.js';
 
@@ -75,7 +75,8 @@ export async function createVenueScanWorld({
     centerData=working[centerIndex];const center=centerData,views=[];
     for(let i=0;i<working.length;i++){
       if(i===centerIndex)continue;
-      views.push({image:working[i],offsetFt:samples[i].offsetFactor*baselineFt});
+      const alignment=estimateFrameTranslation(center,working[i]);
+      views.push({image:working[i],offsetFt:samples[i].offsetFactor*baselineFt,verticalOffsetPx:alignment?.dy||0,registrationScore:alignment?.score??null});
     }
     result=reconstructMultiViewGrid({
       center,views,
@@ -116,8 +117,11 @@ export async function createVenueScanWorld({
     const width=mobile?128:176,height=Math.max(84,Math.min(144,Math.round(width*aspect)));
     const left=imageData(leftImage,width,height),center=imageData(centerImage,width,height),right=imageData(rightImage,width,height);centerData=center;
     const quality=assessCaptureFrames([left,center,right]);if(!quality.usable){group.userData={ready:false,error:'capture-quality',quality,setNight(){}};return group;}
+    const leftAlignment=estimateFrameTranslation(center,left),rightAlignment=estimateFrameTranslation(center,right);
     result=reconstructStereoGrid({
       left,center,right,baselineFt,
+      leftVerticalOffsetPx:leftAlignment?.dy||0,
+      rightVerticalOffsetPx:rightAlignment?.dy||0,
       fovDeg:Number(scan.fovDeg)||62,
       horizonY:Number(calibration?.horizonY)||.34,
       eyeHeightFt:Number(scan.eyeHeightFt)||5.6,
@@ -241,7 +245,7 @@ export async function createVenueScanWorld({
     ready:true,
     metric:false,
     accuracy:'unverified',
-    provenance:{geometry:'estimated stereo depth',scale:'user-entered baseline',cameraPoses:'assumed',unseenAreas:'not reconstructed'},
+    provenance:{geometry:'estimated stereo depth',scale:'user-entered baseline',cameraPoses:'vertical-registered; horizontal pose assumed',unseenAreas:'not reconstructed'},
     baselineFt,
     requestedBaselineFt,
     baselineFactor,

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reconstructStereoGrid, reconstructMultiViewGrid, fuseMultiReferenceSurfels, stereoReconstructionSummary, stereoObstacleRects } from '../js/core/stereo-reconstruction.js';
+import { estimateFrameTranslation, assessCaptureFrames } from '../js/core/capture-quality.js';
 
 function image(width,height,fn){
   const data=new Uint8ClampedArray(width*height*4);
@@ -137,4 +138,39 @@ test('multi-reference fusion combines spatial support from several reference cam
   assert.ok(Array.from(fused.supportReferences).some(v=>v>=2),'some spatial surfels are confirmed by more than one reference camera');
   assert.ok(fused.metrics.multiReferenceAgreement>0,'fusion reports cross-reference spatial agreement');
   assert.ok(fused.metrics.averageConfidence>0);
+});
+
+
+function translateFrame(frame,dx,dy){
+  const {width,height}=frame,data=new Uint8ClampedArray(width*height*4);
+  for(let i=3;i<data.length;i+=4)data[i]=255;
+  for(let y=0;y<height;y++)for(let x=0;x<width;x++){
+    const tx=x+dx,ty=y+dy;if(tx<0||tx>=width||ty<0||ty>=height)continue;
+    const src=(y*width+x)*4,dst=(ty*width+tx)*4;
+    for(let ch=0;ch<3;ch++)data[dst+ch]=frame.data[src+ch];
+  }
+  return {width,height,data};
+}
+
+test('frame registration estimates handheld vertical drift and stereo rectification preserves depth',()=>{
+  const base=shiftedTriplet(112,72,5);
+  const left=translateFrame(base.left,0,6),right=translateFrame(base.right,0,-5);
+  const leftAlignment=estimateFrameTranslation(base.center,left),rightAlignment=estimateFrameTranslation(base.center,right);
+  assert.ok(Number.isFinite(leftAlignment?.dy)&&Number.isFinite(rightAlignment?.dy),'registration returns usable vertical offsets');
+  const quality=assessCaptureFrames([left,base.center,right]);
+  assert.equal(quality.usable,true,'moderate handheld bob is rectifiable rather than rejected');
+  const result=reconstructStereoGrid({
+    left,center:base.center,right,baselineFt:6,fovDeg:60,horizonY:.35,step:4,maxDisparity:12,minConfidence:.05,
+    verticalSearch:2,leftVerticalOffsetPx:leftAlignment.dy,rightVerticalOffsetPx:rightAlignment.dy
+  });
+  assert.ok(result.metrics.validCount>90,'registered captures retain a useful depth field');
+  const expected=result.focalPx*3/5;
+  assert.ok(Math.abs(result.metrics.medianDepthFt-expected)<expected*.25,'rectified depth remains close to the stereo solution');
+});
+
+test('capture quality rejects large vertical camera movement instead of manufacturing geometry',()=>{
+  const base=shiftedTriplet(96,64,5),bad=translateFrame(base.right,0,10);
+  const quality=assessCaptureFrames([base.left,base.center,bad]);
+  assert.equal(quality.usable,false);
+  assert.ok(quality.issues.some(issue=>/up or down|overlap/i.test(issue)));
 });

@@ -69,13 +69,13 @@ function patchScore(a,b,w,h,ax,ay,bx,by,r){
   }
   return err/Math.max(1,energy);
 }
-function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,verticalSearch}){
+function bestMatch(center,target,w,h,x,y,{direction,maxDisparity,patchRadius,verticalSearch,baseDy=0}){
   let best={score:Infinity,d:0,dy:0},second=Infinity;
   for(let d=1;d<=maxDisparity;d++){
     const tx=x+direction*d;
     if(tx-patchRadius<0||tx+patchRadius>=w)continue;
     for(let dy=-verticalSearch;dy<=verticalSearch;dy++){
-      const ty=y+dy;
+      const ty=y+baseDy+dy;
       if(ty-patchRadius<0||ty+patchRadius>=h)continue;
       const score=patchScore(center,target,w,h,x,y,tx,ty,patchRadius);
       if(score<best.score){second=best.score;best={score,d,dy};}
@@ -118,6 +118,8 @@ export function reconstructStereoGrid({
   maxDisparity=28,
   patchRadius=2,
   verticalSearch=2,
+  leftVerticalOffsetPx=0,
+  rightVerticalOffsetPx=0,
   minContrast=7,
   minConfidence=.11,
   maxDepthFt=150,
@@ -153,8 +155,8 @@ export function reconstructStereoGrid({
       if(contrast<minContrast)continue;
       // Same-facing lateral capture: content shifts right in the left image and
       // left in the right image relative to the center frame.
-      const lm=bestMatch(centerGray,leftGray,w,h,x,y,{direction:1,maxDisparity,patchRadius,verticalSearch});
-      const rm=bestMatch(centerGray,rightGray,w,h,x,y,{direction:-1,maxDisparity,patchRadius,verticalSearch});
+      const lm=bestMatch(centerGray,leftGray,w,h,x,y,{direction:1,maxDisparity,patchRadius,verticalSearch,baseDy:finite(leftVerticalOffsetPx,0)});
+      const rm=bestMatch(centerGray,rightGray,w,h,x,y,{direction:-1,maxDisparity,patchRadius,verticalSearch,baseDy:finite(rightVerticalOffsetPx,0)});
       const match=chooseDisparity(lm,rm);
       if(!match||match.confidence<minConfidence)continue;
       const depth=clamp(focalPx*halfBaseline/Math.max(.5,match.d),minDepthFt,maxDepthFt);
@@ -233,7 +235,7 @@ export function reconstructMultiViewGrid({
     const image=view?.image,offsetFt=finite(view?.offsetFt,0);
     if(!image||Math.abs(offsetFt)<.20)return null;
     if(image.width!==w||image.height!==h)throw new Error('All multi-view scan frames must use the same working resolution.');
-    return {image,offsetFt,index};
+    return {image,offsetFt,index,verticalOffsetPx:finite(view?.verticalOffsetPx,0)};
   }).filter(Boolean);
   if(usable.length<2)throw new Error('Multi-view reconstruction needs captures on both sides of the center view.');
   const hasLeft=usable.some(v=>v.offsetFt<0),hasRight=usable.some(v=>v.offsetFt>0);
@@ -284,7 +286,7 @@ export function reconstructMultiViewGrid({
       for(const target of targets){
         const absOffset=Math.abs(target.offsetFt),direction=target.offsetFt<0?1:-1;
         const scaledMax=Math.max(4,Math.min(maxDisparity,Math.round(maxDisparity*(.40+.60*absOffset/maxOffset))));
-        const match=bestMatch(centerGray,target.gray,w,h,x,y,{direction,maxDisparity:scaledMax,patchRadius,verticalSearch});
+        const match=bestMatch(centerGray,target.gray,w,h,x,y,{direction,maxDisparity:scaledMax,patchRadius,verticalSearch,baseDy:target.verticalOffsetPx});
         if(!match||match.d<=0||match.confidence<minConfidence)continue;
         const depth=clamp(focalPx*absOffset/Math.max(.5,match.d),minDepthFt,maxDepthFt);
         const baselineWeight=.55+.45*Math.sqrt(absOffset/maxOffset);
