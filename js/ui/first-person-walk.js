@@ -6,7 +6,7 @@ import { findSafeWalkStart, resolveWalkStep, walkPositionBlocked, walkSpeedFtPer
  *
  * Camera movement is separate from rental placement. Walking can never mutate
  * tent/table/chair coordinates. Collision here is intentionally conservative:
- * traced property geometry and large inflatables block the viewer, while chairs
+ * traced property geometry, inflatables, and standing accessories block the viewer, while chairs
  * and tables stay passable so a customer cannot become trapped in a dense layout.
  */
 function finite(v,f=0){const n=Number(v);return Number.isFinite(n)?n:f;}
@@ -47,7 +47,7 @@ export function createFirstPersonWalk({
       photoGeometry:getObstacles?.()||[],
       items:getItems?.()||[],
       bodyRadiusFt:.85,
-      blockRentalKinds:['inflatable']
+      blockRentalKinds:['inflatable','accessory']
     };
   }
   function blocksWorldPosition(worldX,worldZ){
