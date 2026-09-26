@@ -52,7 +52,10 @@ export function assessCaptureFrames(frames){
   if(difference<.5)issues.push(`Views ${i} and ${i+1} appear identical. Move sideways to capture a new viewpoint.`);
   const alignment=estimateFrameTranslation(frames[i-1],frames[i]);alignments.push(alignment);
   if(alignment){
-   if(alignment.score>62)issues.push(`Views ${i} and ${i+1} do not overlap clearly enough. Keep the same yard features in view while moving sideways.`);
+   // Real lateral parallax can produce a fairly high photometric score even when
+   // the same scene is still well registered. Only reject unmistakably bad
+   // correspondence here; stereo confidence performs the finer per-point test.
+   if(alignment.score>82||alignment.overlap<.55)issues.push(`Views ${i} and ${i+1} do not overlap clearly enough. Keep the same yard features in view while moving sideways.`);
    const verticalLimit=Math.max(5,frames[i].height*.10);
    if(Math.abs(alignment.dy)>verticalLimit)issues.push(`Views ${i} and ${i+1} move too far up or down. Keep the phone level while moving sideways.`);
   }
