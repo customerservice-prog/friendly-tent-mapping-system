@@ -2,6 +2,7 @@ const express = require('express');
 const db = require('../db');
 const { hashPassword } = require('../auth');
 const { createDashboardSession } = require('../dashboardSessions');
+const { requireDashboardBootstrap, sendDashboardSession } = require('../dashboardHttpSession');
 const { randomBytes } = require('crypto');
 
 const router = express.Router();
@@ -31,6 +32,7 @@ function slugify(name) {
 // so the existing dashboard code needs no special-casing for new tenants.
 router.post('/signup', async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
+  try { requireDashboardBootstrap(req); } catch (err) { return res.status(403).json({ error: err.message }); }
   const { businessName, contactEmail, password, plan } = req.body || {};
 
   if (typeof businessName !== 'string' || !businessName.trim() || businessName.trim().length > 120) {
@@ -89,17 +91,11 @@ router.post('/signup', async (req, res) => {
     const dashboardSession = await createDashboardSession({ ...user, password_hash: passwordHash }, client);
     await client.query('COMMIT');
 
-    res.status(201).json({
-      ...dashboardSession,
-      user: { id: user.id, email: user.email, displayName: user.display_name },
-      tenant: {
-        slug: tenant.slug,
-        name: tenant.name,
-        subscriptionPlan: tenant.subscription_plan,
-        subscriptionStatus: tenant.subscription_status,
-        trialEndsAt: tenant.trial_ends_at,
-      },
-    });
+    dashboardSession.tenant = {
+      slug: tenant.slug, name: tenant.name, subscriptionPlan: tenant.subscription_plan,
+      subscriptionStatus: tenant.subscription_status, trialEndsAt: tenant.trial_ends_at,
+    };
+    return sendDashboardSession(req, res.status(201), user, dashboardSession);
   } catch (err) {
     if (client) await client.query('ROLLBACK');
     if (err.code === '23505') return res.status(409).json({ error: 'An account with that email already exists. Please log in instead.' });

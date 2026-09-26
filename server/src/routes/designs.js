@@ -1,3 +1,4 @@
+const { getDashboardToken } = require('../dashboardHttpSession');
 const { clientIp } = require('../clientIp');
 const express = require('express');
 const { verifyDashboardToken } = require('../dashboardSessions');
@@ -56,10 +57,9 @@ async function tenantForSlug(slug) {
 // Match photo-upload authorization. A staff exemption changes the payment
 // requirement only; PATCH still requires this draft's owning browser session.
 async function staffAllowed(req, tenant) {
-  const header = String(req.headers.authorization || '');
-  if (!header.startsWith('Bearer ')) return false;
   try {
-    const payload = await verifyDashboardToken(header.slice(7));
+    const token = getDashboardToken(req); if (!token) return false;
+    const payload = await verifyDashboardToken(token);
     if (await isConfiguredPlatformAdmin(payload)) return true;
     if (!payload.userId) return false;
     const row = (await db.query(
@@ -67,7 +67,8 @@ async function staffAllowed(req, tenant) {
       [tenant.id, payload.userId]
     )).rows[0];
     return !!row && ['owner', 'admin', 'staff'].includes(String(row.role || '').toLowerCase());
-  } catch (_) {
+  } catch (error) {
+        if (error.status === 403) throw error;
     return false;
   }
 }

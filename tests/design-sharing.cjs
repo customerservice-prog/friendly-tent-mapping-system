@@ -17,7 +17,7 @@ const auth={
 };
 const routes=load('server/src/routes/designs.js',{
   express,'../db':db,'../middleware/requireAuth':{requireTenantAccess:(req,res,next)=>next()},
-  '../eventPassAccess':{savePermission:async()=>null},'../auth':auth,'../dashboardSessions':{verifyDashboardToken:async()=>{throw Error('No staff fixture')}}
+  '../eventPassAccess':{savePermission:async()=>null},'../auth':auth,'../dashboardHttpSession':{getDashboardToken:req=>String(req.headers.authorization||'').startsWith('Bearer ')?req.headers.authorization.slice(7):null},'../dashboardSessions':{verifyDashboardToken:async()=>{throw Error('No staff fixture')}}
 });
 const app=express();app.use(express.json());app.use('/api/tenants',routes);app.use((err,req,res,next)=>{console.error(err);res.status(500).json({error:err.message});});
 let server,base;

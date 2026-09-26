@@ -34,7 +34,8 @@ function load(file, deps) {
 }
 const auth = { signToken: (p, o) => jwt.sign(p, 'isolated-test-secret', o), verifyToken: s => jwt.verify(s, 'isolated-test-secret') };
 const dashboardSessions = load('server/src/dashboardSessions.js', { crypto: require('crypto'), './db': db, './auth': auth });
-const authz = load('server/src/middleware/requireAuth.js', { '../dashboardSessions': dashboardSessions, '../db': db });
+const dashboardHttpSession = load('server/src/dashboardHttpSession.js', { crypto: require('crypto'), './auth': auth });
+const authz = load('server/src/middleware/requireAuth.js', { '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession, '../db': db });
 const email = load('server/src/eventPassEmail.js', { crypto: require('crypto'), './db': db, './auth': auth, './outboundWebhook': { validateWebhookUrl: () => ({ ok: false }) }, './mailer': { getMailer: () => ({ send: async (to, subject, text) => { if (failEmail) throw Error('isolated SMTP outage'); deliveries.push({ to, subject, text }); return {}; } }) } });
 // Keep worker ticks explicit so simulated Postgres transactions cannot interleave
 // through the single PGlite connection. Production uses distinct pooled clients.
@@ -47,12 +48,12 @@ const orderAccess = load('server/src/friendlyOrderAccess.js', { crypto: require(
 } } });
 const pass = load('server/src/eventPass.js', { './db': db, './pricing': pricing, './eventPassEmail': mailQueue, stripe: Stripe });
 const access = load('server/src/eventPassAccess.js', { './db': db, './eventPass': pass, './friendlyOrderAccess': orderAccess });
-const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../middleware/requireAuth': authz, '../access': { resolveAccess: async ({isStaff}) => ({isStaff}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
-const designs = load('server/src/routes/designs.js', { express, '../db': db, '../middleware/requireAuth': authz, '../eventPassAccess': access, '../auth': auth, '../dashboardSessions': dashboardSessions });
-const backgrounds = load('server/src/routes/designBackgrounds.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../middleware/requireAuth': authz, '../eventPassAccess': access });
+const consumer = load('server/src/routes/consumerEventPass.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession, '../middleware/requireAuth': authz, '../access': { resolveAccess: async ({isStaff}) => ({isStaff}) }, '../eventPass': pass, '../eventPassAccess': access, '../eventPassEmail': mailQueue, '../friendlyOrderAccess': orderAccess });
+const designs = load('server/src/routes/designs.js', { express, '../db': db, '../middleware/requireAuth': authz, '../eventPassAccess': access, '../auth': auth, '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession });
+const backgrounds = load('server/src/routes/designBackgrounds.js', { express, crypto: require('crypto'), '../db': db, '../auth': auth, '../dashboardSessions': dashboardSessions, '../dashboardHttpSession': dashboardHttpSession, '../middleware/requireAuth': authz, '../eventPassAccess': access });
 const quotes = load('server/src/routes/quoteRequests.js', { express, crypto: require('crypto'), '../db': db, '../mailer': { getMailer: () => null }, '../middleware/requireAuth': { requireTenantRole: () => (req,res,next) => next() }, '../orderProviders/quoteRequestOrderProvider': {}, '../outboundWebhook': {}, '../eventPass': pass, '../eventPassAccess': access });
 const webhook = load('server/src/routes/stripeWebhook.js', { express, '../db': db, '../pricing': pricing, stripe: Stripe, '../eventPass': pass, '../orderProviders/quoteRequestOrderProvider': {} });
-const app = express(); app.use('/webhook', express.raw({ type: 'application/json' }), webhook); app.use(express.json()); app.use('/api/consumer', consumer); app.use('/api/consumer', backgrounds); app.use('/api/tenants', designs); app.use('/api/tenants', backgrounds); app.use('/api/tenants', quotes); app.use((err, req, res, next) => res.status(500).json({ error: err.message }));
+const app = express(); app.use('/webhook', express.raw({ type: 'application/json' }), webhook); app.use(express.json()); app.use('/api/consumer', consumer); app.use('/api/consumer', backgrounds); app.use('/api/tenants', designs); app.use('/api/tenants', backgrounds); app.use('/api/tenants', quotes); app.use((err, req, res, next) => res.status(err.status || 500).json({ error: err.message }));
 const tenant = '10000000-0000-4000-8000-000000000001', other = '10000000-0000-4000-8000-000000000002';
 let server, base;
 async function request(url, body, signature, method, authorization) {
@@ -76,6 +77,7 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
 (async () => {
   await pg.exec(`CREATE TABLE tenants(id uuid PRIMARY KEY,slug text); CREATE TABLE designs(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_id uuid,owner_user_id uuid,anonymous_session_id text,scene jsonb,event_type text,guest_count int,estimate_total numeric,schema_version int,created_at timestamptz DEFAULT now(),updated_at timestamptz DEFAULT now()); CREATE TABLE users(id uuid PRIMARY KEY,email text,password_hash text); CREATE TABLE tenant_memberships(tenant_id uuid,user_id uuid,role text);`);
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/020_dashboard_sessions.sql'), 'utf8'));
+  await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/021_account_security.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/004_entitlements.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/011_event_pass_access_email.sql'), 'utf8'));
   await pg.exec(fs.readFileSync(path.join(root, 'server/migrations/012_friendly_order_access.sql'), 'utf8'));
@@ -104,6 +106,15 @@ const restore = id => request('/api/consumer/event-pass/restore', { checkoutSess
     const url=basePath+'/'+id;
     assert.equal((await request(url,{scene:{...adminFurnished,eventName:'Updated by admin'},anonymousSessionId:sid},null,'PATCH',configuredAdminToken)).status,200,'admin pre-upload save succeeds');
     assert.equal((await photoRequest(url,sid,configuredAdminToken)).status,201,'admin Photo Match upload succeeds after saving');
+    const cookieHeaders={Origin:'https://rentsketch.com','Sec-Fetch-Site':'same-origin',Cookie:'__Host-rentsketch_dashboard='+configuredAdminToken,'X-RentSketch-CSRF':dashboardHttpSession.publicDashboardSession(configuredAdminToken).csrfToken};
+    const cookieSave=await fetch(base+url,{method:'PATCH',headers:{...cookieHeaders,'Content-Type':'application/json'},body:JSON.stringify({scene:adminFurnished,anonymousSessionId:sid})});
+    assert.equal(cookieSave.status,200,'same-origin cookie admin save succeeds');
+    const cookiePhoto=await fetch(base+url+'/background-photo',{method:'POST',headers:{...cookieHeaders,'Content-Type':'image/jpeg','X-RentSketch-Session':sid},body:Buffer.from([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0xff,0xd9])});
+    assert.equal(cookiePhoto.status,201,'same-origin cookie admin photo upload succeeds');
+    const badCsrf={...cookieHeaders,'X-RentSketch-CSRF':'bad'};
+    assert.equal((await fetch(base+url,{method:'PATCH',headers:{...badCsrf,'Content-Type':'application/json'},body:JSON.stringify({scene:adminFurnished,anonymousSessionId:sid})})).status,403,'invalid CSRF never downgrades to anonymous save');
+    assert.equal((await fetch(base+url+'/background-photo',{method:'POST',headers:{...badCsrf,'Content-Type':'image/jpeg','X-RentSketch-Session':sid},body:Buffer.from([0xff,0xd8,0xff,0xe0,0x00,0x10,0x4a,0x46,0x49,0x46,0x00,0x01,0xff,0xd9])})).status,403,'invalid CSRF never downgrades to anonymous photo upload');
+
     assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:'wrong-session'},null,'PATCH',configuredAdminToken)).status,404,'staff payment exemption does not bypass draft ownership');
     assert.equal((await request(url,{scene:adminFurnished,anonymousSessionId:sid},null,'PATCH')).status,402,'same saved draft is not publicly editable after admin signs out');
     assert.equal((await photoRequest(url,sid)).status,402,'same furnished design cannot upload photos without pass or authenticated staff');

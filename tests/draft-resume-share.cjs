@@ -29,32 +29,41 @@ async function sharedRestore(){
 async function authenticatedSaves(){
  for(const slug of ['friendly','generic']){
   const dom=new JSDOM('<!doctype html><body></body>',{url:'https://rentsketch.com/designer/?tenant='+slug,runScripts:'outside-only'}),w=dom.window;
-  let scene={tentId:'frame-20x20',objects:[]},missingDraft=false;
-  const calls=[];
+  let scene={tentId:'frame-20x20',objects:[]},missingDraft=false,pendingJson=null;
+  let staff={id:'first-session',csrfToken:'first-csrf',expiresAt:'2099-01-01T00:00:00.000Z'};
+  const calls=[];w.Headers=Headers;
   w.RENTSKETCH_API_URL='https://api.test';w.RENTSKETCH_TENANT_SLUG=slug;w.RENTSKETCH_CATALOG_READY=true;
   w.FriendlyBridge={getScene:()=>scene,state:{}};
   w.RentSketchEventPass={canEdit:()=>true};
   w.localStorage.setItem('rentsketch-anon-session','owner-session');
-  w.localStorage.setItem('rentsketch_dashboard_token','first-token');
   w.fetch=async(url,options)=>{
-   calls.push({url,method:options.method,headers:options.headers,body:JSON.parse(options.body)});
+   if(url==='/staff-api/api/auth/me')return{ok:!!staff,status:staff?200:401,json:async()=>({session:staff})};
+   const headers=Object.fromEntries(new Headers(options.headers).entries());
+   calls.push({url,method:options.method,headers,credentials:options.credentials,body:JSON.parse(options.body)});
    if(missingDraft&&options.method==='PATCH'){missingDraft=false;return{ok:false,status:404,json:async()=>({error:'Draft not found for this session'})};}
-   return{ok:true,status:200,json:async()=>({id:'saved-design'})};
+   return{ok:true,status:200,json:async()=>pendingJson?await pendingJson:{id:'saved-design'}};
   };
+  w.eval(fs.readFileSync(path.join(root,'js/ui/dashboard-session.js'),'utf8'));
   w.eval(source);w.RentSketchStartAutosave();
   await w.RentSketchAutosave.flush();
-  assert.equal(calls[0].method,'POST');assert.equal(calls[0].headers.Authorization,'Bearer first-token');
-  w.localStorage.setItem('rentsketch_dashboard_token','renewed-token');
+  assert.equal(calls[0].method,'POST');assert.equal(calls[0].headers['x-rentsketch-csrf'],'first-csrf');
+  staff={...staff,id:'renewed-session',csrfToken:'renewed-csrf'};w.RentSketchDashboardSession.accept(staff);
   scene={...scene,surfaceType:'concrete'};missingDraft=true;
   await w.RentSketchAutosave.flush();
   assert.deepEqual(calls.slice(1).map(c=>c.method),['PATCH','POST'],'missing draft recreation follows the update');
-  for(const call of calls.slice(1))assert.equal(call.headers.Authorization,'Bearer renewed-token','update and recreate use current login');
-  w.localStorage.removeItem('rentsketch_dashboard_token');
+  for(const call of calls.slice(1))assert.equal(call.headers['x-rentsketch-csrf'],'renewed-csrf','update and recreate use current cookie session CSRF');
+  let release;pendingJson=new Promise(resolve=>{release=resolve;});scene={...scene,eventName:'Staff pending write'};
+  const pending=w.RentSketchAutosave.flush();await wait(20);
+  await w.RentSketchDashboardSession.clear('signed-out',false);staff=null;
+  release({id:'stale-design'});
+  await assert.rejects(pending,/session changed/,'logout while parsing a save response prevents client state adoption');
+  assert.equal(w.RentSketchAutosave.getDesignId(),'saved-design');
   scene={...scene,surfaceType:'grass'};
-  await w.RentSketchAutosave.flush();
-  assert.equal(calls.at(-1).headers.Authorization,undefined,'logout never reuses an old bearer');
-  for(const call of calls){assert.equal(call.body.anonymousSessionId,'owner-session');assert.equal(call.headers['Content-Type'],'application/json');}
+  const before=calls.length;await assert.rejects(w.RentSketchAutosave.flush(),/admin session ended/);
+  assert.equal(calls.length,before,'a lost staff session never silently falls back to an anonymous write');
+  for(const call of calls){assert.equal(call.body.anonymousSessionId,'owner-session');assert.equal(call.headers['content-type'],'application/json');assert.equal(call.headers.authorization,undefined);assert.equal(call.credentials,'same-origin');assert.ok(call.url.startsWith('/staff-api/api/'));}
   assert.match(calls[0].url,slug==='generic'?/\/api\/consumer\/designs$/:/\/api\/tenants\/friendly\/designs$/);
+  assert.equal(w.localStorage.getItem('rentsketch_dashboard_token'),null,'no readable staff credential is stored');
   dom.window.close();
  }
 }

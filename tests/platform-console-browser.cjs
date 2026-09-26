@@ -2,8 +2,9 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http');
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..'),out=path.join(root,'qa-platform-console');fs.mkdirSync(out,{recursive:true});
+const session={id:'platform-browser-session',csrfToken:'platform-browser-csrf',expiresAt:new Date(Date.now()+3600000).toISOString(),idleTimeoutSeconds:1800};
 const fixtures={
- me:{user:{id:'admin',email:'owner@example.invalid',displayName:'RentSketch Owner',isPlatformAdmin:true},tenants:[{slug:'friendly',name:'Friendly Party Rental',role:'platform_admin'}]},
+ me:{session,user:{id:'admin',email:'owner@example.invalid',displayName:'RentSketch Owner',isPlatformAdmin:true},tenants:[{slug:'friendly',name:'Friendly Party Rental',role:'platform_admin'}]},
  overview:{tenants:3,tenantUsers:8,designs:42,subscriptions:{active:2,trialing:1,attention:0,list_mrr:'148.00'},eventPassRevenue:{count:23,cents:22977},tenantDepositVolume:{count:5,cents:50250},platformFeeRevenue:{cents:1250},month:{eventPassCents:5994,depositCents:20000}},
  payments:{payments:[
   {id:'pay-1',kind:'event_pass',subtype:'consumer_event_pass',status:'paid',amount_cents:999,currency:'USD',customer_email:'buyer@example.invalid',tenant_slug:'generic',tenant_name:'Direct consumer',payment_intent_id:'pi_fixture',created_at:'2026-09-23T12:00:00Z'},
@@ -18,6 +19,7 @@ const fixtures={
 };
 const server=http.createServer((req,res)=>{
  const u=new URL(req.url,'http://localhost');
+ if(u.pathname.startsWith('/staff-api/')){u.pathname=u.pathname.slice('/staff-api'.length);assert.equal(req.headers.authorization,undefined);assert.equal(req.headers['x-rentsketch-client'],'dashboard');assert.match(req.headers.cookie||'',/rs_fixture_session=opaque-fixture/);}
  if(u.pathname.startsWith('/api/')){
   res.setHeader('Content-Type','application/json');
   if(u.pathname==='/api/auth/me')return res.end(JSON.stringify(fixtures.me));
@@ -46,16 +48,15 @@ const server=http.createServer((req,res)=>{
  try{
   for(const viewport of [{width:1440,height:900,name:'desktop'},{width:390,height:844,name:'mobile'}]){
    const ctx=await browser.newContext({viewport:{width:viewport.width,height:viewport.height}});
-   await ctx.addInitScript(url=>{
-    const expiresAt=Date.now()+60*60*1000;
-    const token='fixture.'+btoa(JSON.stringify({kind:'dashboard_session',sub:'admin',jti:'platform-browser-fixture',exp:Math.floor(expiresAt/1000)}))+'.isolated-signature';
-    localStorage.setItem('rentsketch_dashboard_session',JSON.stringify({lastActivity:Date.now(),expiresAt}));
-    localStorage.setItem('rentsketch_dashboard_token',token);window.RENTSKETCH_API_URL=url;
-   },base);
+   await ctx.addCookies([{name:'rs_fixture_session',value:'opaque-fixture',url:base,httpOnly:true,sameSite:'Strict'}]);
+   await ctx.addInitScript(url=>{window.RENTSKETCH_API_URL=url;},base);
    const page=await ctx.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
    await page.goto(base+'/dashboard/platform.html#overview');
    await page.getByRole('heading',{name:'Your RentSketch business'}).waitFor();
+   assert.equal(await page.evaluate(()=>document.cookie.includes('rs_fixture_session')),false,'staff authentication cookie is unavailable to browser JavaScript');
+   assert.equal(await page.evaluate(()=>localStorage.getItem('rentsketch_dashboard_token')),null);
    assert.equal(await page.getByText('$148.00',{exact:true}).count(),1,'MRR metric renders');
+   assert.equal(await page.getByRole('link',{name:'Account security'}).getAttribute('href'),'/dashboard/account.html');
    assert.ok(await page.getByRole('link',{name:/Open RentSketch/}).count()>=1,'admin has direct designer button');
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true,'console has no horizontal page overflow at '+viewport.width);
    if(viewport.name==='mobile'){

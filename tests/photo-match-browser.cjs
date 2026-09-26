@@ -28,7 +28,7 @@ const api=http.createServer((req,res)=>{
   if(u.pathname==='/api/consumer/designs/generic-photo-design/background-photo'&&req.method==='POST'){
     const chunks=[];req.on('data',c=>chunks.push(c));req.on('end',()=>{
       const body=Buffer.concat(chunks),n=uploads.length+1;
-      const item={bytes:body.length,contentType:req.headers['content-type'],session:req.headers['x-rentsketch-session']};uploads.push(item);
+      const item={bytes:body.length,contentType:req.headers['content-type'],session:req.headers['x-rentsketch-session'],cookie:req.headers.cookie,authorization:req.headers.authorization};uploads.push(item);
       json(201,{id:'photo-browser-fixture-'+n,path:'/api/consumer/background-photo/photo-browser-fixture-'+n+'?t=capability',mimeType:'image/jpeg',byteSize:body.length});
     });return;
   }
@@ -43,6 +43,7 @@ const api=http.createServer((req,res)=>{
 });
 const web=http.createServer((req,res)=>{
   const u=new URL(req.url,'http://web.local');
+  if(u.pathname==='/staff-api/api/auth/me'){res.writeHead(401,{'Content-Type':'application/json'});return res.end(JSON.stringify({error:'Not signed into a staff dashboard'}));}
   if(u.pathname==='/designer/'||u.pathname==='/designer/index.html'){
     let html=fs.readFileSync(path.join(root,'designer/index.html'),'utf8');
     html=html.replace('<head>','<head><script>window.RENTSKETCH_API_URL='+JSON.stringify(apiOrigin)+'</script>');
@@ -62,6 +63,7 @@ const web=http.createServer((req,res)=>{
   const browser=await chromium.launch({executablePath:process.env.RENTSKETCH_CHROMIUM||undefined,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
   try{
     const context=await browser.newContext({viewport:{width:1648,height:928}});
+    await context.addCookies([{url:apiOrigin,name:'unrelated-api-cookie',value:'must-not-send',httpOnly:true}]);
     await context.addInitScript(()=>{
       localStorage.setItem('rentsketch-anon-session','generic-photo-owner');
       localStorage.setItem('rentsketch-autosave:generic',JSON.stringify({id:'generic-photo-design',scene:{tentId:'pole-20x20',objects:[{id:'qa-photo-table',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:6,y:7,seatCount:8,chairId:'resin-white',linenId:null}],surfaceType:'grass',lightingId:'lighting-none',customer:{name:'Photo Test',email:'',date:''}},savedAt:new Date().toISOString(),tenant:'generic',anonymousSessionId:'generic-photo-owner'}));
@@ -82,6 +84,8 @@ const web=http.createServer((req,res)=>{
     assert.equal(uploads[0].bytes,1367406,'browser sent exact 1.37 MB file bytes');
     assert.equal(uploads[0].contentType,'image/jpeg','extension fallback normalizes Windows JPG MIME');
     assert.equal(uploads[0].session,'generic-photo-owner');
+    assert.equal(uploads[0].cookie,undefined,'customer photo upload omits cookies even when the API host has one');
+    assert.equal(uploads[0].authorization,undefined,'customer upload uses only its owner capability');
     const scene=await page.evaluate(()=>window.FriendlyBridge.getScene());
     assert.equal(scene.backgroundPhoto.id,'photo-browser-fixture-1');
     assert.match(scene.backgroundPhoto.url,/\/api\/consumer\/background-photo\/photo-browser-fixture-1\?t=capability$/);

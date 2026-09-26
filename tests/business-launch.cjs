@@ -1,6 +1,6 @@
 // Actual business routes + temporary Postgres semantics; no production writes.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
-const {PGlite}=require('@electric-sql/pglite'),express=require('express');
+const {PGlite}=require('@electric-sql/pglite'),express=require('express'),jwt=require('jsonwebtoken');
 const pg=new PGlite();const root=path.resolve(__dirname,'..');
 let failMembership=false,failSubscription=false,lock=Promise.resolve(),priceAmount=4900,activeSub=false,creates=0;
 const db={query:(s,a)=>pg.query(s,a),pool:{connect:async()=>{
@@ -20,16 +20,17 @@ class Stripe{
  billingPortal={sessions:{create:async()=>({url:'https://billing.stripe.com/p/session/fixture'})}};
  webhooks={constructEvent:(b,s)=>{if(s!=='fixture-valid')throw Error('Bad signature');return JSON.parse(b);}};
 }
-const auth={hashPassword:async()=>'$fixture-only$',signToken:p=>JSON.stringify(p),verifyToken:t=>JSON.parse(t)};
+const auth={hashPassword:async()=>'$fixture-only$',signToken:(p,o)=>jwt.sign(p,'business-fixture-key',o),verifyToken:t=>jwt.verify(t,'business-fixture-key')};
 function load(file,deps){const mod={exports:{}};vm.runInNewContext(fs.readFileSync(path.join(root,file),'utf8'),{module:mod,exports:mod.exports,require:id=>{if(!(id in deps))throw Error('Unexpected dependency '+id);return deps[id];},process:{env},console,Buffer,Date,URL,setTimeout},{filename:file});return mod.exports;}
 const ready=load('server/src/businessPaymentReadiness.js',{'./pricing':pricing});
 const dashboardSessions=load('server/src/dashboardSessions.js',{crypto:require('crypto'),'./db':db,'./auth':auth});
-const signup=load('server/src/routes/businessSignup.js',{express,'../db':db,'../auth':auth,'../dashboardSessions':dashboardSessions,crypto:require('crypto')});
-const billing=load('server/src/routes/businessBilling.js',{express,'../db':db,'../auth':auth,'../dashboardSessions':dashboardSessions,'../pricing':pricing,'../middleware/requireAuth':{isConfiguredPlatformAdmin:async()=>false},'../businessPaymentReadiness':ready,stripe:Stripe});
+const dashboardHttpSession=load('server/src/dashboardHttpSession.js',{crypto:require('crypto'),'./auth':auth});
+const signup=load('server/src/routes/businessSignup.js',{express,'../db':db,'../auth':auth,'../dashboardSessions':dashboardSessions,'../dashboardHttpSession':dashboardHttpSession,crypto:require('crypto')});
+const billing=load('server/src/routes/businessBilling.js',{express,'../db':db,'../auth':auth,'../dashboardSessions':dashboardSessions,'../dashboardHttpSession':dashboardHttpSession,'../pricing':pricing,'../middleware/requireAuth':{isConfiguredPlatformAdmin:async()=>false},'../businessPaymentReadiness':ready,stripe:Stripe});
 const webhook=load('server/src/routes/stripeWebhook.js',{express,'../db':db,'../eventPass':{fulfillEventPass:()=>{},PASS_KINDS:['consumer_event_pass']},'../orderProviders/quoteRequestOrderProvider':{},stripe:Stripe});
 const app=express();app.use('/webhook',express.raw({type:'application/json'}),webhook);app.use(express.json());app.use('/business',signup,billing);
 let server,base;
-async function req(url,body,token,signature){const r=await fetch(base+url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{}),...(signature?{'stripe-signature':signature}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,body:await r.text().then(x=>{try{return JSON.parse(x)}catch{return x}})};}
+async function req(url,body,token,signature){const r=await fetch(base+url,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(url==='/business/signup'?{Origin:'https://rentsketch.com','X-RentSketch-Client':'dashboard'}:{}),...(token?{Authorization:'Bearer '+token}:{}),...(signature?{'stripe-signature':signature}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,token:r.headers.get('set-cookie')?.match(/__Host-rentsketch_dashboard=([^;]+)/)?.[1],body:await r.text().then(x=>{try{return JSON.parse(x)}catch{return x}})};}
 (async()=>{
 await pg.exec(`CREATE TABLE users(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),email text UNIQUE,password_hash text,display_name text);
 CREATE TABLE tenants(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),slug text UNIQUE,name text,contact_email text,subscription_plan text,subscription_status text,trial_ends_at timestamptz,customer_access text,stripe_billing_customer_id text,updated_at timestamptz DEFAULT now());
@@ -38,6 +39,7 @@ CREATE TABLE subscriptions(id uuid PRIMARY KEY DEFAULT gen_random_uuid(),tenant_
 CREATE UNIQUE INDEX subscriptions_provider_subscription_idx ON subscriptions(provider_subscription_id) WHERE provider_subscription_id IS NOT NULL;
 CREATE TABLE processed_stripe_events(id text PRIMARY KEY,event_type text);`);
 await pg.exec(fs.readFileSync(path.join(root,'server/migrations/020_dashboard_sessions.sql'),'utf8'));
+await pg.exec(fs.readFileSync(path.join(root,'server/migrations/021_account_security.sql'),'utf8'));
 server=app.listen(0,'127.0.0.1');await new Promise(r=>server.once('listening',r));base='http://127.0.0.1:'+server.address().port;
 const input={businessName:'Launch Fixture',contactEmail:'launch@example.invalid',password:'fixture-password',plan:'starter'};
 assert.equal((await req('/business/signup',{...input,contactEmail:'not-email'})).status,400);
@@ -47,34 +49,34 @@ failMembership=true;assert.equal((await req('/business/signup',input)).status,50
 assert.equal((await pg.query('SELECT * FROM users')).rows.length,0,'failed signup rolls back user');
 assert.equal((await pg.query('SELECT * FROM tenants')).rows.length,0,'failed signup rolls back tenant');
 assert.equal((await pg.query('SELECT * FROM dashboard_sessions')).rows.length,0,'failed signup creates no session');
-const owner=await req('/business/signup',input);assert.equal(owner.status,201);assert.equal(owner.body.tenant.subscriptionStatus,'trialing');
+const owner=await req('/business/signup',input);assert.equal(owner.status,201);assert.equal(owner.body.token,undefined,'signup never exposes browser bearer token in JSON');assert.ok(owner.body.session.csrfToken);assert.equal(owner.body.tenant.subscriptionStatus,'trialing');
 const tenant=(await pg.query('SELECT * FROM tenants')).rows[0];assert.equal(tenant.customer_access,'free');
 assert.equal((await req('/business/signup',input)).status,409);
 const another=await req('/business/signup',{...input,contactEmail:'second@example.invalid'});assert.equal(another.status,201);assert.notEqual(another.body.tenant.slug,owner.body.tenant.slug);
 const route='/business/'+tenant.slug+'/billing/';
 assert.equal((await req(route+'checkout-session',{plan:'starter'})).status,401);
-assert.equal((await req(route+'checkout-session',{plan:'starter'},another.body.token)).status,403);
+assert.equal((await req(route+'checkout-session',{plan:'starter'},another.token)).status,403);
 await pg.query("UPDATE tenants SET trial_ends_at=now()-interval '1 day' WHERE id=$1",[tenant.id]);
-assert.equal((await req(route+'status',null,owner.body.token)).status,200,'expired trial can reach billing');
+assert.equal((await req(route+'status',null,owner.token)).status,200,'expired trial can reach billing');
 assert.equal((await req('/business/payment-status')).body.available,true);
 assert.equal(ready.matchesPrice({active:true,currency:'usd',type:'recurring',recurring:{interval:'month',interval_count:1},unit_amount:4900},pricing.BUSINESS_PLANS.starter,'monthly',true),false,'test price blocked in production');
-const checkout=await req(route+'checkout-session',{plan:'starter'},owner.body.token);assert.equal(checkout.status,200);assert.match(checkout.body.url,/checkout.stripe.com/);
+const checkout=await req(route+'checkout-session',{plan:'starter'},owner.token);assert.equal(checkout.status,200);assert.match(checkout.body.url,/checkout.stripe.com/);
 assert.equal(sessions[0].line_items[0].price,'STARTER_MONTHLY');assert.match(sessions[0].success_url,/#\/billing$/);assert.equal(sessions[0].payment_method_types,undefined);
-assert.equal((await req(route+'checkout-session',{plan:'starter'},owner.body.token)).body.url,checkout.body.url);assert.equal(creates,1,'double click reuses open checkout');
-assert.equal((await req(route+'checkout-session',{plan:'pro'},owner.body.token)).status,409,'second plan cannot create duplicate subscription');
-sessions[0].status='complete';activeSub=true;assert.equal((await req(route+'checkout-session',{plan:'starter'},owner.body.token)).status,409,'active subscription blocks duplicate before webhook');
+assert.equal((await req(route+'checkout-session',{plan:'starter'},owner.token)).body.url,checkout.body.url);assert.equal(creates,1,'double click reuses open checkout');
+assert.equal((await req(route+'checkout-session',{plan:'pro'},owner.token)).status,409,'second plan cannot create duplicate subscription');
+sessions[0].status='complete';activeSub=true;assert.equal((await req(route+'checkout-session',{plan:'starter'},owner.token)).status,409,'active subscription blocks duplicate before webhook');
 subscription.metadata={tenantId:tenant.id,planId:'starter',interval:'monthly'};
 const event={id:'evt_fixture',type:'checkout.session.completed',data:{object:{subscription:'sub_fixture',metadata:{kind:'business_subscription',...subscription.metadata}}}};
 failSubscription=true;assert.equal((await req('/webhook',event,null,'fixture-valid')).status,500);
 assert.equal((await pg.query('SELECT * FROM processed_stripe_events')).rows.length,0,'failed webhook remains retryable');
 assert.equal((await req('/webhook',event,null,'fixture-valid')).status,200);
 assert.equal((await req('/webhook',event,null,'fixture-valid')).body.duplicate,true);
-let state=(await req(route+'status',null,owner.body.token)).body;assert.equal(state.status,'active');assert.equal(state.subscription.status,'active');assert.ok(state.subscription.current_period_end);
+let state=(await req(route+'status',null,owner.token)).body;assert.equal(state.status,'active');assert.equal(state.subscription.status,'active');assert.ok(state.subscription.current_period_end);
 subscription.status='canceled';const cancellation={id:'evt_cancel',type:'customer.subscription.deleted',data:{object:subscription}};
 assert.equal((await req('/webhook',cancellation,null,'fixture-valid')).status,200);
-state=(await req(route+'status',null,owner.body.token)).body;assert.equal(state.status,'canceled');
+state=(await req(route+'status',null,owner.token)).body;assert.equal(state.status,'canceled');
 assert.equal((await req('/webhook',{...event,id:'evt_late_created'},null,'fixture-valid')).status,200);
-assert.equal((await req(route+'status',null,owner.body.token)).body.status,'canceled','delayed event uses latest Stripe status');
-assert.equal((await req(route+'portal-session',{},owner.body.token)).status,200);
+assert.equal((await req(route+'status',null,owner.token)).body.status,'canceled','delayed event uses latest Stripe status');
+assert.equal((await req(route+'portal-session',{},owner.token)).status,200);
 console.log('PASS business launch: signup validation/rollback/collision, tenant isolation, expired-trial billing, live price validation, checkout reuse/duplicate protection, return routes, webhook rollback/retry/deduplication/latest status and billing portal. Isolated database and fake Stripe only.');
 })().catch(e=>{console.error(e);process.exitCode=1}).finally(async()=>{server?.close();await pg.close();});

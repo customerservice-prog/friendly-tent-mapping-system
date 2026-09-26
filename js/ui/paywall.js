@@ -12,7 +12,7 @@
   var adminDesign = params.get('adminDesign');
   var purchaseRequested = params.get('purchase') === '1';
   var productPreview = ['tent', 'inflatable'].includes(params.get('focus')) && params.get('autoplace') === '1';
-  var adminSessionExpired = params.get('admin') === '1' && !dashboardToken();
+  var adminSessionExpired = params.get('admin') === '1', accessEpoch = 0, offerIdentity = '', verifiedIdentity = '';
   var offer, verified, savedPaidEvent, modal, offerPromise, previewLimit, ready = false, busy = false;
   var guidedAutoAttempted = false;
   function maybeStartGuidedPreview() {
@@ -39,37 +39,43 @@
 
   function read(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (_) { return null; } }
   function write(key, value) { try { localStorage.setItem(key, JSON.stringify(value)); } catch (_) {} }
-  function dashboardToken() { try { return window.RentSketchDashboardSession ? window.RentSketchDashboardSession.getToken() : localStorage.getItem('rentsketch_dashboard_token'); } catch (_) { return ''; } }
+  function staffIdentity() { return window.RentSketchDashboardSession?.identity?.() || ''; }
+  async function staffReady(refresh) { await window.RentSketchDashboardSession?.ready?.(refresh ? { refresh: true } : undefined); return staffIdentity(); }
   function bridge() { return window.FriendlyBridge; }
   function money(cents) { return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(cents / 100); }
-  function active() { return !!(verified && verified.active && (!verified.expiresAt || Date.parse(verified.expiresAt) > Date.now())); }
-  function canEdit() { return !!(offer && (!offer.required || active())); }
-  function api(path, body) {
+  function active() { return !!(verified && verified.active && (!verified.adminAccess || !!verifiedIdentity && verifiedIdentity === staffIdentity()) && (!verified.expiresAt || Date.parse(verified.expiresAt) > Date.now())); }
+  function canEdit() { return !!(offer && ((!offer.required && (!offer.adminAccess || !!offerIdentity && offerIdentity === staffIdentity())) || active())); }
+  async function api(path, body) {
+    var identity = await staffReady(), epoch = accessEpoch;
     var controller = new AbortController(), timer = setTimeout(function () { controller.abort(); }, 12000);
-    var headers = body ? { 'Content-Type': 'application/json' } : {};
+    var options = { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined, signal: controller.signal, cache: 'no-store' };
     try {
-      var adminToken = dashboardToken();
-      if (adminToken) headers.Authorization = 'Bearer ' + adminToken;
-    } catch (_) {}
-    return fetch((window.RENTSKETCH_API_URL || '') + '/api/consumer' + path, {
-      method: body ? 'POST' : 'GET', headers: Object.keys(headers).length ? headers : undefined,
-      body: body ? JSON.stringify(body) : undefined, signal: controller.signal, cache: 'no-store',
-    }).then(async function (response) {
+      var response = identity ? await window.RentSketchDashboardSession.request('/api/consumer' + path, options)
+        : await fetch((window.RENTSKETCH_API_URL || '') + '/api/consumer' + path, Object.assign({ credentials: 'omit' }, options));
       var data = await response.json();
-      if(adminToken && dashboardToken() !== adminToken) throw new Error('Your admin session changed. Sign in again to continue.');
-      if(response.status === 401 && adminToken) window.RentSketchDashboardSession?.unauthorized(adminToken);
+      if (identity !== staffIdentity() || epoch !== accessEpoch) throw new Error('Your admin session changed. Sign in again to continue.');
       if (!response.ok) throw new Error(data.error || 'Please try again in a moment.');
       return data;
-    }).catch(function (err) {
+    } catch (err) {
       if (err.name === 'AbortError') throw new Error('That took too long. Your preview is safe. Please try again.');
       if (err instanceof TypeError || err instanceof SyntaxError) throw new Error('We couldn’t connect right now. Your design is safe. Please try again.');
       throw err;
-    }).finally(function () { clearTimeout(timer); });
+    } finally { clearTimeout(timer); }
   }
   function getOffer(refresh) {
-    if (!offerPromise || refresh) offerPromise = api('/event-pass/offer?tenant=' + encodeURIComponent(slug)).then(function (data) {
-      offer = data; if(data.adminAccess) adminSessionExpired = false; document.body.classList.toggle('rs-platform-admin', !!data.adminAccess); render(); return data;
-    }).catch(function (err) { offerPromise = null; throw err; });
+    if (!offerPromise || refresh) {
+      var current;
+      current = (async function () {
+        if (refresh) await staffReady(true);
+        var data = await api('/event-pass/offer?tenant=' + encodeURIComponent(slug));
+        if (offerPromise !== current) return offer;
+        offer = data; offerIdentity = data.adminAccess ? staffIdentity() : '';
+        if (data.adminAccess) adminSessionExpired = false;
+        document.body.classList.toggle('rs-platform-admin', !!data.adminAccess); render(); return data;
+      })().catch(function (err) { if (offerPromise === current) offerPromise = null; throw err; });
+      offerPromise = current;
+    }
     return offerPromise;
   }
   function autosave() {
@@ -219,7 +225,7 @@
       var auto = autosave();
       if (!bridge().loadScene(data.scene, { customerEmail: data.customerEmail })) throw new Error('Your saved layout could not be restored. Please retry.');
       auto.adopt(data);
-      verified = data;
+      verified = data; verifiedIdentity = data.adminAccess ? staffIdentity() : '';
     } finally { window.RENTSKETCH_PASS_RESTORING = false; }
     render();
     window.dispatchEvent(new CustomEvent('rentsketch:accessChanged'));
@@ -342,7 +348,7 @@
     window.RentSketchGuidedPreview?.close();
     try {
       await getOffer();
-      if (!offer.required || active()) { if (continuation) continuation(); return true; }
+      if (canEdit()) { if (continuation) continuation(); return true; }
       if(adminSessionExpired){var login=showAdminSignIn();login.querySelector('[data-admin-retry]').onclick=function(){getOffer(true).then(function(){if(canEdit()){closeModal();if(continuation)continuation();}}).catch(function(){});};return false;}
       if (returning && !ready) throw new Error('Your saved event is still being restored. Please try again in a moment.');
       await showPurchase();
@@ -358,13 +364,13 @@
   // Current entry points call the existing designer directly; wrapping only
   // the old recommendation bridge misses these controls completely.
   document.addEventListener('click', function (event) {
-    if (active() || (offer && !offer.required) || event.target.closest('.paywall-overlay,#eventPassBar')) return;
+    if (canEdit() || event.target.closest('.paywall-overlay,#eventPassBar')) return;
     var control = event.target.closest('#designMyEvent,.rail-btn,#btnToReview,#btnBackToRecommend,#btnUndo,#btnRedo,#emptyStateOverlay button,#inspectorPanel button,#inspectorPanel input,#drawer button,#btnPrint,#btnShare,#btnDownload,#btnEmailQuote,#btnBookRentals,#sceneSettingLabel,#placementBar button,#partySceneButton,#btnPartyScene');
     if (!control || control.disabled || control.matches('[data-open-help]')) return;
     event.preventDefault(); event.stopImmediatePropagation(); requestAccess();
   }, true);
   document.addEventListener('pointerdown', function (event) {
-    if (active() || (offer && !offer.required)) return;
+    if (canEdit()) return;
     if (event.target.closest('#plan2d [data-item-id],#inspectorPanel,#drawer')) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
   document.addEventListener('change', function (event) {
@@ -382,14 +388,17 @@
     }
   }, true);
   window.addEventListener('rentsketch:dashboardSessionChanged', function () {
-    if(offer?.adminAccess || verified?.adminAccess){
-      adminSessionExpired = true;
-      if(verified?.adminAccess) verified = null;
-      offer = Object.assign({},offer,{required:true,adminAccess:false});
-      document.body.classList.remove('rs-platform-admin');
-      render();
+    accessEpoch++;
+    if (!ready && !offer && !verified) return;
+    offerPromise = null;
+    if (offer?.adminAccess || verified?.adminAccess || params.get('admin') === '1') {
+      adminSessionExpired = true; offerIdentity = ''; verifiedIdentity = '';
+      if (verified?.adminAccess) verified = null;
+      offer = Object.assign({}, offer, { required: true, adminAccess: false });
+      document.body.classList.remove('rs-platform-admin'); render();
+      window.dispatchEvent(new CustomEvent('rentsketch:accessChanged'));
     }
-    if(ready) getOffer(true).then(function(){if(canEdit())closeModal();}).catch(function(){});
+    if (ready && staffIdentity()) getOffer().then(function () { if (canEdit()) closeModal(); }).catch(function () {});
   });
   window.addEventListener('rentsketch:accessRequired', function () {
     if(offer?.adminAccess){adminSessionExpired=true;window.RentSketchDashboardSession?.clear('expired');offer=Object.assign({},offer,{required:true,adminAccess:false});}
