@@ -369,6 +369,7 @@ export function init(container,callbacks={}) {
     // The single photo remains available for Matched View and as a fallback while
     // reconstruction is still loading.
     photoStage.visible=immersive&&!metric;photoContinuation.visible=false;local360.visible=immersive&&!metric;scanWorld.visible=metric;
+    if(metric)scanWorld.userData.setPresentationMode?.(cameraMode);
     // Matched View is an exact camera registration. Walk Mode owns the camera directly.
     controls.enabled=!matched&&!walking;
     controls.enablePan=!matched&&!walking;
