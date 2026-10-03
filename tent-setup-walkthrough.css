@@ -18,3 +18,7 @@ body.view-mode-3d:not(.tent-preview) #view3dTimelapseBreak{display:inline-flex!i
   .tent-setup-progress strong{font-size:15px}
   .tent-setup-progress small{font-size:11px}
 }
+
+.tent-setup-actions{display:flex;gap:8px;margin-top:6px;pointer-events:auto}
+.tent-setup-actions button{border:1px solid #9fb5a4;border-radius:8px;background:#fff;color:#23402c;padding:7px 12px;font:inherit;font-size:12px;cursor:pointer}
+.tent-setup-actions button:focus-visible{outline:2px solid #23402c;outline-offset:2px}

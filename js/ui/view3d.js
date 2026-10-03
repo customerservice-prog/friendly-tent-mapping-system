@@ -1,4 +1,5 @@
 import { makeTent } from './tent3d.js';
+import { createPoleTentSetup } from './pole-tent-setup3d.js';
 import { installPhotoProjectionParity } from './photo-projection-renderer.js';
 import { createPhotoForegroundLayer } from './photo-foreground3d.js';
 import { normalizePhotoComposition, foregroundMaskAt, photoLightingPosition } from '../core/photo-composition.js';
@@ -54,6 +55,7 @@ export function init(container,callbacks={}) {
   const rendered=new Map(),pointers=new Set();let state=null,night=false,raf=0,drag=null,danceMesh=null,environment=null,lightGroup=null;
   let inflatableActivity=null,styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let equipmentTime=0;
+  let tentSetupAnimation=null,tentSetupElapsed=0,tentSetupPaused=false,tentSetupStep=-1,tentSetupMode='build';
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',local360Key='',scanWorldKey='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0,tentSetupRun=0,tentSetupTimers=[],tentSetupRig=null;
@@ -418,7 +420,7 @@ export function init(container,callbacks={}) {
   }
   function rebuild(data){
     if(!data?.tent||destroyed)return;
-    if(tentSetupRig)stopTentSetup(true);
+    if(tentSetupRig||tentSetupAnimation){stopTentSetup(true);callbacks.onTentSetupStep?.({dismissed:true});}
     const previous=state?.tent,changed=!previous||previous.id!==data.tent.id||previous.widthFt!==data.tent.widthFt||previous.lengthFt!==data.tent.lengthFt;
     state={...data,objects:(data.objects||[]).map(o=>({...o}))};const t=state.tent;
     state.photoSite=state.photoSite||{id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(50,t.widthFt+20),lengthFt:Math.max(60,t.lengthFt+20)};
@@ -801,6 +803,16 @@ export function init(container,callbacks={}) {
     const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;
     if(walk.isActive()){if(walk.update(dt))dirty=true;}else if(!(hasVenuePhoto()&&cameraMode==='outside'))controls.update();
     if(container.clientWidth&&container.clientHeight&&!document.hidden&&!document.body.classList.contains('table-studio-open')&&!document.body.classList.contains('rs-preview-expired')){
+      if(tentSetupAnimation&&!tentSetupPaused){
+        tentSetupElapsed+=dt;
+        const info=tentSetupAnimation.update(tentSetupElapsed,tentSetupMode==='breakdown');
+        if(info.index!==tentSetupStep||info.done){
+          tentSetupStep=info.index;
+          callbacks.onTentSetupStep?.({canPause:true,mode:tentSetupMode,index:info.index+1,total:tentSetupAnimation.steps.length,title:info.done?(tentSetupMode==='breakdown'?'Tent packed away':'Installation overview complete'):(tentSetupMode==='breakdown'?info.step.undo:info.step.title),detail:info.done?'Return to your layout whenever you are ready.':(tentSetupMode==='breakdown'?'The installation sequence plays in reverse as the crew removes the tent.':info.step.detail),done:info.done});
+        }
+        if(info.done){tentSetupPaused=true;if(tentSetupMode==='build')stopTentSetup();}
+        renderer.shadowMap.needsUpdate=true;dirty=true;
+      }
       if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;
       if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){
         equipmentTime+=animationTime;
@@ -906,6 +918,8 @@ export function init(container,callbacks={}) {
     scene.remove(tentSetupRig);disposeGroup(tentSetupRig);tentSetupRig=null;
   }
   function stopTentSetup(restore=true){
+    if(tentSetupAnimation){tentSetupAnimation.dispose();tentSetupAnimation=null;}
+    tentSetupPaused=false;
     tentSetupRun++;tentSetupTimers.forEach(clearTimeout);tentSetupTimers=[];clearTentSetupRig();
     const root=structure.children[0];
     if(root){root.visible=true;root.traverse(o=>{if(o.userData?.buildStage)o.visible=true;});}
@@ -921,6 +935,14 @@ export function init(container,callbacks={}) {
   function playTentSetup(mode='build'){
     if(!state?.tent||state.tent.isSite||!structure.children[0])return false;
     stopTentSetup(false);
+    if(state.tent.type==='pole'&&!reducedMotion){
+      cancelAnimationFrame(animationFrame);structure.scale.y=1;structure.visible=true;
+      furniture.visible=false;if(styling)styling.visible=false;if(guests)guests.visible=false;if(inflatableActivity)inflatableActivity.visible=false;if(lightGroup)lightGroup.visible=false;
+      outsideWide();
+      tentSetupAnimation=createPoleTentSetup(structure.children[0],state.tent);
+      tentSetupElapsed=0;tentSetupPaused=false;tentSetupStep=-1;tentSetupMode=mode;
+      tentSetupAnimation.update(0,mode==='breakdown');invalidate();return true;
+    }
     const run=++tentSetupRun,root=structure.children[0],tent=state.tent,anchor=state.anchoringMethod||(tent.type==='pole'?'stake':sceneSetting(tent,state.surfaceType)==='driveway'?'ballast':'stake');
     const bucket={roof:[],frame:[],stakes:[],valance:[],sidewalls:[]};
     root.traverse(o=>{const stage=o.userData?.buildStage;if(stage&&bucket[stage]&&o.parent?.userData?.buildStage!==stage)bucket[stage].push(o);});
@@ -1064,7 +1086,7 @@ export function init(container,callbacks={}) {
     if(destroyed||!state?.tent)return null;
     try{scanWorld.userData.updateView?.(camera);renderer.render(scene,camera);return renderer.domElement.toDataURL('image/jpeg',.9);}catch(_){return null;}
   }
-  const api={inside,reception,outsideWide,wide,setScene,previewPhotoComposition,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playTentSetup,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;tentSetupRun++;tentSetupTimers.forEach(clearTimeout);tentSetupTimers=[];walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();photoForeground.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();env?.dispose();container.replaceChildren();}};
+  const api={stopTentSetup,toggleTentSetupPause(){tentSetupPaused=!tentSetupPaused;return tentSetupPaused;},inside,reception,outsideWide,wide,setScene,previewPhotoComposition,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playTentSetup,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){stopTentSetup(false);destroyed=true;tentSetupRun++;tentSetupTimers.forEach(clearTimeout);tentSetupTimers=[];walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();photoForeground.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();env?.dispose();container.replaceChildren();}};
   // A watch-only sample must not replace the real designer renderer.
   if(callbacks.registerActive !== false)active=api;return api;
 }

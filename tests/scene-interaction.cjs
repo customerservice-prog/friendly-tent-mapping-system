@@ -26,11 +26,18 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  const scene=renderer.scene;
  const setupSource=JSON.stringify(data);callbacks=[];
  assert.equal(view.playTentSetup('build'),true,'pole tent exposes worker setup walkthrough');
+ let animationNow=0;
+ function advanceFrames(count){for(let i=0;i<count;i++){animationNow+=50;const pending=[...frames];frames.clear();for(const [,fn] of pending)fn(animationNow);}}
+ advanceFrames(40);
+ const pausedRoof=scene.getObjectByName('Canopy lifted by installation poles'),pausedScale=pausedRoof.scale.x;
+ assert.equal(view.toggleTentSetupPause(),true);advanceFrames(40);assert.equal(pausedRoof.scale.x,pausedScale,'pause freezes the construction state');
+ assert.equal(view.toggleTentSetupPause(),false);advanceFrames(820);
  const poleSteps=callbacks.filter(c=>c[0]==='tentSetup').map(c=>c[1]);
  assert.ok(poleSteps.length>=5,'pole setup reports its major installation stages');
- assert.match(poleSteps[0].title,/pre-stake/i);assert.ok(poleSteps.some(s=>/center pole vertical/i.test(s.title)));assert.ok(poleSteps.some(s=>/side poles/i.test(s.title)));assert.equal(poleSteps.at(-1).done,true);
+ assert.match(poleSteps[0].title,/Spread the top/i);assert.ok(poleSteps.some(s=>/four corners/i.test(s.title)));assert.ok(poleSteps.some(s=>/center poles/i.test(s.title)));assert.ok(poleSteps.some(s=>/side poles/i.test(s.title)));assert.equal(poleSteps.at(-1).done,true);
  assert.equal(JSON.stringify(data),setupSource,'tent walkthrough never mutates the saved event');
  let hiddenStage=false;scene.getObjectByName('Event tent')?.traverse(o=>{if(o.userData?.buildStage&&!o.visible)hiddenStage=true;});assert.equal(hiddenStage,false,'all tent parts are restored after setup walkthrough');
+ if(process.env.RENTSKETCH_SETUP_ONLY==='1'){view.destroy();assert.equal(frames.size,0);w.close();console.log('PASS pole setup controller: pause/resume, stage callbacks, original scene restoration and resource cleanup');return;}
  callbacks=[];assert.equal(scene.fog.density,.004,'rain softens the background');
  assert.ok(scene.getObjectByName('Preview guests').visible);assert.ok(scene.getObjectByName('Rain outside the canopy').visible);assert.ok(!scene.getObjectByName('Visible sun').visible);
  assert.ok(scene.children.flatMap(g=>g.children).filter(o=>o.isPointLight).every(o=>o.intensity>65));
