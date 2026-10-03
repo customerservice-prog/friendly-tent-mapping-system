@@ -55,7 +55,17 @@ function start(skipRestore){
   window.dispatchEvent(new CustomEvent('rentsketch:draftResumed',{detail:{savedAt:local.savedAt,id:lastId}}));
   return true;
  }
- async function fetchLatest(){if(!lastId)throw new Error('Save this layout first.');return request(projectPath());}
+ async function detachMissingProject(local){
+  clearTimeout(timer);lastId=null;revision=null;status.conflict=null;
+  if(local?.scene&&Array.isArray(local.scene.objects)&&bridge().loadScene){
+    bridge().loadScene(local.scene);
+  }
+  lastJson='';
+  snapshot(scene());
+  announce('local','Reopened the layout saved on this device. It will save as a new Friendly project.');
+  schedule();
+ }
+ function fetchLatest(){if(!lastId)throw new Error('Save this layout first.');return request(projectPath());}
  async function resolveRevision(){if(!lastId||revision!==null)return;var latest=await fetchLatest();if(!latest.revision)throw new Error('The saved project could not be verified. Refresh and try again.');
   if(stable(latest.scene)!==lastJson){status.conflict={currentRevision:latest.revision};snapshot(scene());announce('conflict','A newer project is available. Choose which layout to keep. '+recoveryMessage());var e=new Error(status.message);e.status=409;e.data={currentRevision:latest.revision};throw e;}revision=latest.revision;status.project=metadata(latest);}
  function checkoutPreview(){var s=scene();if(window.RENTSKETCH_SHARED_READONLY||window.RentSketchEventPass?.hasPaidEvent?.()||!s||!Array.isArray(s.objects)||s.objects.length>1)return false;if((s.zones&&(!Array.isArray(s.zones)||s.zones.length))||(s.aisles&&(!Array.isArray(s.aisles)||s.aisles.length))||Number(s.guestCount||0)!==0||s.needDance||s.lastTableConfig||s.matchedPackageId||(s.lightingId&&s.lightingId!=='lighting-none'))return false;return !s.objects.length||(s.tentId==null&&s.objects[0]?.kind==='inflatable'&&typeof s.objects[0].inflatableId==='string');}
@@ -80,7 +90,7 @@ function start(skipRestore){
   setTimeout(function(){if(window.RENTSKETCH_TENT_PREVIEW||readOnly())return;if(b.loadScene(saved.scene)){adopt(Object.assign({},saved,saved.project||{}));if(saved.pending!==false)lastJson='';if(saved.conflict){status.conflict=saved.conflict;snapshot(scene());announce('conflict','This local layout has changes to resolve before syncing. '+recoveryMessage());}else if(saved.pending!==false){schedule();}else{announce('local','Reopened the layout saved on this device.');}window.dispatchEvent(new CustomEvent('rentsketch:draftResumed',{detail:{savedAt:saved.savedAt,id:lastId}}));}},180);}
  function restoreWhenAllowed(){if(!document.querySelector('.rs-entry'))return restorePrompt();window.addEventListener('rentsketch:entryAccepted',restorePrompt,{once:true});}
  function emergency(){if(!window.RENTSKETCH_PASS_RESTORING&&!readOnly()&&scene())snapshot(scene());}
- window.RentSketchAutosave={start:function(){return this;},flush:function(){return save(true);},prepareCheckoutDraft:function(){return save(true,true);},getDesignId:function(){return lastId;},getSessionId:sessionId,getRevision:function(){return revision;},getState:getState,projectPath:projectPath,request:request,adopt:adopt,restoreVerified:restoreVerified,fetchLatest:fetchLatest,
+ window.RentSketchAutosave={start:function(){return this;},flush:function(){return save(true);},prepareCheckoutDraft:function(){return save(true,true);},getDesignId:function(){return lastId;},getSessionId:sessionId,getRevision:function(){return revision;},getState:getState,projectPath:projectPath,request:request,adopt:adopt,restoreVerified:restoreVerified,detachMissingProject:detachMissingProject,fetchLatest:fetchLatest,
   reloadLatest:async function(){if(readOnly())throw new Error('This layout is read-only.');await activeSave;var latest=await fetchLatest();if(!bridge().loadScene(latest.scene))throw new Error('Could not restore the latest layout.');adopt(latest);return latest;},flushLocal:emergency};
  function bind(){if(!bridge().getScene){setTimeout(bind,100);return;}if(!skipRestore)restoreWhenAllowed();document.addEventListener('pointerup',function(e){if(!e.target.closest?.('.rs-project-panel'))schedule();},true);document.addEventListener('change',function(e){if(!e.target.closest?.('.rs-project-panel'))schedule();},true);document.addEventListener('keyup',function(e){if((e.key==='Delete'||e.key==='Backspace')&&!/INPUT|TEXTAREA/.test(e.target.tagName))schedule();},true);window.addEventListener('rentsketch:requestSave',schedule);window.addEventListener('pagehide',emergency);window.addEventListener('online',function(){save(false);});window.addEventListener('offline',function(){emergency();announce('offline','You are offline. '+recoveryMessage());});document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')emergency();});}
  window.addEventListener('rentsketch:dashboardSessionChanged',function(){status.project.crewNotes='';if(staffSeen&&!staffIdentity())announce('error','Your admin session ended. Sign in again to save this layout.');});
