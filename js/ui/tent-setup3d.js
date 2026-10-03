@@ -227,39 +227,83 @@ export function createTentSetupRig(tent,anchor,sourceTent){
   const groups={};
   const add=(key)=>groups[key]=stage(root,key);
 
+  const measure=add('measure');
+  measure.add(lineLoop([new THREE.Vector3(-hw,0,-hl),new THREE.Vector3(hw,0,-hl),new THREE.Vector3(hw,0,hl),new THREE.Vector3(-hw,0,hl)]));
+  footprintGuides(measure,tent);
+  workersFor(measure,[[-hw-4,-hl-3,.45,0xf2a93b,'carry'],[hw+4,hl+3,-2.4,0x5b8c62,'kneel']]);
+
   const layout=add('layout');
   layout.add(lineLoop([new THREE.Vector3(-hw,0,-hl),new THREE.Vector3(hw,0,-hl),new THREE.Vector3(hw,0,hl),new THREE.Vector3(-hw,0,hl)]));
+  footprintGuides(layout,tent);
   perimeterStakePoints(tent).forEach(([x,z])=>addStake(layout,x,z));
-  workersFor(layout,[[-hw-4,-hl-3,.5],[hw+4,hl+3,-2.4]]);
+  workersFor(layout,[[-hw-4,-hl-3,.5,0xf2a93b,'stake'],[hw+4,hl+3,-2.4,0x5b8c62,'stake']]);
 
   if(tent.type==='pole'){
+    const folded=add('pole-top-folded');dropCloth(folded,tent);foldedTop(folded,tent,sourceTent);
+    workersFor(folded,[[-hw-2,-1,.3,0xf2a93b,'carry'],[hw+2,1,-2.7,0x5b8c62,'lift']]);
+
     const top=add('top-ground');dropCloth(top,tent);const flat=deformedCanopy(sourceTent,p,{edgeY:.12,peakY:.23});if(flat)top.add(flat);
-    workersFor(top,[[-hw-2,0,.4],[hw+2,0,-2.6]]);
+    workersFor(top,[[-hw-2,0,.4,0xf2a93b,'kneel'],[hw+2,0,-2.6,0x5b8c62,'kneel']]);
 
-    const staged=add('poles-staged');dropCloth(staged,tent);const flat2=deformedCanopy(sourceTent,p,{edgeY:.12,peakY:.23});if(flat2)staged.add(flat2);poleParts(staged,tent,p);
-    workersFor(staged,[[-hw-2,-hl+2,.8],[hw+2,hl-2,-2.2]]);
+    const loose=add('ratchets-loose');dropCloth(loose,tent);const flatLoose=deformedCanopy(sourceTent,p,{edgeY:.12,peakY:.23});if(flatLoose)loose.add(flatLoose);looseRatchets(loose,tent,p);
+    workersFor(loose,[[-hw-3,-hl+2,.8,0xf2a93b,'ratchet'],[hw+3,hl-2,-2.2,0x5b8c62,'ratchet']]);
 
-    const angled=add('center-angled');dropCloth(angled,tent);poleCenterStage(angled,tent,p,sourceTent,{angled:true});
-    workersFor(angled,[[-2,2,.2],[3,-1,-2.2]]);
+    const staged=add('poles-staged');dropCloth(staged,tent);const flat2=deformedCanopy(sourceTent,p,{edgeY:.12,peakY:.23});if(flat2)staged.add(flat2);poleParts(staged,tent,p);looseRatchets(staged,tent,p);
+    workersFor(staged,[[-hw-2,-hl+2,.8,0xf2a93b,'carry'],[hw+2,hl-2,-2.2,0x5b8c62,'carry']]);
 
-    const center=add('center-up');poleCenterStage(center,tent,p,sourceTent,{angled:false});
-    workersFor(center,[[-hw+2,hl+1,.2],[hw-2,-hl-1,-2.5]]);
+    const centerPrep=add('center-assembled');dropCloth(centerPrep,tent);const flat3=deformedCanopy(sourceTent,p,{edgeY:.12,peakY:.23});if(flat3)centerPrep.add(flat3);centerPoleAssembly(centerPrep,tent,p);looseRatchets(centerPrep,tent,p);
+    workersFor(centerPrep,[[-2,2,.25,0xf2a93b,'kneel'],[3,-1,-2.3,0x5b8c62,'carry']]);
+
+    const angled=add('center-angled');dropCloth(angled,tent);poleCenterStage(angled,tent,p,sourceTent,{angled:true});looseRatchets(angled,tent,p);
+    workersFor(angled,[[-2,2,.2,0xf2a93b,'lift'],[3,-1,-2.2,0x5b8c62,'lift']]);
+
+    const center=add('center-up');poleCenterStage(center,tent,p,sourceTent,{angled:false});looseRatchets(center,tent,p);
+    workersFor(center,[[-hw+2,hl+1,.2,0xf2a93b,'stand'],[hw-2,-hl-1,-2.5,0x5b8c62,'stand']]);
+
+    const corners=add('corner-poles');poleSideStage(corners,tent,p,sourceTent,{cornersOnly:true});looseRatchets(corners,tent,p);
+    workersFor(corners,[[-hw-1,-hl-1,.7,0xf2a93b,'lift'],[hw+1,hl+1,-2.4,0x5b8c62,'lift']]);
+
+    const sides=add('side-poles');poleSideStage(sides,tent,p,sourceTent,{cornersOnly:false});looseRatchets(sides,tent,p);
+    workersFor(sides,[[-hw-1,0,.65,0xf2a93b,'lift'],[hw+1,0,-2.5,0x5b8c62,'lift']]);
+
+    const tension=add('pole-tension');ratchetStage(tension,tent,p,sourceTent);
+    workersFor(tension,[[-hw-3,0,.7,0xf2a93b,'ratchet'],[hw+3,0,-2.4,0x5b8c62,'ratchet']]);
 
     const anchors=add('anchors');finalAnchors(anchors,tent,anchor);
-    workersFor(anchors,[[-hw-3,0,.7],[hw+3,0,-2.4]]);
+    workersFor(anchors,[[-hw-3,0,.7,0xf2a93b,'stake'],[hw+3,0,-2.4,0x5b8c62,'stake']]);
   }else{
-    const parts=add('frame-parts');frameParts(parts,tent,p);workersFor(parts,[[-hw-3,-hl-2,.5],[hw+3,hl+2,-2.5]]);
+    const parts=add('frame-parts');frameParts(parts,tent,p);frameLegsStaged(parts,tent,p);
+    workersFor(parts,[[-hw-3,-hl-2,.5,0xf2a93b,'carry'],[hw+3,hl+2,-2.5,0x5b8c62,'carry']]);
 
-    const topframe=add('frame-top');frameTop(topframe,tent,p,.35);workersFor(topframe,[[-hw-2,0,.6],[hw+2,0,-2.4]]);
+    const crown=add('frame-crown');frameCrownAssembly(crown,tent,p);frameLegsStaged(crown,tent,p);
+    workersFor(crown,[[-3,-2,.4,0xf2a93b,'kneel'],[3,2,-2.4,0x5b8c62,'kneel']]);
 
-    const covered=add('frame-covered');dropCloth(covered,tent);frameTop(covered,tent,p,.35);const canopy=deformedCanopy(sourceTent,p,{edgeY:.40,peakY:.40+(p.peakHeightFt-p.eaveHeightFt)});if(canopy)covered.add(canopy);
-    workersFor(covered,[[-hw-2,-hl+2,.5],[hw+2,hl-2,-2.6]]);
+    const perimeter=add('frame-perimeter');perimeterFrameOnly(perimeter,tent,p);frameCrownAssembly(perimeter,tent,p);frameLegsStaged(perimeter,tent,p);
+    workersFor(perimeter,[[-hw-2,-hl-1,.6,0xf2a93b,'carry'],[hw+2,hl+1,-2.5,0x5b8c62,'carry']]);
 
-    const side=add('frame-one-side');frameLiftStage(side,tent,p,sourceTent,true);workersFor(side,[[-hw-2,-hl-1,.4],[hw+1,hl+1,-2.4]]);
+    const topframe=add('frame-top');frameTop(topframe,tent,p,.35);frameLegsStaged(topframe,tent,p);
+    workersFor(topframe,[[-hw-2,0,.6,0xf2a93b,'kneel'],[hw+2,0,-2.4,0x5b8c62,'kneel']]);
 
-    const raised=add('frame-raised');frameLiftStage(raised,tent,p,sourceTent,false);workersFor(raised,[[-hw-2,0,.4],[hw+2,0,-2.4]]);
+    const folded=add('frame-top-folded');dropCloth(folded,tent);frameTop(folded,tent,p,.35);foldedTop(folded,tent,sourceTent);frameLegsStaged(folded,tent,p);
+    workersFor(folded,[[-hw-2,-hl+2,.5,0xf2a93b,'carry'],[hw+2,hl-2,-2.6,0x5b8c62,'lift']]);
 
-    const anchors=add('anchors');finalAnchors(anchors,tent,anchor);workersFor(anchors,[[-hw-3,0,.7],[hw+3,0,-2.4]]);
+    const halfway=add('frame-top-half');dropCloth(halfway,tent);frameTop(halfway,tent,p,.35);halfPulledTop(halfway,tent,p,sourceTent);frameLegsStaged(halfway,tent,p);
+    workersFor(halfway,[[-hw-1,-hl+1,.5,0xf2a93b,'lift'],[hw+1,-hl+1,-2.6,0x5b8c62,'lift']]);
+
+    const covered=add('frame-covered');dropCloth(covered,tent);frameTop(covered,tent,p,.35);const canopy=deformedCanopy(sourceTent,p,{edgeY:.40,peakY:.40+(p.peakHeightFt-p.eaveHeightFt)});if(canopy)covered.add(canopy);frameLegsStaged(covered,tent,p);
+    workersFor(covered,[[-hw-2,-hl+2,.5,0xf2a93b,'kneel'],[hw+2,hl-2,-2.6,0x5b8c62,'kneel']]);
+
+    const strapped=add('frame-strapped');dropCloth(strapped,tent);frameTop(strapped,tent,p,.35);const canopy2=deformedCanopy(sourceTent,p,{edgeY:.40,peakY:.40+(p.peakHeightFt-p.eaveHeightFt)});if(canopy2)strapped.add(canopy2);topStraps(strapped,tent,p);frameLegsStaged(strapped,tent,p);
+    workersFor(strapped,[[-hw-2,0,.5,0xf2a93b,'ratchet'],[hw+2,0,-2.5,0x5b8c62,'ratchet']]);
+
+    const side=add('frame-one-side');frameLiftStage(side,tent,p,sourceTent,true);
+    workersFor(side,[[-hw-2,-hl-1,.4,0xf2a93b,'lift'],[hw+1,hl+1,-2.4,0x5b8c62,'lift'],[hw+1,-hl+1,-2.4,0xf2a93b,'lift']]);
+
+    const raised=add('frame-raised');frameLiftStage(raised,tent,p,sourceTent,false);
+    workersFor(raised,[[-hw-2,0,.4,0xf2a93b,'stand'],[hw+2,0,-2.4,0x5b8c62,'stand']]);
+
+    const anchors=add('anchors');finalAnchors(anchors,tent,anchor);
+    workersFor(anchors,[[-hw-3,0,.7,0xf2a93b,anchor==='ballast'?'carry':'stake'],[hw+3,0,-2.4,0x5b8c62,anchor==='ballast'?'carry':'stake']]);
   }
 
   root.userData.show=function(key){
@@ -269,3 +313,4 @@ export function createTentSetupRig(tent,anchor,sourceTent){
   root.userData.groups=groups;
   return root;
 }
+
