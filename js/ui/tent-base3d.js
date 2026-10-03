@@ -151,7 +151,7 @@ export function makeTent(t,anchor,sidewalls=[]){
   mergeParts(seams);group.add(seams);mergeParts(frame);
   if(anchor==='ballast'){
     const material=new THREE.MeshStandardMaterial({color:0xd4d0c7,roughness:.95});
-    for(const [x,z] of stations){const bx=x+Math.sign(x)*.85,bz=z+Math.sign(z)*.85,weight=box(1.1,1.5,1.1,material);weight.name='Concrete ballast block';weight.userData.kind='concrete-ballast';weight.position.set(bx,.75,bz);weight.castShadow=weight.receiveShadow=true;group.add(weight);group.add(tube(new THREE.Vector3(x,p.eaveHeightFt-.1,z),new THREE.Vector3(bx,1.45,bz),.018,strap,8));}
+    for(const [x,z] of stations){const bx=x+Math.sign(x)*.85,bz=z+Math.sign(z)*.85,weight=box(1.1,1.5,1.1,material);weight.name='Concrete ballast block';weight.userData.kind='concrete-ballast';weight.userData.buildStage='stakes';weight.position.set(bx,.75,bz);weight.castShadow=weight.receiveShadow=true;group.add(weight);const tie=tube(new THREE.Vector3(x,p.eaveHeightFt-.1,z),new THREE.Vector3(bx,1.45,bz),.018,strap,8);tie.userData.buildStage='stakes';group.add(tie);}
   }
   if(anchor==='stake'){
     const anchorsGroup=new THREE.Group();anchorsGroup.name='Stakes and tension straps';anchorsGroup.userData.buildStage='stakes';group.add(anchorsGroup);
