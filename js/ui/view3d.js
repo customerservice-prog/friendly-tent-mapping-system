@@ -25,7 +25,7 @@ import { structuralProfile } from '../data/tentStructure.js';
 import { normalizePhotoCalibration, normalizePhotoGeometry, photoCameraEstimate, photoProjection, photoImageRect, photoTentTransform, rentalPhotoPlacement } from '../core/photo-geometry.js';
 import { measureWorldPoints } from '../core/measurement.js';
 import { objectLocalDimensions } from '../core/world-space.js';
-import { createTentSetupRig } from './tent-setup3d.js';
+import { createTentSetupRig } from './tent-setup3d.js?v=20261003-detailed-install-1';
 
 let active=null;
 const UP=new THREE.Vector3(0,1,0);
