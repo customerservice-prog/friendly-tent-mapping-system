@@ -56,7 +56,7 @@
         : await fetch((window.RENTSKETCH_API_URL || '') + '/api/consumer' + path, Object.assign({ credentials: 'omit' }, options));
       var data = await response.json();
       if (identity !== staffIdentity() || epoch !== accessEpoch) throw new Error('Your admin session changed. Sign in again to continue.');
-      if (!response.ok) throw new Error(data.error || 'Please try again in a moment.');
+      if (!response.ok) { var problem = new Error(data.error || 'Please try again in a moment.'); problem.status = response.status; problem.data = data; throw problem; }
       return data;
     } catch (err) {
       if (err.name === 'AbortError') throw new Error('That took too long. Your preview is safe. Please try again.');
@@ -464,7 +464,23 @@
       }
     } catch (err) {
       console.warn('[RentSketch] Event Pass:', err.message);
-      if (returning) {
+      var freeFriendly = slug === 'friendly' && offer && offer.required === false;
+      if (freeFriendly && saved && saved.id) {
+        try {
+          var auto = autosave();
+          if (auto.detachMissingProject) auto.detachMissingProject(saved);
+          else if (saved.scene && bridge()?.loadScene) bridge().loadScene(saved.scene);
+          closeModal();
+          history.replaceState(null, '', location.pathname + '?tenant=friendly');
+          returning = false;
+          window.RENTSKETCH_PASS_RESTORING = false;
+        } catch (localError) {
+          console.warn('[RentSketch] Friendly local recovery:', localError.message);
+          var freeFailed = openModal('Keep planning your Friendly event', '<p class="paywall-error" role="status"></p><p>Your old saved-project link is no longer available, but Friendly planning is free. Close this message to keep using the planner.</p><button type="button" class="btn-primary" data-continue-free>Continue planning</button>');
+          freeFailed.querySelector('.paywall-error').textContent = localError.message || 'The old saved project could not be reopened.';
+          freeFailed.querySelector('[data-continue-free]').onclick = closeModal;
+        }
+      } else if (returning) {
         var failed = openModal('Your saved event could not be opened', '<p class="paywall-error" role="status"></p><p>Your saved layout has not been replaced. Retry the connection or open your private access link.</p><button type="button" class="btn-primary" data-reload>Retry opening my event</button><button type="button" class="pass-back" data-recover>Email me my access link</button>');
         failed.querySelector('.paywall-error').textContent = err.message;
         failed.querySelector('[data-recover]').onclick = showRecovery;
