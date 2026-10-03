@@ -12,18 +12,26 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  class Renderer{constructor(){renderer=this;this.domElement=w.document.createElement('canvas');this.domElement.getBoundingClientRect=()=>({left:0,top:0,width:800,height:600});this.shadowMap={};}setPixelRatio(){}setSize(){}render(scene,camera){this.scene=scene;this.camera=camera;}dispose(){this.disposed=true;}}
  class Controls{constructor(camera){control=this;this.camera=camera;this.target=new THREE.Vector3();this.touches={};}addEventListener(){}update(){this.camera.lookAt(this.target);this.camera.updateMatrixWorld(true);}dispose(){}}
  class PMREM{fromScene(){return{texture:new THREE.Texture(),dispose(){}};}dispose(){}}
- const context=vm.createContext({console,document:w.document,window:w,Image:w.Image,ResizeObserver:class{constructor(fn){resizeScene=fn;}observe(){}disconnect(){}},requestAnimationFrame:fn=>{frames.set(++clock,fn);return clock;},cancelAnimationFrame:id=>frames.delete(id),performance:{now:()=>0}}),cache=new Map();
+ const context=vm.createContext({console,document:w.document,window:w,Image:w.Image,ResizeObserver:class{constructor(fn){resizeScene=fn;}observe(){}disconnect(){}},requestAnimationFrame:fn=>{frames.set(++clock,fn);return clock;},cancelAnimationFrame:id=>frames.delete(id),setTimeout:fn=>{fn();return ++clock;},clearTimeout:()=>{},performance:{now:()=>0}}),cache=new Map();
  const overrides={WebGLRenderer:Renderer,PMREMGenerator:PMREM};
  const three=new vm.SyntheticModule(Object.keys(THREE),function(){for(const key of Object.keys(THREE))this.setExport(key,overrides[key]||THREE[key]);},{context});
  const orbit=new vm.SyntheticModule(['OrbitControls'],function(){this.setExport('OrbitControls',Controls);},{context});
  function moduleFor(file){if(cache.has(file))return cache.get(file);const m=new vm.SourceTextModule(fs.readFileSync(file,'utf8'),{context,identifier:file});cache.set(file,m);return m;}
  async function load(file){const m=moduleFor(file);if(m.status==='unlinked')await m.link((s,ref)=>s==='three'?three:s.endsWith('/OrbitControls.js')?orbit:moduleFor(s.startsWith('three/addons/')?path.resolve(path.dirname(threePath),'../examples/jsm',s.slice(13)):path.resolve(path.dirname(ref.identifier),s)));return m;}
  const mod=await load(path.join(root,'js/ui/view3d.js'));await mod.evaluate();
- const view=mod.namespace.init(container,{onPlacementMove:(x,y)=>callbacks.push(['move',x,y]),onPlace:()=>callbacks.push(['place']),onPhotoMove:(id,p)=>callbacks.push(['photoMove',id,p]),onMeasureMode:value=>callbacks.push(['measureMode',value]),onMeasurement:value=>callbacks.push(['measurement',value])});
+ const view=mod.namespace.init(container,{onPlacementMove:(x,y)=>callbacks.push(['move',x,y]),onPlace:()=>callbacks.push(['place']),onPhotoMove:(id,p)=>callbacks.push(['photoMove',id,p]),onMeasureMode:value=>callbacks.push(['measureMode',value]),onMeasurement:value=>callbacks.push(['measurement',value]),onTentSetupStep:value=>callbacks.push(['tentSetup',value])});
  const table={id:'t1',kind:'table',tableId:'round-5ft',shape:'round',widthFt:5,depthFt:5,x:1,y:1,seatCount:8,chairId:'resin-white'};
  const data={tent:{id:'pole-20x20',type:'pole',widthFt:20,lengthFt:20,centerPoles:[{x:10,y:10}]},surfaceType:'notSure',objects:[table],lightingId:'lighting-bistro'};
  view.rebuild(data);view.setScene({night:true,weather:'rain',guests:true,motion:true});
- const scene=renderer.scene;assert.equal(scene.fog.density,.004,'rain softens the background');
+ const scene=renderer.scene;
+ const setupSource=JSON.stringify(data);callbacks=[];
+ assert.equal(view.playTentSetup('build'),true,'pole tent exposes worker setup walkthrough');
+ const poleSteps=callbacks.filter(c=>c[0]==='tentSetup').map(c=>c[1]);
+ assert.ok(poleSteps.length>=5,'pole setup reports its major installation stages');
+ assert.match(poleSteps[0].title,/anchors/i);assert.ok(poleSteps.some(s=>/Raise the poles/i.test(s.title)));assert.equal(poleSteps.at(-1).done,true);
+ assert.equal(JSON.stringify(data),setupSource,'tent walkthrough never mutates the saved event');
+ let hiddenStage=false;scene.getObjectByName('Event tent')?.traverse(o=>{if(o.userData?.buildStage&&!o.visible)hiddenStage=true;});assert.equal(hiddenStage,false,'all tent parts are restored after setup walkthrough');
+ callbacks=[];assert.equal(scene.fog.density,.004,'rain softens the background');
  assert.ok(scene.getObjectByName('Preview guests').visible);assert.ok(scene.getObjectByName('Rain outside the canopy').visible);assert.ok(!scene.getObjectByName('Visible sun').visible);
  assert.ok(scene.children.flatMap(g=>g.children).filter(o=>o.isPointLight).every(o=>o.intensity>65));
  view.setScene({night:true,weather:'clear',guests:false,motion:false});assert.equal(scene.fog.density,.002);assert.ok(scene.getObjectByName('Moon').visible);assert.ok(!scene.getObjectByName('Preview guests').visible);
@@ -33,7 +41,7 @@ const {JSDOM}=require('jsdom'),root=path.resolve(__dirname,'..');
  // Accent chairs are independently rendered and selectable, not table seating.
  const accent={id:'king-accent',kind:'chair',chairId:'throne-king',widthFt:2.4,depthFt:2.6,x:12,y:12,rotationDeg:90};
  view.rebuild({...data,objects:[table,accent]});const renderedChair=scene.getObjectByName('King Throne Chair');assert.ok(renderedChair);assert.equal(renderedChair.userData.itemId,accent.id);assert.equal(renderedChair.rotation.y,-Math.PI/2);assert.ok(renderedChair.children.every(o=>o.userData.itemId===accent.id));
- const pavedTent={id:'frame-20x20',type:'frame',widthFt:20,lengthFt:20,centerPoles:[]};view.rebuild({...data,tent:pavedTent,surfaceType:'concrete',anchoringMethod:'ballast',objects:[accent]});assert.ok(scene.getObjectByName('Paved driveway setting'));let blocks=0;scene.traverse(o=>{if(o.userData.kind==='concrete-ballast')blocks++;});assert.equal(blocks,8);view.rebuild({...data,tent:pavedTent,surfaceType:'grass',anchoringMethod:'stake',objects:[accent]});assert.ok(scene.getObjectByName('Backyard setting'));assert.ok(!scene.getObjectByName('Concrete ballast block'));view.rebuild(data);
+ const pavedTent={id:'frame-20x20',type:'frame',widthFt:20,lengthFt:20,centerPoles:[]};view.rebuild({...data,tent:pavedTent,surfaceType:'concrete',anchoringMethod:'ballast',objects:[accent]});assert.ok(scene.getObjectByName('Paved driveway setting'));callbacks=[];assert.equal(view.playTentSetup('build'),true);const frameSteps=callbacks.filter(c=>c[0]==='tentSetup').map(c=>c[1]);assert.match(frameSteps[0].title,/Assemble the frame/i);assert.ok(frameSteps.some(s=>/ballast/i.test(s.title+s.detail)),'frame walkthrough explains ballast when selected');let blocks=0;scene.traverse(o=>{if(o.userData.kind==='concrete-ballast')blocks++;});assert.equal(blocks,8);view.rebuild({...data,tent:pavedTent,surfaceType:'grass',anchoringMethod:'stake',objects:[accent]});assert.ok(scene.getObjectByName('Backyard setting'));assert.ok(!scene.getObjectByName('Concrete ballast block'));view.rebuild(data);
  const placement={x:10,y:10,widthFt:5,depthFt:5,objects:[{...table,id:'pending',x:10,y:10}]};view.rebuild({...data,placement});assert.equal(control.enableRotate,false);
  const canvas=renderer.domElement;
  function pointer(type,id=1){const event=new w.MouseEvent(type,{clientX:400,clientY:350,button:0});Object.defineProperties(event,{pointerId:{value:id},pointerType:{value:'touch'}});canvas.dispatchEvent(event);}

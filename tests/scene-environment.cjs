@@ -17,6 +17,12 @@ const root=path.resolve(__dirname,'..');
   assert.equal(env.userData.setting,tent.type==='pole'?'backyard':'driveway');
   assert.equal(!!env.getObjectByName('Paved tent surface'),tent.type==='frame');
   const trees=env.getObjectByName('Backyard boundary trees');assert.equal(trees.children.length,6);
+  const hedgeNames=['Natural hedge lower foliage','Natural hedge middle foliage','Natural hedge upper foliage'];
+  const hedgeLayers=hedgeNames.map(name=>env.getObjectByName(name));
+  assert.ok(hedgeLayers.every(mesh=>mesh?.isInstancedMesh&&mesh.count>=4),'hedge uses layered instanced foliage');
+  const firstMatrix=new THREE.Matrix4(),secondMatrix=new THREE.Matrix4(),firstScale=new THREE.Vector3(),secondScale=new THREE.Vector3();
+  hedgeLayers[0].getMatrixAt(0,firstMatrix);hedgeLayers[0].getMatrixAt(1,secondMatrix);firstScale.setFromMatrixScale(firstMatrix);secondScale.setFromMatrixScale(secondMatrix);
+  assert.ok(firstScale.distanceTo(secondScale)>.03,'neighboring shrubs vary in shape instead of repeating one clone');
   const installation=new THREE.Box3(new THREE.Vector3(-tent.widthFt/2-5,0,-tent.lengthFt/2-5),new THREE.Vector3(tent.widthFt/2+5,35,tent.lengthFt/2+5));
   for(const tree of trees.children){
     const leaves=tree.getObjectByName('Individual broadleaf sprays');

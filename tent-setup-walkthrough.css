@@ -1,0 +1,19 @@
+.tent-setup-progress{
+  position:absolute;left:50%;bottom:24px;z-index:18;display:grid;gap:4px;
+  width:min(560px,calc(100% - 32px));padding:14px 18px;transform:translateX(-50%);
+  border:1px solid #cbd9cb;border-radius:16px;background:rgba(255,255,255,.96);
+  box-shadow:0 14px 40px rgba(18,44,27,.2);color:#23402c;pointer-events:none
+}
+.tent-setup-progress[hidden]{display:none}
+.tent-setup-progress[data-done="true"]{border-color:#7ca88a;background:rgba(244,250,244,.97)}
+.tent-setup-progress .tent-setup-step{font-size:10px;font-weight:900;letter-spacing:.11em;text-transform:uppercase;color:#66806d}
+.tent-setup-progress strong{font-size:17px;line-height:1.25}
+.tent-setup-progress small{font-size:12px;line-height:1.45;color:#53695b}
+#view3dTimelapseBuild{font-weight:800;border-color:#8eb29a;background:#edf7ef;color:#234b31}
+@media(max-width:880px){
+  body.view-mode-3d:not(.tent-preview) #view3dTimelapseBuild{display:inline-flex!important}
+  body.view-mode-3d:not(.tent-preview) #view3dTimelapseBreak{display:none!important}
+  .tent-setup-progress{bottom:14px;width:calc(100% - 20px);padding:12px 14px}
+  .tent-setup-progress strong{font-size:15px}
+  .tent-setup-progress small{font-size:11px}
+}

@@ -529,6 +529,21 @@ function mountPhoto(){
   return true;
 }
 function mountPlan(){if(planMounted)return;planMounted=true;plan2dMod.mount($('plan2d'),buildSnapshot(getConflicts()),{onSelect:handleSelect,onMove:handleMove,onPlacementMove:movePlacement,onPlace:confirmPlacement});}
+function showTentSetupStep(info){
+  if(!info)return;
+  var host=$('tentSetupProgress');
+  if(!host){
+    host=document.createElement('div');host.id='tentSetupProgress';host.className='tent-setup-progress';host.setAttribute('role','status');host.setAttribute('aria-live','polite');
+    var viewport=document.querySelector('.canvas-viewport');if(viewport)viewport.appendChild(host);
+  }
+  clearTimeout(host._hideTimer);
+  host.replaceChildren();
+  var meta=document.createElement('span');meta.className='tent-setup-step';meta.textContent=(info.done?'Crew check':'Step '+info.index+' of '+info.total);
+  var title=document.createElement('strong');title.textContent=info.title||'Tent setup';
+  var detail=document.createElement('small');detail.textContent=info.detail||'';
+  host.append(meta,title,detail);host.hidden=false;host.dataset.done=String(!!info.done);
+  if(info.done)host._hideTimer=setTimeout(function(){host.hidden=true;},4200);
+}
 function mount3D(){
   if(view3dMod||view3dMountInProgress)return;
   var canvas=$('canvas');if(!canvas){console.warn('3D mount: canvas element not found');return;}
@@ -539,8 +554,8 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20260926-photo-camera-1').then(function(mod){
-      var snap=view3dPendingSnapshot||rendererSnapshot(buildSnapshot(getConflicts())),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPhotoSelect:handlePhotoSelect,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onScanReconstruction:function(info){
+    import('./js/ui/view3d.js?v=20261003-tent-setup-1').then(function(mod){
+      var snap=view3dPendingSnapshot||rendererSnapshot(buildSnapshot(getConflicts())),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPhotoSelect:handlePhotoSelect,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onTentSetupStep:showTentSetupStep,onScanReconstruction:function(info){
         window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());if(state.activeDrawer==='site')renderDrawerBody('site');
         if(info?.ready){
           if(state.viewMode==='3d'&&view3dMod?.orbit360?.())setPhoto3dModeUi('360');
@@ -617,8 +632,9 @@ function setViewMode(mode){
   if((mode!=='3d'||edit)&&view3dMod?.isMeasuring?.()){view3dMod.setMeasureMode(false);setMeasureUi(false);}
   if(mode!=='3d'&&view3dMod?.isWalking?.())view3dMod.exitWalk();
   if(pendingPlacement&&(state.viewMode!==mode||photoEditing!==edit))cancelPlacement();
-  photoEditing=edit;state.viewMode=mode;
-  var rendering=mode==='3d'||(mode==='photo'&&!edit),photoPreview=mode==='photo'&&!edit;
+  photoEditing=edit;state.viewMode=mode;document.body.classList.toggle('view-mode-3d',mode==='3d');
+  if(mode!=='3d'&&$('tentSetupProgress'))$('tentSetupProgress').hidden=true;
+  var rendering=mode==='3d'||(mode==='photo'&&!edit),photoPreview=mode==='photo'&&!edit,tentSetupAvailable=mode==='3d'&&!layoutSpace().isSite;
   if($('sceneControls'))$('sceneControls').hidden=!rendering;
   if($('sceneSettingLabel'))$('sceneSettingLabel').hidden=!rendering;
   if($('canvasHint'))$('canvasHint').textContent=mode==='3d'?'Drag to orbit · Pinch or scroll to zoom':mode==='photo'?'Match a known ground measurement to set photo scale':'Select an item · Drag to move';
@@ -629,8 +645,8 @@ function setViewMode(mode){
   if(photoEl)photoEl.style.display=edit?'block':'none';
   if(canvasEl)canvasEl.style.display=rendering?'block':'none';
   if($('view3dDayNight'))$('view3dDayNight').style.display=rendering?'':'none';
-  if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').style.display=mode==='3d'?'':'none';
-  if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').style.display=mode==='3d'?'':'none';
+  if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').style.display=tentSetupAvailable?'':'none';
+  if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').style.display=tentSetupAvailable?'':'none';
   renderViews(getConflicts());
   if(edit)setTimeout(function(){mountPhoto();},0);
   if(rendering){var useScan=mode==='3d'&&!!state.backgroundPhoto&&hasCapturedScan();setPhoto3dModeUi(useScan?'360':'matched');setTimeout(function(){mount3D();if(!view3dMod)return;if(useScan&&view3dMod.orbit360){view3dMod.orbit360();setPhoto3dModeUi('360');}else if(photoPreview&&view3dMod.matchPhoto){view3dMod.matchPhoto();setPhoto3dModeUi('matched');}else view3dMod.fitCamera?.();},16);}
@@ -813,7 +829,7 @@ $('drawerBody')?.addEventListener('input',function(e){
 if($('propertyFitBadge'))$('propertyFitBadge').addEventListener('click',function(){
   var panel=$('propertyFitPanel');if(!panel)return;panel.hidden=!panel.hidden;this.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)renderPropertyFit(currentPropertyPlan());
 });
-if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('build');});if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').addEventListener('click',function(){if(view3dMod)view3dMod.playTimelapse('breakdown');});if($('btnUndo'))$('btnUndo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.undo();});if($('btnRedo'))$('btnRedo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.redo();});store.subscribe(function(){refreshAll();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});if($('btnBackToRecommend'))$('btnBackToRecommend').addEventListener('click',function(){openDrawer('setup');});if($('btnToReview'))$('btnToReview').addEventListener('click',goToReview);if($('btnBackToDesigner'))$('btnBackToDesigner').addEventListener('click',function(){document.body.classList.add('designer-active');showStep('step-designer');});window.FriendlyBridge={EQUIPMENT:EQUIPMENT,INFLATABLES:INFLATABLES,ACCESSORIES:ACCESSORIES,openInflatablePreview:openInflatablePreview,buildPartyScene:buildPartyScene,openDrawer:openDrawer,state:state,TENTS:TENTS,TABLES:TABLES,CHAIRS:CHAIRS,PACKAGES:PACKAGES,byId:byId,showStep:showStep,enterDesigner:enterDesigner,getScene:getScene,loadScene:loadScene,useRecommendedLayout:useRecommendedLayout,customizeFromScratch:customizeFromScratch,refreshAll:refreshAll,setViewMode:setViewMode,goToReview:goToReview,computeLineItems:computeLineItems,currentReviewPricing:currentReviewPricing,getPropertyPlan:currentPropertyPlan,getChecks:getConflicts,closeDrawer:closeDrawer,getSpaceScan:function(){return currentVenueScan();},getScanReconstruction:function(){return window.RENTSKETCH_SCAN_RECONSTRUCTION||null;},getMeasurement:function(){return view3dMod?.getMeasurement?.()||null;},startMeasurement:function(){if(!view3dMod)return false;var active=view3dMod.setMeasureMode(true);setMeasureUi(active);return active;},clearMeasurement:function(){view3dMod?.clearMeasurement?.();setMeasurementResult(null);return true;},showcaseCamera:function(mode){if(!view3dMod)return false;if(mode==='inside')return view3dMod.inside?.();if(mode==='wide')return view3dMod.wide?.();return view3dMod.fitCamera?.();}};
+if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').addEventListener('click',function(){if(view3dMod?.playTentSetup)view3dMod.playTentSetup('build');else if(view3dMod)view3dMod.playTimelapse('build');});if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').addEventListener('click',function(){if(view3dMod?.playTentSetup)view3dMod.playTentSetup('breakdown');else if(view3dMod)view3dMod.playTimelapse('breakdown');});if($('btnUndo'))$('btnUndo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.undo();});if($('btnRedo'))$('btnRedo').addEventListener('click',function(){if(pendingPlacement)cancelPlacement();else store.redo();});store.subscribe(function(){refreshAll();window.dispatchEvent(new CustomEvent('rentsketch:requestSave'));});if($('btnBackToRecommend'))$('btnBackToRecommend').addEventListener('click',function(){openDrawer('setup');});if($('btnToReview'))$('btnToReview').addEventListener('click',goToReview);if($('btnBackToDesigner'))$('btnBackToDesigner').addEventListener('click',function(){document.body.classList.add('designer-active');showStep('step-designer');});window.FriendlyBridge={EQUIPMENT:EQUIPMENT,INFLATABLES:INFLATABLES,ACCESSORIES:ACCESSORIES,openInflatablePreview:openInflatablePreview,buildPartyScene:buildPartyScene,openDrawer:openDrawer,state:state,TENTS:TENTS,TABLES:TABLES,CHAIRS:CHAIRS,PACKAGES:PACKAGES,byId:byId,showStep:showStep,enterDesigner:enterDesigner,getScene:getScene,loadScene:loadScene,useRecommendedLayout:useRecommendedLayout,customizeFromScratch:customizeFromScratch,refreshAll:refreshAll,setViewMode:setViewMode,goToReview:goToReview,computeLineItems:computeLineItems,currentReviewPricing:currentReviewPricing,getPropertyPlan:currentPropertyPlan,getChecks:getConflicts,closeDrawer:closeDrawer,getSpaceScan:function(){return currentVenueScan();},getScanReconstruction:function(){return window.RENTSKETCH_SCAN_RECONSTRUCTION||null;},getMeasurement:function(){return view3dMod?.getMeasurement?.()||null;},startMeasurement:function(){if(!view3dMod)return false;var active=view3dMod.setMeasureMode(true);setMeasureUi(active);return active;},clearMeasurement:function(){view3dMod?.clearMeasurement?.();setMeasurementResult(null);return true;},showcaseCamera:function(mode){if(!view3dMod)return false;if(mode==='inside')return view3dMod.inside?.();if(mode==='wide')return view3dMod.wide?.();return view3dMod.fitCamera?.();}};
 
 $('drawerBody').addEventListener('submit',function(e){if(e.target.id!=='quickSetupForm')return;e.preventDefault();var form=e.target;if(!form.reportValidity())return;state.guestCount=Math.max(1,Math.min(1000,Number(form.elements.guests.value)||1));var ft=Number(form.elements.dance.value);state.needDance=ft>0;state.danceFloorSizeId='custom';state.customDanceFloorFt=ft||null;useRecommendedLayout();});
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){if(view3dMod?.isMeasuring?.()){view3dMod.setMeasureMode(false);setMeasureUi(false);return;}if(view3dMod?.isWalking?.()){view3dMod.exitWalk();setPhoto3dModeUi('360');return;}if(pendingPlacement){cancelPlacement();return;}if($('sceneControls'))$('sceneControls').open=false;if(state.activeDrawer)closeDrawer();else if(state.selectedId){state.selectedId=null;refreshAll();}}});

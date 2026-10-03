@@ -55,7 +55,7 @@ export function init(container,callbacks={}) {
   let equipmentTime=0;
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',local360Key='',scanWorldKey='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0;
+  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',local360Key='',scanWorldKey='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0,tentSetupRun=0,tentSetupTimers=[];
   let scanWorldSeq=0,scanWorldAbort=null;
   const photoCanvas=document.createElement('canvas'),photoCtx=photoCanvas.getContext('2d',{alpha:false});
   function newPhotoTexture(){const texture=new THREE.CanvasTexture(photoCanvas);texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearFilter;texture.magFilter=THREE.LinearFilter;return texture;}
@@ -899,6 +899,72 @@ export function init(container,callbacks={}) {
     renderer.shadowMap.needsUpdate=true;invalidate();
   }
   function playTimelapse(){cancelAnimationFrame(animationFrame);if(reducedMotion){structure.scale.y=1;invalidate();return;}const start=performance.now();structure.visible=true;structure.scale.y=.02;function tick(now){if(destroyed)return;const k=Math.min(1,(now-start)/1800),e=1-Math.pow(1-k,3);structure.scale.y=Math.max(.02,e);renderer.shadowMap.needsUpdate=true;invalidate();if(k<1)animationFrame=requestAnimationFrame(tick);else structure.scale.y=1;}animationFrame=requestAnimationFrame(tick);}
+  function stopTentSetup(restore=true){
+    tentSetupRun++;tentSetupTimers.forEach(clearTimeout);tentSetupTimers=[];
+    const root=structure.children[0];
+    if(root)root.traverse(o=>{if(o.userData?.buildStage)o.visible=true;});
+    if(restore){
+      furniture.visible=true;
+      if(styling)styling.visible=showStyling&&!drag;
+      if(guests)guests.visible=showGuests&&!drag;
+      if(inflatableActivity)inflatableActivity.visible=showGuests&&!drag&&!state?.placement;
+      if(lightGroup)lightGroup.visible=true;
+    }
+    renderer.shadowMap.needsUpdate=true;invalidate();
+  }
+  function playTentSetup(mode='build'){
+    if(!state?.tent||state.tent.isSite||!structure.children[0])return false;
+    stopTentSetup(false);
+    const run=++tentSetupRun,root=structure.children[0],bucket={roof:[],frame:[],stakes:[],valance:[],sidewalls:[]};
+    root.traverse(o=>{
+      const stage=o.userData?.buildStage;
+      if(stage&&bucket[stage]&&o.parent?.userData?.buildStage!==stage)bucket[stage].push(o);
+    });
+    const hasSidewalls=bucket.sidewalls.length>0,ballast=!!root.getObjectByName('Concrete ballast block'),pole=state.tent.type==='pole';
+    const build=pole
+      ? [
+          ['stakes','Mark footprint & set anchors','Crew marks the tent footprint, drives the perimeter stakes, and positions the ratchet straps.'],
+          ['roof','Lay out the tent top','The vinyl canopy is spread flat inside the marked footprint before the poles are raised.'],
+          ['frame','Raise the poles','Side poles are set first, then the center poles raise the canopy to full height.'],
+          ['valance','Square & tension the tent','Ratchets are tightened evenly so the tent is centered, square, and properly tensioned.'],
+          ['sidewalls','Install selected sidewalls',hasSidewalls?'Any selected sidewalls are attached after the tent is fully raised and tensioned.':'No sidewalls are selected for this layout.']
+        ]
+      : [
+          ['frame','Assemble the frame','Frame sections are connected on the ground and checked before the tent is lifted.'],
+          ['roof','Fit the tent top','The vinyl top is pulled over the assembled frame and secured before the legs are raised.'],
+          ['stakes',ballast?'Raise & ballast the frame':'Raise & anchor the frame',ballast?'The frame is raised to working height and secured with the planned ballast system.':'The frame is raised to working height and secured with the planned anchoring system.'],
+          ['valance','Square & tension the top','The crew squares the frame and tensions the vinyl evenly around the perimeter.'],
+          ['sidewalls','Install selected sidewalls',hasSidewalls?'Any selected sidewalls are attached after the frame is secure and the top is tensioned.':'No sidewalls are selected for this layout.']
+        ];
+    const steps=(mode==='breakdown'?build.slice().reverse():build).filter(step=>step[0]!=='sidewalls'||hasSidewalls);
+    const all=Object.values(bucket).flat();
+    all.forEach(o=>o.visible=mode==='breakdown');
+    furniture.visible=false;if(styling)styling.visible=false;if(guests)guests.visible=false;if(inflatableActivity)inflatableActivity.visible=false;if(lightGroup)lightGroup.visible=false;
+    outsideWide();
+    const showStep=(index)=>{
+      if(destroyed||run!==tentSetupRun)return;
+      const [stage,title,detail]=steps[index];
+      const visible=mode!=='breakdown';
+      (bucket[stage]||[]).forEach(o=>o.visible=visible);
+      if(mode==='breakdown'&&stage==='roof')structure.scale.y=1;
+      callbacks.onTentSetupStep?.({mode,index:index+1,total:steps.length+1,title,detail,done:false});
+      renderer.shadowMap.needsUpdate=true;invalidate();
+    };
+    if(reducedMotion){
+      all.forEach(o=>o.visible=true);
+      callbacks.onTentSetupStep?.({mode,index:steps.length+1,total:steps.length+1,title:'Crew setup complete',detail:'This visual sequence shows the major installation stages. Final placement and anchoring are confirmed by the crew on site.',done:true});
+      furniture.visible=true;if(styling)styling.visible=showStyling;if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;if(lightGroup)lightGroup.visible=true;invalidate();return true;
+    }
+    steps.forEach((step,index)=>tentSetupTimers.push(setTimeout(()=>showStep(index),index*1050)));
+    tentSetupTimers.push(setTimeout(()=>{
+      if(destroyed||run!==tentSetupRun)return;
+      all.forEach(o=>o.visible=true);
+      furniture.visible=true;if(styling)styling.visible=showStyling&&!drag;if(guests)guests.visible=showGuests&&!drag;if(inflatableActivity)inflatableActivity.visible=showGuests&&!drag&&!state?.placement;if(lightGroup)lightGroup.visible=true;
+      callbacks.onTentSetupStep?.({mode,index:steps.length+1,total:steps.length+1,title:mode==='breakdown'?'Tent breakdown complete':'Final crew safety check',detail:mode==='breakdown'?'The tent is cleared from the event area after the rental is complete.':'Crew checks anchors or ballast, pole/frame connections, tension, clearances, and the finished installation before leaving the site.',done:true});
+      renderer.shadowMap.needsUpdate=true;invalidate();
+    },steps.length*1050));
+    return true;
+  }
   function playItemTimelapse(ids=[],duration=720){
     cancelAnimationFrame(itemAnimationFrame);
     if(reducedMotion||!ids.length)return;
@@ -981,7 +1047,7 @@ export function init(container,callbacks={}) {
     if(destroyed||!state?.tent)return null;
     try{scanWorld.userData.updateView?.(camera);renderer.render(scene,camera);return renderer.domElement.toDataURL('image/jpeg',.9);}catch(_){return null;}
   }
-  const api={inside,reception,outsideWide,wide,setScene,previewPhotoComposition,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();photoForeground.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();env?.dispose();container.replaceChildren();}};
+  const api={inside,reception,outsideWide,wide,setScene,previewPhotoComposition,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playTentSetup,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){destroyed=true;tentSetupRun++;tentSetupTimers.forEach(clearTimeout);tentSetupTimers=[];walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();photoForeground.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();env?.dispose();container.replaceChildren();}};
   // A watch-only sample must not replace the real designer renderer.
   if(callbacks.registerActive !== false)active=api;return api;
 }
