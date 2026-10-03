@@ -22,18 +22,35 @@ function lineLoop(points,color=0x2c5f39){
   const line=new THREE.LineLoop(geometry,new THREE.LineBasicMaterial({color,transparent:true,opacity:.78}));
   line.position.y=.035;return line;
 }
-function worker(x,z,ry=0,shirt=0xf2a93b){
-  const g=new THREE.Group();g.name='Tent crew worker';g.position.set(x,0,z);g.rotation.y=ry;
-  const skin=mat(0xc98d67),pants=mat(0x263744),top=mat(shirt),cap=mat(0x27352d);
-  const body=cyl(.34,1.25,top,10);body.position.y=2;g.add(body);
-  const legs=[-.17,.17].map(dx=>{const q=cyl(.10,1.25,pants,8);q.position.set(dx,.7,0);g.add(q);return q;});
-  const head=new THREE.Mesh(new THREE.SphereGeometry(.26,12,8),skin);head.position.y=2.82;g.add(head);
-  const hat=cyl(.28,.10,cap,12);hat.position.y=3.05;g.add(hat);
-  for(const sx of [-1,1]){const arm=cyl(.075,.9,top,8);arm.position.set(sx*.39,2.02,0);arm.rotation.z=sx*.23;g.add(arm);}
+function worker(x,z,ry=0,shirt=0xf2a93b,pose='stand'){
+  const g=new THREE.Group();g.name='Tent crew worker';g.position.set(x,0,z);g.rotation.y=ry;g.userData.pose=pose;
+  const skin=mat(0xc98d67),pants=mat(0x263744),top=mat(shirt),cap=mat(0x27352d),toolMat=mat(0x6e573f),metal=mat(0x565f61,{metalness:.55,roughness:.45});
+  const crouch=pose==='kneel'||pose==='stake'||pose==='ratchet',lift=pose==='lift'||pose==='carry';
+  const torsoY=crouch?1.56:2,body=cyl(.34,1.25,top,10);body.position.y=torsoY;if(crouch)body.rotation.x=.22;g.add(body);
+  const legs=[-.17,.17].map((dx,i)=>{const q=cyl(.10,crouch?.82:1.25,pants,8);q.position.set(dx,crouch?.48:.7,crouch?(i?-.22:.22):0);if(crouch)q.rotation.x=i?.85:-.35;g.add(q);return q;});
+  const head=new THREE.Mesh(new THREE.SphereGeometry(.26,12,8),skin);head.position.y=crouch?2.28:2.82;g.add(head);
+  const hat=cyl(.28,.10,cap,12);hat.position.y=crouch?2.51:3.05;g.add(hat);
+  const arms=[];
+  for(const sx of [-1,1]){
+    const arm=cyl(.075,.9,top,8);
+    arm.position.set(sx*.39,crouch?1.65:2.02,lift?.34:0);
+    arm.rotation.z=sx*(lift?1.08:(crouch?.48:.23));
+    if(pose==='ratchet')arm.rotation.x=-.9;
+    if(pose==='stake')arm.rotation.x=-.55;
+    g.add(arm);arms.push(arm);
+  }
+  if(pose==='stake'){
+    const handle=cyl(.035,1.4,toolMat,8);handle.position.set(.18,1.22,-.35);handle.rotation.x=.42;g.add(handle);
+    const hammer=box(.52,.13,.16,metal,.18,1.82,-.65);hammer.rotation.z=.08;g.add(hammer);
+  }else if(pose==='ratchet'){
+    const ratchet=box(.32,.14,.12,metal,0,1.38,-.55);ratchet.rotation.x=.12;g.add(ratchet);
+  }else if(pose==='carry'){
+    const bar=cyl(.045,2.1,metal,10);bar.rotation.z=Math.PI/2;bar.position.set(0,2.32,-.22);g.add(bar);
+  }
   g.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;}});return g;
 }
 function workersFor(group,positions){
-  positions.forEach((p,i)=>group.add(worker(p[0],p[1],p[2]||0,i%2?0x5b8c62:0xf2a93b)));
+  positions.forEach((p,i)=>group.add(worker(p[0],p[1],p[2]||0,p[3]|| (i%2?0x5b8c62:0xf2a93b),p[4]||'stand')));
 }
 function addStake(group,x,z,angle=.14){
   const steel=mat(0x444b4d,{metalness:.65,roughness:.4});
@@ -48,6 +65,69 @@ function perimeterStakePoints(tent){
     else pts.push([x+(edgeX?Math.sign(x)*clear:0),z+(edgeZ?Math.sign(z)*clear:0)]);
   }
   return pts;
+}
+function footprintGuides(group,tent){
+  const hw=tent.widthFt/2,hl=tent.lengthFt/2,guideMat=new THREE.LineBasicMaterial({color:0xf0c45a,transparent:true,opacity:.9});
+  const diag=new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(-hw,.045,-hl),new THREE.Vector3(hw,.045,hl),new THREE.Vector3(-hw,.045,hl),new THREE.Vector3(hw,.045,-hl)]);
+  const lines=new THREE.LineSegments(diag,guideMat);lines.name='Diagonal squaring tape';group.add(lines);
+  for(const [x,z] of [[-hw,-hl],[hw,-hl],[hw,hl],[-hw,hl]]){
+    const mark=new THREE.Mesh(new THREE.RingGeometry(.22,.32,16),new THREE.MeshBasicMaterial({color:0xffd56a,side:THREE.DoubleSide}));mark.rotation.x=-Math.PI/2;mark.position.set(x,.05,z);mark.name='Corner layout mark';group.add(mark);
+  }
+}
+function foldedTop(group,tent,source){
+  const roof=source?.getObjectByName('Continuous tensioned vinyl canopy');
+  const material=roof?.material?.clone?.()||new THREE.MeshStandardMaterial({color:0xfafaf8,roughness:.82});
+  const bundle=box(Math.max(4,tent.widthFt*.42),.32,Math.max(2.5,tent.lengthFt*.18),material,0,.20,-tent.lengthFt*.20);
+  bundle.name='Folded tent top';group.add(bundle);
+  const fold2=box(Math.max(3.4,tent.widthFt*.34),.26,Math.max(2.2,tent.lengthFt*.15),material,.55,.39,-tent.lengthFt*.15);fold2.rotation.y=.05;fold2.name='Folded tent top layer';group.add(fold2);
+}
+function halfPulledTop(group,tent,p,source){
+  const roof=source?.getObjectByName('Continuous tensioned vinyl canopy');
+  const material=roof?.material?.clone?.()||new THREE.MeshStandardMaterial({color:0xfafaf8,roughness:.82,side:THREE.DoubleSide});
+  material.side=THREE.DoubleSide;
+  const w=tent.widthFt,d=tent.lengthFt*.58,plane=new THREE.Mesh(new THREE.PlaneGeometry(w,d,12,8),material);
+  plane.rotation.x=-Math.PI/2;plane.position.set(0,.48,-tent.lengthFt*.18);plane.name='Tent top halfway pulled across frame';plane.castShadow=plane.receiveShadow=true;group.add(plane);
+}
+function looseRatchets(group,tent,p){
+  const hw=tent.widthFt/2,hl=tent.lengthFt/2,strap=mat(0xe6d9b8,{roughness:.95}),stations=computePerimeterStations(tent.widthFt,tent.lengthFt),stakes=perimeterStakePoints(tent);
+  stations.forEach((s,i)=>{
+    const x=s.x-hw,z=s.y-hl,target=stakes[Math.min(i,stakes.length-1)]||[x,z];
+    const a=new THREE.Vector3(x,.32,z),b=new THREE.Vector3(target[0],.10,target[1]),mid=a.clone().lerp(b,.6);mid.y=.12;
+    const first=tube(a,mid,.016,strap,8),second=tube(mid,b,.016,strap,8);first.name=second.name='Loose ratchet strap';group.add(first,second);
+    const ratchet=box(.22,.10,.08,mat(0x9a9c98,{metalness:.4,roughness:.5}),mid.x,mid.y+.06,mid.z);ratchet.name='Loose ratchet body';group.add(ratchet);
+  });
+}
+function frameCrownAssembly(group,tent,p){
+  const steel=mat(0xbcc3c4,{metalness:.65,roughness:.4}),crowns=crownPoints(tent),rise=p.peakHeightFt-p.eaveHeightFt;
+  const use=crowns.length?crowns:[{x:0,z:0}];
+  use.forEach((c,i)=>{
+    const center=new THREE.Vector3(c.x,.26,c.z),crown=new THREE.Mesh(new THREE.SphereGeometry(.24,10,7),steel);crown.position.copy(center);crown.name='Frame crown fitting';group.add(crown);
+    for(const a of [-1.2,-.4,.4,1.2]){
+      const end=new THREE.Vector3(c.x+a*3,.18,c.z+(i%2?1:-1)*2.8);
+      group.add(tube(center,end,.065,steel));
+    }
+  });
+  group.userData.frameRise=rise;
+}
+function perimeterFrameOnly(group,tent,p){
+  const steel=mat(0xc3c8c9,{metalness:.68,roughness:.38}),hw=tent.widthFt/2,hl=tent.lengthFt/2,y=.35;
+  group.add(tube(new THREE.Vector3(-hw,y,-hl),new THREE.Vector3(hw,y,-hl),.06,steel));
+  group.add(tube(new THREE.Vector3(-hw,y,hl),new THREE.Vector3(hw,y,hl),.06,steel));
+  group.add(tube(new THREE.Vector3(-hw,y,-hl),new THREE.Vector3(-hw,y,hl),.06,steel));
+  group.add(tube(new THREE.Vector3(hw,y,-hl),new THREE.Vector3(hw,y,hl),.06,steel));
+}
+function poleSideStage(group,tent,p,source,{cornersOnly=false}={}){
+  const steel=mat(0xc2c7c8,{metalness:.62,roughness:.4}),hw=tent.widthFt/2,hl=tent.lengthFt/2;
+  const canopy=deformedCanopy(source,p,{edgeY:p.eaveHeightFt*.78,peakY:p.peakHeightFt,opacity:.96});if(canopy)group.add(canopy);
+  const stations=computePerimeterStations(tent.widthFt,tent.lengthFt);
+  stations.forEach(s=>{
+    const x=s.x-hw,z=s.y-hl,isCorner=Math.abs(Math.abs(x)-hw)<.1&&Math.abs(Math.abs(z)-hl)<.1;
+    if(cornersOnly&&!isCorner)return;
+    const pole=cyl(p.sidePoleDiameterFt/2,p.eaveHeightFt,steel,12);pole.position.set(x,p.eaveHeightFt/2,z);group.add(pole);
+  });
+}
+function ratchetStage(group,tent,p,source){
+  poleSideStage(group,tent,p,source,{cornersOnly:false});looseRatchets(group,tent,p);
 }
 function dropCloth(group,tent){
   const cloth=new THREE.Mesh(new THREE.PlaneGeometry(tent.widthFt+3,tent.lengthFt+3),new THREE.MeshStandardMaterial({color:0x5f7b58,roughness:1,side:THREE.DoubleSide}));
