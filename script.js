@@ -632,8 +632,9 @@ function setViewMode(mode){
   if((mode!=='3d'||edit)&&view3dMod?.isMeasuring?.()){view3dMod.setMeasureMode(false);setMeasureUi(false);}
   if(mode!=='3d'&&view3dMod?.isWalking?.())view3dMod.exitWalk();
   if(pendingPlacement&&(state.viewMode!==mode||photoEditing!==edit))cancelPlacement();
-  photoEditing=edit;state.viewMode=mode;
-  var rendering=mode==='3d'||(mode==='photo'&&!edit),photoPreview=mode==='photo'&&!edit;
+  photoEditing=edit;state.viewMode=mode;document.body.classList.toggle('view-mode-3d',mode==='3d');
+  if(mode!=='3d'&&$('tentSetupProgress'))$('tentSetupProgress').hidden=true;
+  var rendering=mode==='3d'||(mode==='photo'&&!edit),photoPreview=mode==='photo'&&!edit,tentSetupAvailable=mode==='3d'&&!layoutSpace().isSite;
   if($('sceneControls'))$('sceneControls').hidden=!rendering;
   if($('sceneSettingLabel'))$('sceneSettingLabel').hidden=!rendering;
   if($('canvasHint'))$('canvasHint').textContent=mode==='3d'?'Drag to orbit · Pinch or scroll to zoom':mode==='photo'?'Match a known ground measurement to set photo scale':'Select an item · Drag to move';
@@ -644,8 +645,8 @@ function setViewMode(mode){
   if(photoEl)photoEl.style.display=edit?'block':'none';
   if(canvasEl)canvasEl.style.display=rendering?'block':'none';
   if($('view3dDayNight'))$('view3dDayNight').style.display=rendering?'':'none';
-  if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').style.display=mode==='3d'?'':'none';
-  if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').style.display=mode==='3d'?'':'none';
+  if($('view3dTimelapseBuild'))$('view3dTimelapseBuild').style.display=tentSetupAvailable?'':'none';
+  if($('view3dTimelapseBreak'))$('view3dTimelapseBreak').style.display=tentSetupAvailable?'':'none';
   renderViews(getConflicts());
   if(edit)setTimeout(function(){mountPhoto();},0);
   if(rendering){var useScan=mode==='3d'&&!!state.backgroundPhoto&&hasCapturedScan();setPhoto3dModeUi(useScan?'360':'matched');setTimeout(function(){mount3D();if(!view3dMod)return;if(useScan&&view3dMod.orbit360){view3dMod.orbit360();setPhoto3dModeUi('360');}else if(photoPreview&&view3dMod.matchPhoto){view3dMod.matchPhoto();setPhoto3dModeUi('matched');}else view3dMod.fitCamera?.();},16);}
