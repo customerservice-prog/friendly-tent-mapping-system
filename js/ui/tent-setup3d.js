@@ -129,6 +129,30 @@ function poleSideStage(group,tent,p,source,{cornersOnly=false}={}){
 function ratchetStage(group,tent,p,source){
   poleSideStage(group,tent,p,source,{cornersOnly:false});looseRatchets(group,tent,p);
 }
+function topStraps(group,tent,p){
+  const strap=mat(0x2f3738,{roughness:.72}),hw=tent.widthFt/2,hl=tent.lengthFt/2,stations=computePerimeterStations(tent.widthFt,tent.lengthFt);
+  stations.forEach((s,i)=>{
+    const x=s.x-hw,z=s.y-hl,edgeX=Math.abs(x)>hw-.1,edgeZ=Math.abs(z)>hl-.1;
+    const band=box(edgeX?.12:.55,.42,edgeZ?.12:.55,strap,x,.28,z);band.name='Tent top perimeter strap';group.add(band);
+    if(i%2===0){const buckle=box(.22,.12,.16,mat(0xa4aaa9,{metalness:.45,roughness:.45}),x,.36,z);buckle.name='Tent top buckle';group.add(buckle);}
+  });
+}
+function frameLegsStaged(group,tent,p){
+  const steel=mat(0xc3c8c9,{metalness:.68,roughness:.38}),hw=tent.widthFt/2,hl=tent.lengthFt/2;
+  const spots=[[-hw-2,-hl],[hw+2,-hl],[-hw-2,hl],[hw+2,hl]];
+  spots.forEach(([x,z],i)=>{
+    const leg=cyl(p.sidePoleDiameterFt/2,p.eaveHeightFt,steel,12);
+    leg.rotation.z=Math.PI/2;leg.position.set(x,.16,z+(i%2?.7:-.7));leg.name='Frame leg staged on ground';group.add(leg);
+  });
+}
+function centerPoleAssembly(group,tent,p){
+  const steel=mat(0xc2c7c8,{metalness:.62,roughness:.4}),crowns=crownPoints(tent);
+  (crowns.length?crowns:[{x:0,z:0}]).forEach((c,i)=>{
+    const pole=tube(new THREE.Vector3(c.x-3.2,.15,c.z+1.3+i*.35),new THREE.Vector3(c.x+3.2,.15,c.z+1.3+i*.35),p.centerPoleDiameterFt/2,steel,16);
+    pole.name='Center pole assembled on ground';group.add(pole);
+    const pin=new THREE.Mesh(new THREE.CylinderGeometry(.045,.045,.42,8),steel);pin.rotation.z=Math.PI/2;pin.position.set(c.x+3.18,.22,c.z+1.3+i*.35);pin.name='Center pole top pin';group.add(pin);
+  });
+}
 function dropCloth(group,tent){
   const cloth=new THREE.Mesh(new THREE.PlaneGeometry(tent.widthFt+3,tent.lengthFt+3),new THREE.MeshStandardMaterial({color:0x5f7b58,roughness:1,side:THREE.DoubleSide}));
   cloth.name='Protective drop cloth';cloth.rotation.x=-Math.PI/2;cloth.position.y=.025;cloth.receiveShadow=true;group.add(cloth);return cloth;
