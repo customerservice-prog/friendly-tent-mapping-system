@@ -15,6 +15,8 @@ jobs:
         with:
           node-version: 22
       - run: npm --prefix tests ci
+      - run: node --experimental-vm-modules tests/pole-tent-setup.cjs
+      - run: RENTSKETCH_SETUP_ONLY=1 node --experimental-vm-modules tests/scene-interaction.cjs
       - run: npm --prefix tests run test:event-pass
       - name: Verify production Caddy routing and security boundaries
         run: |
