@@ -82,9 +82,18 @@ function fence(group, bounds) {
 }
 function trees(group,bounds) {
   group.add(createBoundaryTrees(bounds));
-  const hedges=[];
-  for(let x=-bounds.side+4;x<bounds.side-3;x+=2.8)hedges.push({x,y:1.25,z:-bounds.back+2.5,sx:1.8,sy:1.7,sz:1.5,color:x%3?'#567046':'#657d50'});
-  instances(group,new THREE.IcosahedronGeometry(1,1),material('#65784b'),hedges);
+  const rand=random(9331+Math.round(bounds.side*13+bounds.back*7)),low=[],mid=[],top=[];
+  let x=-bounds.side+4;
+  while(x<bounds.side-3){
+    const w=1.45+rand()*.72,h=1.05+rand()*.56,d=1.08+rand()*.5,z=-bounds.back+2.45+(rand()-.5)*.72,j=(rand()-.5)*.32;
+    low.push({x,y:.95,z,ry:(rand()-.5)*.5,sx:w,sy:h*.82,sz:d});
+    mid.push({x:x+j,y:1.55,z:z+(rand()-.5)*.24,ry:(rand()-.5)*.8,sx:w*.76,sy:h*.62,sz:d*.78});
+    top.push({x:x-j*.6,y:2.05,z:z+(rand()-.5)*.2,ry:(rand()-.5)*1.1,sx:w*.5,sy:h*.45,sz:d*.55});
+    x+=2.25+rand()*1.55;
+  }
+  const a=instances(group,new THREE.SphereGeometry(1,10,7),material('#49653e'),low);a.name='Natural hedge lower foliage';
+  const b=instances(group,new THREE.IcosahedronGeometry(1,1),material('#5f7c4d'),mid);b.name='Natural hedge middle foliage';
+  const d=instances(group,new THREE.DodecahedronGeometry(1,0),material('#718d5b'),top);d.name='Natural hedge upper foliage';
 }
 function house(group,bounds,setting,nightMaterials) {
   const home=new THREE.Group();home.name='Background home';
