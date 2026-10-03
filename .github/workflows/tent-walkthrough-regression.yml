@@ -26,5 +26,7 @@ jobs:
           cache: npm
           cache-dependency-path: tests/package-lock.json
       - run: npm ci
+      - name: Expose test dependencies to renderer modules
+        run: ln -sfn "$PWD/node_modules" ../node_modules
       - run: node --test tent-setup3d.test.mjs
       - run: node --experimental-vm-modules scene-interaction.cjs
