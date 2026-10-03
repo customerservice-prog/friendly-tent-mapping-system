@@ -20,6 +20,18 @@ export function createPoleTentSetup(root,tent){
   const UP=new THREE.Vector3(0,1,0),a=new THREE.Vector3(),b=new THREE.Vector3(),direction=new THREE.Vector3();
   function between(object,from,to){direction.copy(to).sub(from);object.position.copy(from).add(to).multiplyScalar(.5);object.scale.y=Math.max(.001,direction.length());object.quaternion.setFromUnitVectors(UP,direction.normalize());}
 
+  const guideMaterial=new THREE.LineBasicMaterial({color:0xf0c85c,transparent:true,opacity:.92});materials.push(guideMaterial);
+  const guidePoints=[
+    new THREE.Vector3(-hw,.045,-hl),new THREE.Vector3(hw,.045,-hl),
+    new THREE.Vector3(hw,.045,-hl),new THREE.Vector3(hw,.045,hl),
+    new THREE.Vector3(hw,.045,hl),new THREE.Vector3(-hw,.045,hl),
+    new THREE.Vector3(-hw,.045,hl),new THREE.Vector3(-hw,.045,-hl),
+    new THREE.Vector3(-hw,.05,-hl),new THREE.Vector3(hw,.05,hl),
+    new THREE.Vector3(hw,.05,-hl),new THREE.Vector3(-hw,.05,hl)
+  ];
+  const guideGeometry=new THREE.BufferGeometry().setFromPoints(guidePoints);geometries.push(guideGeometry);
+  const layoutGuide=new THREE.LineSegments(guideGeometry,guideMaterial);layoutGuide.name='Tent footprint and diagonal squaring guides';group.add(layoutGuide);
+
   const tarp=box(tent.widthFt+2,.025,tent.lengthFt+2,green);tarp.position.y=.02;
   const originalRoof=root.getObjectByName('Continuous tensioned vinyl canopy');
   const roof=mesh(originalRoof.geometry.clone(),vinyl);roof.name='Canopy lifted by installation poles';
@@ -66,8 +78,14 @@ export function createPoleTentSetup(root,tent){
       const trouser=cylinder(.19,2.3,pants,leg);trouser.position.y=-1.15;
       const boot=box(.36,.35,.65,dark,leg);boot.position.set(0,-2.48,.13);limbs.push(leg);
     }
+    const hammer=new THREE.Group();person.add(hammer);hammer.position.set(.55,2.65,-.34);
+    const hammerHandle=cylinder(.045,1.25,dark,hammer);hammerHandle.rotation.z=.5;
+    const hammerHead=box(.48,.16,.18,steel,hammer);hammerHead.position.set(.29,.45,0);hammerHead.rotation.z=.5;
+    const ratchetTool=box(.38,.16,.13,steel,person);ratchetTool.position.set(0,2.45,-.58);
+    const tapeMeasure=cylinder(.22,.13,green,person);tapeMeasure.rotation.z=Math.PI/2;tapeMeasure.position.set(.36,2.55,-.45);
+    hammer.visible=ratchetTool.visible=tapeMeasure.visible=false;
     person.scale.setScalar(1.12);
-    return {person,limbs,torso};
+    return {person,limbs,torso,tools:{hammer,ratchet:ratchetTool,tape:tapeMeasure}};
   }
   const crew=[worker(),worker()];
   const heights=new Float32Array(cornerPoles.length);
@@ -92,13 +110,14 @@ export function createPoleTentSetup(root,tent){
   }
   let lastTarget=new THREE.Vector3(-hw-4,0,-hl-4),target=lastTarget.clone(),lastJob='';
   function update(seconds,reverse=false){
-    const sampled=sampleSetup(seconds,steps,reverse),p=sampled.progress,tension=ease(p.tension||0),laid=ease(p.layout||0);
+    const sampled=sampleSetup(seconds,steps,reverse),p=sampled.progress,tension=ease(p.tension||0),laid=ease(p.layout||0),staged=ease(p.poles||0);
     const cornerLift=cornerPoles.map((pole,i)=>stagger(p.corners||0,i,cornerPoles.length));
     const centerLift=centerPoles.map((pole,i)=>stagger(p.centers||0,i,centerPoles.length));
     const sideLift=sidePoles.map((pole,i)=>stagger(p.sides||0,i,sidePoles.length));
-    cornerPoles.forEach((pole,i)=>{movePole(pole,cornerLift[i],tension,laid);heights[i]=pole.tip.y;});
-    centerPoles.forEach((pole,i)=>movePole(pole,centerLift[i],tension,laid));
-    sidePoles.forEach((pole,i)=>movePole(pole,sideLift[i],tension,laid));
+    cornerPoles.forEach((pole,i)=>{movePole(pole,cornerLift[i],tension,staged);heights[i]=pole.tip.y;});
+    centerPoles.forEach((pole,i)=>movePole(pole,centerLift[i],tension,staged));
+    sidePoles.forEach((pole,i)=>movePole(pole,sideLift[i],tension,staged));
+    layoutGuide.visible=(p.measure||0)>0&&(p.layout||0)<.02;
     roof.visible=laid>0;roof.scale.x=Math.max(.035,laid);
     tarp.visible=(p.tension||0)<.95&&laid>0;
     for(let i=0;i<positions.count;i++){
@@ -115,16 +134,16 @@ export function createPoleTentSetup(root,tent){
     }
     positions.needsUpdate=true;roof.geometry.computeVertexNormals();
     anchors.forEach((anchor,i)=>{
-      const progress=stagger(p.anchors||0,i,anchors.length);
-      anchor.stake.visible=anchor.strap.visible=anchor.ratchet.visible=progress>0;
-      anchor.stake.position.set(anchor.x,.08+(1-progress)*.75,anchor.z);
+      const stakeProgress=stagger(p.anchors||0,i,anchors.length),strapProgress=stagger(p.ratchets||0,i,anchors.length);
+      anchor.stake.visible=stakeProgress>0;anchor.strap.visible=anchor.ratchet.visible=strapProgress>0;
+      anchor.stake.position.set(anchor.x,.08+(1-stakeProgress)*.75,anchor.z);
       a.copy(anchor.pole.tip);b.set(anchor.x,.12,anchor.z);
       between(anchor.strap,a,b);anchor.ratchet.position.copy(a).lerp(b,.58);
     });
     if(walls){walls.visible=(p.walls||0)>0;walls.scale.y=Math.max(.001,ease(p.walls||0));}
     const phase=sampled.step.id;
-    const jobs=phase==='anchors'?anchors:phase==='corners'?cornerPoles:phase==='centers'?centerPoles:phase==='sides'?sidePoles:phase==='tension'?anchors:[];
-    const phaseProgress=p[phase]||0,jobIndex=Math.min(jobs.length-1,Math.floor(phaseProgress*jobs.length));
+    const jobs=phase==='measure'?corners:phase==='anchors'||phase==='ratchets'||phase==='tension'?anchors:phase==='poles'?[...cornerPoles,...centerPoles,...sidePoles]:phase==='centerPrep'?centerPoles:phase==='corners'?cornerPoles:phase==='centers'?centerPoles:phase==='sides'?sidePoles:[];
+    const phaseProgress=p[phase]||0,jobIndex=Math.min(jobs.length-1,Math.floor(phaseProgress*Math.max(1,jobs.length)));
     const job=jobs[jobIndex],jobKey=phase+':'+jobIndex;
     if(jobKey!==lastJob){lastTarget.copy(target);if(job?.point)target.set(job.point.x,0,job.point.z);else if(job)target.set(job.x,0,job.z);else target.set(-hw-2,0,-hl+2);lastJob=jobKey;}
     const fraction=phaseProgress* Math.max(1,jobs.length)%1,travel=ease(Math.min(1,(reverse?1-fraction:fraction)*3));
@@ -136,7 +155,11 @@ export function createPoleTentSetup(root,tent){
       w.limbs[0].rotation.x=work?(lifting?-1.65:-.7+beat*.25):beat*.35;
       w.limbs[2].rotation.x=work?(lifting?-1.65:-.7-beat*.25):-beat*.35;
       w.limbs[1].rotation.x=work?0:-beat*.25;w.limbs[3].rotation.x=work?0:beat*.25;
-      w.torso.rotation.x=work&&phase==='anchors'?.25:0;
+      w.torso.rotation.x=work&&['anchors','ratchets','tension'].includes(phase)?.25:0;
+      Object.values(w.tools).forEach(tool=>{tool.visible=false;});
+      if(work&&phase==='anchors')w.tools.hammer.visible=true;
+      if(work&&['ratchets','tension'].includes(phase))w.tools.ratchet.visible=true;
+      if(phase==='measure')w.tools.tape.visible=true;
     });
     return sampled;
   }
