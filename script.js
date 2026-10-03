@@ -554,7 +554,7 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20261003-tent-setup-1').then(function(mod){
+    import('./js/ui/view3d.js?v=20261003-real-install-1').then(function(mod){
       var snap=view3dPendingSnapshot||rendererSnapshot(buildSnapshot(getConflicts())),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPhotoSelect:handlePhotoSelect,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onTentSetupStep:showTentSetupStep,onScanReconstruction:function(info){
         window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());if(state.activeDrawer==='site')renderDrawerBody('site');
         if(info?.ready){
