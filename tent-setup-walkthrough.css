@@ -1,20 +1,28 @@
 .tent-setup-progress{
-  position:absolute;left:50%;bottom:24px;z-index:18;display:grid;gap:4px;
-  width:min(560px,calc(100% - 32px));padding:14px 18px;transform:translateX(-50%);
-  border:1px solid #cbd9cb;border-radius:16px;background:rgba(255,255,255,.96);
-  box-shadow:0 14px 40px rgba(18,44,27,.2);color:#23402c;pointer-events:none
+  position:absolute;left:50%;bottom:20px;z-index:18;display:grid;gap:7px;
+  width:min(700px,calc(100% - 32px));padding:15px 18px 16px;transform:translateX(-50%);
+  border:1px solid #cbd9cb;border-radius:18px;background:rgba(255,255,255,.97);
+  box-shadow:0 16px 44px rgba(18,44,27,.22);color:#23402c;pointer-events:none;
+  backdrop-filter:blur(7px)
 }
 .tent-setup-progress[hidden]{display:none}
-.tent-setup-progress[data-done="true"]{border-color:#7ca88a;background:rgba(244,250,244,.97)}
-.tent-setup-progress .tent-setup-step{font-size:10px;font-weight:900;letter-spacing:.11em;text-transform:uppercase;color:#66806d}
-.tent-setup-progress strong{font-size:17px;line-height:1.25}
-.tent-setup-progress small{font-size:12px;line-height:1.45;color:#53695b}
+.tent-setup-progress[data-done="true"]{border-color:#7ca88a;background:rgba(244,250,244,.98)}
+.tent-setup-progress-head{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.tent-setup-progress .tent-setup-step{font-size:10px;font-weight:900;letter-spacing:.11em;text-transform:uppercase;color:#5d7867}
+.tent-setup-percent{font-size:10px;font-weight:800;color:#789082}
+.tent-setup-track{height:5px;border-radius:999px;background:#e3ebe4;overflow:hidden}
+.tent-setup-track span{display:block;height:100%;border-radius:inherit;background:#3e7753;transition:width .35s ease}
+.tent-setup-progress strong{font-size:18px;line-height:1.22;color:#173b27}
+.tent-setup-detail,.tent-setup-why{margin:0;font-size:12px;line-height:1.5;color:#52685a}
+.tent-setup-why{padding-top:7px;border-top:1px solid #e6ece6;color:#647468}
+.tent-setup-why b{color:#345440}
 #view3dTimelapseBuild{font-weight:800;border-color:#8eb29a;background:#edf7ef;color:#234b31}
 body.view-mode-3d:not(.tent-preview) #view3dTimelapseBuild{display:inline-flex!important}
 body.view-mode-3d:not(.tent-preview) #view3dTimelapseBreak{display:inline-flex!important}
 @media(max-width:880px){
   body.view-mode-3d:not(.tent-preview) #view3dTimelapseBreak{display:none!important}
-  .tent-setup-progress{bottom:14px;width:calc(100% - 20px);padding:12px 14px}
+  .tent-setup-progress{bottom:10px;width:calc(100% - 16px);padding:11px 13px 12px;gap:5px;border-radius:14px}
   .tent-setup-progress strong{font-size:15px}
-  .tent-setup-progress small{font-size:11px}
+  .tent-setup-detail,.tent-setup-why{font-size:11px;line-height:1.38}
+  .tent-setup-why{padding-top:5px}
 }
