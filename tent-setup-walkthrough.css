@@ -10,8 +10,9 @@
 .tent-setup-progress strong{font-size:17px;line-height:1.25}
 .tent-setup-progress small{font-size:12px;line-height:1.45;color:#53695b}
 #view3dTimelapseBuild{font-weight:800;border-color:#8eb29a;background:#edf7ef;color:#234b31}
+body.view-mode-3d:not(.tent-preview) #view3dTimelapseBuild{display:inline-flex!important}
+body.view-mode-3d:not(.tent-preview) #view3dTimelapseBreak{display:inline-flex!important}
 @media(max-width:880px){
-  body.view-mode-3d:not(.tent-preview) #view3dTimelapseBuild{display:inline-flex!important}
   body.view-mode-3d:not(.tent-preview) #view3dTimelapseBreak{display:none!important}
   .tent-setup-progress{bottom:14px;width:calc(100% - 20px);padding:12px 14px}
   .tent-setup-progress strong{font-size:15px}
