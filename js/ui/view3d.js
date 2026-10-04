@@ -1,5 +1,5 @@
 import { makeTent } from './tent3d.js';
-import { createPoleTentSetup } from './pole-tent-setup3d.js?v=20261003-detailed-install-v2';
+import { createPoleTentSetup } from './pole-tent-setup3d.js';
 import { installPhotoProjectionParity } from './photo-projection-renderer.js';
 import { createPhotoForegroundLayer } from './photo-foreground3d.js';
 import { normalizePhotoComposition, foregroundMaskAt, photoLightingPosition } from '../core/photo-composition.js';
@@ -26,7 +26,7 @@ import { structuralProfile } from '../data/tentStructure.js';
 import { normalizePhotoCalibration, normalizePhotoGeometry, photoCameraEstimate, photoProjection, photoImageRect, photoTentTransform, rentalPhotoPlacement } from '../core/photo-geometry.js';
 import { measureWorldPoints } from '../core/measurement.js';
 import { objectLocalDimensions } from '../core/world-space.js';
-import { createTentSetupRig } from './tent-setup3d.js?v=20261003-detailed-install-v2';
+import { createTentSetupRig } from './tent-setup3d.js';
 
 let active=null;
 const UP=new THREE.Vector3(0,1,0);
