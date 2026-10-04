@@ -808,7 +808,7 @@ export function init(container,callbacks={}) {
         const info=tentSetupAnimation.update(tentSetupElapsed,tentSetupMode==='breakdown');
         if(info.index!==tentSetupStep||info.done){
           tentSetupStep=info.index;
-          callbacks.onTentSetupStep?.({canPause:true,mode:tentSetupMode,index:info.index+1,total:tentSetupAnimation.steps.length,title:info.done?(tentSetupMode==='breakdown'?'Tent packed away':'Installation overview complete'):(tentSetupMode==='breakdown'?info.step.undo:info.step.title),detail:info.done?'Return to your layout whenever you are ready.':(tentSetupMode==='breakdown'?'The installation sequence plays in reverse as the crew removes the tent.':info.step.detail),done:info.done});
+          callbacks.onTentSetupStep?.({canPause:true,mode:tentSetupMode,index:info.index+1,total:tentSetupAnimation.steps.length,phase:info.done?'Complete':(info.step.phase||''),title:info.done?(tentSetupMode==='breakdown'?'Tent packed away':'Installation overview complete'):(tentSetupMode==='breakdown'?info.step.undo:info.step.title),detail:info.done?'Return to your layout whenever you are ready.':(tentSetupMode==='breakdown'?'The animated installation state is reversing through this phase as the crew removes the tent.':info.step.detail),why:info.done?'The walkthrough is a visual explanation; the real crew still verifies site conditions and anchoring.':(info.step.why||''),done:info.done});
         }
         if(info.done){tentSetupPaused=true;if(tentSetupMode==='build')stopTentSetup();}
         renderer.shadowMap.needsUpdate=true;dirty=true;
@@ -954,26 +954,60 @@ export function init(container,callbacks={}) {
 
     const build=pole
       ? [
-          {rig:'layout',title:'Square the footprint & pre-stake',detail:'Crew measures the tent footprint, marks every grommet location, places the stakes about five feet out, and drives them before the top is raised.'},
-          {rig:'top-ground',title:'Roll out the drop cloth & tent top',detail:'The vinyl top is unrolled and unfolded on a protective drop cloth. Nobody walks on the tent fabric.'},
-          {rig:'poles-staged',title:'Stage every pole & attach ratchets loosely',detail:'One pole is placed at each grommet location. Ratchets or ropes are connected to the pre-driven stakes but kept loose enough for the top to rise.'},
-          {rig:'center-angled',title:'Insert the center pole pin & lift the top',detail:'The center pole is assembled, pinned through the center ring and grommet, then left angled while it lifts the top completely off the ground.'},
-          {rig:'center-up',title:'Stand the center pole vertical',detail:'The center pole is brought upright first. Larger Classic pole tents repeat this with their remaining center or quarter poles.'},
-          {actual:'raise',title:'Install side poles & straighten the corners',detail:'Side poles are installed loosely while the crew works around the corner ratchets until the corner poles and center pole are vertical and the perimeter is taut.'},
-          {actual:'tension',title:'Tighten every side ratchet',detail:'The crew works around the tent again, tightening the remaining ratchets and securing excess strap without pulling the tent out of square.'},
-          ...(hasSidewalls?[{actual:'sidewalls',title:'Clip on the selected sidewalls',detail:'Sidewalls are unrolled around the perimeter and clipped to the support rope only after the tent top is fully tensioned.'}]:[])
+          {rig:'measure',phase:'Layout',title:'Measure & square the footprint',detail:'The crew marks the four tent corners and checks both diagonals before the hardware is raised.',why:'Starting square keeps the canopy and pole lines aligned.'},
+          {rig:'layout',phase:'Anchoring',title:'Pre-stake the perimeter',detail:'Perimeter stake locations are set around the tent footprint before the lift begins.',why:'Anchors installed early let the crew control the canopy as it rises.'},
+          {rig:'pole-top-folded',phase:'Tent top',title:'Bring the folded top onto a drop cloth',detail:'The vinyl is carried into the footprint on a protective drop cloth instead of being dragged over the ground.',why:'The drop cloth protects the coated fabric from abrasion and pinholes.'},
+          {rig:'top-ground',phase:'Tent top',title:'Unfold & orient the tent top',detail:'The canopy is opened flat and aligned to the four corners.',why:'Correct orientation prevents twisting the top after poles and straps are connected.'},
+          {rig:'ratchets-loose',phase:'Loose anchoring',title:'Connect the ratchets with working slack',detail:'Ratchets or ropes are attached but left loose enough for the top to lift.',why:'The canopy stays controlled without fighting the workers during the lift.'},
+          {rig:'poles-staged',phase:'Pole staging',title:'Stage the poles around the footprint',detail:'Poles are placed near the positions where the crew will use them.',why:'Staging keeps long poles out of the crew’s travel path once the tent is partly raised.'},
+          {rig:'corner-poles',phase:'Corner lift',title:'Raise the corner poles',detail:'The four corners lift the outside edge while the center remains low.',why:'The corners establish the perimeter shape before the rest of the tent comes up.'},
+          {rig:'center-assembled',phase:'Center poles',title:'Assemble & position the center poles',detail:'Center-pole sections and top pins are prepared under their lifting points.',why:'The connection must be positioned correctly before the peak is lifted.'},
+          {rig:'center-up',phase:'Center lift',title:'Raise the center poles',detail:'The center poles lift the canopy into its peak shape.',why:'The center supports create the final roof height and pitch.'},
+          {rig:'side-poles',phase:'Perimeter poles',title:'Install the remaining side poles',detail:'The crew works around the perimeter bringing each remaining bay to eave height.',why:'Even side-pole spacing keeps the valance level and distributes load.'},
+          {rig:'pole-tension',phase:'Tension',title:'Straighten poles & work the ratchets',detail:'Poles are brought plumb while opposite ratchets are tightened progressively.',why:'Balanced tension keeps the tent square instead of pulling it toward one corner.'},
+          {actual:'tension',phase:'Final tension',title:'Make the final perimeter tension pass',detail:'Every remaining ratchet is tightened and loose strap is secured.',why:'The final pass creates the stable finished roof shape.'},
+          ...(hasSidewalls?[{actual:'sidewalls',phase:'Sidewalls',title:'Install the selected sidewalls',detail:'Wall panels are attached after the top is raised, anchored, and tensioned.',why:'Walls go on last so they do not add wind load during the lift.'}]:[])
         ]
       : [
-          {rig:'frame-parts',title:'Lay every frame part in position',detail:'Tubing, crowns, corner fittings, side tees and spreaders are laid on the ground where they will be assembled so the crew can verify every part.'},
-          {rig:'frame-top',title:'Build the complete frame top on the ground',detail:'The crown is pinned to the hip rafters, then rafters, side tees, spreaders and corner fittings are connected while the entire roof frame stays low.'},
-          {rig:'frame-covered',title:'Pull the vinyl top over the low frame',detail:'A drop cloth protects the top. The crew pulls and “flaps” the vinyl over the frame to create an air cushion, centers it, then secures perimeter and loop straps.'},
-          {rig:'frame-one-side',title:'Lift one whole side & insert its legs',detail:'The crew lifts an entire side together—not one corner at a time—and pins the leg poles into that side. In wind, the downwind side is lifted first.'},
-          {rig:'frame-raised',title:'Lift the opposite side & install remaining legs',detail:'The opposite side is raised and the remaining legs are pinned so the frame reaches full working height.'},
-          {actual:'raise',title:ballast?'Set the ballast system':'Drive stakes & connect the anchors',detail:ballast?'The raised frame is secured with the planned ballast at the leg/anchor points before final tensioning.':'Perimeter stakes and ratchet assemblies secure the raised frame before the top is fully tightened.'},
-          {actual:'tension',title:'Square the frame & tension every strap',detail:'The crew checks the frame, tightens the tent-top straps and ratchets evenly, and confirms the top is centered and properly tensioned.'},
-          ...(hasSidewalls?[{actual:'sidewalls',title:'Install the selected sidewalls',detail:'Sidewalls go on after the frame, anchoring and top tension are complete.'}]:[])
+          {rig:'measure',phase:'Layout',title:'Measure & square the frame-tent footprint',detail:'The crew marks the corners and checks both diagonals before tubing is laid out.',why:'A square footprint keeps the spreaders, corners, and legs aligned.'},
+          {rig:'frame-parts',phase:'Parts layout',title:'Lay out the tubing, fittings & legs',detail:'Crowns, rafters, side tees, spreaders, corners, pins, and legs are placed near their assembly positions.',why:'A full parts layout catches missing hardware before the frame is half built.'},
+          {rig:'frame-crown',phase:'Roof frame',title:'Assemble the crown fittings & hip rafters',detail:'The crown and hip-rafter assembly is pinned together while everything remains close to the ground.',why:'The crown establishes the roof geometry for the remaining rafters.'},
+          {rig:'frame-perimeter',phase:'Roof frame',title:'Connect perimeter spreaders & corner fittings',detail:'Side tees, corner fittings, and spreaders close the perimeter and tie into the crown/rafter assembly.',why:'The perimeter locks the roof frame square before the vinyl top is installed.'},
+          {rig:'frame-top',phase:'Roof frame',title:'Finish & inspect the complete low roof frame',detail:'The crew checks every pin, fitting, and connection while the entire roof frame is still low.',why:'Missing pins and misaligned fittings are safest to correct before the frame is raised.'},
+          {rig:'frame-top-folded',phase:'Top protection',title:'Place the drop cloth & folded tent top',detail:'The folded vinyl is positioned beside the low frame on a protective drop cloth.',why:'This keeps the coated top off dirt and sharp surfaces.'},
+          {rig:'frame-top-half',phase:'Top installation',title:'Pull the top halfway across the frame',detail:'Workers on opposite sides lift and pull the vinyl, keeping air beneath it instead of scraping it over tubing.',why:'Reducing friction protects the top as it passes over frame joints.'},
+          {rig:'frame-covered',phase:'Top installation',title:'Center the top over the low frame',detail:'The vinyl is pulled fully into place and its corners are aligned before fastening.',why:'An off-center top will tension unevenly after the legs are raised.'},
+          {rig:'frame-strapped',phase:'Top attachment',title:'Attach the perimeter & loop straps while low',detail:'Top straps and buckles are connected and snugged enough to hold the vinyl in place.',why:'The top should be secured before workers lift the roof frame to leg height.'},
+          {rig:'frame-one-side',phase:'Leg lift',title:'Lift one whole side & insert that side’s legs',detail:'The crew lifts an entire side together and pins the leg poles into that side rather than raising one isolated corner.',why:'Raising a complete side reduces twist through the roof frame.'},
+          {rig:'frame-raised',phase:'Leg lift',title:'Lift the opposite side & install the remaining legs',detail:'The second side is raised as a team until the full frame reaches working height.',why:'Keeping the roof level prevents side-loading fittings during the lift.'},
+          {rig:'anchors',phase:'Anchoring',title:ballast?'Position & connect the ballast':'Drive stakes & connect the anchors',detail:ballast?'Ballast is placed at the planned anchor points and connected before final top tensioning.':'Stakes and ratchet assemblies are connected to restrain the raised frame before final top tensioning.',why:'The frame must be restrained before the top is pulled to final tension.'},
+          {actual:'tension',phase:'Final tension',title:'Square the raised frame & tension every strap',detail:'The crew works around the perimeter tightening top straps and anchors evenly while checking every leg for plumb.',why:'Balanced tension creates the finished roof shape without pulling the frame out of square.'},
+          ...(hasSidewalls?[{actual:'sidewalls',phase:'Sidewalls',title:'Install the selected sidewalls',detail:'Wall panels are attached only after the frame, anchoring, and top tension are complete.',why:'Installing walls last avoids extra wind load during setup.'}]:[])
         ];
-    const steps=mode==='breakdown'?build.slice().reverse():build;
+
+    const strike=pole
+      ? [
+          ...(hasSidewalls?[{actual:'sidewalls',phase:'Strike',title:'Remove & fold the sidewalls first',detail:'Wall panels are removed before any tension or poles are released.',why:'Removing walls reduces wind load before the tent is lowered.'}]:[]),
+          {actual:'tension',phase:'Strike',title:'Release perimeter tension in a controlled order',detail:'Ratchets are backed off progressively while the corners remain controlled.',why:'Releasing everything at once can let poles or the top shift unpredictably.'},
+          {rig:'side-poles',phase:'Strike',title:'Remove the remaining side poles',detail:'Side poles come out in a controlled order while the canopy is still supported.',why:'The canopy stays controlled as its perimeter drops.'},
+          {rig:'center-up',phase:'Strike',title:'Lower the center supports',detail:'Center poles are walked down carefully instead of allowing the peak to fall.',why:'Controlled lowering protects both the crew and the tent top.'},
+          {rig:'top-ground',phase:'Strike',title:'Settle the top onto the drop cloth',detail:'The canopy is brought onto the protective cloth before straps and remaining hardware are packed.',why:'The top should never be dragged directly onto the event surface.'},
+          {rig:'pole-top-folded',phase:'Strike',title:'Fold & roll the tent top',detail:'The vinyl is folded consistently and rolled for transport.',why:'Clean packing protects the top and speeds the next setup.'},
+          {rig:'layout',phase:'Strike',title:'Pull stakes & clear the footprint',detail:'Stakes, ratchets, poles, and layout gear are counted and loaded last.',why:'Anchors stay available until the tent is safely on the ground.'}
+        ]
+      : [
+          ...(hasSidewalls?[{actual:'sidewalls',phase:'Strike',title:'Remove all sidewalls first',detail:'Wall panels are unclipped, separated, folded, and moved out of the work area.',why:'This removes wind load before the structure is lowered.'}]:[]),
+          {actual:'tension',phase:'Strike',title:'Release top tension & anchor ratchets',detail:'Top straps and anchor tension are reduced in a controlled perimeter sequence.',why:'Controlled release prevents the raised frame from shifting suddenly.'},
+          {rig:'frame-one-side',phase:'Strike',title:'Lower one whole side & remove its legs',detail:'One complete side is lowered together and its legs are unpinned.',why:'Lowering a whole side limits twist through the roof frame.'},
+          {rig:'frame-covered',phase:'Strike',title:'Lower the opposite side until the roof frame is low',detail:'The remaining legs are removed so the top and roof frame can be handled safely near the ground.',why:'Top removal and frame disassembly should happen low, not overhead.'},
+          {rig:'frame-top-half',phase:'Strike',title:'Release straps & pull the vinyl onto the drop cloth',detail:'The top is lifted and pulled off the low frame rather than dragged across the tubing.',why:'Air under the fabric and the drop cloth protect its coating.'},
+          {rig:'frame-top-folded',phase:'Strike',title:'Fold & roll the tent top',detail:'The vinyl is aligned, folded, and packed while it remains protected from the ground.',why:'Consistent folding prevents abrasion and makes the next setup faster.'},
+          {rig:'frame-top',phase:'Strike',title:'Disassemble the roof frame while it is low',detail:'Spreaders, rafters, side tees, crowns, and corner fittings are unpinned and organized.',why:'Loose fittings are safest to handle at ground level.'},
+          {rig:'frame-parts',phase:'Strike',title:'Stack, count & load the frame parts',detail:'Tubing, fittings, pins, legs, anchors, and straps are counted before leaving the site.',why:'The parts count keeps hardware from being left behind or mixed with another order.'},
+          {rig:'measure',phase:'Strike',title:'Clear the installation footprint',detail:'The crew checks the area for stakes, pins, straps, drop cloths, or debris.',why:'The event site should be returned clear of installation hardware.'}
+        ];
+
+    const steps=mode==='breakdown'?strike:build;
     const actualVisible=(phase)=>{
       root.visible=true;structure.visible=true;
       bucket.roof.forEach(o=>o.visible=true);bucket.frame.forEach(o=>o.visible=true);bucket.valance.forEach(o=>o.visible=true);
@@ -985,21 +1019,21 @@ export function init(container,callbacks={}) {
       const step=steps[index];tentSetupRig.userData.hide?.();root.visible=false;
       if(step.rig)tentSetupRig.userData.show?.(step.rig);
       else{actualVisible(step.actual);}
-      callbacks.onTentSetupStep?.({mode,index:index+1,total:steps.length+1,title:step.title,detail:step.detail,done:false});
+      callbacks.onTentSetupStep?.({mode,index:index+1,total:steps.length+1,phase:step.phase||'',title:step.title,detail:step.detail,why:step.why||'',done:false});
       renderer.shadowMap.needsUpdate=true;invalidate();
     };
     if(reducedMotion){
       tentSetupRig.userData.hide?.();root.visible=true;root.traverse(o=>{if(o.userData?.buildStage)o.visible=true;});
-      callbacks.onTentSetupStep?.({mode,index:steps.length+1,total:steps.length+1,title:'Crew installation complete',detail:'The sequence follows the major installation order for this tent style; the crew still verifies the exact site, anchoring and manufacturer requirements on location.',done:true});
+      callbacks.onTentSetupStep?.({mode,index:steps.length+1,total:steps.length+1,phase:'Complete',title:mode==='breakdown'?'Tent strike complete':'Crew installation complete',detail:mode==='breakdown'?'The structure and hardware are packed and the installation footprint is cleared.':'The walkthrough shows the major installation order for this tent style; the crew still verifies the exact site, anchoring, weather, and manufacturer requirements on location.',why:'This visual walkthrough explains the work but does not replace trained installation or a site inspection.',done:true});
       clearTentSetupRig();furniture.visible=true;if(styling)styling.visible=showStyling;if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;if(lightGroup)lightGroup.visible=true;invalidate();return true;
     }
-    const dwell=1650;
+    const dwell=2100;
     steps.forEach((step,index)=>tentSetupTimers.push(setTimeout(()=>showStep(index),index*dwell)));
     tentSetupTimers.push(setTimeout(()=>{
       if(destroyed||run!==tentSetupRun)return;
       clearTentSetupRig();root.visible=true;root.traverse(o=>{if(o.userData?.buildStage)o.visible=true;});
       furniture.visible=true;if(styling)styling.visible=showStyling&&!drag;if(guests)guests.visible=showGuests&&!drag;if(inflatableActivity)inflatableActivity.visible=showGuests&&!drag&&!state?.placement;if(lightGroup)lightGroup.visible=true;
-      callbacks.onTentSetupStep?.({mode,index:steps.length+1,total:steps.length+1,title:mode==='breakdown'?'Tent strike complete':'Final crew safety check',detail:mode==='breakdown'?'The frame/top is lowered before the final parts and anchors are removed and packed.':'Crew verifies every anchor or ballast point, fitting/pin, pole/leg, ratchet and clearance before the tent is released for use.',done:true});
+      callbacks.onTentSetupStep?.({mode,index:steps.length+1,total:steps.length+1,phase:'Complete',title:mode==='breakdown'?'Tent strike complete':'Final crew safety check',detail:mode==='breakdown'?'All top/frame/pole components, anchors, ratchets, straps, and protective materials are accounted for and the footprint is cleared.':'Crew verifies every anchor or ballast point, fitting and pin, pole or leg, ratchet, top tension, selected wall attachment, and installation clearance before the tent is released for use.',why:'The final inspection is what turns an assembled tent into a completed installation.',done:true});
       renderer.shadowMap.needsUpdate=true;invalidate();
     },steps.length*dwell));
     return true;

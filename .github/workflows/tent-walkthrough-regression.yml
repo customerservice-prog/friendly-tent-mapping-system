@@ -1,0 +1,40 @@
+name: Tent walkthrough regression
+
+on:
+  pull_request:
+    paths:
+      - 'js/core/tent-setup-timeline.js'
+      - 'js/ui/pole-tent-setup3d.js'
+      - 'js/ui/tent-setup3d.js'
+      - 'js/ui/view3d.js'
+      - 'script.js'
+      - 'tent-setup-walkthrough.css'
+      - 'designer/index.html'
+      - 'tests/pole-tent-setup.cjs'
+      - 'tests/tent-setup3d.test.mjs'
+      - 'tests/scene-interaction.cjs'
+      - '.github/workflows/tent-walkthrough-regression.yml'
+
+jobs:
+  tent-walkthrough:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: tests
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: tests/package-lock.json
+      - run: npm ci
+      - name: Expose test dependencies to renderer modules
+        run: ln -sfn "$PWD/node_modules" ../node_modules
+      - name: Detailed frame and fallback geometry
+        run: node --test tent-setup3d.test.mjs
+      - name: Smooth detailed pole installation
+        run: node --experimental-vm-modules pole-tent-setup.cjs
+      - name: 3D controller setup flow
+        run: RENTSKETCH_SETUP_ONLY=1 node --experimental-vm-modules scene-interaction.cjs

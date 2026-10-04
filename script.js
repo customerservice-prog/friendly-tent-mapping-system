@@ -539,13 +539,32 @@ function showTentSetupStep(info){
   }
   clearTimeout(host._hideTimer);
   host.replaceChildren();
-  var meta=document.createElement('span');meta.className='tent-setup-step';meta.textContent=(info.done?'Overview complete':'Step '+info.index+' of '+info.total);
+  var header=document.createElement('div');header.className='tent-setup-progress-head';
+  var meta=document.createElement('span');meta.className='tent-setup-step';
+  meta.textContent=(info.done?'Complete':('Step '+info.index+' of '+info.total))+(info.phase?' · '+info.phase:'');
+  var percent=Math.max(0,Math.min(100,Math.round((Number(info.index)||0)/Math.max(1,Number(info.total)||1)*100)));
+  var pct=document.createElement('span');pct.className='tent-setup-percent';pct.textContent=percent+'%';
+  header.append(meta,pct);
+  var track=document.createElement('div');track.className='tent-setup-track';track.setAttribute('aria-hidden','true');
+  var fill=document.createElement('span');fill.style.width=percent+'%';track.append(fill);
   var title=document.createElement('strong');title.textContent=info.title||'Tent setup';
-  var detail=document.createElement('small');detail.textContent=info.detail||'';
-  host.append(meta,title,detail);host.hidden=false;host.dataset.done=String(!!info.done);
+  var detail=document.createElement('p');detail.className='tent-setup-detail';detail.textContent=info.detail||'';
+  host.append(header,track,title,detail);
+  if(info.why){
+    var why=document.createElement('p');why.className='tent-setup-why';
+    var whyLabel=document.createElement('b');whyLabel.textContent='Why this matters: ';
+    why.append(whyLabel,document.createTextNode(info.why));host.append(why);
+  }
   var actions=document.createElement('div');actions.className='tent-setup-actions';
-  if(!info.done&&info.canPause){var pause=document.createElement('button');pause.type='button';pause.textContent='Pause';pause.onclick=function(){var paused=view3dMod?.toggleTentSetupPause?.();pause.textContent=paused?'Resume':'Pause';};actions.append(pause);}
-  var close=document.createElement('button');close.type='button';close.textContent='Back to layout';close.onclick=function(){view3dMod?.stopTentSetup?.();host.hidden=true;};actions.append(close);host.append(actions);
+  if(!info.done&&info.canPause){
+    var pause=document.createElement('button');pause.type='button';pause.textContent='Pause';
+    pause.onclick=function(){var paused=view3dMod?.toggleTentSetupPause?.();pause.textContent=paused?'Resume':'Pause';};
+    actions.append(pause);
+  }
+  var close=document.createElement('button');close.type='button';close.textContent='Back to layout';
+  close.onclick=function(){view3dMod?.stopTentSetup?.();host.hidden=true;};actions.append(close);host.append(actions);
+  host.hidden=false;host.dataset.done=String(!!info.done);host.dataset.mode=info.mode||'build';
+  if(info.done)host._hideTimer=setTimeout(function(){host.hidden=true;},7000);
 }
 function mount3D(){
   if(view3dMod||view3dMountInProgress)return;
@@ -557,7 +576,7 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20261003-pole-setup-2').then(function(mod){
+    import('./js/ui/view3d.js?v=20261003-detailed-install-v2').then(function(mod){
       var snap=view3dPendingSnapshot||rendererSnapshot(buildSnapshot(getConflicts())),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPhotoSelect:handlePhotoSelect,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onTentSetupStep:showTentSetupStep,onScanReconstruction:function(info){
         window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());if(state.activeDrawer==='site')renderDrawerBody('site');
         if(info?.ready){
