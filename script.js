@@ -532,39 +532,40 @@ function mountPlan(){if(planMounted)return;planMounted=true;plan2dMod.mount($('p
 function showTentSetupStep(info){
   if(!info)return;
   var host=$('tentSetupProgress');
-  if(info.dismissed){if(host)host.hidden=true;return;}
+  if(info.closed){if(host)host.hidden=true;document.body.classList.remove('tent-setup-active');return;}
+  document.body.classList.toggle('tent-setup-active',!info.done);
   if(!host){
-    host=document.createElement('div');host.id='tentSetupProgress';host.className='tent-setup-progress';host.setAttribute('role','status');host.setAttribute('aria-live','polite');
+    host=document.createElement('section');host.id='tentSetupProgress';host.className='tent-setup-progress';host.setAttribute('aria-label','Tent setup walkthrough');
+    host.innerHTML='<div class="tent-setup-heading"><span class="tent-setup-step"></span><button type="button" data-setup="stop" aria-label="Close tent walkthrough">×</button></div><div class="tent-setup-caption" aria-live="polite" aria-atomic="true"><strong></strong><p></p></div><div class="tent-setup-scrub"><input type="range" min="0" max="1000" value="0" aria-label="Walkthrough position"><span class="tent-setup-time"></span></div><div class="tent-setup-controls"><button type="button" data-setup="previous" aria-label="Previous setup step">←</button><button type="button" data-setup="pause">Pause</button><button type="button" data-setup="next" aria-label="Next setup step">→</button><label class="tent-setup-speed"><span class="sr-only">Playback speed</span><select aria-label="Playback speed"><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option></select></label><button type="button" data-setup="camera" aria-pressed="false">Closer view</button><button type="button" data-setup="cutaway" aria-pressed="false">See through top</button><button type="button" data-setup="replay" aria-label="Replay tent setup">Replay</button></div><details class="tent-setup-chapters"><summary>Details &amp; all steps</summary><p class="tent-setup-purpose"></p><ol></ol></details>';
     var viewport=document.querySelector('.canvas-viewport');if(viewport)viewport.appendChild(host);
+    host.addEventListener('pointerdown',function(e){e.stopPropagation();});
+    host.addEventListener('click',function(e){
+      var button=e.target.closest('[data-setup]');if(!button)return;var action=button.dataset.setup;
+      if(action==='stop'){view3dMod?.stopTentSetup?.();host.hidden=true;$('view3dTimelapseBuild')?.focus();return;}
+      if(action==='replay'){view3dMod?.playTentSetup?.(host._info.mode);return;}
+      if(host._info.done){view3dMod?.playTentSetup?.(host._info.mode);if(action==='pause')return;}
+      if(action==='chapter'){view3dMod?.controlTentSetup?.('seek',Number(button.dataset.time));return;}
+      view3dMod?.controlTentSetup?.(action,action==='camera'?(host._info.camera==='detail'?'overview':'detail'):undefined);
+    });
+    host.querySelector('input').addEventListener('input',function(e){if(host._info.done)view3dMod?.playTentSetup?.(host._info.mode);view3dMod?.controlTentSetup?.('seek',Number(e.target.value)/1000*host._info.duration);});
+    host.querySelector('select').addEventListener('change',function(e){view3dMod?.controlTentSetup?.('speed',Number(e.target.value));});
+    host.addEventListener('keydown',function(e){if(e.key==='Escape'){view3dMod?.stopTentSetup?.();host.hidden=true;$('view3dTimelapseBuild')?.focus();}});
   }
-  clearTimeout(host._hideTimer);
-  host.replaceChildren();
-  var header=document.createElement('div');header.className='tent-setup-progress-head';
-  var meta=document.createElement('span');meta.className='tent-setup-step';
-  meta.textContent=(info.done?'Complete':('Step '+info.index+' of '+info.total))+(info.phase?' · '+info.phase:'');
-  var percent=Math.max(0,Math.min(100,Math.round((Number(info.index)||0)/Math.max(1,Number(info.total)||1)*100)));
-  var pct=document.createElement('span');pct.className='tent-setup-percent';pct.textContent=percent+'%';
-  header.append(meta,pct);
-  var track=document.createElement('div');track.className='tent-setup-track';track.setAttribute('aria-hidden','true');
-  var fill=document.createElement('span');fill.style.width=percent+'%';track.append(fill);
-  var title=document.createElement('strong');title.textContent=info.title||'Tent setup';
-  var detail=document.createElement('p');detail.className='tent-setup-detail';detail.textContent=info.detail||'';
-  host.append(header,track,title,detail);
-  if(info.why){
-    var why=document.createElement('p');why.className='tent-setup-why';
-    var whyLabel=document.createElement('b');whyLabel.textContent='Why this matters: ';
-    why.append(whyLabel,document.createTextNode(info.why));host.append(why);
-  }
-  var actions=document.createElement('div');actions.className='tent-setup-actions';
-  if(!info.done&&info.canPause){
-    var pause=document.createElement('button');pause.type='button';pause.textContent='Pause';
-    pause.onclick=function(){var paused=view3dMod?.toggleTentSetupPause?.();pause.textContent=paused?'Resume':'Pause';};
-    actions.append(pause);
-  }
-  var close=document.createElement('button');close.type='button';close.textContent='Back to layout';
-  close.onclick=function(){view3dMod?.stopTentSetup?.();host.hidden=true;};actions.append(close);host.append(actions);
-  host.hidden=false;host.dataset.done=String(!!info.done);host.dataset.mode=info.mode||'build';
-  if(info.done)host._hideTimer=setTimeout(function(){host.hidden=true;},7000);
+  host._info=info;host.hidden=false;host.dataset.done=String(!!info.done);
+  host.querySelector('.tent-setup-step').textContent=info.done?'Your event is ready':(info.mode==='breakdown'?'Takedown':'Tent setup')+' · '+info.index+' / '+info.total;
+  var title=host.querySelector('strong'),detail=host.querySelector('.tent-setup-caption p');
+  if(title.textContent!==info.title){title.textContent=info.title;detail.textContent=info.detail;}
+  var clock=function(n){return Math.floor(n/60)+':'+String(Math.floor(n%60)).padStart(2,'0');};
+  var range=host.querySelector('input');range.value=Math.round(info.progress*1000);range.setAttribute('aria-valuetext',clock(info.elapsed)+' of '+clock(info.duration));
+  host.querySelector('.tent-setup-time').textContent=clock(info.elapsed)+' / '+clock(info.duration);
+  var play=host.querySelector('[data-setup="pause"]');play.textContent=info.done?'Play again':info.paused?'Play':'Pause';
+  host.querySelector('select').value=String(info.speed||1);
+  var camera=host.querySelector('[data-setup="camera"]');camera.textContent=info.camera==='detail'?'Wide view':'Closer view';camera.setAttribute('aria-pressed',String(info.camera==='detail'));
+  var cutaway=host.querySelector('[data-setup="cutaway"]');cutaway.textContent=info.cutaway?'Solid top':'See through top';cutaway.setAttribute('aria-pressed',String(!!info.cutaway));
+  host.querySelector('.tent-setup-purpose').textContent=info.why||'';
+  var chapters=host.querySelector('ol'),key=info.mode+info.steps.map(s=>s.title).join('|');
+  if(host._chaptersKey!==key){host._chaptersKey=key;chapters.replaceChildren();info.steps.forEach(function(step,i){var li=document.createElement('li'),b=document.createElement('button');b.type='button';b.dataset.setup='chapter';b.dataset.time=step.time;b.textContent=(i+1)+'. '+step.title;li.appendChild(b);chapters.appendChild(li);});}
+  chapters.querySelectorAll('button').forEach(function(b,i){if(i===info.index-1)b.setAttribute('aria-current','step');else b.removeAttribute('aria-current');});
 }
 function mount3D(){
   if(view3dMod||view3dMountInProgress)return;
@@ -576,7 +577,7 @@ function mount3D(){
     var stepDes=$('step-designer'),displayed=canvas.offsetParent!==null,hasWidth=canvas.offsetWidth>=100,hasHeight=canvas.offsetHeight>=100;
     if(!stepDes||!displayed||!hasWidth||!hasHeight){setTimeout(checkCanvasReady,16);return;}
     view3dMountInProgress=true;
-    import('./js/ui/view3d.js?v=20261003-detailed-install-v2').then(function(mod){
+    import('./js/ui/view3d.js?v=20261003-detailed-1').then(function(mod){
       var snap=view3dPendingSnapshot||rendererSnapshot(buildSnapshot(getConflicts())),inst=mod.init(canvas,{onSelect:handleSelect,onMove:handleMove,onPhotoMove:handlePhotoPlacement,onPhotoSelect:handlePhotoSelect,onPlacementMove:movePlacement,onPlace:confirmPlacement,onWalkMode:function(value){setPhoto3dModeUi(value?'walk':'360');},onMeasureMode:function(value){setMeasureUi(value);},onMeasurement:function(value){setMeasurementResult(value);},onTentSetupStep:showTentSetupStep,onScanReconstruction:function(info){
         window.RENTSKETCH_SCAN_RECONSTRUCTION=info||null;renderViews(getConflicts());if(state.activeDrawer==='site')renderDrawerBody('site');
         if(info?.ready){
@@ -655,7 +656,7 @@ function setViewMode(mode){
   if(mode!=='3d'&&view3dMod?.isWalking?.())view3dMod.exitWalk();
   if(pendingPlacement&&(state.viewMode!==mode||photoEditing!==edit))cancelPlacement();
   photoEditing=edit;state.viewMode=mode;document.body.classList.toggle('view-mode-3d',mode==='3d');
-  if(mode!=='3d'&&$('tentSetupProgress'))$('tentSetupProgress').hidden=true;
+  if(mode!=='3d'){view3dMod?.stopTentSetup?.();if($('tentSetupProgress'))$('tentSetupProgress').hidden=true;}
   var rendering=mode==='3d'||(mode==='photo'&&!edit),photoPreview=mode==='photo'&&!edit,tentSetupAvailable=mode==='3d'&&!layoutSpace().isSite;
   if($('sceneControls'))$('sceneControls').hidden=!rendering;
   if($('sceneSettingLabel'))$('sceneSettingLabel').hidden=!rendering;
