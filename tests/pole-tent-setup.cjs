@@ -19,7 +19,7 @@ const root=path.resolve(__dirname,'..');
     const animation=api.createPoleTentSetup(original,tent),roof=animation.group.getObjectByName('Canopy lifted by installation poles'),steps=animation.steps;
     assert.equal(original.visible,false);
     assert.ok(steps.length>=11,'detailed pole walkthrough has at least eleven customer-visible phases');
-    assert.deepEqual(steps.slice(0,5).map(s=>s.id),['measure','anchors','layout','ratchets','poles']);
+    assert.deepEqual(Array.from(steps.slice(0,5),s=>s.id),['measure','anchors','layout','ratchets','poles']);
     assert.ok(steps.every(s=>s.phase&&s.title&&s.detail&&s.why),'every detailed pole phase explains action and purpose');
 
     animation.update(endOf(steps,'measure'));
