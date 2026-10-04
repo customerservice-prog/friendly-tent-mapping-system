@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { structuralProfile, computePerimeterStations } from '../data/tentStructure.js';
 import { crownPoints } from '../core/tent-canopy.js';
-import { setupSteps, sampleSetup, stagger, ease, clamp01 } from '../core/tent-setup-timeline.js?v=20261003-detailed-install-v2';
+import { setupSteps, sampleSetup, stagger, ease, clamp01 } from '../core/tent-setup-timeline.js';
 
 // Temporary installation model: the customer's finished tent is never deformed.
 // All temporary geometries/materials are owned here and released on stop/replay.
