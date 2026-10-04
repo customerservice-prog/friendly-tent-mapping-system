@@ -6,6 +6,7 @@ on:
       - 'js/core/tent-setup-timeline.js'
       - 'js/ui/pole-tent-setup3d.js'
       - 'js/ui/tent-setup3d.js'
+      - 'js/ui/tent-setup-crew.js'
       - 'js/ui/view3d.js'
       - 'script.js'
       - 'tent-setup-walkthrough.css'
@@ -33,7 +34,7 @@ jobs:
       - name: Expose test dependencies to renderer modules
         run: ln -sfn "$PWD/node_modules" ../node_modules
       - name: Detailed frame and fallback geometry
-        run: node --test tent-setup3d.test.mjs
+        run: node --experimental-vm-modules --test tent-setup3d.test.mjs
       - name: Smooth detailed pole installation
         run: node --experimental-vm-modules pole-tent-setup.cjs
       - name: 3D controller setup flow

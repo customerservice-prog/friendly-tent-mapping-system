@@ -1,5 +1,4 @@
 import { makeTent } from './tent3d.js';
-import { createPoleTentSetup } from './pole-tent-setup3d.js';
 import { installPhotoProjectionParity } from './photo-projection-renderer.js';
 import { createPhotoForegroundLayer } from './photo-foreground3d.js';
 import { normalizePhotoComposition, foregroundMaskAt, photoLightingPosition } from '../core/photo-composition.js';
@@ -55,10 +54,9 @@ export function init(container,callbacks={}) {
   const rendered=new Map(),pointers=new Set();let state=null,night=false,raf=0,drag=null,danceMesh=null,environment=null,lightGroup=null;
   let inflatableActivity=null,styling=null,showStyling=true,stylingKey='',cameraMode='outside';
   let equipmentTime=0;
-  let tentSetupAnimation=null,tentSetupElapsed=0,tentSetupPaused=false,tentSetupStep=-1,tentSetupMode='build';
   let weather=null,guests=null,ghost=new THREE.Group(),ghostKey='',guestKey='',weatherMode='clear',motion=true,showGuests=false,placementPointer=null,lastTime=0,animationTime=0;scene.add(ghost);
   const reducedMotion=window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',local360Key='',scanWorldKey='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0,tentSetupRun=0,tentSetupTimers=[],tentSetupRig=null;
+  let environmentKey='',structureKey='',furnitureKey='',lightingKey='',photoCameraKey='',photoStageKey='',photoContinuationKey='',local360Key='',scanWorldKey='',photoStageTexture=null,dirty=true,destroyed=false,animationFrame=0,itemAnimationFrame=0,chairAnimationFrame=0,cameraAnimationFrame=0,tentSetupSession=null,tentSetupRig=null;
   let scanWorldSeq=0,scanWorldAbort=null;
   const photoCanvas=document.createElement('canvas'),photoCtx=photoCanvas.getContext('2d',{alpha:false});
   function newPhotoTexture(){const texture=new THREE.CanvasTexture(photoCanvas);texture.colorSpace=THREE.SRGBColorSpace;texture.minFilter=THREE.LinearFilter;texture.magFilter=THREE.LinearFilter;return texture;}
@@ -364,6 +362,7 @@ export function init(container,callbacks={}) {
     if(scene.background===photoTexture)scene.background=null;else scene.background?.dispose?.();
     scene.background=state?.photoLayoutModel?new THREE.Color(night?0x222a30:0xe8ece9):sky(night,weatherMode==='rain');
   }
+  controls.addEventListener('start',()=>{if(tentSetupSession)tentSetupSession.cameraMove=null;});
   controls.addEventListener('change',()=>{updatePhotoStageViewFade();invalidate();});
   function shadows(t){const radius=Math.max(t.widthFt,t.lengthFt)/2+18;sun.shadow.camera.left=-radius;sun.shadow.camera.right=radius;sun.shadow.camera.top=radius;sun.shadow.camera.bottom=-radius;sun.shadow.camera.far=radius*4+120;sun.shadow.camera.updateProjectionMatrix();renderer.shadowMap.needsUpdate=true;}
   function frame(t){
@@ -420,7 +419,7 @@ export function init(container,callbacks={}) {
   }
   function rebuild(data){
     if(!data?.tent||destroyed)return;
-    if(tentSetupRig||tentSetupAnimation){stopTentSetup(true);callbacks.onTentSetupStep?.({dismissed:true});}
+    if(tentSetupRig)stopTentSetup(true);
     const previous=state?.tent,changed=!previous||previous.id!==data.tent.id||previous.widthFt!==data.tent.widthFt||previous.lengthFt!==data.tent.lengthFt;
     state={...data,objects:(data.objects||[]).map(o=>({...o}))};const t=state.tent;
     state.photoSite=state.photoSite||{id:'photo-site',isSite:true,type:'photo-site',name:'Photo venue',widthFt:Math.max(50,t.widthFt+20),lengthFt:Math.max(60,t.lengthFt+20)};
@@ -581,7 +580,7 @@ export function init(container,callbacks={}) {
     if(marketingFootprint)marketingFootprint.visible=p>.04&&p<.89;
     renderer.shadowMap.needsUpdate=true;invalidate();
   }
-  function resize(){const w=Math.max(1,container.clientWidth||800),h=Math.max(1,container.clientHeight||600),aspect=w/h,changed=Math.abs(camera.aspect-aspect)>.01;camera.aspect=aspect;camera.updateProjectionMatrix();renderer.setSize(w,h,false);if(hasVenuePhoto())paintVenuePhoto();if(state?.tent&&(changed||hasVenuePhoto()&&cameraMode==='outside'))frame(state.tent);invalidate();}
+  function resize(){const w=Math.max(1,container.clientWidth||800),h=Math.max(1,container.clientHeight||600),aspect=w/h,changed=Math.abs(camera.aspect-aspect)>.01;camera.aspect=aspect;camera.updateProjectionMatrix();renderer.setSize(w,h,false);if(hasVenuePhoto())paintVenuePhoto();if(tentSetupSession&&changed)setupCamera(tentSetupSession.cameraView,true);else if(state?.tent&&(changed||hasVenuePhoto()&&cameraMode==='outside'))frame(state.tent);invalidate();}
   let measureMode=false,measureA=null,measureB=null,measureResult=null;
   function makeMeasureLabel(text){
     const canvas=document.createElement('canvas');canvas.width=512;canvas.height=128;
@@ -619,6 +618,7 @@ export function init(container,callbacks={}) {
     measureA=null;measureB=null;measureResult=null;renderMeasurement();callbacks.onMeasurement?.(null);
   }
   function setMeasureMode(value){
+    if(value&&tentSetupSession)stopTentSetup();
     const next=!!value;
     if(next&&state?.photoMode&&!state?.photoLayoutModel&&!hasReadyMetricScan())return false;
     if(next&&walk.isActive())exitWalk();
@@ -649,6 +649,7 @@ export function init(container,callbacks={}) {
     return {x:mapped.x,y:mapped.y,rotationDeg:mapped.rotationDeg};
   }
   function down(e){
+    if(tentSetupSession)return;
     if(callbacks.marketingOnly)return;
     if(e.button!==undefined&&e.button!==0)return;
     if(measureMode){
@@ -803,18 +804,9 @@ export function init(container,callbacks={}) {
     const dt=Math.min(.05,Math.max(0,(now-lastTime)/1000));lastTime=now;
     if(walk.isActive()){if(walk.update(dt))dirty=true;}else if(!(hasVenuePhoto()&&cameraMode==='outside'))controls.update();
     if(container.clientWidth&&container.clientHeight&&!document.hidden&&!document.body.classList.contains('table-studio-open')&&!document.body.classList.contains('rs-preview-expired')){
-      if(tentSetupAnimation&&!tentSetupPaused){
-        tentSetupElapsed+=dt;
-        const info=tentSetupAnimation.update(tentSetupElapsed,tentSetupMode==='breakdown');
-        if(info.index!==tentSetupStep||info.done){
-          tentSetupStep=info.index;
-          callbacks.onTentSetupStep?.({canPause:true,mode:tentSetupMode,index:info.index+1,total:tentSetupAnimation.steps.length,phase:info.done?'Complete':(info.step.phase||''),title:info.done?(tentSetupMode==='breakdown'?'Tent packed away':'Installation overview complete'):(tentSetupMode==='breakdown'?info.step.undo:info.step.title),detail:info.done?'Return to your layout whenever you are ready.':(tentSetupMode==='breakdown'?'The animated installation state is reversing through this phase as the crew removes the tent.':info.step.detail),why:info.done?'The walkthrough is a visual explanation; the real crew still verifies site conditions and anchoring.':(info.step.why||''),done:info.done});
-        }
-        if(info.done){tentSetupPaused=true;if(tentSetupMode==='build')stopTentSetup();}
-        renderer.shadowMap.needsUpdate=true;dirty=true;
-      }
-      if(!motion||reducedMotion||drag||state?.placement)animationTime=0;else animationTime+=dt;
-      if(motion&&!reducedMotion&&!drag&&!state?.placement&&animationTime>=1/30){
+      advanceTentSetup(dt);
+      if(!motion||reducedMotion||drag||state?.placement||tentSetupSession)animationTime=0;else animationTime+=dt;
+      if(motion&&!reducedMotion&&!drag&&!state?.placement&&!tentSetupSession&&animationTime>=1/30){
         equipmentTime+=animationTime;
         // A single traversal advances current equipment, saved accessories and
         // inflatable visuals exactly once, using a clock that pauses with motion.
@@ -849,16 +841,17 @@ export function init(container,callbacks={}) {
   }
   function setNight(value){night=!!value;generatedBackground();syncPhotoFog();applySceneLighting();weather?.userData.setNight(night);weather?.userData.setPhotoMode?.(hasVenuePhoto()||state?.photoLayoutModel);environment?.userData.setNight(night);local360.userData.setNight?.(night);scanWorld.userData.setNight?.(night);lightGroup?.userData.setNight?.(night);invalidate();}
   function setScene(options={}){
+    if(tentSetupSession)stopTentSetup();
     showStyling=options.styling!==false;if(styling)styling.visible=showStyling;
     weatherMode=options.weather==='rain'?'rain':'clear';showGuests=!!options.guests;motion=options.motion!==false;
     weather?.userData.setWeather(weatherMode);if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;
     setNight(!!options.night);invalidate();
   }
   function stopWalk(){if(walk.isActive())walk.exit();}
-  function inside(){if(hasVenuePhoto())return false;if(state?.tent){stopWalk();cameraMode='inside';syncPhotoPresentation();frame(state.tent);return true;}return false;}
+  function inside(){stopTentSetup();if(hasVenuePhoto())return false;if(state?.tent){stopWalk();cameraMode='inside';syncPhotoPresentation();frame(state.tent);return true;}return false;}
   // An eye-level reception view for the public tour; other designer views keep their existing framing.
   function reception(){if(hasVenuePhoto())return false;if(state?.tent){stopWalk();cameraMode='reception';syncPhotoPresentation();frame(state.tent);return true;}return false;}
-  function fitCamera(){if(state?.tent){if(measureMode)setMeasureMode(false);stopWalk();cameraMode='outside';syncPhotoPresentation();frame(state.tent);return true;}return false;}
+  function fitCamera(){stopTentSetup();if(state?.tent){if(measureMode)setMeasureMode(false);stopWalk();cameraMode='outside';syncPhotoPresentation();frame(state.tent);return true;}return false;}
   function outsideWide(){
     if(!state?.tent)return false;
     if(measureMode)setMeasureMode(false);
@@ -881,7 +874,7 @@ export function init(container,callbacks={}) {
     if(!walk.isActive())return false;
     walk.exit();cameraMode='photo360';syncPhotoPresentation();invalidate();return true;
   }
-  function toggleWalk(){if(walk.isActive()){exitWalk();return false;}return walkWorld();}
+  function toggleWalk(){stopTentSetup();if(walk.isActive()){exitWalk();return false;}return walkWorld();}
   function isWalking(){return walk.isActive();}
   function setMarketingBuildStage(key){
     const order={space:0,tent:1,tables:2,chairs:3,sweetheart:4,dance:5,style:6,lighting:7,waterslide:8,reception:9,evening:10};
@@ -917,126 +910,107 @@ export function init(container,callbacks={}) {
     if(!tentSetupRig)return;
     scene.remove(tentSetupRig);disposeGroup(tentSetupRig);tentSetupRig=null;
   }
-  function stopTentSetup(restore=true){
-    if(tentSetupAnimation){tentSetupAnimation.dispose();tentSetupAnimation=null;}
-    tentSetupPaused=false;
-    tentSetupRun++;tentSetupTimers.forEach(clearTimeout);tentSetupTimers=[];clearTentSetupRig();
-    const root=structure.children[0];
-    if(root){root.visible=true;root.traverse(o=>{if(o.userData?.buildStage)o.visible=true;});}
-    if(restore){
-      structure.visible=true;furniture.visible=true;
-      if(styling)styling.visible=showStyling&&!drag;
-      if(guests)guests.visible=showGuests&&!drag;
-      if(inflatableActivity)inflatableActivity.visible=showGuests&&!drag&&!state?.placement;
-      if(lightGroup)lightGroup.visible=true;
-    }
+  function restoreTentSetup(){
+    const session=tentSetupSession;if(!session)return;
+    session.visibility.forEach(([object,visible])=>object.visible=visible);
+    camera.position.copy(session.camera.position);controls.target.copy(session.camera.target);
+    camera.fov=session.camera.fov;camera.updateProjectionMatrix();cameraMode=session.camera.mode;
+    controls.enabled=session.camera.enabled;controls.enableRotate=session.camera.rotate;
+    controls.minDistance=session.camera.minDistance;controls.maxDistance=session.camera.maxDistance;
+    controls.update();clearTentSetupRig();tentSetupSession=null;
     renderer.shadowMap.needsUpdate=true;invalidate();
+  }
+  function stopTentSetup(){
+    if(!tentSetupSession)return false;
+    restoreTentSetup();callbacks.onTentSetupStep?.({closed:true});return true;
+  }
+  function tentSetupInfo(done=false){
+    const s=tentSetupSession;if(!s)return null;
+    const f=s.frame,steps=s.mode==='breakdown'?s.steps.slice().reverse():s.steps;
+    const displayIndex=s.mode==='breakdown'?steps.length-1-f.index:f.index;
+    const reverse={layout:['Site cleared','The crew checks the area after the equipment has been packed.'],anchors:['Remove the anchors','Anchors are removed after the supported structure is lowered.'],cloth:['Fold the ground cloth','The protective cloth is rolled for transport.'],top:['Fold & roll the vinyl top','The crew packs the top on the protective ground cloth.'],straps:['Disconnect straps & gather poles','The loose straps and perimeter poles are collected.'],corners:['Lower the corner poles','Corner supports are removed after the center poles and remaining side poles.'],'center-angle':['Lower the center poles','The center poles lower the top carefully onto the ground cloth.'],'cloth-away':['Replace the ground cloth','The cloth is returned beneath the elevated top to protect it during lowering.'],'center-up':['Angle the center poles','The center poles are angled to release the fabric tension.'],sides:['Remove the side poles','The crew removes the side poles while the corner supports remain.'],tension:['Release the tension','The crew loosens restraints in stages before lowering.'],walls:['Unclip & roll the sidewalls','The selected walls are removed before the tent is lowered.'],check:['Walk around before takedown','The crew checks that the working area is clear.'],'frame-second':['Lower one side','Crew members support the frame while removing one side’s legs.'],'frame-first':['Lower the remaining side','The remaining legs are removed and the roof frame is lowered together.'],'frame-connect':['Disconnect the frame','The low frame is separated into its tubing and fittings.'],'frame-parts':['Pack the frame parts','The crew gathers the tubing and fittings for transport.'],expand:['Close the folding frame','Workers bring the scissor frame together.'],'frame-raise':['Lower the telescoping legs','The crew lowers the legs evenly.']};
+    const text=s.mode==='breakdown'?reverse[f.step.id]:null;
+    return {mode:s.mode,index:displayIndex+1,total:steps.length,title:done?'Walkthrough complete':text?.[0]||f.step.title,detail:done?'Your event layout is back. Replay the walkthrough or choose a step to watch again.':text?.[1]||f.step.detail,why:done?'':f.step.why,done,paused:s.paused,speed:s.speed,camera:s.cameraView,cutaway:!!s.cutaway,elapsed:s.elapsed,duration:s.duration,progress:s.elapsed/s.duration,steps:steps.map(step=>({title:s.mode==='breakdown'?reverse[step.id]?.[0]||step.title:step.title,time:s.mode==='breakdown'?s.duration-step.end:step.start}))};
+  }
+  function setupCamera(view='overview',snap=false){
+    const s=tentSetupSession;if(!s||!tentSetupRig)return;
+    s.cameraView=view;
+    const tent=state.tent,p=tentSetupRig.userData.profile,focus=tentSetupRig.userData.focus||new THREE.Vector3();
+    const fit=fitTentCamera({widthFt:tent.widthFt+18,lengthFt:tent.lengthFt+18},p.peakHeightFt,camera.aspect,42,2);
+    let target=new THREE.Vector3(...fit.target),position=new THREE.Vector3(...fit.position);
+    if(camera.aspect<.85&&view==='overview'){
+      // Aim along the tent's length on phones so long tents do not shrink into
+      // a distant strip. Fit the geometry into the space above the controls.
+      const direction=new THREE.Vector3(.25,.46,1).normalize(),right=new THREE.Vector3(direction.z,0,-direction.x).normalize(),up=new THREE.Vector3().crossVectors(direction,right).normalize();
+      const height=container.clientHeight||640,available=Math.max(.38,(height-320)/height),tanV=Math.tan(42*Math.PI/360),tanH=tanV*camera.aspect;
+      const center=new THREE.Vector3(0,p.peakHeightFt*.5,0);let distance=0;
+      for(const x of [-1,1])for(const y of [-1,1])for(const z of [-1,1]){
+        const corner=new THREE.Vector3(x*(tent.widthFt/2+8),y*p.peakHeightFt/2,z*(tent.lengthFt/2+8));
+        distance=Math.max(distance,corner.dot(direction)+Math.abs(corner.dot(right))*1.08/tanH,corner.dot(direction)+Math.abs(corner.dot(up))*1.08/(tanV*available));
+      }
+      const offset=up.multiplyScalar(-distance*tanV*Math.min(.38,150/height));
+      target.copy(center).add(offset);position.copy(center).addScaledVector(direction,distance).add(offset);
+    }
+    if(view==='detail'){
+      const kind=s.frame.step.camera;
+      if(kind==='anchor'){
+        target.set(focus.x,2.1,focus.z);
+        const out=new THREE.Vector3(focus.x,0,focus.z).normalize();position.copy(target).add(out.multiplyScalar(camera.aspect<1?19:15)).add(new THREE.Vector3(5,8,5));
+      }else if(kind==='fabric'){
+        target.set(0,2,0);position.set(tent.widthFt*.68,Math.max(17,tent.widthFt*.72),tent.lengthFt*.6+10);
+      }else if(kind==='lift'){
+        target.set(0,p.eaveHeightFt*.85,0);position.set(tent.widthFt*.7,p.eaveHeightFt*.9,tent.lengthFt*.65+10);
+      }
+      if(camera.aspect<1)position.sub(target).multiplyScalar(1.25).add(target);
+    }
+    // Lift the framed scene above the playback panel, which occupies its own
+    // reserved bottom area of the viewport.
+    target.y-=p.peakHeightFt*.12;
+    s.cameraMove={start:camera.position.clone(),targetStart:controls.target.clone(),position,target,elapsed:snap?1:0};
+    if(snap){camera.position.copy(position);controls.target.copy(target);s.cameraMove=null;}
+    camera.fov=42;camera.updateProjectionMatrix();controls.update();invalidate();
+  }
+  function updateTentSetup(force=false){
+    const s=tentSetupSession;if(!s||!tentSetupRig)return;
+    const rigTime=s.mode==='breakdown'?s.duration-s.elapsed:s.elapsed;
+    const lastIndex=s.frame?.index;s.frame=tentSetupRig.userData.update(rigTime);
+    if(lastIndex!==s.frame.index&&s.cameraView==='detail')setupCamera('detail');
+    if(force||lastIndex!==s.frame.index||s.elapsed-s.lastReport>.12){callbacks.onTentSetupStep?.(tentSetupInfo());s.lastReport=s.elapsed;}
+    renderer.shadowMap.needsUpdate=true;invalidate();
+  }
+  function advanceTentSetup(dt){
+    const s=tentSetupSession;if(!s)return;
+    if(s.cameraMove){const m=s.cameraMove;m.elapsed=Math.min(1,m.elapsed+dt/1.2);const e=m.elapsed*m.elapsed*(3-2*m.elapsed);camera.position.lerpVectors(m.start,m.position,e);controls.target.lerpVectors(m.targetStart,m.target,e);controls.update();invalidate();if(m.elapsed===1)s.cameraMove=null;}
+    if(s.paused)return;
+    s.elapsed=Math.min(s.duration,s.elapsed+dt*s.speed);s.drawTime+=dt;
+    if(s.drawTime<1/30&&s.elapsed<s.duration)return;s.drawTime=0;updateTentSetup();
+    if(s.elapsed>=s.duration){const info=tentSetupInfo(true);restoreTentSetup();callbacks.onTentSetupStep?.(info);}
+  }
+  function controlTentSetup(action,value){
+    const s=tentSetupSession;if(!s)return false;
+    if(action==='stop')return stopTentSetup();
+    if(action==='cutaway'){s.cutaway=!s.cutaway;tentSetupRig.userData.setCutaway(s.cutaway);}
+    if(action==='pause')s.paused=!s.paused;
+    if(action==='speed')s.speed=[.5,1,1.5,2].includes(Number(value))?Number(value):1;
+    if(action==='seek'){s.elapsed=Math.max(0,Math.min(s.duration-.001,Number(value)||0));s.paused=true;s.lastReport=-1;}
+    if(action==='previous'||action==='next'){
+      const info=tentSetupInfo(),i=Math.max(0,Math.min(info.total-1,info.index-1+(action==='next'?1:-1)));
+      s.elapsed=info.steps[i].time+.001;s.paused=true;s.lastReport=-1;
+    }
+    if(action==='camera')setupCamera(value==='detail'?'detail':'overview',reducedMotion);
+    updateTentSetup(true);return true;
   }
   function playTentSetup(mode='build'){
     if(!state?.tent||state.tent.isSite||!structure.children[0])return false;
-    stopTentSetup(false);
-    if(state.tent.type==='pole'&&!reducedMotion){
-      cancelAnimationFrame(animationFrame);structure.scale.y=1;structure.visible=true;
-      furniture.visible=false;if(styling)styling.visible=false;if(guests)guests.visible=false;if(inflatableActivity)inflatableActivity.visible=false;if(lightGroup)lightGroup.visible=false;
-      outsideWide();
-      tentSetupAnimation=createPoleTentSetup(structure.children[0],state.tent);
-      tentSetupElapsed=0;tentSetupPaused=false;tentSetupStep=-1;tentSetupMode=mode;
-      tentSetupAnimation.update(0,mode==='breakdown');invalidate();return true;
-    }
-    const run=++tentSetupRun,root=structure.children[0],tent=state.tent,anchor=state.anchoringMethod||(tent.type==='pole'?'stake':sceneSetting(tent,state.surfaceType)==='driveway'?'ballast':'stake');
-    const bucket={roof:[],frame:[],stakes:[],valance:[],sidewalls:[]};
-    root.traverse(o=>{const stage=o.userData?.buildStage;if(stage&&bucket[stage]&&o.parent?.userData?.buildStage!==stage)bucket[stage].push(o);});
-    const hasSidewalls=bucket.sidewalls.length>0,pole=tent.type==='pole',ballast=anchor==='ballast';
-    tentSetupRig=createTentSetupRig(tent,anchor,root);scene.add(tentSetupRig);
-    root.visible=false;structure.visible=true;tentSetupRig.userData.hide?.();
-    furniture.visible=false;if(styling)styling.visible=false;if(guests)guests.visible=false;if(inflatableActivity)inflatableActivity.visible=false;if(lightGroup)lightGroup.visible=false;
-    outsideWide();
-
-    const build=pole
-      ? [
-          {rig:'measure',phase:'Layout',title:'Measure & square the footprint',detail:'The crew marks the four tent corners and checks both diagonals before the hardware is raised.',why:'Starting square keeps the canopy and pole lines aligned.'},
-          {rig:'layout',phase:'Anchoring',title:'Pre-stake the perimeter',detail:'Perimeter stake locations are set around the tent footprint before the lift begins.',why:'Anchors installed early let the crew control the canopy as it rises.'},
-          {rig:'pole-top-folded',phase:'Tent top',title:'Bring the folded top onto a drop cloth',detail:'The vinyl is carried into the footprint on a protective drop cloth instead of being dragged over the ground.',why:'The drop cloth protects the coated fabric from abrasion and pinholes.'},
-          {rig:'top-ground',phase:'Tent top',title:'Unfold & orient the tent top',detail:'The canopy is opened flat and aligned to the four corners.',why:'Correct orientation prevents twisting the top after poles and straps are connected.'},
-          {rig:'ratchets-loose',phase:'Loose anchoring',title:'Connect the ratchets with working slack',detail:'Ratchets or ropes are attached but left loose enough for the top to lift.',why:'The canopy stays controlled without fighting the workers during the lift.'},
-          {rig:'poles-staged',phase:'Pole staging',title:'Stage the poles around the footprint',detail:'Poles are placed near the positions where the crew will use them.',why:'Staging keeps long poles out of the crew’s travel path once the tent is partly raised.'},
-          {rig:'corner-poles',phase:'Corner lift',title:'Raise the corner poles',detail:'The four corners lift the outside edge while the center remains low.',why:'The corners establish the perimeter shape before the rest of the tent comes up.'},
-          {rig:'center-assembled',phase:'Center poles',title:'Assemble & position the center poles',detail:'Center-pole sections and top pins are prepared under their lifting points.',why:'The connection must be positioned correctly before the peak is lifted.'},
-          {rig:'center-up',phase:'Center lift',title:'Raise the center poles',detail:'The center poles lift the canopy into its peak shape.',why:'The center supports create the final roof height and pitch.'},
-          {rig:'side-poles',phase:'Perimeter poles',title:'Install the remaining side poles',detail:'The crew works around the perimeter bringing each remaining bay to eave height.',why:'Even side-pole spacing keeps the valance level and distributes load.'},
-          {rig:'pole-tension',phase:'Tension',title:'Straighten poles & work the ratchets',detail:'Poles are brought plumb while opposite ratchets are tightened progressively.',why:'Balanced tension keeps the tent square instead of pulling it toward one corner.'},
-          {actual:'tension',phase:'Final tension',title:'Make the final perimeter tension pass',detail:'Every remaining ratchet is tightened and loose strap is secured.',why:'The final pass creates the stable finished roof shape.'},
-          ...(hasSidewalls?[{actual:'sidewalls',phase:'Sidewalls',title:'Install the selected sidewalls',detail:'Wall panels are attached after the top is raised, anchored, and tensioned.',why:'Walls go on last so they do not add wind load during the lift.'}]:[])
-        ]
-      : [
-          {rig:'measure',phase:'Layout',title:'Measure & square the frame-tent footprint',detail:'The crew marks the corners and checks both diagonals before tubing is laid out.',why:'A square footprint keeps the spreaders, corners, and legs aligned.'},
-          {rig:'frame-parts',phase:'Parts layout',title:'Lay out the tubing, fittings & legs',detail:'Crowns, rafters, side tees, spreaders, corners, pins, and legs are placed near their assembly positions.',why:'A full parts layout catches missing hardware before the frame is half built.'},
-          {rig:'frame-crown',phase:'Roof frame',title:'Assemble the crown fittings & hip rafters',detail:'The crown and hip-rafter assembly is pinned together while everything remains close to the ground.',why:'The crown establishes the roof geometry for the remaining rafters.'},
-          {rig:'frame-perimeter',phase:'Roof frame',title:'Connect perimeter spreaders & corner fittings',detail:'Side tees, corner fittings, and spreaders close the perimeter and tie into the crown/rafter assembly.',why:'The perimeter locks the roof frame square before the vinyl top is installed.'},
-          {rig:'frame-top',phase:'Roof frame',title:'Finish & inspect the complete low roof frame',detail:'The crew checks every pin, fitting, and connection while the entire roof frame is still low.',why:'Missing pins and misaligned fittings are safest to correct before the frame is raised.'},
-          {rig:'frame-top-folded',phase:'Top protection',title:'Place the drop cloth & folded tent top',detail:'The folded vinyl is positioned beside the low frame on a protective drop cloth.',why:'This keeps the coated top off dirt and sharp surfaces.'},
-          {rig:'frame-top-half',phase:'Top installation',title:'Pull the top halfway across the frame',detail:'Workers on opposite sides lift and pull the vinyl, keeping air beneath it instead of scraping it over tubing.',why:'Reducing friction protects the top as it passes over frame joints.'},
-          {rig:'frame-covered',phase:'Top installation',title:'Center the top over the low frame',detail:'The vinyl is pulled fully into place and its corners are aligned before fastening.',why:'An off-center top will tension unevenly after the legs are raised.'},
-          {rig:'frame-strapped',phase:'Top attachment',title:'Attach the perimeter & loop straps while low',detail:'Top straps and buckles are connected and snugged enough to hold the vinyl in place.',why:'The top should be secured before workers lift the roof frame to leg height.'},
-          {rig:'frame-one-side',phase:'Leg lift',title:'Lift one whole side & insert that side’s legs',detail:'The crew lifts an entire side together and pins the leg poles into that side rather than raising one isolated corner.',why:'Raising a complete side reduces twist through the roof frame.'},
-          {rig:'frame-raised',phase:'Leg lift',title:'Lift the opposite side & install the remaining legs',detail:'The second side is raised as a team until the full frame reaches working height.',why:'Keeping the roof level prevents side-loading fittings during the lift.'},
-          {rig:'anchors',phase:'Anchoring',title:ballast?'Position & connect the ballast':'Drive stakes & connect the anchors',detail:ballast?'Ballast is placed at the planned anchor points and connected before final top tensioning.':'Stakes and ratchet assemblies are connected to restrain the raised frame before final top tensioning.',why:'The frame must be restrained before the top is pulled to final tension.'},
-          {actual:'tension',phase:'Final tension',title:'Square the raised frame & tension every strap',detail:'The crew works around the perimeter tightening top straps and anchors evenly while checking every leg for plumb.',why:'Balanced tension creates the finished roof shape without pulling the frame out of square.'},
-          ...(hasSidewalls?[{actual:'sidewalls',phase:'Sidewalls',title:'Install the selected sidewalls',detail:'Wall panels are attached only after the frame, anchoring, and top tension are complete.',why:'Installing walls last avoids extra wind load during setup.'}]:[])
-        ];
-
-    const strike=pole
-      ? [
-          ...(hasSidewalls?[{actual:'sidewalls',phase:'Strike',title:'Remove & fold the sidewalls first',detail:'Wall panels are removed before any tension or poles are released.',why:'Removing walls reduces wind load before the tent is lowered.'}]:[]),
-          {actual:'tension',phase:'Strike',title:'Release perimeter tension in a controlled order',detail:'Ratchets are backed off progressively while the corners remain controlled.',why:'Releasing everything at once can let poles or the top shift unpredictably.'},
-          {rig:'side-poles',phase:'Strike',title:'Remove the remaining side poles',detail:'Side poles come out in a controlled order while the canopy is still supported.',why:'The canopy stays controlled as its perimeter drops.'},
-          {rig:'center-up',phase:'Strike',title:'Lower the center supports',detail:'Center poles are walked down carefully instead of allowing the peak to fall.',why:'Controlled lowering protects both the crew and the tent top.'},
-          {rig:'top-ground',phase:'Strike',title:'Settle the top onto the drop cloth',detail:'The canopy is brought onto the protective cloth before straps and remaining hardware are packed.',why:'The top should never be dragged directly onto the event surface.'},
-          {rig:'pole-top-folded',phase:'Strike',title:'Fold & roll the tent top',detail:'The vinyl is folded consistently and rolled for transport.',why:'Clean packing protects the top and speeds the next setup.'},
-          {rig:'layout',phase:'Strike',title:'Pull stakes & clear the footprint',detail:'Stakes, ratchets, poles, and layout gear are counted and loaded last.',why:'Anchors stay available until the tent is safely on the ground.'}
-        ]
-      : [
-          ...(hasSidewalls?[{actual:'sidewalls',phase:'Strike',title:'Remove all sidewalls first',detail:'Wall panels are unclipped, separated, folded, and moved out of the work area.',why:'This removes wind load before the structure is lowered.'}]:[]),
-          {actual:'tension',phase:'Strike',title:'Release top tension & anchor ratchets',detail:'Top straps and anchor tension are reduced in a controlled perimeter sequence.',why:'Controlled release prevents the raised frame from shifting suddenly.'},
-          {rig:'frame-one-side',phase:'Strike',title:'Lower one whole side & remove its legs',detail:'One complete side is lowered together and its legs are unpinned.',why:'Lowering a whole side limits twist through the roof frame.'},
-          {rig:'frame-covered',phase:'Strike',title:'Lower the opposite side until the roof frame is low',detail:'The remaining legs are removed so the top and roof frame can be handled safely near the ground.',why:'Top removal and frame disassembly should happen low, not overhead.'},
-          {rig:'frame-top-half',phase:'Strike',title:'Release straps & pull the vinyl onto the drop cloth',detail:'The top is lifted and pulled off the low frame rather than dragged across the tubing.',why:'Air under the fabric and the drop cloth protect its coating.'},
-          {rig:'frame-top-folded',phase:'Strike',title:'Fold & roll the tent top',detail:'The vinyl is aligned, folded, and packed while it remains protected from the ground.',why:'Consistent folding prevents abrasion and makes the next setup faster.'},
-          {rig:'frame-top',phase:'Strike',title:'Disassemble the roof frame while it is low',detail:'Spreaders, rafters, side tees, crowns, and corner fittings are unpinned and organized.',why:'Loose fittings are safest to handle at ground level.'},
-          {rig:'frame-parts',phase:'Strike',title:'Stack, count & load the frame parts',detail:'Tubing, fittings, pins, legs, anchors, and straps are counted before leaving the site.',why:'The parts count keeps hardware from being left behind or mixed with another order.'},
-          {rig:'measure',phase:'Strike',title:'Clear the installation footprint',detail:'The crew checks the area for stakes, pins, straps, drop cloths, or debris.',why:'The event site should be returned clear of installation hardware.'}
-        ];
-
-    const steps=mode==='breakdown'?strike:build;
-    const actualVisible=(phase)=>{
-      root.visible=true;structure.visible=true;
-      bucket.roof.forEach(o=>o.visible=true);bucket.frame.forEach(o=>o.visible=true);bucket.valance.forEach(o=>o.visible=true);
-      bucket.stakes.forEach(o=>o.visible=phase==='tension'||phase==='sidewalls'||(pole&&phase==='raise'));
-      bucket.sidewalls.forEach(o=>o.visible=phase==='sidewalls');
-    };
-    const showStep=(index)=>{
-      if(destroyed||run!==tentSetupRun)return;
-      const step=steps[index];tentSetupRig.userData.hide?.();root.visible=false;
-      if(step.rig)tentSetupRig.userData.show?.(step.rig);
-      else{actualVisible(step.actual);}
-      callbacks.onTentSetupStep?.({mode,index:index+1,total:steps.length+1,phase:step.phase||'',title:step.title,detail:step.detail,why:step.why||'',done:false});
-      renderer.shadowMap.needsUpdate=true;invalidate();
-    };
-    if(reducedMotion){
-      tentSetupRig.userData.hide?.();root.visible=true;root.traverse(o=>{if(o.userData?.buildStage)o.visible=true;});
-      callbacks.onTentSetupStep?.({mode,index:steps.length+1,total:steps.length+1,phase:'Complete',title:mode==='breakdown'?'Tent strike complete':'Crew installation complete',detail:mode==='breakdown'?'The structure and hardware are packed and the installation footprint is cleared.':'The walkthrough shows the major installation order for this tent style; the crew still verifies the exact site, anchoring, weather, and manufacturer requirements on location.',why:'This visual walkthrough explains the work but does not replace trained installation or a site inspection.',done:true});
-      clearTentSetupRig();furniture.visible=true;if(styling)styling.visible=showStyling;if(guests)guests.visible=showGuests;if(inflatableActivity)inflatableActivity.visible=showGuests;if(lightGroup)lightGroup.visible=true;invalidate();return true;
-    }
-    const dwell=2100;
-    steps.forEach((step,index)=>tentSetupTimers.push(setTimeout(()=>showStep(index),index*dwell)));
-    tentSetupTimers.push(setTimeout(()=>{
-      if(destroyed||run!==tentSetupRun)return;
-      clearTentSetupRig();root.visible=true;root.traverse(o=>{if(o.userData?.buildStage)o.visible=true;});
-      furniture.visible=true;if(styling)styling.visible=showStyling&&!drag;if(guests)guests.visible=showGuests&&!drag;if(inflatableActivity)inflatableActivity.visible=showGuests&&!drag&&!state?.placement;if(lightGroup)lightGroup.visible=true;
-      callbacks.onTentSetupStep?.({mode,index:steps.length+1,total:steps.length+1,phase:'Complete',title:mode==='breakdown'?'Tent strike complete':'Final crew safety check',detail:mode==='breakdown'?'All top/frame/pole components, anchors, ratchets, straps, and protective materials are accounted for and the footprint is cleared.':'Crew verifies every anchor or ballast point, fitting and pin, pole or leg, ratchet, top tension, selected wall attachment, and installation clearance before the tent is released for use.',why:'The final inspection is what turns an assembled tent into a completed installation.',done:true});
-      renderer.shadowMap.needsUpdate=true;invalidate();
-    },steps.length*dwell));
-    return true;
+    stopTentSetup();exitWalk();cancelAnimationFrame(animationFrame);cancelAnimationFrame(cameraAnimationFrame);
+    const root=structure.children[0],tent=state.tent,anchor=state.anchoringMethod||(tent.type==='pole'?'stake':sceneSetting(tent,state.surfaceType)==='driveway'?'ballast':'stake');
+    const walls=root.getObjectByName('Sidewalls'),hasSidewalls=!!walls?.children.length;
+    tentSetupRig=createTentSetupRig(tent,anchor,root,{sidewalls:hasSidewalls});scene.add(tentSetupRig);
+    const visibility=[root,furniture,styling,guests,inflatableActivity,lightGroup,selection,ghost,measurementGroup].filter(Boolean).map(object=>[object,object.visible]);
+    tentSetupSession={mode:mode==='breakdown'?'breakdown':'build',elapsed:0,duration:tentSetupRig.userData.duration,steps:tentSetupRig.userData.steps,paused:!!reducedMotion,speed:1,drawTime:0,lastReport:-1,cameraView:'overview',frame:null,visibility,camera:{position:camera.position.clone(),target:controls.target.clone(),fov:camera.fov,mode:cameraMode,enabled:controls.enabled,rotate:controls.enableRotate,minDistance:controls.minDistance,maxDistance:controls.maxDistance}};
+    visibility.forEach(([object])=>object.visible=false);
+    controls.enabled=true;controls.enableRotate=true;controls.minDistance=5;controls.maxDistance=Math.max(260,tent.lengthFt*4);
+    cameraMode='setup';updateTentSetup(true);setupCamera('overview',true);return true;
   }
   function playItemTimelapse(ids=[],duration=720){
     cancelAnimationFrame(itemAnimationFrame);
@@ -1117,10 +1091,11 @@ export function init(container,callbacks={}) {
     cameraAnimationFrame=requestAnimationFrame(tick);
   }
   function captureImage(){
+    if(tentSetupSession)stopTentSetup();
     if(destroyed||!state?.tent)return null;
     try{scanWorld.userData.updateView?.(camera);renderer.render(scene,camera);return renderer.domElement.toDataURL('image/jpeg',.9);}catch(_){return null;}
   }
-  const api={stopTentSetup,toggleTentSetupPause(){tentSetupPaused=!tentSetupPaused;return tentSetupPaused;},inside,reception,outsideWide,wide,setScene,previewPhotoComposition,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playTentSetup,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){stopTentSetup(false);destroyed=true;tentSetupRun++;tentSetupTimers.forEach(clearTimeout);tentSetupTimers=[];walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();photoForeground.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();env?.dispose();container.replaceChildren();}};
+  const api={toggleTentSetupPause(){controlTentSetup('pause');return !!tentSetupSession?.paused;},inside,reception,outsideWide,wide,setScene,previewPhotoComposition,rebuild,update:rebuild,fitCamera,fitTentPreview:fitCamera,matchPhoto,orbit360,walkWorld,exitWalk,toggleWalk,isWalking,toggleMeasure,setMeasureMode,isMeasuring,clearMeasurement,getMeasurement,captureImage,night:setNight,playTimelapse,playTentSetup,controlTentSetup,stopTentSetup,playItemTimelapse,playChairTimelapse,transitionCamera,setMarketingBuildStage,setMarketingProgress,destroy(){stopTentSetup();destroyed=true;walk.destroy();cancelAnimationFrame(animationFrame);cancelAnimationFrame(itemAnimationFrame);cancelAnimationFrame(chairAnimationFrame);cancelAnimationFrame(cameraAnimationFrame);cancelAnimationFrame(raf);ro.disconnect();document.removeEventListener('visibilitychange',invalidate);controls.dispose();disposeGroup(structure);disposeGroup(furniture);disposeGroup(ghost);disposeMeasurementGroup();if(weather)disposeGroup(weather);if(guests)disposeGroup(guests);if(inflatableActivity)disposeGroup(inflatableActivity);if(styling)disposeGroup(styling);if(environment)disposeGroup(environment);clearPhotoStage();disposeGroup(photoContinuation);clearLocal360();clearScanWorld();if(lightGroup)disposeGroup(lightGroup);if(marketingFootprint)disposeGroup(marketingFootprint);if(marketingDetails)disposeGroup(marketingDetails);selection.geometry.dispose();selection.material.dispose();if(scene.background&&scene.background!==photoTexture)scene.background.dispose?.();photoTexture.dispose();photoForeground.dispose();sun.shadow.dispose();restoreProjectionParity();renderer.dispose();env?.dispose();container.replaceChildren();}};
   // A watch-only sample must not replace the real designer renderer.
   if(callbacks.registerActive !== false)active=api;return api;
 }
